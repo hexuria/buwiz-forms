@@ -1,0 +1,296 @@
+{
+    "source_sha256":  "2ccf624c87c8a951443630a0803e5f1f4bd7800bceb850ff14e8160f5f6b59fd",
+    "function_count":  20,
+    "functions":  [
+                      {
+                          "name":  "enablePenalties",
+                          "start_line":  6649,
+                          "end_line":  6667,
+                          "body_sha256":  "89e4247cc2b460f85bce14f3585d779268fab5467834d641020d2fcfc445bc0e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax21A",
+                                              "frm2200S:txtTax21B",
+                                              "frm2200S:txtTax21C"
+                                          ]
+                      },
+                      {
+                          "name":  "disablePenalties",
+                          "start_line":  6668,
+                          "end_line":  6687,
+                          "body_sha256":  "99a0aac2f17e109d868284e26a209f54eb7525dc7f3ccd75328146585d01f55b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax21A",
+                                              "frm2200S:txtTax21B",
+                                              "frm2200S:txtTax21C"
+                                          ]
+                      },
+                      {
+                          "name":  "computeBasicTaxDue",
+                          "start_line":  7388,
+                          "end_line":  7406,
+                          "body_sha256":  "9a8a08141c06226becba093e99a4a7c64aebb6062446e25a173b01be293afebe",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Basic Excise Tax Due.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:hideProAppRate",
+                                              "frm2200S:txtBasicTaxDue",
+                                              "frm2200S:txtSalesValue",
+                                              "frm2200S:txtVolumeRemovals"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1BasicTaxDue",
+                          "start_line":  7407,
+                          "end_line":  7453,
+                          "body_sha256":  "6ec3effe37e3abeaa41552e2ea11ffcc709298e64449f9eb4b90cea0f39bf109",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Basic Excise Tax Due.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:hideProAppRate",
+                                              "frm2200S:txtProBasicTaxDue",
+                                              "frm2200S:txtsched1AppTaxRate",
+                                              "frm2200S:txtsched1Atc",
+                                              "frm2200S:txtsched1BasicTaxDue",
+                                              "frm2200S:txtsched1Taxable",
+                                              "frm2200S:txtsched1VolumeRemovals"
+                                          ]
+                      },
+                      {
+                          "name":  "totalTaxDue",
+                          "start_line":  7454,
+                          "end_line":  7521,
+                          "body_sha256":  "37bd30cb210d1d344e19885cfed6161cfcc81d2399b971386b81b906c0dedf80",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Total Tax Due.\"",
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Item 26 Balance to be Carried Over to Next Return.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:totalTaxDue",
+                                              "frm2200S:txtBasicTaxDue",
+                                              "frm2200S:txtInsTaxable",
+                                              "frm2200S:txtProTaxable",
+                                              "frm2200S:txtsched1BasicTaxDue",
+                                              "frm2200S:txtsched1Taxable",
+                                              "frm2200S:txtTax16",
+                                              "frm2200S:txtTax24"
+                                          ]
+                      },
+                      {
+                          "name":  "compute17C",
+                          "start_line":  7535,
+                          "end_line":  7545,
+                          "body_sha256":  "7804bb0def5ae9e855611db340f9b0ec49c7ee77f1439f45baf322ed0bd88c97",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax17A",
+                                              "frm2200S:txtTax17B",
+                                              "frm2200S:txtTax17C"
+                                          ]
+                      },
+                      {
+                          "name":  "compute18",
+                          "start_line":  7546,
+                          "end_line":  7556,
+                          "body_sha256":  "3782f6457472f97b9277727584278384f0774f29d6b3f1fe973ba01069c79cc0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax16",
+                                              "frm2200S:txtTax17C",
+                                              "frm2200S:txtTax18"
+                                          ]
+                      },
+                      {
+                          "name":  "compute20",
+                          "start_line":  7557,
+                          "end_line":  7582,
+                          "body_sha256":  "997eefaccdf162c58ce542000b8370b369620cf3b59b4816b9a2839f18b811fd",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Item 22 Tax Still Due/Overpayment.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax17A",
+                                              "frm2200S:txtTax18",
+                                              "frm2200S:txtTax19",
+                                              "frm2200S:txtTax20"
+                                          ]
+                      },
+                      {
+                          "name":  "compute21D",
+                          "start_line":  7583,
+                          "end_line":  7602,
+                          "body_sha256":  "0956ecdcfee7c9669542d4aa445e1509fbb0b5a73852d763dda291494b87b960",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Item 23D Total Penalties.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:PayPenalties",
+                                              "frm2200S:txtTax21A",
+                                              "frm2200S:txtTax21B",
+                                              "frm2200S:txtTax21C",
+                                              "frm2200S:txtTax21D"
+                                          ]
+                      },
+                      {
+                          "name":  "payPenalties",
+                          "start_line":  7603,
+                          "end_line":  7612,
+                          "body_sha256":  "4db646f58b176bd2a0c9dca6fca5f095611bb23d930baf5a9c5c24a49df643fa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:PayPenalties",
+                                              "frm2200S:txtTax21D",
+                                              "frm2200S:txtTax23B"
+                                          ]
+                      },
+                      {
+                          "name":  "compute22",
+                          "start_line":  7613,
+                          "end_line":  7636,
+                          "body_sha256":  "3019473b93e2e6cad29d3133ff12219c30df3b08840fd8b65235e1bec714b39f",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Item 24 Amount Payable.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax20",
+                                              "frm2200S:txtTax21D",
+                                              "frm2200S:txtTax22"
+                                          ]
+                      },
+                      {
+                          "name":  "compute23C",
+                          "start_line":  7637,
+                          "end_line":  7647,
+                          "body_sha256":  "875ed5f2c48bee3a128226b79d89af6318daf9570730c953bd18be13d3e35b58",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax23A",
+                                              "frm2200S:txtTax23B",
+                                              "frm2200S:txtTax23C"
+                                          ]
+                      },
+                      {
+                          "name":  "compute24",
+                          "start_line":  7648,
+                          "end_line":  7672,
+                          "body_sha256":  "8673f2fd07aa80c20571943200af661eff27a6b73365e243de1abc3e9677ccb2",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Item 26 Balance to be Carried Over to Next Return.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:PayPenalties",
+                                              "frm2200S:txtTax22",
+                                              "frm2200S:txtTax23B",
+                                              "frm2200S:txtTax23C",
+                                              "frm2200S:txtTax24"
+                                          ]
+                      },
+                      {
+                          "name":  "recomputePrepayment",
+                          "start_line":  9659,
+                          "end_line":  9662,
+                          "body_sha256":  "7cac104ec79ee174657f464c884d29f58afca5f72a545496c38497407f81204e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtTax16"
+                                          ]
+                      },
+                      {
+                          "name":  "recomputePaymentActual",
+                          "start_line":  9663,
+                          "end_line":  9676,
+                          "body_sha256":  "8440a263c6cb78c3fb90cd004e038b71f3e2383d7f29b1ea6564f48b0cda963f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:totalTaxDue",
+                                              "frm2200S:txtTax16"
+                                          ]
+                      },
+                      {
+                          "name":  "computeCalculatorSubTotal",
+                          "start_line":  9707,
+                          "end_line":  9771,
+                          "body_sha256":  "945515284717d1e900d1086eabe372a1620f66e4e2990e6dc15beb2aee002e37",
+                          "alerts":  [
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Total Tax Base.\"",
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Total Tax Due.\"",
+                                         "\"Exceeded maximum amount of 999,999,999,999.99 on Item 26 Balance to be Carried Over to Next Return.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:hideInsAppRate",
+                                              "frm2200S:hideProAppRate",
+                                              "frm2200S:totalTaxDue",
+                                              "frm2200S:txtInsBasicTaxDue",
+                                              "frm2200S:txtProBasicTaxDue",
+                                              "frm2200S:txtTax24"
+                                          ]
+                      },
+                      {
+                          "name":  "computeModal",
+                          "start_line":  9772,
+                          "end_line":  9811,
+                          "body_sha256":  "50acad07145b2a3be70c4756c2a2e1534927812279409e78d88163f5b6c9003a",
+                          "alerts":  [
+                                         "\"Please provide valid data.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txt"
+                                          ]
+                      },
+                      {
+                          "name":  "setDisabledBackgroundColor",
+                          "start_line":  10038,
+                          "end_line":  10043,
+                          "body_sha256":  "38eee64853ae2a82ad32dc2292b8444ea99635b9dcc0399f82ecc55aba05190f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "setEnabledBackgroundColor",
+                          "start_line":  10044,
+                          "end_line":  10049,
+                          "body_sha256":  "7e0044fca7816e0802fcb75b2019fcefe6cbf3d3cb4cb7add548d0fc79de2cb6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkTaxRate",
+                          "start_line":  10065,
+                          "end_line":  10103,
+                          "body_sha256":  "2141db6776eda4ec520a9e8c57f653b7897f878f710fe47543985ec5467d123b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

@@ -1,0 +1,279 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2000ot-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "2000ot-fmv-row",
+                             "2000ot-fmv-total",
+                             "2000ot-stock-par-base",
+                             "2000ot-stock-no-par-base",
+                             "2000ot-real-property-base",
+                             "2000ot-do102-tax",
+                             "2000ot-do122-tax",
+                             "2000ot-do125-tax",
+                             "2000ot-tax-still-due",
+                             "2000ot-penalties",
+                             "2000ot-total-payable"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2000ot-fmv-row",
+                             "outputs":  [
+                                             "frm2000OT:sched1A:txtFMVSubTot{index}"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:sched1A:txtFMVCol1{index}",
+                                            "frm2000OT:sched1A:txtFMVCol2{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Row subtotal is max(zonal/Commissioner FMV, assessor FMV).",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "ComputeFMV",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputeFMV:L5289-L5304",
+                                                 "official-help-v2018#taxable-base"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-fmv-total",
+                             "outputs":  [
+                                             "frm2000OT:sched1A:txtFMVTotal",
+                                             "frm2000OT:Sched2:txtTotalFairMarket"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:sched1A:txtFMVSubTot{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum row FMV subtotals and copy to Schedule 2.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "ComputeFMV",
+                             "depends_on":  [
+                                                "2000ot-fmv-row"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputeFMV:L5299-L5304"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-stock-par-base",
+                             "outputs":  [
+                                             "frm2000OT:txtTax14"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:sched1B:txtParValOfShares{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For DO102, Item 14 is the sum of par values.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "ComputeSharesOfStock",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputeSharesOfStock:L5187-L5204"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-stock-no-par-base",
+                             "outputs":  [
+                                             "frm2000OT:txtTax14"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:sched1B:txtDSTPaid{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For DO125, Item 14 is the sum of DST paid on original issue.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "ComputeSharesOfStock",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputeSharesOfStock:L5187-L5214"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-real-property-base",
+                             "outputs":  [
+                                             "frm2000OT:Sched2:txtTaxableBase",
+                                             "frm2000OT:txtTax15"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:Sched2:txtGrossSellingPrice",
+                                            "frm2000OT:Sched2:txtTotalFairMarket",
+                                            "frm2000OT:Sched2:txtOthers",
+                                            "frm2000OT:Sched2:txtOthersAmount"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For DO122, if Others is blank and amount is 0, base=max(gross selling price,total FMV); otherwise base=Others amount.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "ComputeRealProperty",
+                             "depends_on":  [
+                                                "2000ot-fmv-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputeRealProperty:L5217-L5264",
+                                                 "official-help-v2018#taxable-base"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Model the third valuation basis explicitly rather than switching solely on blank description/zero amount.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-do102-tax",
+                             "outputs":  [
+                                             "frm2000OT:txtTax17"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:txtTax14"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For stock transfer with par value: floor(base / 200) Ã— PHP 1.50.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "TaxComputation",
+                             "depends_on":  [
+                                                "2000ot-stock-par-base"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#TaxComputation:L5120-L5130"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use the legally required per-PHP-200-or-fraction rule (ceiling) after confirming the pinned form text; floor drops every fractional block.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-do122-tax",
+                             "outputs":  [
+                                             "frm2000OT:txtTax17"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:txtTax15"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For real property: round(base / 1000) Ã— PHP 15.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "TaxComputation",
+                             "depends_on":  [
+                                                "2000ot-real-property-base"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#TaxComputation:L5142-L5151"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use the legally required per-PHP-1,000-or-fraction rule (ceiling); Math.round undercharges fractions below half a block.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-do125-tax",
+                             "outputs":  [
+                                             "frm2000OT:txtTax17"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:txtTax14"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For shares without par value: base Ã— 50%.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "TaxComputation",
+                             "depends_on":  [
+                                                "2000ot-stock-no-par-base"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#TaxComputation:L5137-L5140",
+                                                 "official-help-v2018#shares-without-par"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-tax-still-due",
+                             "outputs":  [
+                                             "frm2000OT:txtTax19"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:txtTax17",
+                                            "frm2000OT:txtTax18"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax still due/overpayment = tax due - previously paid on amended return.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "TaxComputation",
+                             "depends_on":  [
+                                                "2000ot-do102-tax",
+                                                "2000ot-do122-tax",
+                                                "2000ot-do125-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#TaxComputation:L5160-L5162"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-penalties",
+                             "outputs":  [
+                                             "frm2000OT:txtTax20D"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:txtTax20A",
+                                            "frm2000OT:txtTax20B",
+                                            "frm2000OT:txtTax20C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Total penalties = surcharge + interest + compromise.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "TaxComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#TaxComputation:L5164-L5166"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2000ot-total-payable",
+                             "outputs":  [
+                                             "frm2000OT:txtTax21"
+                                         ],
+                             "inputs":  [
+                                            "frm2000OT:txtTax19",
+                                            "frm2000OT:txtTax20D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Total payable = max(tax still due,0) + penalties.",
+                             "rounding":  "formatCurrency uses toFixed(2) and thousands separators unless formula states otherwise.",
+                             "trigger":  "TaxComputation",
+                             "depends_on":  [
+                                                "2000ot-tax-still-due",
+                                                "2000ot-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#TaxComputation:L5172-L5180"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

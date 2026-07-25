@@ -1,0 +1,29 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200a-v2020",
+    "cases":  [
+                  {
+                      "case_id":  "fixed-row",
+                      "taxable":  1000,
+                      "calculation_id":  "2200a-schedule-fixed-row-due",
+                      "official_output":  420,
+                      "atr":  0.42
+                  },
+                  {
+                      "case_id":  "part3",
+                      "official_output":  0,
+                      "calculation_id":  "2200a-item24",
+                      "payment":  1000,
+                      "amount_payable":  1000
+                  },
+                  {
+                      "recommended_output":  100,
+                      "existing_due":  0,
+                      "calculation_id":  "2200a-schedule-others-due",
+                      "case_id":  "others-defect",
+                      "rate":  0.1,
+                      "official_output":  0,
+                      "taxable":  1000
+                  }
+              ]
+}

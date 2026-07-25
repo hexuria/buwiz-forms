@@ -1,0 +1,136 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604f-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1604f-row-total-amount",
+                             "1604f-total-withheld",
+                             "1604f-total-penalties",
+                             "1604f-schedule-total",
+                             "1604f-adjustment-obsolete"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1604f-row-total-amount",
+                             "outputs":  [
+                                             "frm1604f:txtSched1TotalAmt1..4",
+                                             "frm1604f:txtSched2TotalAmt1..4",
+                                             "frm1604f:txtSched3TotalAmt1..4"
+                                         ],
+                             "inputs":  [
+                                            "corresponding Taxes Withheld",
+                                            "corresponding Penalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each schedule/quarter, Total Amount Remitted = Taxes Withheld + Penalties.",
+                             "rounding":  "Entry handlers use parseFloat(...).toFixed(2); totals use NumWithComma and formatCurrency.",
+                             "trigger":  "computeTotalAmount(schedule,row)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAmount:L3735-L3746"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604f-total-withheld",
+                             "outputs":  [
+                                             "frm1604f:txtSched1TaxWheldTotal",
+                                             "frm1604f:txtSched2TaxWheldTotal",
+                                             "frm1604f:txtSched3TaxWheldTotal"
+                                         ],
+                             "inputs":  [
+                                            "four Taxes Withheld rows per schedule"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the four quarterly Taxes Withheld values for the selected schedule.",
+                             "rounding":  "Entry handlers use parseFloat(...).toFixed(2); totals use NumWithComma and formatCurrency.",
+                             "trigger":  "computeTotalWithheld(schedule)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalWithheld:L3638-L3665"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604f-total-penalties",
+                             "outputs":  [
+                                             "frm1604f:txtSched1PenTotal",
+                                             "frm1604f:txtSched2PenTotal",
+                                             "frm1604f:txtSched3PenTotal"
+                                         ],
+                             "inputs":  [
+                                            "four Penalties rows per schedule"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the four quarterly Penalties values for the selected schedule.",
+                             "rounding":  "Entry handlers use parseFloat(...).toFixed(2); totals use NumWithComma and formatCurrency.",
+                             "trigger":  "computeTotalPenalties(schedule)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalPenalties:L3667-L3697"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604f-schedule-total",
+                             "outputs":  [
+                                             "frm1604f:txtSched1Total",
+                                             "frm1604f:txtSched2Total",
+                                             "frm1604f:txtSched3Total"
+                                         ],
+                             "inputs":  [
+                                            "corresponding TaxWheldTotal",
+                                            "corresponding PenTotal"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Schedule Total = total Taxes Withheld + total Penalties.",
+                             "rounding":  "Entry handlers use parseFloat(...).toFixed(2); totals use NumWithComma and formatCurrency.",
+                             "trigger":  "computeTotal(schedule)",
+                             "depends_on":  [
+                                                "1604f-total-withheld",
+                                                "1604f-total-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotal:L3699-L3719"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604f-adjustment-obsolete",
+                             "outputs":  [
+                                             "commented adjustment total"
+                                         ],
+                             "inputs":  [
+                                            "commented adjustment rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "The entire adjustment computation is commented out.",
+                             "rounding":  "Entry handlers use parseFloat(...).toFixed(2); totals use NumWithComma and formatCurrency.",
+                             "trigger":  "none",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAdjustment:L3721-L3733"
+                                             ],
+                             "assessment":  "obsolete",
+                             "recommended_app_behavior":  "Do not implement as active January 2018 behavior.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

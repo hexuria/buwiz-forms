@@ -653,6 +653,7 @@ dependencies = [
  "aes-gcm",
  "ammonia",
  "anyhow",
+ "bir-rules",
  "cbc",
  "chrono",
  "cron",
@@ -764,6 +765,27 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "bir-rules"
+version = "0.1.0"
+dependencies = [
+ "num-bigint",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "bir-rules-codegen"
+version = "0.1.0"
+dependencies = [
+ "bir-rules",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

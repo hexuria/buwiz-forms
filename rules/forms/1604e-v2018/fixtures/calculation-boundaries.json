@@ -1,0 +1,37 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1604e-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "schedule1-row-basic",
+                      "inputs":  {
+                                     "penalties":  5,
+                                     "withheld":  100
+                                 },
+                      "calculation_id":  "1604e-schedule1-row-total",
+                      "official_output":  "105.00"
+                  },
+                  {
+                      "case_id":  "schedule2-row-zero-penalty",
+                      "inputs":  {
+                                     "penalties":  0,
+                                     "withheld":  100
+                                 },
+                      "calculation_id":  "1604e-schedule2-row-total",
+                      "official_output":  "100.00"
+                  },
+                  {
+                      "case_id":  "schedule1-four-row-total",
+                      "inputs":  {
+                                     "rows":  [
+                                                  10,
+                                                  20,
+                                                  30,
+                                                  40
+                                              ]
+                                 },
+                      "calculation_id":  "1604e-schedule1-column-totals",
+                      "official_output":  "100.00"
+                  }
+              ]
+}

@@ -4,6 +4,8 @@ members = [
     "crates/bir-core",
     "crates/bir-desktop",
     "crates/bir-print",
+    "crates/bir-rules",
+    "crates/bir-rules-codegen",
 ]
 default-members = ["crates/bir-desktop"]
 

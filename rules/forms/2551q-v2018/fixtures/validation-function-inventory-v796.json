@@ -1,0 +1,17 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "official_hta_sha256":  "dc5c19710400e9bd15ceccd1bbeafc5290074b17b2d460af5f8921c6a7f93186",
+    "main_validate":  "validateForm:L4608-L4723",
+    "save_preflight":  "initialValidateBeforeSave:L4902-L4927",
+    "secondary_validators":  [
+                                 "validateYear:L4600-L4607",
+                                 "validateItem2:L5458-L5478"
+                             ],
+    "covered_rule_count":  37,
+    "commented_out_behavior":  [
+                                   "Line-of-business main check",
+                                   "RDO 000 Save guard",
+                                   "legacy five-row ATC calculations and duplicate prevention"
+                               ]
+}

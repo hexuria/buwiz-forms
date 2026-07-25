@@ -1,0 +1,100 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1707a-v2021",
+    "form_code":  "1707A",
+    "revision":  "2021-04-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707Av2021.hta",
+                                "sha256":  "cd1112c6c14bc338cdd81b19f405bdd788866e0c0164591b968c630feb1b07f1",
+                                "size":  452763,
+                                "revision_binding":  "Title/formType 1707Av2021; April 2021 ENCS. APPLICATIONNAME remains stale as 1707."
+                            },
+                            {
+                                "asset_id":  "legacy-2001-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707A.hta",
+                                "sha256":  "c119206a80a218f5b0cf78e4d9a94ff5f461bb8d8dfb25a262b2b30ed4aa0166",
+                                "size":  386182,
+                                "revision_binding":  "June 2001 predecessor; excluded."
+                            },
+                            {
+                                "asset_id":  "official-help-runtime",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1707Av2021.hta",
+                                "sha256":  "f0ca102e83ce897b66d23533ca5aed77b39bc072563ac8400632677853e6e18b",
+                                "size":  23781,
+                                "revision_binding":  "Revision-matched April 2021 filing/rate/attachment guidance."
+                            },
+                            {
+                                "asset_id":  "legacy-help-excluded",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1707A.hta",
+                                "sha256":  "174191a1aa6ff502f3d6b10fe20309e2a3617e08765aba1b75ee427b283c7f57",
+                                "size":  13914,
+                                "revision_binding":  "Predecessor help; excluded."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1707Av2021\\1707-A April 2021 ENCS.pdf",
+                                "sha256":  "5742d6bf0ca58c601f6c87e486984714a976c6a8b8c1bc6fb246b11fc87f08c3",
+                                "size":  894195,
+                                "revision_binding":  "April 2021 ENCS form."
+                            },
+                            {
+                                "asset_id":  "legacy-encrypted-sample-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1707A\\1707A-final-copy-#email-redacted#.xml",
+                                "sha256":  "fac538050e6ec5773e89dbef2287d13e231afbefa04bde90403268727d22087b",
+                                "size":  1412,
+                                "revision_binding":  "Excluded: all 127 keys overlap the June 2001 runtime, while only 8 overlap April 2021."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  139,
+                   "runtime_field_families":  11,
+                   "fields_total":  150,
+                   "typed_fields":  150,
+                   "validation_rules":  33,
+                   "confirmed_official_bugs":  9,
+                   "calculations":  12,
+                   "negative_fixtures":  30,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "excluded_legacy_encrypted_keys":  "fixtures/excluded-legacy-encrypted-field-keys-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No decrypted values or email-bearing filenames are emitted.",
+                        "The 127-key sample is proven legacy and excluded.",
+                        "139 serialized control occurrences, including the duplicated email key, plus 11 unbounded schedule families are preserved."
+                    ]
+}

@@ -1,0 +1,307 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1600wp-v2010",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1600wp-validate-001-month-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "From-month is blank."
+                                    },
+                      "expected_message":  "Please enter a valid month on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-001-month-required"
+                  },
+                  {
+                      "case_id":  "case-02-1600wp-validate-002-month-width",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "From-month has one character."
+                                    },
+                      "expected_message":  "Please enter a valid month on item 1. Format should be MM/DD/YYYY.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-002-month-width"
+                  },
+                  {
+                      "case_id":  "case-03-1600wp-validate-003-day-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "From-day is blank."
+                                    },
+                      "expected_message":  "Please enter a valid day on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-003-day-required"
+                  },
+                  {
+                      "case_id":  "case-04-1600wp-validate-004-day-width",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "From-day has one character."
+                                    },
+                      "expected_message":  "Please enter a valid day on item 1. Format should be MM/DD/YYYY.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-004-day-width"
+                  },
+                  {
+                      "case_id":  "case-05-1600wp-validate-005-year-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "From-year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-005-year-required"
+                  },
+                  {
+                      "case_id":  "case-06-1600wp-validate-006-positive-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "From-day is below 1."
+                                    },
+                      "expected_message":  "Invalid date entry on item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-006-positive-day"
+                  },
+                  {
+                      "case_id":  "case-07-1600wp-validate-007-nonleap-feb29",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date is February 29 in a non-leap year."
+                                    },
+                      "expected_message":  "Filing year is not a leap year.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-007-nonleap-feb29"
+                  },
+                  {
+                      "case_id":  "case-08-1600wp-validate-008-calendar-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day exceeds the allowed value for a recognized month."
+                                    },
+                      "expected_message":  "Invalid date entry on item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-008-calendar-day"
+                  },
+                  {
+                      "case_id":  "case-09-1600wp-validate-009-year-floor",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is below 1900."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-009-year-floor"
+                  },
+                  {
+                      "case_id":  "case-10-1600wp-validate-012-amended",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither amended-return radio is selected."
+                                    },
+                      "expected_message":  "Please choose amended return on item 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-012-amended"
+                  },
+                  {
+                      "case_id":  "case-11-1600wp-validate-013-tax-held",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Item 4 radio is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-013-tax-held"
+                  },
+                  {
+                      "case_id":  "case-12-1600wp-validate-014-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any withholding-agent TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "1600wp-validate-014-tin"
+                  },
+                  {
+                      "case_id":  "case-13-1600wp-validate-015-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The runtime RDO select remains at index zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-015-rdo"
+                  },
+                  {
+                      "case_id":  "case-14-1600wp-validate-016-category",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither withholding-agent category is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-016-category"
+                  },
+                  {
+                      "case_id":  "case-15-1600wp-validate-017-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-017-name"
+                  },
+                  {
+                      "case_id":  "case-16-1600wp-validate-018-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-018-address"
+                  },
+                  {
+                      "case_id":  "case-17-1600wp-validate-019-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Zip code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-019-zip"
+                  },
+                  {
+                      "case_id":  "case-18-1600wp-validate-020-category-duplicate",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither withholding-agent category is selected after the identical earlier check passed."
+                                    },
+                      "expected_message":  "Please select an option for Item 7.",
+                      "expected_behavior":  "This branch is unreachable because the identical condition already returned at order 16.",
+                      "rule_id":  "1600wp-validate-020-category-duplicate"
+                  },
+                  {
+                      "case_id":  "case-19-1600wp-validate-021-partii-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 4 is Yes but the Part II table has no selected ATC rows."
+                                    },
+                      "expected_message":  "Please fill up Part II Computation of Tax if item 4 is set to Yes.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-021-partii-required"
+                  },
+                  {
+                      "case_id":  "case-20-1600wp-validate-022-partii-base-blank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Part II ATC row has blank tax base."
+                                    },
+                      "expected_message":  "Please enter a valid value for tax base for {ATC}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-022-partii-base-blank"
+                  },
+                  {
+                      "case_id":  "case-21-1600wp-validate-023-partii-base-positive",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Part II ATC row has tax base at or below zero."
+                                    },
+                      "expected_message":  "Please enter Tax Base for ATC \u003c{ATC}\u003e.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-023-partii-base-positive"
+                  },
+                  {
+                      "case_id":  "case-22-1600wp-validate-024-partii-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A generated Part II row has blank ATC."
+                                    },
+                      "expected_message":  "Please fill up Part II Computation of Tax if item 4 is set to Yes.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-024-partii-atc"
+                  },
+                  {
+                      "case_id":  "case-23-1600wp-validate-025-schedule-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A used Schedule II row has blank or shorter-than-12 TIN."
+                                    },
+                      "expected_message":  "Please enter a valid TIN Number for Sequence {index}.",
+                      "expected_behavior":  "Only length is checked; checksum and structure are not.",
+                      "rule_id":  "1600wp-validate-025-schedule-tin"
+                  },
+                  {
+                      "case_id":  "case-24-1600wp-validate-026-schedule-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A used Schedule II row has blank payee name."
+                                    },
+                      "expected_message":  "Please enter a valid Name of Individual/Corporation for Sequence {index}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-026-schedule-name"
+                  },
+                  {
+                      "case_id":  "case-25-1600wp-validate-027-schedule-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A used Schedule II row has blank ATC or nature of payment."
+                                    },
+                      "expected_message":  "Please select an ATC from the list for Sequence {index}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-027-schedule-atc"
+                  },
+                  {
+                      "case_id":  "case-26-1600wp-validate-028-schedule-amount",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A used Schedule II row has amount at or below zero."
+                                    },
+                      "expected_message":  "Please enter Tax Base for ATC {ATC}. Value must be greater than 0.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-validate-028-schedule-amount"
+                  },
+                  {
+                      "case_id":  "case-27-1600wp-validate-030-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All prior checks pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "Controls are disabled after hPartIITableSize is updated.",
+                      "rule_id":  "1600wp-validate-030-success"
+                  },
+                  {
+                      "case_id":  "case-28-1600wp-save-001-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any withholding-agent TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "1600wp-save-001-tin"
+                  },
+                  {
+                      "case_id":  "case-29-1600wp-save-002-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-save-002-rdo"
+                  },
+                  {
+                      "case_id":  "case-30-1600wp-save-003-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1600wp-save-003-name"
+                  }
+              ]
+}

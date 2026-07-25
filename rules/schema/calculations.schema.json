@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/calculations.schema.json",
+  "type": "object",
+  "required": ["schema_version", "form_id", "revision", "evaluation_order", "calculations"],
+  "properties": {
+    "$schema": { "type": "string" }, "schema_version": { "type": "string" }, "form_id": { "type": "string" }, "revision": { "type": "string" },
+    "evaluation_order": { "type": "array", "items": { "type": "string" } },
+    "calculations": { "type": "array", "items": { "$ref": "#/$defs/calculation" } }
+  },
+  "$defs": {
+    "calculation": {
+      "type": "object",
+      "required": ["calculation_id", "outputs", "inputs", "condition", "official_formula", "rounding", "trigger", "depends_on", "source_refs", "assessment", "recommended_app_behavior", "confidence"],
+      "properties": {
+        "calculation_id": { "type": "string" }, "outputs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "inputs": { "type": "array", "items": { "type": "string" } }, "condition": { "type": ["string", "null"] },
+        "official_formula": { "type": "string" }, "rounding": { "type": "string" }, "trigger": { "type": "string" },
+        "depends_on": { "type": "array", "items": { "type": "string" } }, "source_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "assessment": { "enum": ["verified-correct", "official-bug-compatible", "incorrect-official-behavior", "ambiguous", "unverified", "obsolete"] },
+        "recommended_app_behavior": { "type": "string" }, "confidence": { "enum": ["high", "medium", "low", "unknown"] }
+      }, "additionalProperties": false
+    }
+  }, "additionalProperties": false
+}

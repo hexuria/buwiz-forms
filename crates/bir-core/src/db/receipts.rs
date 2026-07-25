@@ -6,6 +6,16 @@ use super::{Database, DbError, SubmissionReceipt, parse_2551q_period};
 use crate::forms::FilingStatus;
 use crate::receipt::{BirReceiptConfirmation, split_bir_filename};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReceiptConfirmationOutcome {
+    Confirmed,
+    Ignored,
+}
+
+pub(super) fn is_audited_2551q_receipt_form_type(form_type: &str) -> bool {
+    matches!(form_type, "2551Qv2018" | "2551Q")
+}
+
 impl Database {
     pub fn save_submission_receipt(
         &self,
@@ -115,54 +125,112 @@ impl Database {
         }
     }
 
-    pub fn confirm_2551q_from_receipt(&self, receipt: &SubmissionReceipt) -> Result<(), DbError> {
-        if receipt.form_type != "2551Qv2018" {
-            return Ok(());
+    pub fn confirm_2551q_from_receipt(
+        &self,
+        receipt: &SubmissionReceipt,
+    ) -> Result<ReceiptConfirmationOutcome, DbError> {
+        if !is_audited_2551q_receipt_form_type(&receipt.form_type) {
+            return Ok(ReceiptConfirmationOutcome::Ignored);
         }
 
         let Some((year, quarter)) = parse_2551q_period(&receipt.period) else {
-            return Ok(());
+            return Ok(ReceiptConfirmationOutcome::Ignored);
         };
 
         let mut draft = match self.get_2551q_draft(&receipt.tin, year, quarter)? {
             Some(draft) => draft,
-            None => return Ok(()),
+            None => return Ok(ReceiptConfirmationOutcome::Ignored),
         };
 
         // Only confirm forms that are currently in Submitted status
         if !matches!(draft.status, FilingStatus::Submitted) {
-            return Ok(());
+            return Ok(ReceiptConfirmationOutcome::Ignored);
+        }
+        let receipt_id = receipt.id.ok_or_else(|| {
+            DbError::Other(
+                "A 2551Q receipt must be persisted before it can confirm a submission".to_string(),
+            )
+        })?;
+
+        let submitted_at = draft.submitted_at.as_deref().ok_or_else(|| {
+            DbError::Other("Submitted 2551Q draft has no submission timestamp".to_string())
+        })?;
+        let submitted_dt = chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|error| {
+            DbError::Other(format!(
+                "Submitted 2551Q draft has an invalid submission timestamp: {error}"
+            ))
+        })?;
+        let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
+        let receipt_naive = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
+            .map_err(|error| {
+            DbError::Other(format!(
+                "Receipt has an invalid received timestamp: {error}"
+            ))
+        })?;
+        let offset = chrono::FixedOffset::east_opt(8 * 3600)
+            .ok_or_else(|| DbError::Other("UTC+08:00 offset is unavailable".to_string()))?;
+        use chrono::TimeZone;
+        let receipt_dt = offset
+            .from_local_datetime(&receipt_naive)
+            .single()
+            .ok_or_else(|| DbError::Other("Receipt received timestamp is ambiguous".to_string()))?;
+        if receipt_dt < submitted_dt {
+            tracing::info!(
+                "Ignoring old receipt {} for draft submitted at {}",
+                receipt.filename,
+                submitted_dt
+            );
+            return Ok(ReceiptConfirmationOutcome::Ignored);
         }
 
-        if let Some(submitted_at) = &draft.submitted_at
-            && let Ok(submitted_dt) = chrono::DateTime::parse_from_rfc3339(submitted_at)
-        {
-            let date_str = format!("{}T{}", receipt.received_date, receipt.received_time);
-            if let Ok(receipt_naive) =
-                chrono::NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
-                && let Some(offset) = chrono::FixedOffset::east_opt(8 * 3600)
-            {
-                use chrono::TimeZone;
-                if let chrono::LocalResult::Single(receipt_dt) =
-                    offset.from_local_datetime(&receipt_naive)
-                    && receipt_dt + chrono::Duration::minutes(5) < submitted_dt
-                {
-                    tracing::info!(
-                        "Ignoring old receipt {} for draft submitted at {}",
-                        receipt.filename,
-                        submitted_dt
-                    );
-                    return Ok(());
-                }
-            }
-        }
+        draft.transition_to_confirmed(date_str, Some(receipt_id), Some(receipt.filename.clone()));
+        self.save_confirmed_2551q_draft(&draft)?;
+        Ok(ReceiptConfirmationOutcome::Confirmed)
+    }
+}
 
-        draft.transition_to_confirmed(
-            format!("{}T{}", receipt.received_date, receipt.received_time),
-            receipt.id,
-            Some(receipt.filename.clone()),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn receipt(form_type: &str) -> SubmissionReceipt {
+        SubmissionReceipt {
+            id: None,
+            filename: format!("123456789000-{form_type}-122026Q1.xml"),
+            tin: "123456789000".to_string(),
+            form_type: form_type.to_string(),
+            period: "122026Q1".to_string(),
+            received_date: "2026-04-25".to_string(),
+            received_time: "12:00:00".to_string(),
+            source_from: None,
+            raw_text: "test receipt".to_string(),
+            raw_html: None,
+            created_at: None,
+        }
+    }
+
+    #[test]
+    fn receipt_form_aliases_are_closed_and_explicit() {
+        assert!(is_audited_2551q_receipt_form_type("2551Qv2018"));
+        assert!(is_audited_2551q_receipt_form_type("2551Q"));
+        assert!(!is_audited_2551q_receipt_form_type("2551Qv2024"));
+        assert!(!is_audited_2551q_receipt_form_type("1601C"));
+    }
+
+    #[test]
+    fn unrelated_or_unmatched_receipts_report_ignored() {
+        let database = Database::open_in_memory_for_tests().unwrap();
+        assert_eq!(
+            database
+                .confirm_2551q_from_receipt(&receipt("1601C"))
+                .unwrap(),
+            ReceiptConfirmationOutcome::Ignored
         );
-        self.save_2551q_draft(&draft)?;
-        Ok(())
+        assert_eq!(
+            database
+                .confirm_2551q_from_receipt(&receipt("2551Q"))
+                .unwrap(),
+            ReceiptConfirmationOutcome::Ignored
+        );
     }
 }

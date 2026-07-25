@@ -1,0 +1,516 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1801-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1801-schedule-real-property",
+                             "1801-schedule-family-home",
+                             "1801-schedule-shares",
+                             "1801-schedule-other-personal",
+                             "1801-schedule-taxable-transfers",
+                             "1801-schedule-business",
+                             "1801-schedule-ordinary-deductions",
+                             "1801-gross-estate-components",
+                             "1801-gross-estate-total",
+                             "1801-estate-after-ordinary-deductions",
+                             "1801-special-deductions-total",
+                             "1801-net-estate",
+                             "1801-surviving-spouse-share",
+                             "1801-net-taxable-estate",
+                             "1801-estate-tax-due",
+                             "1801-tax-credits-total",
+                             "1801-tax-payable",
+                             "1801-installment-balance",
+                             "1801-penalties-total",
+                             "1801-total-payable"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1801-schedule-real-property",
+                             "outputs":  [
+                                             "frm1801v2018:sched1Exc_Total",
+                                             "frm1801v2018:sched1Conj_Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:sched1Exc_{index}",
+                                            "frm1801v2018:sched1Conj_{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each ownership column across Schedule 1 rows.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "getRealProp_totals",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getRealProp_totals:L5032-L5045"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-schedule-family-home",
+                             "outputs":  [
+                                             "frm1801v2018:sched1AExc_Total",
+                                             "frm1801v2018:sched1AConj_Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:sched1AExc_{index}",
+                                            "frm1801v2018:sched1AConj_{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each ownership column across Schedule 1A rows.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "getFam_totals",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getFam_totals:L5046-L5059"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-schedule-shares",
+                             "outputs":  [
+                                             "frm1801v2018:sched2Exc_Total",
+                                             "frm1801v2018:sched2Conj_Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:sched2Exc_{index}",
+                                            "frm1801v2018:sched2Conj_{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each ownership column across Schedule 2 rows.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "getStock_totals",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getStock_totals:L5060-L5073"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-schedule-other-personal",
+                             "outputs":  [
+                                             "frm1801v2018:sched2AExc_Total",
+                                             "frm1801v2018:sched2AConj_Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:sched2AExc_{index}",
+                                            "frm1801v2018:sched2AConj_{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each ownership column across Schedule 2A rows.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "getOther_totals",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getOther_totals:L5074-L5087"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-schedule-taxable-transfers",
+                             "outputs":  [
+                                             "frm1801v2018:sched3Exc_Total",
+                                             "frm1801v2018:sched3Conj_Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:sched3Exc_{index}",
+                                            "frm1801v2018:sched3Conj_{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each ownership column across Schedule 3 rows.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "getTransfer_totals",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getTransfer_totals:L5088-L5101"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-schedule-business",
+                             "outputs":  [
+                                             "frm1801v2018:sched4Exc_Total",
+                                             "frm1801v2018:sched4Conj_Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:sched4Exc_{index}",
+                                            "frm1801v2018:sched4Conj_{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each ownership column across Schedule 4 rows.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "getBusiness_totals",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getBusiness_totals:L5102-L5115"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-schedule-ordinary-deductions",
+                             "outputs":  [
+                                             "frm1801v2018:sched5Exc_Total",
+                                             "frm1801v2018:sched5Conj_Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:sched5*Exc",
+                                            "frm1801v2018:sched5*Conj"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the seven fixed Schedule 5 ordinary-deduction rows by ownership column.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "getOrdDed_totals",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getOrdDed_totals:L5116-L5130"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-gross-estate-components",
+                             "outputs":  [
+                                             "frm1801v2018:txtRealProp_C",
+                                             "frm1801v2018:txtFam_C",
+                                             "frm1801v2018:txtPersonalProp_C",
+                                             "frm1801v2018:txtTaxable_C",
+                                             "frm1801v2018:txtBusiness_C"
+                                         ],
+                             "inputs":  [
+                                            "schedule totals"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each category, C = exclusive A + conjugal B; personal property combines Schedules 2 and 2A.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part4",
+                             "depends_on":  [
+                                                "1801-schedule-real-property",
+                                                "1801-schedule-family-home",
+                                                "1801-schedule-shares",
+                                                "1801-schedule-other-personal",
+                                                "1801-schedule-taxable-transfers",
+                                                "1801-schedule-business"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part4:L4977-L4996"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-gross-estate-total",
+                             "outputs":  [
+                                             "frm1801v2018:txtGrossEst_A",
+                                             "frm1801v2018:txtGrossEst_B",
+                                             "frm1801v2018:txtGrossEst_C"
+                                         ],
+                             "inputs":  [
+                                            "category A/B values"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Gross A and B are category sums; Gross C = Gross A + Gross B.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part4",
+                             "depends_on":  [
+                                                "1801-gross-estate-components"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part4:L4998-L5008"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-estate-after-ordinary-deductions",
+                             "outputs":  [
+                                             "frm1801v2018:txtEstAfterDed_A",
+                                             "frm1801v2018:txtEstAfterDed_B",
+                                             "frm1801v2018:txtEstAfterDed_C"
+                                         ],
+                             "inputs":  [
+                                            "gross estate",
+                                            "ordinary deductions"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "A = gross A - ordinary deductions A; B likewise; C = A + B.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part4",
+                             "depends_on":  [
+                                                "1801-gross-estate-total",
+                                                "1801-schedule-ordinary-deductions"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part4:L5010-L5016"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-special-deductions-total",
+                             "outputs":  [
+                                             "frm1801v2018:txtTotalDed_C"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtStandardDed_C",
+                                            "frm1801v2018:txtFamDed_C",
+                                            "frm1801v2018:txtOtherDed_C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Total special deductions = standard + family home + other.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part4",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part4:L5018"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-net-estate",
+                             "outputs":  [
+                                             "frm1801v2018:txtNetEst_C"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtEstAfterDed_C",
+                                            "frm1801v2018:txtTotalDed_C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Net estate = estate after ordinary deductions - special deductions.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part4",
+                             "depends_on":  [
+                                                "1801-estate-after-ordinary-deductions",
+                                                "1801-special-deductions-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part4:L5020"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-surviving-spouse-share",
+                             "outputs":  [
+                                             "frm1801v2018:txtShareSpouse_C"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtEstAfterDed_B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Surviving-spouse share = one half of conjugal estate after ordinary deductions.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part4",
+                             "depends_on":  [
+                                                "1801-estate-after-ordinary-deductions"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part4:L5022"
+                                             ],
+                             "assessment":  "ambiguous",
+                             "recommended_app_behavior":  "Verify the legal base and ownership treatment against the revision-matched guide before implementation; retain the source formula separately.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-net-taxable-estate",
+                             "outputs":  [
+                                             "frm1801v2018:txtNetTaxEst_C",
+                                             "frm1801v2018:txtTaxableEstate"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtNetEst_C",
+                                            "frm1801v2018:txtShareSpouse_C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Net taxable estate = net estate - surviving-spouse share; Item 17 copies it.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part4",
+                             "depends_on":  [
+                                                "1801-net-estate",
+                                                "1801-surviving-spouse-share"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part4:L5024-L5026"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-estate-tax-due",
+                             "outputs":  [
+                                             "frm1801v2018:txtEstTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtTaxableEstate",
+                                            "frm1801v2018:txtTaxRate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If taxable estate is positive, tax due = taxable estate Ã— parsed percentage / 100; otherwise 0.00.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "computeNo18",
+                             "depends_on":  [
+                                                "1801-net-taxable-estate"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeNo18:L5359-L5377",
+                                                 "official-help-v2018#six-percent"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-tax-credits-total",
+                             "outputs":  [
+                                             "frm1801v2018:txtCredits_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtCredits_ForeignEst",
+                                            "frm1801v2018:txtCredits_TaxPrev"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Credits total = foreign estate-tax credit + previous-payment credit.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part2",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part2:L4946-L4951"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-tax-payable",
+                             "outputs":  [
+                                             "frm1801v2018:txtTaxPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtEstTaxDue",
+                                            "frm1801v2018:txtCredits_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax payable = estate tax due - total credits; no zero floor.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part2",
+                             "depends_on":  [
+                                                "1801-estate-tax-due",
+                                                "1801-tax-credits-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part2:L4952"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Represent overpayment separately or floor payable at zero according to the filing specification.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-installment-balance",
+                             "outputs":  [
+                                             "frm1801v2018:txtTaxPayable_1st"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtTaxPayable",
+                                            "frm1801v2018:txtInstallment"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Balance = tax payable - installment amount; no zero floor.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part2",
+                             "depends_on":  [
+                                                "1801-tax-payable"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part2:L4953-L4954"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Reject installments exceeding payable tax or represent the resulting credit explicitly.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-penalties-total",
+                             "outputs":  [
+                                             "frm1801v2018:txtPen_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtPen_Surcharge",
+                                            "frm1801v2018:txtPen_Interest",
+                                            "frm1801v2018:txtPen_Compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Total penalties = surcharge + interest + compromise.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part2",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part2:L4955-L4958"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement as a typed decimal calculation with deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1801-total-payable",
+                             "outputs":  [
+                                             "frm1801v2018:txtTotPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1801v2018:txtTaxPayable_1st",
+                                            "frm1801v2018:txtPen_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Normally balance + penalties; if balance is negative and penalties positive, output penalties only.",
+                             "rounding":  "formatCurrency calls Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part2",
+                             "depends_on":  [
+                                                "1801-installment-balance",
+                                                "1801-penalties-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part2:L4960-L4972"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Floor the tax component at zero before adding penalties and represent any credit separately; source can emit a negative total when penalties are zero.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

@@ -1,0 +1,813 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/serialization.schema.json",
+  "title": "eBIRForms reviewed serialization contract v1",
+  "$defs": {
+    "artifact_variant_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "artifact_target": {
+      "enum": [
+        "editable-save",
+        "finalized-save",
+        "encrypted-final-copy",
+        "submission-payload",
+        "historical-import-compatibility"
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "target",
+        "variant_id",
+        "official",
+        "filing_safe",
+        "source_refs"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "target": {
+          "$ref": "#/$defs/artifact_target"
+        },
+        "variant_id": {
+          "$ref": "#/$defs/artifact_variant_id"
+        },
+        "official": {
+          "$ref": "#/$defs/artifact_branch"
+        },
+        "filing_safe": {
+          "$ref": "#/$defs/artifact_branch"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact_branch": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/executable_artifact_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    },
+    "executable_artifact_branch": {
+      "type": "object",
+      "required": [
+        "state",
+        "nodes",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "state": {
+          "const": "executable"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact_node"
+          },
+          "minItems": 1
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifact_node": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/non_group_artifact_node"
+        },
+        {
+          "$ref": "#/$defs/dynamic_group"
+        }
+      ]
+    },
+    "non_group_artifact_node": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/pseudo_xml_field"
+        },
+        {
+          "$ref": "#/$defs/metadata_element"
+        },
+        {
+          "$ref": "#/$defs/reviewed_literal"
+        }
+      ]
+    },
+    "ordinal": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "pseudo_xml_field": {
+      "type": "object",
+      "required": [
+        "kind",
+        "ordinal",
+        "key_projection",
+        "occurrence_projection",
+        "value_projection",
+        "semantic_format",
+        "body_codec",
+        "presence",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "pseudo-xml-field"
+        },
+        "ordinal": {
+          "$ref": "#/$defs/ordinal"
+        },
+        "key_projection": {
+          "$ref": "#/$defs/key_projection"
+        },
+        "occurrence_projection": {
+          "$ref": "#/$defs/occurrence_projection"
+        },
+        "value_projection": {
+          "$ref": "#/$defs/value_projection"
+        },
+        "semantic_format": {
+          "$ref": "#/$defs/semantic_format"
+        },
+        "body_codec": {
+          "$ref": "#/$defs/body_codec"
+        },
+        "presence": {
+          "$ref": "#/$defs/presence"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata_element": {
+      "type": "object",
+      "required": [
+        "kind",
+        "ordinal",
+        "exact_tag",
+        "value_projection",
+        "semantic_format",
+        "body_codec",
+        "presence",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "metadata-element"
+        },
+        "ordinal": {
+          "$ref": "#/$defs/ordinal"
+        },
+        "exact_tag": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9._:-]*$",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "value_projection": {
+          "$ref": "#/$defs/value_projection"
+        },
+        "semantic_format": {
+          "$ref": "#/$defs/semantic_format"
+        },
+        "body_codec": {
+          "$ref": "#/$defs/body_codec"
+        },
+        "presence": {
+          "$ref": "#/$defs/presence"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewed_literal": {
+      "type": "object",
+      "required": [
+        "kind",
+        "ordinal",
+        "exact_bytes",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "reviewed-literal"
+        },
+        "ordinal": {
+          "$ref": "#/$defs/ordinal"
+        },
+        "exact_bytes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "minItems": 1
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dynamic_group": {
+      "type": "object",
+      "required": [
+        "kind",
+        "ordinal",
+        "group_id",
+        "instance_order",
+        "min_occurs",
+        "max_occurs",
+        "nodes",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "dynamic-group"
+        },
+        "ordinal": {
+          "$ref": "#/$defs/ordinal"
+        },
+        "group_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "instance_order": {
+          "const": "stable-instance-id-ascending"
+        },
+        "min_occurs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_occurs": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_group_artifact_node"
+          },
+          "minItems": 1
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "key_projection": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/exact_key_projection"
+        },
+        {
+          "$ref": "#/$defs/group_indexed_key_projection"
+        }
+      ]
+    },
+    "exact_key_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "key"
+      ],
+      "properties": {
+        "kind": {
+          "const": "exact"
+        },
+        "key": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "group_indexed_key_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "group_id",
+        "index_base",
+        "index_step",
+        "padding",
+        "prefix",
+        "suffix",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "group-indexed"
+        },
+        "group_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "index_base": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "index_step": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "padding": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "prefix": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "suffix": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "occurrence_projection": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/fixed_occurrence_projection"
+        },
+        {
+          "$ref": "#/$defs/group_indexed_occurrence_projection"
+        }
+      ]
+    },
+    "fixed_occurrence_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "occurrence"
+      ],
+      "properties": {
+        "kind": {
+          "const": "fixed"
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "group_indexed_occurrence_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "group_id",
+        "index_base",
+        "index_step",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "group-indexed"
+        },
+        "group_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "index_base": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "index_step": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "value_projection": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/field_value_projection"
+        },
+        {
+          "$ref": "#/$defs/derived_value_projection"
+        },
+        {
+          "$ref": "#/$defs/context_value_projection"
+        },
+        {
+          "$ref": "#/$defs/constant_value_projection"
+        },
+        {
+          "$ref": "#/$defs/default_value_projection"
+        }
+      ]
+    },
+    "field_value_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "field"
+      ],
+      "properties": {
+        "kind": {
+          "const": "field"
+        },
+        "field": {
+          "$ref": "common.schema.json#/$defs/field_ref"
+        }
+      },
+      "additionalProperties": false
+    },
+    "derived_value_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "calculation_id",
+        "output_id",
+        "instance"
+      ],
+      "properties": {
+        "kind": {
+          "const": "derived"
+        },
+        "calculation_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "output_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "instance": {
+          "$ref": "common.schema.json#/$defs/derived_instance_selector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context_value_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "context_value_id"
+      ],
+      "properties": {
+        "kind": {
+          "const": "context"
+        },
+        "context_value_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "additionalProperties": false
+    },
+    "constant_value_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "constant"
+        },
+        "value": {
+          "$ref": "common.schema.json#/$defs/typed_value"
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "default_value_projection": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "default"
+        },
+        "value": {
+          "$ref": "common.schema.json#/$defs/typed_value"
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "semantic_format": {
+      "type": "object",
+      "required": [
+        "absent",
+        "blank",
+        "present"
+      ],
+      "properties": {
+        "absent": {
+          "enum": [
+            "reject",
+            "omit-occurrence"
+          ]
+        },
+        "blank": {
+          "enum": [
+            "reject",
+            "emit-empty-body",
+            "omit-occurrence"
+          ]
+        },
+        "present": {
+          "$ref": "#/$defs/present_value_format"
+        }
+      },
+      "additionalProperties": false
+    },
+    "present_value_format": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/text_format"
+        },
+        {
+          "$ref": "#/$defs/boolean_format"
+        },
+        {
+          "$ref": "#/$defs/integer_format"
+        },
+        {
+          "$ref": "#/$defs/decimal_format"
+        },
+        {
+          "$ref": "#/$defs/date_format"
+        }
+      ]
+    },
+    "text_format": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "text"
+        }
+      },
+      "additionalProperties": false
+    },
+    "boolean_format": {
+      "type": "object",
+      "required": [
+        "kind",
+        "true_text",
+        "false_text"
+      ],
+      "properties": {
+        "kind": {
+          "const": "boolean"
+        },
+        "true_text": {
+          "type": "string"
+        },
+        "false_text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "integer_format": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "base10-integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "decimal_format": {
+      "type": "object",
+      "required": [
+        "kind",
+        "scale",
+        "rounding",
+        "grouping",
+        "decimal_separator",
+        "negative"
+      ],
+      "properties": {
+        "kind": {
+          "const": "decimal"
+        },
+        "scale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "rounding": {
+          "enum": [
+            "none",
+            "half-up",
+            "half-even",
+            "toward-zero",
+            "away-from-zero",
+            "floor",
+            "ceiling"
+          ]
+        },
+        "grouping": {
+          "enum": [
+            "none",
+            "comma",
+            "period",
+            "space"
+          ]
+        },
+        "decimal_separator": {
+          "enum": [
+            "period",
+            "comma"
+          ]
+        },
+        "negative": {
+          "enum": [
+            "leading-minus",
+            "trailing-minus",
+            "parentheses"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "date_format": {
+      "type": "object",
+      "required": [
+        "kind",
+        "pattern"
+      ],
+      "properties": {
+        "kind": {
+          "const": "date"
+        },
+        "pattern": {
+          "enum": [
+            "yyyy-mm-dd-hyphen",
+            "yyyy-mm-dd-slash",
+            "mm-dd-yyyy-slash",
+            "dd-mm-yyyy-slash",
+            "yyyymmdd"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "body_codec": {
+      "enum": [
+        "raw-literal",
+        "legacy-javascript-escape",
+        "utf8-percent-rfc3986-unreserved"
+      ]
+    },
+    "presence": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/always_presence"
+        },
+        {
+          "$ref": "#/$defs/conditional_presence"
+        },
+        {
+          "$ref": "#/$defs/omitted_presence"
+        }
+      ]
+    },
+    "always_presence": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "always"
+        }
+      },
+      "additionalProperties": false
+    },
+    "conditional_presence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "predicate"
+      ],
+      "properties": {
+        "kind": {
+          "const": "when"
+        },
+        "predicate": {
+          "$ref": "predicate.schema.json#/$defs/predicate"
+        }
+      },
+      "additionalProperties": false
+    },
+    "omitted_presence": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "omitted"
+        }
+      },
+      "additionalProperties": false
+    },
+    "serialization_contract": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "artifacts"
+      ],
+      "properties": {
+        "contract_version": {
+          "const": "1.0.0"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/serialization_contract"
+}

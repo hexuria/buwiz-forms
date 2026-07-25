@@ -1,0 +1,665 @@
+{
+    "source_sha256":  "fbbaa75784bb054f3658ab0a357ad50b65807c59c437c2d010e69aa1ad64081a",
+    "function_count":  48,
+    "functions":  [
+                      {
+                          "name":  "populateItems",
+                          "start_line":  5721,
+                          "end_line":  5847,
+                          "body_sha256":  "d15d694cd953eee83836ea94c90c786cfefd67f5db8592d0709e166208a49e7c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I54",
+                                              "frm1702RT:txtPg3Sc2I4"
+                                          ]
+                      },
+                      {
+                          "name":  "populateSavedModalTable",
+                          "start_line":  5962,
+                          "end_line":  6031,
+                          "body_sha256":  "2db87837299c9134c0ab3d9c3ed8c2ae1a3d341b9d2b177f831f57136c12f59f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I54",
+                                              "frm1702RT:txtPg3Sc2I4"
+                                          ]
+                      },
+                      {
+                          "name":  "getSum",
+                          "start_line":  6903,
+                          "end_line":  6915,
+                          "body_sha256":  "604b8873991f216f9a7509e208c02b74c05612be2de4907ff8c0e36df480ece3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getSum2",
+                          "start_line":  6916,
+                          "end_line":  6928,
+                          "body_sha256":  "4a48950f051f0a4861ba5573c78fb112a3f9ee65f77c2898f9fc514092aeb3f5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getDifference",
+                          "start_line":  6929,
+                          "end_line":  6941,
+                          "body_sha256":  "e84fd73c452a651b4102faf13867878da362b790d045b212c949def1395a475d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getProduct",
+                          "start_line":  6942,
+                          "end_line":  6951,
+                          "body_sha256":  "185daaf06d4d08c28942428a8ea9387d347ffc9b1e1e304ec064d0d20db4b08b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getProduct2",
+                          "start_line":  6952,
+                          "end_line":  6960,
+                          "body_sha256":  "2ac046483af2711adf2dd11c860f4cae8190e7fb314094fc3f183d142363d13b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "sumThenDifference",
+                          "start_line":  6965,
+                          "end_line":  6974,
+                          "body_sha256":  "44437673e2fa90fbbf116ad1d952f74b57a0529abd750cc4c6d4123f664afb14",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateAllNames",
+                          "start_line":  7486,
+                          "end_line":  7516,
+                          "body_sha256":  "334a9f4a2dc22dfe3eacecc438d49c779a692836aa82f4f74a8788e9a391c21a",
+                          "alerts":  [
+                                         "\u0027Page 1 Part I Item 14 PSIC code cannot be less than 4 characters\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:Pg2Pt4I40IncomeTaxRate",
+                                              "frm1702RT:txtPg1Pt1I14PSIC",
+                                              "frm1702RT:txtPg1Pt1I8Name1",
+                                              "frm1702RT:txtPg2Pt4I41IncomeTaxDue",
+                                              "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+                                              "frm1702RT:txtPg2Pt5I57SpecialAllowable",
+                                              "frm1702RT:txtPg2RegisteredName",
+                                              "frm1702RT:txtPg3RegisteredName",
+                                              "frm1702RT:txtPg4RegisteredName"
+                                          ]
+                      },
+                      {
+                          "name":  "recomputeForOptional",
+                          "start_line":  8030,
+                          "end_line":  8052,
+                          "body_sha256":  "b27cac62780e0f6f42b905fecf7223c7944bbb8f08228ea85c7e1269236a6310",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP1Pt2I16",
+                          "start_line":  8176,
+                          "end_line":  8180,
+                          "body_sha256":  "100433b92dc3270d83cb5715dee0e0c002cee8477193781688c9aed520bb392d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP1Pt2I20",
+                          "start_line":  8181,
+                          "end_line":  8185,
+                          "body_sha256":  "8e1a561e8ccbd459a14274b8198d10e9c3a0a6eb4477617bd6f44eb8fab754fa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP1Pt2I21",
+                          "start_line":  8186,
+                          "end_line":  8216,
+                          "body_sha256":  "6c94f0775545a51415bea493436a1d118e2fe33ae9c88a01383f277d5223bc65",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1Pt2I21OverpaymentCarried",
+                                              "frm1702RT:rdoPg1Pt2I21OverpaymentIssued",
+                                              "frm1702RT:rdoPg1Pt2I21OverpaymentRefunded",
+                                              "frm1702RT:txtPg1Pt2I16NetTax",
+                                              "frm1702RT:txtPg1Pt2I20TotalPenalties",
+                                              "frm1702RT:txtPg1Pt2I21TotalAmount"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I29",
+                          "start_line":  8217,
+                          "end_line":  8225,
+                          "body_sha256":  "f172ab0956768b4bcb817ef9d3ec3c40b32f0a813ed64ee77867ffac65a0bc72",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I31",
+                          "start_line":  8226,
+                          "end_line":  8231,
+                          "body_sha256":  "bbb6f2512eeb2586cbc2d1f71cc3a171b0683ce5fb529b3c342234525a59f24f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I33",
+                          "start_line":  8232,
+                          "end_line":  8253,
+                          "body_sha256":  "d997276c09be086bea5992e3db3362235b89e9b3249ce457f77e83f1a0067b24",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+                                              "frm1702RT:rdoPg1Pt1I13OptionalStandard",
+                                              "frm1702RT:txtPg2Pt4I33TotalGross",
+                                              "frm1702RT:txtPg4Sc3I1GrossIncome",
+                                              "frm1702RT:txtPg4Sc3I2TotalDeductions",
+                                              "frm1702RT:txtPg4Sc3I3NetOperatingLoss"
+                                          ]
+                      },
+                      {
+                          "name":  "computeItem18and33",
+                          "start_line":  8254,
+                          "end_line":  8276,
+                          "body_sha256":  "4fe7c622e5838abe5d0662118e0f522ed3d24f9fe1bc072dc1da05f7718e529a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I33TotalGross",
+                                              "frm1702RT:txtPg2Pt4I34OrdinaryAllowable",
+                                              "frm1702RT:txtPg3Sc1I18TotalOrdinaryAllowable",
+                                              "frm1702RT:txtPg4Sc3AI4C1",
+                                              "frm1702RT:txtPg4Sc3AI4C2",
+                                              "frm1702RT:txtPg4Sc3I1GrossIncome",
+                                              "frm1702RT:txtPg4Sc3I2TotalDeductions",
+                                              "frm1702RT:txtPg4Sc3I3NetOperatingLoss"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I37",
+                          "start_line":  8277,
+                          "end_line":  8290,
+                          "body_sha256":  "daa388fee35cf500211b2d36088c610c4c25ec01623bb0374d53f7ddf3394345",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+                                              "frm1702RT:rdoPg1Pt1I13OptionalStandard",
+                                              "frm1702RT:txtPg2Pt4I37TotalItemized"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I38",
+                          "start_line":  8291,
+                          "end_line":  8305,
+                          "body_sha256":  "ef4de0fdb91ecc2e5d3e8bb6cc81bf03be4868ec39ac1f78c84aa01c63bd865a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+                                              "frm1702RT:rdoPg1Pt1I13OptionalStandard",
+                                              "frm1702RT:txtPg2Pt4I38OptionalStandard"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I39",
+                          "start_line":  8306,
+                          "end_line":  8326,
+                          "body_sha256":  "7a771c8483cbe03977768e684e61204cde6d70e1ab62e460abf566186b7c8a55",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+                                              "frm1702RT:rdoPg1Pt1I13OptionalStandard",
+                                              "frm1702RT:txtPg2Pt4I33TotalGross",
+                                              "frm1702RT:txtPg2Pt4I34OrdinaryAllowable",
+                                              "frm1702RT:txtPg4Sc3AI4C5",
+                                              "frm1702RT:txtPg4Sc3AI4C6",
+                                              "frm1702RT:txtPg4Sc3I1GrossIncome"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I40",
+                          "start_line":  8327,
+                          "end_line":  8334,
+                          "body_sha256":  "c926ea6eb13cefc47cae5f35e4587aec821ac35296ed5175afef1600370e2867",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:Pg2Pt4I40IncomeTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I41",
+                          "start_line":  8335,
+                          "end_line":  8358,
+                          "body_sha256":  "71ef010a789b809ff133bdeed809ee0265f13a675d6e58c2e98324e39d67918b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                              "frm1702RT:txtPg2Pt4I41IncomeTaxDue"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I42",
+                          "start_line":  8359,
+                          "end_line":  8379,
+                          "body_sha256":  "8a75534853bd4ee6ff9b1e41979fedd573f33bc00be21e3fc452cce798f703ae",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1I5Atc",
+                                              "frm1702RT:txtPg2Pt4I33TotalGross",
+                                              "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                              "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+                                              "frm1702RT:txtPg2Pt4I43TotalIncomeTax"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I43",
+                          "start_line":  8380,
+                          "end_line":  8415,
+                          "body_sha256":  "cf0a9bbb51db427be0bfdf88873136ea2cb2e79720405d580b4d7ada60cf196b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                              "frm1702RT:txtPg2Pt4I41IncomeTaxDue",
+                                              "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+                                              "frm1702RT:txtPg2Pt4I43TotalIncomeTax"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I55TotalTaxCredits",
+                          "start_line":  8416,
+                          "end_line":  8423,
+                          "body_sha256":  "3025ca9c2bb68b97dd1019a54582c21c9f049fb51f0f825bf0d0074b0b3d92bf",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg1Pt2I15TotalTaxCredits",
+                                              "frm1702RT:txtPg2Pt4I55TotalTaxCredits"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I56",
+                          "start_line":  8424,
+                          "end_line":  8436,
+                          "body_sha256":  "8bba30c61cf866845e50fc726253fcf9c2c34bdb3b2b615d7b34c405147de00b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg1Pt2I16NetTax",
+                                              "frm1702RT:txtPg2Pt4I56NetTax"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt5I57",
+                          "start_line":  8437,
+                          "end_line":  8448,
+                          "body_sha256":  "122fb2df609febf2380d5c2fe70cb8f8fd6277514272f69207bf907b3371950d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:Pg2Pt4I40IncomeTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt5I59",
+                          "start_line":  8449,
+                          "end_line":  8454,
+                          "body_sha256":  "685d96355b216072b87cd53f12ab6ddf0f755e4bab176d11b8827bf897ce107f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP3Sc1I18TotalOrdinaryAllowable",
+                          "start_line":  8455,
+                          "end_line":  8469,
+                          "body_sha256":  "f2e450cf36c6cb764ea7f80518ecb6358327283aa6fe73c709209bb121d198f2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+                                              "frm1702RT:rdoPg1Pt1I13OptionalStandard"
+                                          ]
+                      },
+                      {
+                          "name":  "computeAllIterationsSub",
+                          "start_line":  8470,
+                          "end_line":  8478,
+                          "body_sha256":  "ccdac11e3d00971a086d0559b20dbf17344f8be5b85a781b8c5bb57f61bc4cdf",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeAllIterations",
+                          "start_line":  8479,
+                          "end_line":  8484,
+                          "body_sha256":  "a0528f635bba095031984afe361f788e02f905831a0c3a364ae07476d80355d6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP3Sc2I5TotalSpecialAllowable",
+                          "start_line":  8485,
+                          "end_line":  8496,
+                          "body_sha256":  "fa5a0de7b014ba8c823a8252976c50d0b65bb83e2e88878682b851e9e00f5952",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I35SpecialAllowable",
+                                              "frm1702RT:txtPg3Sc2I5TotalSpecialAllowable"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc3AI8TotalNOLCO",
+                          "start_line":  8497,
+                          "end_line":  8541,
+                          "body_sha256":  "8d6c944ab1e284813ac91ea67535e4941ff219528d554cd0c2daea2a89b036d0",
+                          "alerts":  [
+                                         "\u0027Page 4 Schedule IIIA Item 4 Column D (NOLCO Applied Current Year) cannot be more than Page 4 Schedule 3A Item 4 Column A (Amount)\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 5 Column D (NOLCO Applied Current Year) cannot be more than Page 4 Schedule 3A Item 5 Column A (Amount)\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 6 Column D (NOLCO Applied Current Year) cannot be more than Page 4 Schedule 3A Item 6 Column A (Amount)\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 7 Column D (NOLCO Applied Current Year) cannot be more than Page 4 Schedule 3A Item 7 Column A (Amount)\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 5: Column B + C + D cannot be greater than Column A\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 6: Column B + C + D cannot be greater than Column A\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 7: Column B + C + D cannot be greater than Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I36Nolco",
+                                              "frm1702RT:txtPg4Sc3AI4C2",
+                                              "frm1702RT:txtPg4Sc3AI4C5",
+                                              "frm1702RT:txtPg4Sc3AI5C2",
+                                              "frm1702RT:txtPg4Sc3AI5C3",
+                                              "frm1702RT:txtPg4Sc3AI5C4",
+                                              "frm1702RT:txtPg4Sc3AI5C5",
+                                              "frm1702RT:txtPg4Sc3AI6C2",
+                                              "frm1702RT:txtPg4Sc3AI6C3",
+                                              "frm1702RT:txtPg4Sc3AI6C4",
+                                              "frm1702RT:txtPg4Sc3AI6C5",
+                                              "frm1702RT:txtPg4Sc3AI7C2",
+                                              "frm1702RT:txtPg4Sc3AI7C3",
+                                              "frm1702RT:txtPg4Sc3AI7C4",
+                                              "frm1702RT:txtPg4Sc3AI7C5",
+                                              "frm1702RT:txtPg4Sc4I8TotalNOLCO"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3I3NetOperatingLoss",
+                          "start_line":  8542,
+                          "end_line":  8546,
+                          "body_sha256":  "0c5794725d7c3a45f0cb2647884a6dbe7e56da9f8edfdf32d72bed2589e44dab",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc3AI4C6",
+                          "start_line":  8645,
+                          "end_line":  8649,
+                          "body_sha256":  "5666b744b70704b2ba6bb8ce54a7b78f29c7238dc52b079c0d24885fadaf7498",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc3AI5C6",
+                          "start_line":  8650,
+                          "end_line":  8664,
+                          "body_sha256":  "cc0eeb61f689b42c2117a8a1e57bc8f52b524ee87290c354bdb3778c992c2b16",
+                          "alerts":  [
+                                         "\u0027Page 4 Schedule IIIA Item 5: Column B + C + D cannot be greater than Column A\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 5: Column B + C + D cannot be greater than Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc3AI5C2",
+                                              "frm1702RT:txtPg4Sc3AI5C3",
+                                              "frm1702RT:txtPg4Sc3AI5C4",
+                                              "frm1702RT:txtPg4Sc3AI5C5"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc3AI6C6",
+                          "start_line":  8665,
+                          "end_line":  8679,
+                          "body_sha256":  "020283b5b874bb1de0b8a4ef87b38e9512d6541c0e036050ded26e54b8db05e1",
+                          "alerts":  [
+                                         "\u0027Page 4 Schedule IIIA Item 6: Column B + C + D cannot be greater than Column A\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 6: Column B + C + D cannot be greater than Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc3AI6C2",
+                                              "frm1702RT:txtPg4Sc3AI6C3",
+                                              "frm1702RT:txtPg4Sc3AI6C4",
+                                              "frm1702RT:txtPg4Sc3AI6C5"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc3AI7C6",
+                          "start_line":  8680,
+                          "end_line":  8700,
+                          "body_sha256":  "e79ea41beb4d2d4c19bcbd71d844d1e8e1ab60fbe4a569e20e5112753463c5c1",
+                          "alerts":  [
+                                         "\u0027Page 4 Schedule IIIA Item 7: Column B + C + D cannot be greater than Column A\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 7: Column B + C + D cannot be greater than Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc3AI7C2",
+                                              "frm1702RT:txtPg4Sc3AI7C3",
+                                              "frm1702RT:txtPg4Sc3AI7C4",
+                                              "frm1702RT:txtPg4Sc3AI7C5"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc4I1C4",
+                          "start_line":  8701,
+                          "end_line":  8707,
+                          "body_sha256":  "e16816ebcf9b07171fd3ecb5d4a15556df945505e4d75b9140ce860c0aece648",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc4I1C4"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc4I2C4",
+                          "start_line":  8708,
+                          "end_line":  8714,
+                          "body_sha256":  "b363587b9b012ca7a209c02a83c563abeeb7172334d7b5a0bd65e16af958b7e0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc4I2C4"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc4I3C4",
+                          "start_line":  8715,
+                          "end_line":  8724,
+                          "body_sha256":  "adcc3fb3654a22630205a423ddd18b05901400bfc833b23740ecb10d8c3d08b2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc4I3C4"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc4I1C8",
+                          "start_line":  8725,
+                          "end_line":  8732,
+                          "body_sha256":  "22ecdb356c1845c8eb0929db687bc2775d7c1ad64a6ac08a36ef8173bf77cbbc",
+                          "alerts":  [
+                                         "\u0027Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc4I1C8"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc4I2C8",
+                          "start_line":  8733,
+                          "end_line":  8740,
+                          "body_sha256":  "9c22b77e9e5302cfb4774b567b728d77e9c4b50ebafd1fd45cefdfac838e744e",
+                          "alerts":  [
+                                         "\u0027Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc4I2C8"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc4I3C8",
+                          "start_line":  8741,
+                          "end_line":  8748,
+                          "body_sha256":  "9a80c91fc0543302244aeeeeebc085b2903bc8658ebd1ac7f25d7175143b6a02",
+                          "alerts":  [
+                                         "\u0027Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc4I3C8"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc4I4TotalExcessMCIT",
+                          "start_line":  8749,
+                          "end_line":  8754,
+                          "body_sha256":  "b769fd49e1120a46004cfe3ab7a8a1efaa192b3a9832a95cc4e74602ba5e29d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I47ExcessMCIT",
+                                              "frm1702RT:txtPg4Sc4I4TotalExcessMCIT"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc5I4Total",
+                          "start_line":  8755,
+                          "end_line":  8759,
+                          "body_sha256":  "b75790f4aa98c7081c25752c4a0913162c8b9a49c3455bc54ce6dea264bc1037",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc5I9Total",
+                          "start_line":  8760,
+                          "end_line":  8763,
+                          "body_sha256":  "cf3e1f6f6f2d468ee9b3b3d92e974cb877ae5b1db3e02433627ca872fba00376",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc5I10NetTaxableIncome",
+                          "start_line":  8764,
+                          "end_line":  8775,
+                          "body_sha256":  "9d194f3c024fd2413f2b2498079c6f4a1aee9aea5b371fd2936b5c0fbf74db7e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

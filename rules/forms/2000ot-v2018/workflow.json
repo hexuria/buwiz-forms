@@ -1,0 +1,189 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2000ot-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-form-pdf",
+                                           "official-help-v2018"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 monthly DST return for one-time stock and real-property transactions, with expandable valuation schedules."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3982-L4004",
+                                           "official-hta-runtime#saveXML:L2412-L2757"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save applies four narrow identity/date guards and serializes 123 baseline entries plus added schedule rows."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L3681-L3764"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate checks transaction date, ATC, identity, counterparty, transaction nature, and conditional real-property location, but not schedule completeness or tax-base consistency."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML",
+                                           "legacy-artifact-exclusion"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Final-copy encryption is source-present; the only available encrypted sample is legacy and excluded."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Collapses two address/name continuation controls.",
+                                                 "Preserves added zero-based schedule rows."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L2412-L2757"
+                                            ],
+                            "guard":  "Narrow Save guards and file-version guards pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables print/edit/final-copy paths."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L3681-L3764"
+                                            ],
+                            "guard":  "All source-ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls and restores conditional states."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L3846-L3918"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts/compresses final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Finalization/version flow succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Online submission attempt; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Transaction date and ATC",
+                          "Taxpayer identity/RDO",
+                          "Counterparty identity",
+                          "Nature of transaction and location if real property",
+                          "Applicable stock or real-property valuation schedules"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "taxable-document",
+                                     "label":  "Document to which the documentary stamp is affixed.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#attachments"
+                                                     ],
+                                     "required_when":  "All applicable filings.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "original-issue-dst-proof",
+                                     "label":  "Proof of DST paid on original issue of shares without par value.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#attachments"
+                                                     ],
+                                     "required_when":  "DO125 applies.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "valuation-documents",
+                                     "label":  "Documents supporting stock or real-property valuation and selling price.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#taxable-base"
+                                                     ],
+                                     "required_when":  "Applicable transaction.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Monthly/event-related: file and pay within five days after the close of the month of the taxable document."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not quarterly; the same monthly deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not quarterly; the same monthly deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not quarterly; the same monthly deadline applies."
+                             }
+                         ]
+}

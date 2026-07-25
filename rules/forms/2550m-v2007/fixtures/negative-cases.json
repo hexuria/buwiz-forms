@@ -1,0 +1,287 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2550m-v2007",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2550m-modal-001",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2, 6, 7, or 8 is opened with year \u003c= 2000."
+                                    },
+                      "expected_message":  "Please input a valid Return period year. Please enter 2000 above.",
+                      "expected_behavior":  "The duplicated conjunction \u003c=2000 \u0026\u0026 \u003c=2020 reduces to \u003c=2000, so year 2000 is rejected although Validate accepts it.",
+                      "rule_id":  "2550m-modal-001"
+                  },
+                  {
+                      "case_id":  "case-02-2550m-s1-001",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 OK is clicked with zero/blank sales or output tax."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Schedule 1 row validation is an intentional no-op after a QAD change.",
+                      "rule_id":  "2550m-s1-001"
+                  },
+                  {
+                      "case_id":  "case-03-2550m-s2-001",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 2 row has blank purchase date or description."
+                                    },
+                      "expected_message":  "Please enter valid row {row} data for Schedule 2.\\nEmpty fields are not allowed.",
+                      "expected_behavior":  "Blank date/description is rejected.",
+                      "rule_id":  "2550m-s2-001"
+                  },
+                  {
+                      "case_id":  "case-04-2550m-s2-002",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 2 row amount exceeds 1,000,000."
+                                    },
+                      "expected_message":  "Please enter valid data.\\n Aggregate amount should not exceed P1 Million.",
+                      "expected_behavior":  "Per-row cap is enforced.",
+                      "rule_id":  "2550m-s2-002"
+                  },
+                  {
+                      "case_id":  "case-05-2550m-s2-003",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 date does not split into three numeric components."
+                                    },
+                      "expected_message":  "Please enter a valid date for Date of Purchase on row {row}.\\nPlease enter a date in the MM/DD/YYYY format.",
+                      "expected_behavior":  "Ad-hoc split/isNaN validation is used.",
+                      "rule_id":  "2550m-s2-003"
+                  },
+                  {
+                      "case_id":  "case-06-2550m-s2-004",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 date has an impossible day or, except February, is outside the return month/year."
+                                    },
+                      "expected_message":  "Invalid entry on row {row}. Date of Purchase must be within the Return Period only.",
+                      "expected_behavior":  "Month 02 skips the return-period comparison entirely; month/day lower bounds and unknown months are also not checked.",
+                      "rule_id":  "2550m-s2-004"
+                  },
+                  {
+                      "case_id":  "case-07-2550m-s2-005",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 net-of-VAT amount is \u003c= 0."
+                                    },
+                      "expected_message":  "Please enter amount for Net of VAT on row {row}.\\nValue must be greater than 0.",
+                      "expected_behavior":  "Positive amount required.",
+                      "rule_id":  "2550m-s2-005"
+                  },
+                  {
+                      "case_id":  "case-08-2550m-s2-006",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 total amount exceeds 1,000,000 when OK is clicked."
+                                    },
+                      "expected_message":  "The total aggregate amount should not exceed 1 Million.\\n Please re-enter the values of Schedule 2.",
+                      "expected_behavior":  "Aggregate cap is enforced after row validation.",
+                      "rule_id":  "2550m-s2-006"
+                  },
+                  {
+                      "case_id":  "case-09-2550m-s3a-001",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3A date/description is blank or allowable input tax compares equal to zero."
+                                    },
+                      "expected_message":  "Please enter valid row {row} data for Schedule 3A.\\nEmpty fields are not allowed.",
+                      "expected_behavior":  "Computed allowable tax is treated as required.",
+                      "rule_id":  "2550m-s3a-001"
+                  },
+                  {
+                      "case_id":  "case-10-2550m-s3a-004",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3A estimated life is outside 1..999."
+                                    },
+                      "expected_message":  "Please enter a value 1 to 999 for Estimated Life on row {row} Schedule 3Part A.",
+                      "expected_behavior":  "Bounds are correct; message lacks spacing.",
+                      "rule_id":  "2550m-s3a-004"
+                  },
+                  {
+                      "case_id":  "case-11-2550m-s3a-005",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3A recognized life is outside 1..60."
+                                    },
+                      "expected_message":  "Please enter a value 1 to 60 for Recognized Life on row {row}Part A.",
+                      "expected_behavior":  "Bounds are enforced; message lacks spacing.",
+                      "rule_id":  "2550m-s3a-005"
+                  },
+                  {
+                      "case_id":  "case-12-2550m-s3a-006",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3A is committed in AandB mode with rows and total \u003c= 1,000,000."
+                                    },
+                      "expected_message":  "The total aggregate amount does not exceed 1 Million.\\n Please re-enter the values of Schedule 3.",
+                      "expected_behavior":  "Schedule 3A is reserved for aggregate acquisitions above one million.",
+                      "rule_id":  "2550m-s3a-006"
+                  },
+                  {
+                      "case_id":  "case-13-2550m-s3b-001",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3B row has blank date or description."
+                                    },
+                      "expected_message":  "If you don\u0027t have any entries for Schedule 3b,\\nplease delete the row on this schedule if not applicable.",
+                      "expected_behavior":  "Blank placeholder row must be deleted.",
+                      "rule_id":  "2550m-s3b-001"
+                  },
+                  {
+                      "case_id":  "case-14-2550m-s3b-002",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3B date is malformed, future, or in the current return month."
+                                    },
+                      "expected_message":  "Invalid entry on row {row}. Date of Purchase must be within the Return Period only.",
+                      "expected_behavior":  "The comparison rejects current-month dates but the message says within return period; February and lower-bound defects remain.",
+                      "rule_id":  "2550m-s3b-002"
+                  },
+                  {
+                      "case_id":  "case-15-2550m-s4-002",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 4 OK is clicked with incomplete/invalid values."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Validation function unconditionally returns true.",
+                      "rule_id":  "2550m-s4-002"
+                  },
+                  {
+                      "case_id":  "case-16-2550m-s5-002",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 5 OK is clicked with incomplete/invalid values."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Validation function unconditionally returns true.",
+                      "rule_id":  "2550m-s5-002"
+                  },
+                  {
+                      "case_id":  "case-17-2550m-s6-006",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 6 applied amount exceeds total withheld."
+                                    },
+                      "expected_message":  "The Applied Current Month on row {row} should not be greater than the Total Tax Withheld.",
+                      "expected_behavior":  "Comparison is active.",
+                      "rule_id":  "2550m-s6-006"
+                  },
+                  {
+                      "case_id":  "case-18-2550m-s7-005",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 7 applied amount exceeds amount paid."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Over-application is accepted.",
+                      "rule_id":  "2550m-s7-005"
+                  },
+                  {
+                      "case_id":  "case-19-2550m-s8-006",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 8 applied amount exceeds total withheld."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Over-application is accepted.",
+                      "rule_id":  "2550m-s8-006"
+                  },
+                  {
+                      "case_id":  "case-20-2550m-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 11 Yes is selected and classification is 0."
+                                    },
+                      "expected_message":  "Please select an option on item no. 11. Entry must not be empty.",
+                      "expected_behavior":  "The first matching condition alerts and returns.",
+                      "rule_id":  "2550m-validate-001"
+                  },
+                  {
+                      "case_id":  "case-21-2550m-validate-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Please indicate a valid Year.",
+                      "expected_behavior":  "The first matching condition alerts and returns.",
+                      "rule_id":  "2550m-validate-002"
+                  },
+                  {
+                      "case_id":  "case-22-2550m-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is in the future, or current-year month is in the future."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "The entire future-period branch is commented out; the invalid period passes.",
+                      "rule_id":  "2550m-validate-003"
+                  },
+                  {
+                      "case_id":  "case-23-2550m-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is below 2000."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be lower than 2000.",
+                      "expected_behavior":  "The first matching condition alerts and returns.",
+                      "rule_id":  "2550m-validate-004"
+                  },
+                  {
+                      "case_id":  "case-24-2550m-validate-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "Only nonblankness is checked; length, characters, and checksum are not.",
+                      "rule_id":  "2550m-validate-005"
+                  },
+                  {
+                      "case_id":  "case-25-2550m-validate-006",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The first matching condition alerts and returns.",
+                      "rule_id":  "2550m-validate-006"
+                  },
+                  {
+                      "case_id":  "case-26-2550m-validate-008",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "expected_behavior":  "The first matching condition alerts and returns.",
+                      "rule_id":  "2550m-validate-008"
+                  },
+                  {
+                      "case_id":  "case-27-2550m-save-004",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year/month, address, phone, ZIP, line of business, special tax, return values, or schedules are invalid."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Save preflight is substantially narrower than Validate.",
+                      "rule_id":  "2550m-save-004"
+                  },
+                  {
+                      "case_id":  "case-28-2550m-submit-001",
+                      "phase":  "submit",
+                      "mutations":  {
+                                        "synthetic_condition":  "Submission email/body is prepared."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Copied transport labels identify the wrong tax type.",
+                      "rule_id":  "2550m-submit-001"
+                  }
+              ]
+}

@@ -1,0 +1,512 @@
+{
+    "source_sha256":  "6200b57ef2a3d9d296dc79cbdb9d2f7a605fb92d1dfcdcc4883f08de7c7fa324",
+    "function_count":  29,
+    "functions":  [
+                      {
+                          "name":  "atcPropertyJS",
+                          "start_line":  1589,
+                          "end_line":  1602,
+                          "body_sha256":  "2d225e86871b7472cf30c3006017bbceae80f9b67f569265801f99ecc03fb869",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "taxTypeCodePropertyJS",
+                          "start_line":  1603,
+                          "end_line":  1611,
+                          "body_sha256":  "c00207687f312b73b0528aa8fe74baddece1d35b59f8d55b4f051b5d30dd6ea8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadXMLATC",
+                          "start_line":  1612,
+                          "end_line":  1630,
+                          "body_sha256":  "6a939238aa78d051452014e14b6be497ad13bf122916f9faf993788cacd760e4",
+                          "alerts":  [
+                                         "responseATC.innerHTML"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadXMLTaxTypeCode",
+                          "start_line":  1631,
+                          "end_line":  1652,
+                          "body_sha256":  "e5ef69a3f284b9d8b9f275a8c90c7cb55abbd01637bbb547efd09b1325429269",
+                          "alerts":  [
+                                         "responseTaxTypeCode.innerHTML"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadTaxTypeCode",
+                          "start_line":  1653,
+                          "end_line":  1684,
+                          "body_sha256":  "55647277da00c373caddf2248fb11975f02e3cf8173f88c15540fc248dd26eac",
+                          "alerts":  [
+                                         "\u00270605 successfully created array #\u0027+i",
+                                         "\u00270605 not found in array #\u0027+i"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadATC",
+                          "start_line":  1685,
+                          "end_line":  1727,
+                          "body_sha256":  "2d4ee99be2e9e6eea2eab9f21d544dcca94c772c224d215d3cc62cafb6264dc7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  1860,
+                          "end_line":  1898,
+                          "body_sha256":  "09535e62bb62f7c472038531688b3f22bd85f9525416fa2e828cf553313cdbce",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:txtAddress",
+                                              "frm0605:txtBranchCode",
+                                              "frm0605:txtLineBus",
+                                              "frm0605:txtRDOCode",
+                                              "frm0605:txtTaxPayerName",
+                                              "frm0605:txtTelNum",
+                                              "frm0605:txtTIN1",
+                                              "frm0605:txtTIN2",
+                                              "frm0605:txtTIN3",
+                                              "frm0605:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  1899,
+                          "end_line":  1967,
+                          "body_sha256":  "c1c8c9e402dbc9f8a4f6fff3a57b78a810066d7eb3a5bdd72bc094bb9841e9ad",
+                          "alerts":  [
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  1968,
+                          "end_line":  2164,
+                          "body_sha256":  "3c8698547bec2c870b60984a90fd34047572eb7c553b3625e6806f6e3371eb6a",
+                          "alerts":  [
+                                         "\"You will no longer be allowed to modify \\nsince this is already the final copy.\\nDo you want to save it in\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:txtAddress",
+                                              "frm0605:txtBranchCode",
+                                              "frm0605:txtClassification:_1",
+                                              "frm0605:txtClassification:_2",
+                                              "frm0605:txtLineBus",
+                                              "frm0605:txtRDOCode",
+                                              "frm0605:txtTax19",
+                                              "frm0605:txtTax20A",
+                                              "frm0605:txtTax20B",
+                                              "frm0605:txtTax20C",
+                                              "frm0605:txtTax20D",
+                                              "frm0605:txtTax21",
+                                              "frm0605:txtTaxPayerName",
+                                              "frm0605:txtTelNum",
+                                              "frm0605:txtTIN1",
+                                              "frm0605:txtTIN2",
+                                              "frm0605:txtTIN3",
+                                              "frm0605:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2165,
+                          "end_line":  2307,
+                          "body_sha256":  "0f377c0a185f296e48d43fa64e2c30c49bac76db3bb0af168ff81a7d5cfe700b",
+                          "alerts":  [
+                                         "fileName",
+                                         "xmlFileName",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:txtAddress",
+                                              "frm0605:txtBranchCode",
+                                              "frm0605:txtClassification:_1",
+                                              "frm0605:txtClassification:_2",
+                                              "frm0605:txtLineBus",
+                                              "frm0605:txtRDOCode",
+                                              "frm0605:txtTax19",
+                                              "frm0605:txtTax20A",
+                                              "frm0605:txtTax20B",
+                                              "frm0605:txtTax20C",
+                                              "frm0605:txtTax20D",
+                                              "frm0605:txtTax21",
+                                              "frm0605:txtTaxPayerName",
+                                              "frm0605:txtTelNum",
+                                              "frm0605:txtTIN1",
+                                              "frm0605:txtTIN2",
+                                              "frm0605:txtTIN3",
+                                              "frm0605:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOfTax",
+                          "start_line":  2586,
+                          "end_line":  2591,
+                          "body_sha256":  "d4788df7c65eebd1027716c048ad87c0c31b0ed0115038c3973fac8b52b91be2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:txtTax19",
+                                              "frm0605:txtTax20D",
+                                              "frm0605:txtTax21"
+                                          ]
+                      },
+                      {
+                          "name":  "enableDefTax",
+                          "start_line":  2592,
+                          "end_line":  2596,
+                          "body_sha256":  "694d25f4fd8d93103a1593cf0eb6bf86276ab1f10262bf65ad9ab5b8f9a4917e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:itemApprovedYN:_1",
+                                              "frm0605:itemApprovedYN:_2"
+                                          ]
+                      },
+                      {
+                          "name":  "disableDefTax",
+                          "start_line":  2597,
+                          "end_line":  2603,
+                          "body_sha256":  "37a04ab02e93a9b15be341d4a08ce5184370a9b4caa39110dc93cdc34ea8f95b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:itemApprovedYN:_1",
+                                              "frm0605:itemApprovedYN:_2"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  2621,
+                          "end_line":  2948,
+                          "body_sha256":  "1756a51827f702fd616d8c22fc7bc9085d2648bac2720becd1314301bb80839e",
+                          "alerts":  [
+                                         "\"Please select an option on Item 1.\") return; } if( (d.getElementById(\u0027frm0605:txtYearEnded\u0027).value == \"\") || ( d.getElementById(\u0027frm0605:txtYearEnded\u0027).value \u003c 1904 || d.getElementById(\u0027frm0605:txtYearEnded\u0027).value \u003e 3000 ) ) { alert(\"Please enter a valid year on Item 2.\"",
+                                         "\"Please choose quarter on item 3.\") return; }*/ /*if( (d.getElementById(\u0027frm0605:txtDueDateMonth\u0027).value == \"\" ) || (d.getElementById(\u0027frm0605:txtDueDateDay\u0027).value == \"\" ) || (d.getElementById(\u0027frm0605:txtDueDateYear\u0027).value == \"\") ) { alert(\"Please enter valid month on item 4.\"",
+                                         "\"Please enter a valid day/month on item 4. Format should be MM/DD/YYYY.\") return; } if(document.getElementById(\u0027frm0605:txtDueDateDay\u0027).value \u003c 1) { alert(\"Invalid date entry on item 4.\"",
+                                         "\"Filing year is not a leap year.\"",
+                                         "\"Invalid date entry on item 4.\"",
+                                         "\"Invalid date entry on item 4.\"",
+                                         "\"Invalid date entry on item 4.\"",
+                                         "\"Invalid date entry on item 4.\"",
+                                         "\"Please enter a valid ATC on Item 6.\"",
+                                         "\"Please enter a valid Return Period on Item 7.\"",
+                                         "\"Please enter a valid day/month on item 7. Format should be MM/DD/YYYY.\") return; } if(document.getElementById(\u0027frm0605:txtReturnPeriodDay\u0027).value \u003c 1) { alert(\"Invalid date entry on item 7.\"",
+                                         "\"Filing year is not a leap year.\"",
+                                         "\"Invalid date entry on item 7.\"",
+                                         "\"Invalid date entry on item 7.\"",
+                                         "\"Invalid date entry on item 7.\"",
+                                         "\"Invalid date entry on item 7.\"",
+                                         "\"Please enter a valid TIN number on Item 9.\"",
+                                         "\"Please enter a valid RDO Code on Item 10.\"",
+                                         "\"Please select Taxpayer Classification on Item 11.\"",
+                                         "\"Please enter a valid Line of Business/Occupation on Item 12.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 13.\"",
+                                         "\"Please enter a valid Taxpayer Telephone Number on Item 14.\"",
+                                         "\"Please enter a valid Taxpayer Registered Address on Item 15.\"",
+                                         "\"Please enter a valid Taxpayer Zip Code on Item 16.\"",
+                                         "\"Please enter valid month on item 4.\"",
+                                         "\"Please enter valid month on item 4.\"",
+                                         "\"Please enter a valid day on item 4.\"",
+                                         "\"Please enter a valid date on item 4.\"",
+                                         "\"Please enter a valid day on item 4.\"",
+                                         "\"Please enter a valid date on item 4.\"",
+                                         "\"Please enter a valid day on item 4.\"",
+                                         "\"Please enter a valid date on item 4.\"",
+                                         "\"Please enter a valid date on item 4.\"",
+                                         "\"Please enter valid year on item 4.\"",
+                                         "\"Please enter a valid date on item 4.\"",
+                                         "\"Please enter a valid month on item 7.\"",
+                                         "\"Please enter a valid month on item 7.\"",
+                                         "\"Please enter a valid month on item 7.\"",
+                                         "\"Please enter a valid day on item 7.\"",
+                                         "\"Please enter a valid day on item 7.\"",
+                                         "\"Please enter a valid date on item 7.\"",
+                                         "\"Please enter a valid year on item 7.\"",
+                                         "\"Please enter a valid date on item 7.\"",
+                                         "\"Please enter a valid date on item 7.\"",
+                                         "\"Please enter a valid year on item 7.\"",
+                                         "\"Please enter a valid date on item 7.\"",
+                                         "\"The return period date should not be later than the year ended date.\"",
+                                         "\"The return period date should not be later than the year ended date.\"",
+                                         "\"Please select Tax Type Code on Item 8.\"",
+                                         "\"Please select Manner of Payment on item 17.\"",
+                                         "\"Since you have selected Preliminary/Final Assess/Deficiency Tax on\\n\" + \"item 17, you must choose either:Pre-approved or Not approved by\" + \"Investigating Office.\"",
+                                         "\"Please re-enter No. of Installment. Allowed values from 1 to 20 only.\"",
+                                         "\"Please select Type of Payment on item 18.\") return; } if(d.getElementById(\u0027frm0605:txtTax19\u0027).value \u003c= 0 ) { alert(\"Please enter valid value (greater than 0) for item 19 under Computation of Tax.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:cmdEdit",
+                                              "frm0605:cmdValidate",
+                                              "frm0605:itemApprovedYN:_1",
+                                              "frm0605:itemApprovedYN:_2",
+                                              "frm0605:itemFiscalStartMonth:_1",
+                                              "frm0605:itemFiscalStartMonth:_2",
+                                              "frm0605:itemMannerOfPayment:_1",
+                                              "frm0605:itemMannerOfPayment:_2",
+                                              "frm0605:itemMannerOfPayment:_3",
+                                              "frm0605:itemMannerOfPayment:_4",
+                                              "frm0605:itemMannerOfPayment:_5",
+                                              "frm0605:itemMannerOfPaymentB:_1",
+                                              "frm0605:itemMannerOfPaymentB:_2",
+                                              "frm0605:itemModeOfPayment:_1",
+                                              "frm0605:itemModeOfPayment:_2",
+                                              "frm0605:itemModeOfPayment:_3",
+                                              "frm0605:itemYearEndMonth",
+                                              "frm0605:txtAddress",
+                                              "frm0605:txtBranchCode",
+                                              "frm0605:txtClassification:_1",
+                                              "frm0605:txtClassification:_2",
+                                              "frm0605:txtDueDateDay",
+                                              "frm0605:txtDueDateMonth",
+                                              "frm0605:txtDueDateYear",
+                                              "frm0605:txtLineBus",
+                                              "frm0605:txtNumOfInstallment",
+                                              "frm0605:txtRDOCode",
+                                              "frm0605:txtReturnPeriodDay",
+                                              "frm0605:txtReturnPeriodMonth",
+                                              "frm0605:txtReturnPeriodYear",
+                                              "frm0605:txtTax19",
+                                              "frm0605:txtTaxPayerName",
+                                              "frm0605:txtTelNum",
+                                              "frm0605:txtTIN1",
+                                              "frm0605:txtTIN2",
+                                              "frm0605:txtTIN3",
+                                              "frm0605:txtYearEnded",
+                                              "frm0605:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "getPopulateATC",
+                          "start_line":  2949,
+                          "end_line":  2974,
+                          "body_sha256":  "d71f006045726058b600a8479e9f6f0d1f609fa953f48d27865bbcfe41897ed5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "showATCDiv",
+                          "start_line":  2975,
+                          "end_line":  2993,
+                          "body_sha256":  "d9dc99af8d8bf70d81afdf8161d65cb4d9098594087bdce21fb0464abe391cd2",
+                          "alerts":  [
+                                         "\u0027Please select a valid Tax Type on Item 8.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "ATCList",
+                          "start_line":  2994,
+                          "end_line":  3026,
+                          "body_sha256":  "3d058aafcb4227626992f991ca2bc908620faa592869a53444831ac4d3cbc952",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "cancelATC",
+                          "start_line":  3027,
+                          "end_line":  3039,
+                          "body_sha256":  "b94751427da68673e6107422d38dd109fc3544ae67fedd2ec75c45952edbe7e7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getATCCode",
+                          "start_line":  3040,
+                          "end_line":  3058,
+                          "body_sha256":  "1c0a2fea31133d64d5204a90e02a29a6e20777333de6f28787a4082b4c90a4b0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "showTaxTypeCodeDiv",
+                          "start_line":  3059,
+                          "end_line":  3072,
+                          "body_sha256":  "4d182fdda0820094821415a26df2e1f31222bebddb978955fff3544e88fd8288",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "TaxTypeCodeList",
+                          "start_line":  3073,
+                          "end_line":  3093,
+                          "body_sha256":  "fe0b384e4e35b50cab1c78eb538e2b75a840eb95de61ef50b9e9972ca7aec15a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getTaxTypeCode",
+                          "start_line":  3094,
+                          "end_line":  3118,
+                          "body_sha256":  "5ba5fb6e9f411decc1db0d677aae0b988653fca8c4957ee0f1ac2442d4812434",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getPopulateTaxTypeCode",
+                          "start_line":  3119,
+                          "end_line":  3138,
+                          "body_sha256":  "f6eb3c0a37f83568023cb4cdbc64d1944a194b1d5c9ca9dcada45dd41120fa0b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "cancelTaxTypeCode",
+                          "start_line":  3139,
+                          "end_line":  3151,
+                          "body_sha256":  "254f2ca87c78d103c451d10065f2e48e5781997213af36fe4feede3619ffd44e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "dateyear",
+                          "start_line":  3152,
+                          "end_line":  3165,
+                          "body_sha256":  "387f386dc405b87ee9f6f1b441b78e7e6597620841fe3d688580d755be266922",
+                          "alerts":  [
+                                         "\u0027You have entered invalid month for Fiscal Year\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:itemFiscalStartMonth:_1",
+                                              "frm0605:itemFiscalStartMonth:_2",
+                                              "frm0605:itemYearEndMonth"
+                                          ]
+                      },
+                      {
+                          "name":  "datemonth",
+                          "start_line":  3166,
+                          "end_line":  3179,
+                          "body_sha256":  "fe1cadb16494661981e9d916b1e6139275c698b4aba33420efdbb016aac3761e",
+                          "alerts":  [
+                                         "\u0027You have entered a filing year not ending in December. This filing will be considered as a Fiscal Year Filing.\u0027",
+                                         "\u0027You have entered a filing year ending in December. This filing will be considered as a Calendar Year Filing.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:itemFiscalStartMonth:_1",
+                                              "frm0605:itemFiscalStartMonth:_2",
+                                              "frm0605:itemYearEndMonth"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  3180,
+                          "end_line":  3205,
+                          "body_sha256":  "6a09cff85b51c024f8160e6da57a56fba3b7da5d25f462799fe759d52a531ae7",
+                          "alerts":  [
+                                         "\"Please enter a valid Return Period on Item 7.\"",
+                                         "\"Please enter a valid TIN number on Item 9.\"",
+                                         "\"Please enter a valid RDO Code on Item 10.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 13.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:txtBranchCode",
+                                              "frm0605:txtRDOCode",
+                                              "frm0605:txtReturnPeriodDay",
+                                              "frm0605:txtReturnPeriodMonth",
+                                              "frm0605:txtReturnPeriodYear",
+                                              "frm0605:txtTaxPayerName",
+                                              "frm0605:txtTIN1",
+                                              "frm0605:txtTIN2",
+                                              "frm0605:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  3641,
+                          "end_line":  3654,
+                          "body_sha256":  "1ce099ca53c0d25242512d2f3954d17472912b35cc30e2d269f3325b2aa11449",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  3810,
+                          "end_line":  3823,
+                          "body_sha256":  "b2de3d87b1305516855a2c21157d501b0ba75cb503b0603dff5bcce26578e3ac",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

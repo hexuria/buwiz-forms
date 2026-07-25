@@ -1,0 +1,109 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702ex-v2018c",
+    "form_code":  "1702EX",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EXv2018C.hta",
+                                "sha256":  "1c2f990e08d6ad02bd488bffdcd1b6cf1666d3c173ed0b5617f5faa0c546a7ed",
+                                "size":  552495,
+                                "revision_binding":  "formType 1702EXv2018C; CREATE-law variant."
+                            },
+                            {
+                                "asset_id":  "pre-create-hta-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EXv2018.hta",
+                                "sha256":  "6bad84a723c0e4bd8ec3e2488f11946bd9d5117f0c7bfba7231edfb68e71d641",
+                                "size":  553038,
+                                "revision_binding":  "January 2018 predecessor; excluded from CREATE calculations."
+                            },
+                            {
+                                "asset_id":  "legacy-hta-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702EX.hta",
+                                "sha256":  "5dbc2357e5c46b82688396cc0eeaf48aeb76e6ceda95e5e38577fe3d0ce91960",
+                                "size":  1086467,
+                                "revision_binding":  "June 2013 predecessor; excluded."
+                            },
+                            {
+                                "asset_id":  "legacy-help-runtime",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1702EX.hta",
+                                "sha256":  "eecc062d879b8417cd0d3d78a70eef8bff80235b99ee82d75bfd410d91c092bf",
+                                "size":  38878,
+                                "revision_binding":  "Packaged help is June 2013 and is not revision-matched."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1702EXv2018\\1702-EX Jan 2018 ENCS v2.pdf",
+                                "sha256":  "e2dece405bbf48d4be8f50fc73f124b90e574ddaf79361b2f81bacf8831efcfb",
+                                "size":  1100312,
+                                "revision_binding":  "January 2018 ENCS v2 printed form used by both 2018 runtime variants."
+                            },
+                            {
+                                "asset_id":  "package-release-notes",
+                                "kind":  "official-package-release-notes",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\Release Notes 7.9.5.0.txt",
+                                "sha256":  "a4539eb0d1e0ca6b5554795ed9e72f5f20952cf8d4bdafbbcbcd570de54fcb62",
+                                "size":  37574,
+                                "revision_binding":  "v7.9 explicitly introduces 1702EXv2018C for CREATE law."
+                            },
+                            {
+                                "asset_id":  "legacy-encrypted-sample-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1702EX\\1702EX-final-copy-#email-redacted#.xml",
+                                "sha256":  "524d4b122e252fb090045a898f1c84245ece2ee250751b3433591c686e488a44",
+                                "size":  4613,
+                                "revision_binding":  "Excluded from CREATE inventory: all 484 keys match the June 2013 runtime, while only 46 match the CREATE runtime."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  186,
+                   "runtime_field_families":  11,
+                   "fields_total":  197,
+                   "typed_fields":  197,
+                   "validation_rules":  34,
+                   "confirmed_official_bugs":  6,
+                   "calculations":  15,
+                   "negative_fixtures":  32,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "excluded_legacy_encrypted_keys":  "fixtures/excluded-legacy-encrypted-field-keys-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No decrypted values or email-bearing filenames are emitted.",
+                        "CREATE runtime is separated from the plain v2018 predecessor.",
+                        "The available encrypted sample is proven legacy and excluded from the CREATE field inventory.",
+                        "186 source-serializable controls plus 11 source-unbounded families are preserved."
+                    ]
+}

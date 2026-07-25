@@ -1,0 +1,237 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1604c-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1604c-save-001",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "Only nonblankness is checked; no shape/checksum validation exists.",
+                      "rule_id":  "1604c-save-001"
+                  },
+                  {
+                      "case_id":  "case-02-1604c-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value equals literal 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-save-002"
+                  },
+                  {
+                      "case_id":  "case-03-1604c-save-003",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "expected_behavior":  "The message cites Item 7, while the name is printed Item 6.",
+                      "rule_id":  "1604c-save-003"
+                  },
+                  {
+                      "case_id":  "case-04-1604c-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxable year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-001"
+                  },
+                  {
+                      "case_id":  "case-05-1604c-validate-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxable year is after current system year."
+                                    },
+                      "expected_message":  "Invalid data entry on Item no. 1. Entry should be current or prior year but not be earlier than effectivity date of January 2018.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-002"
+                  },
+                  {
+                      "case_id":  "case-06-1604c-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxable year is below 1900."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+                      "expected_behavior":  "Validate accepts 1900-2017 even though blur validation rejects years before 2018.",
+                      "rule_id":  "1604c-validate-003"
+                  },
+                  {
+                      "case_id":  "case-07-1604c-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN segment or branch is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "No length, digits, or checksum validation follows.",
+                      "rule_id":  "1604c-validate-004"
+                  },
+                  {
+                      "case_id":  "case-08-1604c-validate-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-005"
+                  },
+                  {
+                      "case_id":  "case-09-1604c-validate-006",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Name on Item 6.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-006"
+                  },
+                  {
+                      "case_id":  "case-10-1604c-validate-007",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 7.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-007"
+                  },
+                  {
+                      "case_id":  "case-11-1604c-validate-008",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither private nor government category is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 8.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-008"
+                  },
+                  {
+                      "case_id":  "case-12-1604c-validate-009",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-009"
+                  },
+                  {
+                      "case_id":  "case-13-1604c-validate-010",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 10.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-010"
+                  },
+                  {
+                      "case_id":  "case-14-1604c-validate-011",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Released-of-funds Yes and assembled refund date fails date helper."
+                                    },
+                      "expected_message":  "Please specify date of refund in item 11A.",
+                      "expected_behavior":  "The helper returns true for malformed/blank and the message does not identify the format.",
+                      "rule_id":  "1604c-validate-011"
+                  },
+                  {
+                      "case_id":  "case-15-1604c-validate-012",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Refund day component has length one."
+                                    },
+                      "expected_message":  "Please enter a valid day on item 11A. Format should be MM/DD/YYYY.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-012"
+                  },
+                  {
+                      "case_id":  "case-16-1604c-validate-013",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Released-of-funds Yes and Item 12 is blank."
+                                    },
+                      "expected_message":  "Please enter Amount of Overremittance in Item 12.",
+                      "expected_behavior":  "Literal 0.00 is explicitly allowed because the zero rejection is commented out.",
+                      "rule_id":  "1604c-validate-013"
+                  },
+                  {
+                      "case_id":  "case-17-1604c-validate-014",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Released-of-funds Yes and Item 13 equals 00."
+                                    },
+                      "expected_message":  "Please select a month from the list on Item 13.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-014"
+                  },
+                  {
+                      "case_id":  "case-18-1604c-validate-015",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "An enabled, non-0.00 Part II row mixes blank and nonblank cells across the primary table."
+                                    },
+                      "expected_message":  "Incomplete values on Part II, Row {row}.",
+                      "expected_behavior":  "Literal 0.00 cells are skipped, so a row can mix zero placeholders and blanks without consistent semantic checks.",
+                      "rule_id":  "1604c-validate-015"
+                  },
+                  {
+                      "case_id":  "case-19-1604c-validate-016",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The same row-state check fails in the continuation table."
+                                    },
+                      "expected_message":  "Incomplete values on Part II (Continuation), Row {row}.",
+                      "expected_behavior":  "The check variable carries primary-table state into the continuation half before reset.",
+                      "rule_id":  "1604c-validate-016"
+                  },
+                  {
+                      "case_id":  "case-20-1604c-validate-017",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All prior checks pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-validate-017"
+                  },
+                  {
+                      "case_id":  "case-21-1604c-input-year-blank",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Edited year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-input-year-blank"
+                  },
+                  {
+                      "case_id":  "case-22-1604c-input-year-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Edited year is after current system year."
+                                    },
+                      "expected_message":  "Invalid data entry on Item no. 1. Entry should be current or prior year but not be earlier than effectivity date of January 2018.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604c-input-year-future"
+                  },
+                  {
+                      "case_id":  "case-23-1604c-input-year-pre2018",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Edited year is below 2018."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be earlier than effectivity date of January 2018.",
+                      "expected_behavior":  "Blur restores the prior year.",
+                      "rule_id":  "1604c-input-year-pre2018"
+                  }
+              ]
+}

@@ -1489,8 +1489,11 @@ mod tests {
         assert_eq!(fields.len(), EXACT_SOURCE_FIELD_COUNT);
         let draft = Form1702MXDraft::from_bir_field_map(&fields).expect("import exact source");
         assert_eq!(draft.to_bir_field_map(), fields);
-        let regenerated = crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload())
-            .expect("parse regenerated payload");
+        let regenerated = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            &draft.to_bir_xml_payload(),
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .expect("parse regenerated UTF-8 payload");
         assert_eq!(regenerated, fields);
 
         assert_eq!(

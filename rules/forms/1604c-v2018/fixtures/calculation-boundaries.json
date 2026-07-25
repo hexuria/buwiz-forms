@@ -1,0 +1,35 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1604c-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "row-basic",
+                      "inputs":  {
+                                     "penalty":  5,
+                                     "withheld":  100,
+                                     "adjustment":  -10
+                                 },
+                      "calculation_id":  "1604c-row-total-amount",
+                      "official_output":  "95.00"
+                  },
+                  {
+                      "case_id":  "grand-positive",
+                      "inputs":  {
+                                     "row1":  95,
+                                     "row2":  10
+                                 },
+                      "calculation_id":  "1604c-grand-total",
+                      "official_output":  "105.00"
+                  },
+                  {
+                      "case_id":  "grand-negative-clipped",
+                      "inputs":  {
+                                     "row1":  -5,
+                                     "row2":  10
+                                 },
+                      "calculation_id":  "1604c-grand-total",
+                      "official_output":  "10.00",
+                      "recommended_review":  "Signed total would be 5.00."
+                  }
+              ]
+}

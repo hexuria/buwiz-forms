@@ -1,0 +1,477 @@
+{
+    "source_sha256":  "58b1ff5157f6d66f1ed1252c696d13ab9afe090bae0c1793faf42ef104159d37",
+    "function_count":  31,
+    "functions":  [
+                      {
+                          "name":  "scheduleA",
+                          "start_line":  2302,
+                          "end_line":  2307,
+                          "body_sha256":  "9eb505997edf03daf9d710def7e90c0733eb1c65a40ae4d5cb8c355c651a0288",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "ScheduleB2",
+                          "start_line":  2308,
+                          "end_line":  2314,
+                          "body_sha256":  "88df442c8466abb19cf0db305b2fda04bfb277f957bda3f8c4dbeb294968b0d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "ScheduleB1",
+                          "start_line":  2315,
+                          "end_line":  2332,
+                          "body_sha256":  "177b7ca8da9ba8bdb361bf70c20383673bf2ca305d0e47b050e87485100bd701",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processTaxRelief",
+                          "start_line":  3815,
+                          "end_line":  3823,
+                          "body_sha256":  "96f676b572ed43818dfe498aad2f9c40c00aea215ef39e792b0a175021065903",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:TaxTreaty",
+                                              "frm1800v2018:TaxTreatyYN_Y"
+                                          ]
+                      },
+                      {
+                          "name":  "enablescheduleA",
+                          "start_line":  3886,
+                          "end_line":  3896,
+                          "body_sha256":  "b77bbf883e7774b42056c783e243d4a24b754517c797d825253e87723fd56e79",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched3Add",
+                                              "frm1800v2018:btnSched3Delete",
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars"
+                                          ]
+                      },
+                      {
+                          "name":  "disablescheduleA",
+                          "start_line":  3897,
+                          "end_line":  3911,
+                          "body_sha256":  "97400b2158adcb85f717b9ad6064ec128c5e7d2b55ab8062c8b7b9cc5a0d2e54",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched3Add",
+                                              "frm1800v2018:btnSched3Delete",
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars"
+                                          ]
+                      },
+                      {
+                          "name":  "loadscheduleA",
+                          "start_line":  3912,
+                          "end_line":  3943,
+                          "body_sha256":  "cf5233b6982fb764c6f0af92494be64c7958f8bc90e3b6837a8c41d7623fb4c0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars"
+                                          ]
+                      },
+                      {
+                          "name":  "addScheduleA",
+                          "start_line":  3944,
+                          "end_line":  3969,
+                          "body_sha256":  "8b41482eb5cc94f55a55016ce3c899eaef583f2a88cda768e863b513b7030fa8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars"
+                                          ]
+                      },
+                      {
+                          "name":  "deleteScheduleA",
+                          "start_line":  3970,
+                          "end_line":  4009,
+                          "body_sha256":  "83d439fa5f3cabe9048cfa1137f19b1dcffb4e73bfc519b7b999c701dcc1043b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars"
+                                          ]
+                      },
+                      {
+                          "name":  "enableScheduleB2",
+                          "start_line":  4010,
+                          "end_line":  4024,
+                          "body_sha256":  "3416a94ca170de1c55ba788fd66bb961ac7c1704b8619015c52823da88545e95",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched4Add",
+                                              "frm1800v2018:btnSched4Delete",
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD"
+                                          ]
+                      },
+                      {
+                          "name":  "disableScheduleB2",
+                          "start_line":  4025,
+                          "end_line":  4045,
+                          "body_sha256":  "b2f76d7b71c95a2c27d0a42ed0b00fc86b77de70e908ccc2b3401c6e1d5595d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched4Add",
+                                              "frm1800v2018:btnSched4Delete",
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD"
+                                          ]
+                      },
+                      {
+                          "name":  "loadScheduleB2",
+                          "start_line":  4046,
+                          "end_line":  4086,
+                          "body_sha256":  "0213d253c9bde43aa621d69e9b05a7fb87413523d6113e972093ba1926a9cee9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD"
+                                          ]
+                      },
+                      {
+                          "name":  "addScheduleB2",
+                          "start_line":  4087,
+                          "end_line":  4118,
+                          "body_sha256":  "c6644947f6e89d92572d777d179b06f0071c01a5b23f85202ed6b7cc3a56097a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD"
+                                          ]
+                      },
+                      {
+                          "name":  "deleteScheduleB2",
+                          "start_line":  4119,
+                          "end_line":  4165,
+                          "body_sha256":  "dcb51b320caea1bc0cd044624c6dbef5a99810b9c3cd7d1bec1b68d89ba721c5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD"
+                                          ]
+                      },
+                      {
+                          "name":  "loadScheduleB1",
+                          "start_line":  4166,
+                          "end_line":  4208,
+                          "body_sha256":  "97588d97578e9f07d47892f133053828479d67252e34e198ea12bc3ae095ca53",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB1:txtClassification",
+                                              "frm1800v2018:schedB1:txtLocation",
+                                              "frm1800v2018:schedB1:txtLotImprovement",
+                                              "frm1800v2018:schedB1:txtOCT",
+                                              "frm1800v2018:schedB1:txtTaxDecNo"
+                                          ]
+                      },
+                      {
+                          "name":  "addScheduleB1",
+                          "start_line":  4209,
+                          "end_line":  4240,
+                          "body_sha256":  "9291210994405ee7908fb8c03fa131a283f704cce72f6594eb7cd4cbe1c08af0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB1:txtClassification",
+                                              "frm1800v2018:schedB1:txtLocation",
+                                              "frm1800v2018:schedB1:txtLotImprovement",
+                                              "frm1800v2018:schedB1:txtOCT",
+                                              "frm1800v2018:schedB1:txtTaxDecNo"
+                                          ]
+                      },
+                      {
+                          "name":  "deleteScheduleB1",
+                          "start_line":  4241,
+                          "end_line":  4305,
+                          "body_sha256":  "a3056501bbc60c5baaa82089ad5cdb57a928d0600df3eddf21ff042053126d17",
+                          "alerts":  [
+                                         "\"Serial Number input must be 7 digits long.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB1:txtClassification",
+                                              "frm1800v2018:schedB1:txtLocation",
+                                              "frm1800v2018:schedB1:txtLotImprovement",
+                                              "frm1800v2018:schedB1:txtOCT",
+                                              "frm1800v2018:schedB1:txtTaxDecNo",
+                                              "frm1800v2018:txt13A",
+                                              "frm1800v2018:txt13B",
+                                              "frm1800v2018:txt13C",
+                                              "frm1800v2018:txt13F",
+                                              "frm1800v2018:txt13G",
+                                              "frm1800v2018:txt13H",
+                                              "frm1800v2018:txt13I"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTax15D",
+                          "start_line":  4306,
+                          "end_line":  4310,
+                          "body_sha256":  "9bb1a41d097b91e8dfd82054095d31f8f12c4a852a85f50ffc61a5c8ad909c23",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:txtTax15A",
+                                              "frm1800v2018:txtTax15B",
+                                              "frm1800v2018:txtTax15C",
+                                              "frm1800v2018:txtTax15D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTax16",
+                          "start_line":  4311,
+                          "end_line":  4315,
+                          "body_sha256":  "9d14cc26475f0ef15d2fdcb6780ab084766fbcd219eaed43fcd1a5760bb5751b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:TotalNetGifts",
+                                              "frm1800v2018:txtTax15D",
+                                              "frm1800v2018:txtTaxPayable"
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  4316,
+                          "end_line":  4322,
+                          "body_sha256":  "141bab1ddbd6bd753c4a3256b395bed86e867053cfcab207730d553848dcb6df",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:Compromise",
+                                              "frm1800v2018:Interest",
+                                              "frm1800v2018:Surcharge",
+                                              "frm1800v2018:TotalPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAmtPayable",
+                          "start_line":  4323,
+                          "end_line":  4327,
+                          "body_sha256":  "f74324b5d3d77eef44affca48a4bc5a8d5682f83f67dbb59bfa4fd77e6b086d4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:TotalAmountPayable",
+                                              "frm1800v2018:TotalPenalties",
+                                              "frm1800v2018:txtTaxPayable"
+                                          ]
+                      },
+                      {
+                          "name":  "compute17D",
+                          "start_line":  4328,
+                          "end_line":  4332,
+                          "body_sha256":  "75275c275ad114cfd164732cba7d4fb356445db45ffa7969c2f8b6f9b7ae59cb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:TaxCredit17A",
+                                              "frm1800v2018:TaxCredit17B",
+                                              "frm1800v2018:TaxCredit17C",
+                                              "frm1800v2018:TaxCredit17D"
+                                          ]
+                      },
+                      {
+                          "name":  "compute27",
+                          "start_line":  4333,
+                          "end_line":  4336,
+                          "body_sha256":  "4ac4fa526b9c676efe10df0c14696fbb9d74737c6a92008f42afb3a00bad347c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:PersonalProperties",
+                                              "frm1800v2018:RealProperties",
+                                              "frm1800v2018:TotalGifts"
+                                          ]
+                      },
+                      {
+                          "name":  "compute33",
+                          "start_line":  4337,
+                          "end_line":  4341,
+                          "body_sha256":  "12d63ddc98c7848deacee96a21db27250d414ca79d51e96cfece7e42078b0c83",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:DeductionAmt1",
+                                              "frm1800v2018:DeductionAmt2",
+                                              "frm1800v2018:DeductionAmt3",
+                                              "frm1800v2018:DeductionAmt4",
+                                              "frm1800v2018:DeductionAmt5",
+                                              "frm1800v2018:TotalDeductionsAllowed"
+                                          ]
+                      },
+                      {
+                          "name":  "compute34",
+                          "start_line":  4342,
+                          "end_line":  4346,
+                          "body_sha256":  "b4b60b550d8e1d2d88a72c64de44099e174ba5ce12fddfb7b0b73a4b614c1b32",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:TotalDeductionsAllowed",
+                                              "frm1800v2018:TotalGifts",
+                                              "frm1800v2018:TotalReturnNetGifts"
+                                          ]
+                      },
+                      {
+                          "name":  "compute36",
+                          "start_line":  4347,
+                          "end_line":  4351,
+                          "body_sha256":  "3e7c2d241fda3a0f933314d69beaeb531c606c50ca4a6d96ed397ed1d3d52bed",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:TotalNetGifts36",
+                                              "frm1800v2018:TotalPriorNetGifts",
+                                              "frm1800v2018:TotalReturnNetGifts"
+                                          ]
+                      },
+                      {
+                          "name":  "compute38",
+                          "start_line":  4352,
+                          "end_line":  4357,
+                          "body_sha256":  "2ab632a3c866a7c3706467de75cac9affc22d2f2979bd2183ff864e6d8423398",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:TotalNetGifts",
+                                              "frm1800v2018:TotalNetGifts36",
+                                              "frm1800v2018:TotalNetGiftsSubjectToTax"
+                                          ]
+                      },
+                      {
+                          "name":  "compute16",
+                          "start_line":  4358,
+                          "end_line":  4362,
+                          "body_sha256":  "b32ed05785015526303a5037b4d1cdd64311f17f576b01f273d932a2fe5c3842",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:DonorTaxDue",
+                                              "frm1800v2018:TotalNetGifts"
+                                          ]
+                      },
+                      {
+                          "name":  "compute18",
+                          "start_line":  4363,
+                          "end_line":  4367,
+                          "body_sha256":  "f3c827fdee12ff18d19d32e5e4fe3432d9f47dc0f98546cd98cac138e41d04de",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:DonorTaxDue",
+                                              "frm1800v2018:TaxCredit17D",
+                                              "frm1800v2018:txtTaxPayable"
+                                          ]
+                      },
+                      {
+                          "name":  "computeScheduleA",
+                          "start_line":  4435,
+                          "end_line":  4447,
+                          "body_sha256":  "7dd915083e64fe9389f9b2ecfa14807f5da1d349f90dbce198c9eb1a79ba0f52",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:PersonalProperties",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtTotalPayment1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeScheduleB2",
+                          "start_line":  4448,
+                          "end_line":  4463,
+                          "body_sha256":  "bc2394b25015241fb67e28bd6287b9c18d87f6ea8c8295a5ffc79bcacc3df9dd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:RealProperties",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtTotal"
+                                          ]
+                      }
+                  ]
+}

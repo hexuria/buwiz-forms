@@ -78,6 +78,55 @@ fn counts_as_started_or_filed(state: &QuarterState) -> bool {
     )
 }
 
+const AUDITED_2551Q_RECEIPT_FORM: &str = "2551Qv2018";
+
+fn matches_2551q_receipt_filename(submitted_filename: &str, receipt_filename: &str) -> bool {
+    let Some(receipt_stem_with_identity) = receipt_filename.strip_suffix(".xml") else {
+        return false;
+    };
+    if receipt_stem_with_identity.is_empty() {
+        return false;
+    }
+    let Some(submitted_stem) = submitted_filename.strip_suffix(".xml") else {
+        return false;
+    };
+    let Some((receipt_stem, email_suffix)) = submitted_stem.split_once('#') else {
+        return false;
+    };
+    let Some(email) = email_suffix.strip_suffix('#') else {
+        return false;
+    };
+    if receipt_stem.is_empty() || email.is_empty() || email.contains('#') {
+        return false;
+    }
+
+    let submitted_identity = crate::receipt::split_bir_filename(&format!("{receipt_stem}.xml"));
+    let receipt_identity = crate::receipt::split_bir_filename(receipt_filename);
+    matches!(
+        (submitted_identity, receipt_identity),
+        (
+            Some((submitted_tin, submitted_form, submitted_period)),
+            Some((receipt_tin, receipt_form, receipt_period))
+        ) if submitted_tin == receipt_tin
+            && submitted_form == AUDITED_2551Q_RECEIPT_FORM
+            && super::receipts::is_audited_2551q_receipt_form_type(&receipt_form)
+            && submitted_period == receipt_period
+    )
+}
+
+fn parse_2551q_receipt_timestamp(
+    received_date: &str,
+    received_time: &str,
+) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let received = chrono::NaiveDateTime::parse_from_str(
+        &format!("{received_date}T{received_time}"),
+        "%Y-%m-%dT%H:%M:%S",
+    )
+    .ok()?;
+    let philippine_time = chrono::FixedOffset::east_opt(8 * 60 * 60)?;
+    received.and_local_timezone(philippine_time).single()
+}
+
 fn frequency_for_form(form_code: &str) -> FilingFrequency {
     find_form(form_code)
         .map(|form| form.frequency.clone())
@@ -237,64 +286,85 @@ impl Database {
         }
     }
 
-    /// Save or update a Form 2551Q draft.
-    /// Uses UPSERT on (tin, form_code, taxable_year, quarter).
+    /// Save or update an editable Form 2551Q draft.
+    ///
+    /// Generic saves may never create or replace Queued and later snapshots.
+    /// Queue, cancellation, claim, and completion each use a dedicated CAS path.
     pub fn save_2551q_draft(&self, draft: &Form2551QDraft) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Draft)
+            || draft.submission_claim_token.is_some()
+            || draft.submission_claimed_at.is_some()
+        {
+            return Err(DbError::Other(
+                "Only an editable Draft 2551Q return may use the draft save path".to_string(),
+            ));
+        }
+
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
-        let existing_json = tx
+        let json = serde_json::to_string(draft)?;
+        let quarter = i64::from(draft.quarter);
+        let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
+        let existing = tx
             .query_row(
-                "SELECT data_json FROM form_drafts
+                "SELECT id, status, data_json FROM form_drafts
                  WHERE tin = ?1 AND form_code = '2551Q'
                    AND taxable_year = ?2 AND quarter = ?3",
-                params![
-                    &draft.tin,
-                    i64::from(draft.taxable_year),
-                    i64::from(draft.quarter)
-                ],
-                |row| row.get::<_, String>(0),
+                params![&draft.tin, i64::from(draft.taxable_year), quarter],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .optional()?;
-        if let Some(existing_json) = existing_json {
-            let existing: Form2551QDraft = serde_json::from_str(&existing_json)?;
-            if existing.submission_claim_token.is_some() {
+
+        let id = if let Some((id, db_status, raw_json)) = existing {
+            if db_status != "Draft" {
                 return Err(DbError::Other(
-                    "2551Q submission has already crossed the network claim boundary and cannot be replaced by a generic draft write"
+                    "An immutable queued or filed 2551Q snapshot cannot be replaced by an editable draft save"
                         .to_string(),
                 ));
             }
-        }
+            let stored: Form2551QDraft = serde_json::from_str(&raw_json)?;
+            if !matches!(stored.status, FilingStatus::Draft)
+                || stored.submission_claim_token.is_some()
+                || stored.submission_claimed_at.is_some()
+            {
+                return Err(DbError::Other(
+                    "An immutable queued or filed 2551Q snapshot cannot be replaced by an editable draft save"
+                        .to_string(),
+                ));
+            }
+            let updated = tx.execute(
+                "UPDATE form_drafts
+                 SET data_json = ?1, period_key = ?2, updated_at = datetime('now')
+                 WHERE id = ?3 AND status = 'Draft' AND data_json = ?4",
+                params![json, period_key, id, raw_json],
+            )?;
+            if updated != 1 {
+                return Err(DbError::Other(
+                    "2551Q draft changed before the editable save completed".to_string(),
+                ));
+            }
+            id
+        } else {
+            tx.execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '2551Q', ?2, ?3, ?4, 'Draft', ?5)",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    quarter,
+                    period_key,
+                    json
+                ],
+            )?;
+            tx.last_insert_rowid()
+        };
 
-        let json = serde_json::to_string(draft)?;
-        let status = filing_status_to_db(&draft.status);
-        let quarter = i64::from(draft.quarter);
-        let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
-
-        tx.execute(
-            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(tin, form_code, taxable_year, quarter)
-             DO UPDATE SET status = excluded.status,
-                           data_json = excluded.data_json,
-                           period_key = excluded.period_key,
-                           updated_at = datetime('now')",
-            params![
-                &draft.tin,
-                "2551Q",
-                i64::from(draft.taxable_year),
-                quarter,
-                period_key,
-                status,
-                json
-            ],
-        )?;
-
-        let id = tx.query_row(
-            "SELECT id FROM form_drafts
-             WHERE tin = ?1 AND form_code = '2551Q'
-               AND taxable_year = ?2 AND quarter = ?3",
-            params![&draft.tin, i64::from(draft.taxable_year), quarter],
-            |row| row.get::<_, i64>(0),
-        )?;
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
         Ok(id)
@@ -335,6 +405,12 @@ impl Database {
         if matches!(current.status, FilingStatus::Draft) {
             return Err(DbError::Other(
                 "Editable 2551Q drafts must use the draft save path for profile reconciliation"
+                    .to_string(),
+            ));
+        }
+        if current.submission_claim_token.is_some() || current.submission_claimed_at.is_some() {
+            return Err(DbError::Other(
+                "A claimed 2551Q submission snapshot is frozen until the network attempt completes"
                     .to_string(),
             ));
         }
@@ -400,12 +476,17 @@ impl Database {
                 "Only a queued 2551Q draft can be saved through the submission path".to_string(),
             ));
         }
+        if draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some() {
+            return Err(DbError::Other(
+                "A reviewed 2551Q queue snapshot cannot carry a network claim".to_string(),
+            ));
+        }
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
 
-        let existing_json = tx
+        let existing = tx
             .query_row(
-                "SELECT data_json FROM form_drafts
+                "SELECT id, status, data_json FROM form_drafts
                  WHERE tin = ?1 AND form_code = '2551Q'
                    AND taxable_year = ?2 AND quarter = ?3",
                 params![
@@ -413,14 +494,29 @@ impl Database {
                     i64::from(draft.taxable_year),
                     i64::from(draft.quarter)
                 ],
-                |row| row.get::<_, String>(0),
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .optional()?;
-        if let Some(existing_json) = existing_json {
-            let existing: Form2551QDraft = serde_json::from_str(&existing_json)?;
-            if existing.submission_claim_token.is_some() {
+        if let Some((_, db_status, raw_json)) = &existing {
+            if db_status != "Draft" {
                 return Err(DbError::Other(
-                    "2551Q submission has already crossed the network claim boundary and cannot be requeued"
+                    "2551Q must return to Draft through its dedicated CAS path before a new queue snapshot can replace it"
+                        .to_string(),
+                ));
+            }
+            let stored: Form2551QDraft = serde_json::from_str(raw_json)?;
+            if !matches!(stored.status, FilingStatus::Draft)
+                || stored.submission_claim_token.is_some()
+                || stored.submission_claimed_at.is_some()
+            {
+                return Err(DbError::Other(
+                    "2551Q must return to Draft through its dedicated CAS path before a new queue snapshot can replace it"
                         .to_string(),
                 ));
             }
@@ -566,39 +662,207 @@ impl Database {
         }
 
         let json = serde_json::to_string(&verified)?;
-        let status = filing_status_to_db(&verified.status);
         let quarter = i64::from(verified.quarter);
         let period_key = FilingPeriod::Quarterly(verified.quarter).to_period_key();
 
-        tx.execute(
-            "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-             ON CONFLICT(tin, form_code, taxable_year, quarter)
-             DO UPDATE SET status = excluded.status,
-                           data_json = excluded.data_json,
-                           period_key = excluded.period_key,
-                           updated_at = datetime('now')",
-            params![
-                &verified.tin,
-                "2551Q",
-                i64::from(verified.taxable_year),
-                quarter,
-                &period_key,
-                status,
-                json
-            ],
-        )?;
-
-        let id = tx.query_row(
-            "SELECT id FROM form_drafts
-             WHERE tin = ?1 AND form_code = '2551Q'
-               AND taxable_year = ?2 AND quarter = ?3",
-            params![&verified.tin, i64::from(verified.taxable_year), quarter],
-            |row| row.get::<_, i64>(0),
-        )?;
+        let id = if let Some((id, _, raw_json)) = existing {
+            let updated = tx.execute(
+                "UPDATE form_drafts
+                 SET status = 'Queued', data_json = ?1, period_key = ?2,
+                     updated_at = datetime('now')
+                 WHERE id = ?3 AND status = 'Draft' AND data_json = ?4",
+                params![json, &period_key, id, raw_json],
+            )?;
+            if updated != 1 {
+                return Err(DbError::Other(
+                    "2551Q draft changed before its queue snapshot was persisted".to_string(),
+                ));
+            }
+            id
+        } else {
+            tx.execute(
+                "INSERT INTO form_drafts
+                    (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                 VALUES (?1, '2551Q', ?2, ?3, ?4, 'Queued', ?5)",
+                params![
+                    &verified.tin,
+                    i64::from(verified.taxable_year),
+                    quarter,
+                    &period_key,
+                    json
+                ],
+            )?;
+            tx.last_insert_rowid()
+        };
         tx.commit()?;
 
         Ok(self.finish_post_commit_write(id, "Queued 2551Q election save"))
+    }
+
+    /// CAS-replace one exact, still-unclaimed 2551Q queue generation with
+    /// either retry metadata or a deliberate return to Draft.
+    pub(crate) fn replace_unclaimed_queued_2551q_submission(
+        &self,
+        replacement: &Form2551QDraft,
+        expected_fingerprint: &Option<String>,
+        expected_next_retry_at: &Option<String>,
+        expected_submission_attempts: u32,
+    ) -> Result<bool, DbError> {
+        let mut replacement = replacement.clone();
+        if !matches!(
+            replacement.status,
+            FilingStatus::Draft | FilingStatus::Queued
+        ) {
+            return Err(DbError::Other(
+                "An unclaimed 2551Q queue generation may only remain Queued or return to Draft"
+                    .to_string(),
+            ));
+        }
+        if matches!(replacement.status, FilingStatus::Queued)
+            && &replacement.queued_submission_fingerprint != expected_fingerprint
+        {
+            return Err(DbError::Other(
+                "A retry update cannot change the reviewed 2551Q queue fingerprint".to_string(),
+            ));
+        }
+        if matches!(replacement.status, FilingStatus::Queued) {
+            if let Err(errors) = replacement.revalidate_queued_before_submission() {
+                return Err(DbError::Other(format!(
+                    "A retry update cannot persist invalid 2551Q submission fields: {}",
+                    errors
+                        .iter()
+                        .map(|(field, message)| format!("{field}: {message}"))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                )));
+            }
+        }
+        if replacement.submission_claim_token.is_some()
+            || replacement.submission_claimed_at.is_some()
+        {
+            return Err(DbError::Other(
+                "An unclaimed 2551Q replacement cannot carry a network claim".to_string(),
+            ));
+        }
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &replacement.tin,
+                    i64::from(replacement.taxable_year),
+                    i64::from(replacement.quarter)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+        let current: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(current.status, FilingStatus::Queued)
+            || current.submission_claim_token.is_some()
+            || current.submission_claimed_at.is_some()
+            || &current.queued_submission_fingerprint != expected_fingerprint
+            || &current.next_retry_at != expected_next_retry_at
+            || current.submission_attempts != expected_submission_attempts
+        {
+            return Ok(false);
+        }
+
+        let json = serde_json::to_string(&replacement)?;
+        let status = filing_status_to_db(&replacement.status);
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = ?1, data_json = ?2, updated_at = datetime('now')
+             WHERE id = ?3 AND status = 'Queued' AND data_json = ?4",
+            params![status, json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Ok(false);
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(true)
+    }
+
+    /// Cancel one exact, still-unclaimed 2551Q queue generation.
+    pub fn cancel_queued_2551q_submission(
+        &self,
+        queued: &Form2551QDraft,
+    ) -> Result<Form2551QDraft, DbError> {
+        if !matches!(queued.status, FilingStatus::Queued)
+            || queued.submission_claim_token.is_some()
+            || queued.submission_claimed_at.is_some()
+        {
+            return Err(DbError::Other(
+                "Only an unclaimed queued 2551Q snapshot can be canceled".to_string(),
+            ));
+        }
+        let expected_json = serde_json::to_string(queued)?;
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &queued.tin,
+                    i64::from(queued.taxable_year),
+                    i64::from(queued.quarter)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "2551Q submission has already started or the queue generation changed".to_string(),
+            ));
+        };
+        let mut draft: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(draft.status, FilingStatus::Queued)
+            || draft.submission_claim_token.is_some()
+            || draft.submission_claimed_at.is_some()
+            || raw_json != expected_json
+        {
+            return Err(DbError::Other(
+                "2551Q submission has already started or the queue generation changed".to_string(),
+            ));
+        }
+
+        draft.revert_to_draft();
+        let json = serde_json::to_string(&draft)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q submission has already started or the queue generation changed".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(draft)
     }
 
     /// Atomically claim the exact queue generation that was revalidated by the
@@ -622,13 +886,19 @@ impl Database {
         expected_submission_attempts: u32,
     ) -> Result<Claim2551QSubmissionResult, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
-        let Some((raw_json, db_status)) = tx
+        let Some((id, raw_json, db_status)) = tx
             .query_row(
-                "SELECT data_json, status FROM form_drafts
+                "SELECT id, data_json, status FROM form_drafts
                  WHERE tin = ?1 AND form_code = '2551Q'
                    AND taxable_year = ?2 AND quarter = ?3",
                 params![tin, i64::from(taxable_year), i64::from(quarter)],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .optional()?
         else {
@@ -638,6 +908,7 @@ impl Database {
         if db_status != "Queued"
             || !matches!(draft.status, FilingStatus::Queued)
             || draft.submission_claim_token.is_some()
+            || draft.submission_claimed_at.is_some()
             || &draft.queued_submission_fingerprint != expected_fingerprint
             || &draft.next_retry_at != expected_next_retry_at
             || draft.submission_attempts != expected_submission_attempts
@@ -658,17 +929,28 @@ impl Database {
                 ))
             })?;
         let profile: crate::profile::TaxpayerProfile = serde_json::from_str(&profile_json)?;
-        if let Err(error) = draft.reconcile_with_effective_profile(&profile) {
-            draft.revert_to_draft();
-            draft.last_error = Some(format!(
-                "Submission blocked because the effective taxpayer profile is unresolved: {error}"
-            ));
-            return Ok(Claim2551QSubmissionResult::Rejected {
-                draft,
-                errors: vec![("profile_resolution".to_string(), error)],
-            });
-        }
-        if let Err(errors) = draft.revalidate_queued_before_submission() {
+        let rejection_errors = match draft.reconcile_with_effective_profile(&profile) {
+            Ok(()) => draft.revalidate_queued_before_submission().err(),
+            Err(error) => {
+                draft.revert_to_draft();
+                draft.last_error = Some(format!(
+                    "Submission blocked because the effective taxpayer profile is unresolved: {error}"
+                ));
+                Some(vec![("profile_resolution".to_string(), error)])
+            }
+        };
+        if let Some(errors) = rejection_errors {
+            let rejected_json = serde_json::to_string(&draft)?;
+            let updated = tx.execute(
+                "UPDATE form_drafts
+                 SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+                 WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+                params![rejected_json, id, raw_json],
+            )?;
+            if updated != 1 {
+                return Ok(Claim2551QSubmissionResult::Superseded);
+            }
+            tx.commit()?;
             return Ok(Claim2551QSubmissionResult::Rejected { draft, errors });
         }
 
@@ -683,16 +965,8 @@ impl Database {
         let updated = tx.execute(
             "UPDATE form_drafts
              SET data_json = ?1, updated_at = datetime('now')
-             WHERE tin = ?2 AND form_code = '2551Q'
-               AND taxable_year = ?3 AND quarter = ?4
-               AND status = 'Queued' AND data_json = ?5",
-            params![
-                claimed_json,
-                tin,
-                i64::from(taxable_year),
-                i64::from(quarter),
-                raw_json
-            ],
+             WHERE id = ?2 AND status = 'Queued' AND data_json = ?3",
+            params![claimed_json, id, raw_json],
         )?;
         if updated != 1 {
             return Ok(Claim2551QSubmissionResult::Superseded);
@@ -701,18 +975,30 @@ impl Database {
         Ok(Claim2551QSubmissionResult::Claimed { draft, token })
     }
 
-    /// Finish a claimed network attempt with either Submitted, a queued retry,
-    /// or Draft after the retry limit. Only the worker holding `claim_token`
-    /// may clear and replace the claimed row.
+    /// Finish a claimed network attempt as Submitted. Once a claim exists, any
+    /// non-success outcome is unknown and must leave the durable claim frozen
+    /// for manual reconciliation. Retry/exhaustion transitions happen only
+    /// before the network claim through the unclaimed queue-generation CAS.
     pub(crate) fn finish_claimed_2551q_submission(
         &self,
         draft: &Form2551QDraft,
         claim_token: &str,
     ) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Submitted) {
+            return Err(DbError::Other(
+                "Only a Submitted 2551Q snapshot can finish a network claim".to_string(),
+            ));
+        }
+        if draft.submission_claim_token.is_some() || draft.submission_claimed_at.is_some() {
+            return Err(DbError::Other(
+                "A finished 2551Q attempt must clear its own network claim metadata".to_string(),
+            ));
+        }
+
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
-        let Some((raw_json, db_status)) = tx
+        let Some((id, raw_json, db_status)) = tx
             .query_row(
-                "SELECT data_json, status FROM form_drafts
+                "SELECT id, data_json, status FROM form_drafts
                  WHERE tin = ?1 AND form_code = '2551Q'
                    AND taxable_year = ?2 AND quarter = ?3",
                 params![
@@ -720,7 +1006,13 @@ impl Database {
                     i64::from(draft.taxable_year),
                     i64::from(draft.quarter)
                 ],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
             )
             .optional()?
         else {
@@ -728,55 +1020,396 @@ impl Database {
                 "Claimed 2551Q draft disappeared before the network attempt finished".to_string(),
             ));
         };
-        let existing: Form2551QDraft = serde_json::from_str(&raw_json)?;
-        if db_status != "Queued" || existing.submission_claim_token.as_deref() != Some(claim_token)
+        let mut existing: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Queued"
+            || !matches!(existing.status, FilingStatus::Queued)
+            || existing.submission_claim_token.as_deref() != Some(claim_token)
+            || existing.submission_claimed_at.is_none()
         {
             return Err(DbError::Other(
                 "2551Q submission claim no longer belongs to this worker".to_string(),
             ));
         }
+        if draft.to_bir_field_map() != existing.to_bir_field_map() {
+            return Err(DbError::Other(
+                "Claimed 2551Q submission fields changed before completion".to_string(),
+            ));
+        }
 
-        let mut finished = draft.clone();
-        finished.submission_claim_token = None;
-        finished.submission_claimed_at = None;
-        let json = serde_json::to_string(&finished)?;
-        let status = filing_status_to_db(&finished.status);
-        let period_key = FilingPeriod::Quarterly(finished.quarter).to_period_key();
+        let expected_filename = existing.default_submission_filename();
+        if draft.queued_submission_fingerprint != existing.queued_submission_fingerprint
+            || draft.submission_filename.as_deref() != Some(expected_filename.as_str())
+            || draft.submitted_at.is_none()
+            || draft.submission_attempts != 0
+            || draft.next_retry_at.is_some()
+            || draft.last_error.is_some()
+        {
+            return Err(DbError::Other(
+                "Claimed 2551Q submission completion did not preserve the reviewed fingerprint, IAF filename, timestamp, and terminal state"
+                    .to_string(),
+            ));
+        }
+
+        existing.status = FilingStatus::Submitted;
+        existing.submitted_at = draft.submitted_at.clone();
+        existing.submission_filename = draft.submission_filename.clone();
+        existing.submission_attempts = 0;
+        existing.next_retry_at = None;
+        existing.last_error = None;
+        existing.submission_claim_token = None;
+        existing.submission_claimed_at = None;
+        existing.updated_at = chrono::Utc::now().to_rfc3339();
+        let json = serde_json::to_string(&existing)?;
+        let period_key = FilingPeriod::Quarterly(draft.quarter).to_period_key();
         let updated = tx.execute(
             "UPDATE form_drafts
              SET status = ?1, data_json = ?2, period_key = ?3,
                  updated_at = datetime('now')
-             WHERE tin = ?4 AND form_code = '2551Q'
-               AND taxable_year = ?5 AND quarter = ?6
-               AND status = 'Queued' AND data_json = ?7",
-            params![
-                status,
-                json,
-                period_key,
-                &finished.tin,
-                i64::from(finished.taxable_year),
-                i64::from(finished.quarter),
-                raw_json
-            ],
+             WHERE id = ?4 AND status = 'Queued' AND data_json = ?5",
+            params!["Submitted", json, period_key, id, raw_json],
         )?;
         if updated != 1 {
             return Err(DbError::Other(
                 "2551Q submission claim changed before completion".to_string(),
             ));
         }
-        let id = tx.query_row(
-            "SELECT id FROM form_drafts
-             WHERE tin = ?1 AND form_code = '2551Q'
-               AND taxable_year = ?2 AND quarter = ?3",
-            params![
-                &finished.tin,
-                i64::from(finished.taxable_year),
-                i64::from(finished.quarter)
-            ],
-            |row| row.get::<_, i64>(0),
-        )?;
         tx.commit()?;
         let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// CAS-advance one exact Submitted 2551Q snapshot to Confirmed.
+    ///
+    /// Receipt matching may add confirmation metadata, but it may not replace
+    /// the transmitted filing fields or the queue fingerprint.
+    pub fn save_confirmed_2551q_draft(&self, draft: &Form2551QDraft) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Confirmed)
+            || draft.confirmed_at.is_none()
+            || draft.submission_claim_token.is_some()
+            || draft.submission_claimed_at.is_some()
+        {
+            return Err(DbError::Other(
+                "Only a completed 2551Q confirmation may use the confirmation persistence path"
+                    .to_string(),
+            ));
+        }
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.quarter)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "Submitted 2551Q draft disappeared before confirmation".to_string(),
+            ));
+        };
+        let mut existing: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Submitted"
+            || !matches!(existing.status, FilingStatus::Submitted)
+            || draft.to_bir_field_map() != existing.to_bir_field_map()
+            || draft.queued_submission_fingerprint != existing.queued_submission_fingerprint
+            || draft.submitted_at != existing.submitted_at
+            || existing.submitted_at.is_none()
+            || existing.submission_filename.is_none()
+        {
+            return Err(DbError::Other(
+                "2551Q confirmation no longer matches the exact submitted snapshot".to_string(),
+            ));
+        }
+
+        let confirmed_at = if let Some(receipt_id) = draft.receipt_id {
+            let receipt = tx
+                .query_row(
+                    "SELECT filename, tin, form_type, period, received_date, received_time
+                     FROM submission_receipts
+                     WHERE id = ?1",
+                    params![receipt_id],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, String>(4)?,
+                            row.get::<_, String>(5)?,
+                        ))
+                    },
+                )
+                .optional()?
+                .ok_or_else(|| {
+                    DbError::Other(format!(
+                        "2551Q confirmation receipt {receipt_id} does not exist"
+                    ))
+                })?;
+            let (
+                receipt_filename,
+                receipt_tin,
+                receipt_form,
+                receipt_period,
+                received_date,
+                received_time,
+            ) = receipt;
+            let submitted_filename = existing
+                .submission_filename
+                .as_deref()
+                .expect("submitted filename checked above");
+            let filename_identity = crate::receipt::split_bir_filename(&receipt_filename);
+            let expected_period = existing.period_code();
+            if receipt_tin != existing.tin
+                || !super::receipts::is_audited_2551q_receipt_form_type(&receipt_form)
+                || receipt_period != expected_period
+                || !filename_identity.as_ref().is_some_and(
+                    |(filename_tin, filename_form, filename_period)| {
+                        filename_tin == &existing.tin
+                            && filename_form == &receipt_form
+                            && filename_period == &expected_period
+                    },
+                )
+                || !matches_2551q_receipt_filename(submitted_filename, &receipt_filename)
+                || !draft
+                    .submission_filename
+                    .as_deref()
+                    .is_some_and(|filename| {
+                        filename == receipt_filename || filename == submitted_filename
+                    })
+            {
+                return Err(DbError::Other(
+                    "2551Q confirmation receipt does not match the submitted taxpayer, audited form alias, period, and filename"
+                        .to_string(),
+                ));
+            }
+
+            let received_at = parse_2551q_receipt_timestamp(&received_date, &received_time)
+                .ok_or_else(|| {
+                    DbError::Other(
+                        "2551Q confirmation receipt has an invalid received timestamp".to_string(),
+                    )
+                })?;
+            let submitted_at = chrono::DateTime::parse_from_rfc3339(
+                existing
+                    .submitted_at
+                    .as_deref()
+                    .expect("submitted timestamp checked above"),
+            )
+            .map_err(|_| {
+                DbError::Other(
+                    "Submitted 2551Q snapshot has an invalid submission timestamp".to_string(),
+                )
+            })?;
+            if received_at < submitted_at {
+                return Err(DbError::Other(
+                    "2551Q confirmation receipt predates the submitted snapshot".to_string(),
+                ));
+            }
+            received_at.to_rfc3339()
+        } else {
+            if draft.submission_filename != existing.submission_filename {
+                return Err(DbError::Other(
+                    "Manual 2551Q confirmation cannot replace the submitted filename".to_string(),
+                ));
+            }
+            let manual_confirmed_at = draft
+                .confirmed_at
+                .clone()
+                .expect("confirmed timestamp checked above");
+            let manual_confirmed_dt = chrono::DateTime::parse_from_rfc3339(&manual_confirmed_at)
+                .map_err(|_| {
+                    DbError::Other(
+                        "Manual 2551Q confirmation has an invalid confirmation timestamp"
+                            .to_string(),
+                    )
+                })?;
+            let submitted_at = chrono::DateTime::parse_from_rfc3339(
+                existing
+                    .submitted_at
+                    .as_deref()
+                    .expect("submitted timestamp checked above"),
+            )
+            .map_err(|_| {
+                DbError::Other(
+                    "Submitted 2551Q snapshot has an invalid submission timestamp".to_string(),
+                )
+            })?;
+            if manual_confirmed_dt < submitted_at {
+                return Err(DbError::Other(
+                    "Manual 2551Q confirmation predates the submitted snapshot".to_string(),
+                ));
+            }
+            manual_confirmed_at
+        };
+
+        existing.status = FilingStatus::Confirmed;
+        existing.confirmed_at = Some(confirmed_at);
+        existing.receipt_id = draft.receipt_id;
+        existing.updated_at = chrono::Utc::now().to_rfc3339();
+        let json = serde_json::to_string(&existing)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Confirmed', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Submitted' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q submission changed before confirmation completed".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// CAS-advance one exact Confirmed 2551Q snapshot to Paid.
+    pub fn save_paid_2551q_draft(&self, draft: &Form2551QDraft) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Paid)
+            || draft.submission_claim_token.is_some()
+            || draft.submission_claimed_at.is_some()
+        {
+            return Err(DbError::Other(
+                "Only a Paid 2551Q return may use the payment persistence path".to_string(),
+            ));
+        }
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.quarter)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "Confirmed 2551Q draft disappeared before payment completion".to_string(),
+            ));
+        };
+        let mut existing: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if db_status != "Confirmed"
+            || !matches!(existing.status, FilingStatus::Confirmed)
+            || draft.to_bir_field_map() != existing.to_bir_field_map()
+            || draft.queued_submission_fingerprint != existing.queued_submission_fingerprint
+            || draft.submitted_at != existing.submitted_at
+            || draft.submission_filename != existing.submission_filename
+            || draft.confirmed_at != existing.confirmed_at
+            || draft.receipt_id != existing.receipt_id
+        {
+            return Err(DbError::Other(
+                "2551Q payment no longer matches the exact confirmed snapshot".to_string(),
+            ));
+        }
+
+        existing.status = FilingStatus::Paid;
+        existing.updated_at = chrono::Utc::now().to_rfc3339();
+        let json = serde_json::to_string(&existing)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET status = 'Paid', data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = 'Confirmed' AND data_json = ?3",
+            params![json, id, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q confirmation changed before payment completed".to_string(),
+            ));
+        }
+        tx.commit()?;
+        let _ = self.request_google_calendar_sync();
+        Ok(id)
+    }
+
+    /// CAS-update only the local payment-receipt attachment path on an
+    /// immutable Confirmed or Paid 2551Q snapshot.
+    pub fn save_2551q_payment_receipt_path(&self, draft: &Form2551QDraft) -> Result<i64, DbError> {
+        if !matches!(draft.status, FilingStatus::Confirmed | FilingStatus::Paid) {
+            return Err(DbError::Other(
+                "A 2551Q payment receipt may only be attached to a Confirmed or Paid return"
+                    .to_string(),
+            ));
+        }
+
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        let Some((id, raw_json, db_status)) = tx
+            .query_row(
+                "SELECT id, data_json, status FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &draft.tin,
+                    i64::from(draft.taxable_year),
+                    i64::from(draft.quarter)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+        else {
+            return Err(DbError::Other(
+                "2551Q return disappeared before its payment receipt was attached".to_string(),
+            ));
+        };
+        let mut existing: Form2551QDraft = serde_json::from_str(&raw_json)?;
+        if filing_status_from_db(&db_status) != existing.status
+            || existing.status != draft.status
+            || draft.to_bir_field_map() != existing.to_bir_field_map()
+            || draft.queued_submission_fingerprint != existing.queued_submission_fingerprint
+            || draft.submitted_at != existing.submitted_at
+            || draft.submission_filename != existing.submission_filename
+            || draft.confirmed_at != existing.confirmed_at
+            || draft.receipt_id != existing.receipt_id
+        {
+            return Err(DbError::Other(
+                "2551Q payment receipt no longer matches the exact immutable filing snapshot"
+                    .to_string(),
+            ));
+        }
+
+        existing.payment_receipt_path = draft.payment_receipt_path.clone();
+        let json = serde_json::to_string(&existing)?;
+        let updated = tx.execute(
+            "UPDATE form_drafts
+             SET data_json = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND status = ?3 AND data_json = ?4",
+            params![json, id, db_status, raw_json],
+        )?;
+        if updated != 1 {
+            return Err(DbError::Other(
+                "2551Q return changed before its payment receipt was attached".to_string(),
+            ));
+        }
+        tx.commit()?;
         Ok(id)
     }
 
@@ -801,18 +1434,6 @@ impl Database {
         } else {
             Ok(None)
         }
-    }
-
-    /// Mark a 2551Q draft as Filed.
-    pub fn mark_2551q_filed(&self, tin: &str, year: u16, quarter: u8) -> Result<(), DbError> {
-        self.conn.execute(
-            "UPDATE form_drafts SET status = 'Submitted', updated_at = datetime('now')
-             WHERE tin = ?1 AND form_code = '2551Q'
-               AND taxable_year = ?2 AND quarter = ?3",
-            params![tin, year as i64, quarter as i64],
-        )?;
-        let _ = self.request_google_calendar_sync();
-        Ok(())
     }
 
     /// Save or update an editable Form 1601C draft.
@@ -1030,7 +1651,9 @@ impl Database {
                 )));
             }
         }
-        if replacement.submission_claim_token.is_some() {
+        if replacement.submission_claim_token.is_some()
+            || replacement.submission_claimed_at.is_some()
+        {
             return Err(DbError::Other(
                 "An unclaimed 1601C replacement cannot carry a network claim".to_string(),
             ));
@@ -1063,6 +1686,7 @@ impl Database {
         if db_status != "Queued"
             || !matches!(current.status, FilingStatus::Queued)
             || current.submission_claim_token.is_some()
+            || current.submission_claimed_at.is_some()
             || &current.queued_submission_fingerprint != expected_fingerprint
             || &current.next_retry_at != expected_next_retry_at
             || current.submission_attempts != expected_submission_attempts
@@ -1091,7 +1715,9 @@ impl Database {
         &self,
         queued: &Form1601CDraft,
     ) -> Result<Form1601CDraft, DbError> {
-        if !matches!(queued.status, FilingStatus::Queued) || queued.submission_claim_token.is_some()
+        if !matches!(queued.status, FilingStatus::Queued)
+            || queued.submission_claim_token.is_some()
+            || queued.submission_claimed_at.is_some()
         {
             return Err(DbError::Other(
                 "Only an unclaimed queued 1601C snapshot can be canceled".to_string(),
@@ -1161,6 +1787,7 @@ impl Database {
         if db_status != "Queued"
             || !matches!(draft.status, FilingStatus::Queued)
             || draft.submission_claim_token.is_some()
+            || draft.submission_claimed_at.is_some()
             || &draft.queued_submission_fingerprint != expected_fingerprint
             || &draft.next_retry_at != expected_next_retry_at
             || draft.submission_attempts != expected_submission_attempts
@@ -1242,7 +1869,10 @@ impl Database {
             ));
         };
         let existing: Form1601CDraft = serde_json::from_str(&raw_json)?;
-        if db_status != "Queued" || existing.submission_claim_token.as_deref() != Some(claim_token)
+        if db_status != "Queued"
+            || !matches!(existing.status, FilingStatus::Queued)
+            || existing.submission_claim_token.as_deref() != Some(claim_token)
+            || existing.submission_claimed_at.is_none()
         {
             return Err(DbError::Other(
                 "1601C submission claim no longer belongs to this worker".to_string(),
@@ -1318,6 +1948,13 @@ impl Database {
         quarter: Option<u8>,
         month: Option<u8>,
     ) -> Result<i64, DbError> {
+        if form_code == "2551Q" {
+            return Err(DbError::Other(
+                "Imported 2551Q returns cannot bypass the audited draft, queue, claim, and confirmation persistence paths"
+                    .to_string(),
+            ));
+        }
+
         let legacy_slot = match frequency_for_form(form_code) {
             FilingFrequency::Monthly => month.or(quarter),
             FilingFrequency::Quarterly => quarter.or(month),
@@ -1598,18 +2235,15 @@ impl Database {
         status: &FilingStatus,
         draft: &T,
     ) -> Result<i64, DbError> {
-        if form_code == "1601C" {
-            return Err(DbError::Other(
-                "1601C must use its dedicated immutable draft or queue persistence path"
-                    .to_string(),
-            ));
+        if matches!(form_code, "1601C" | "2551Q") {
+            return Err(DbError::Other(format!(
+                "{form_code} must use its dedicated immutable draft or queue persistence path"
+            )));
         }
 
-        if matches!(status, FilingStatus::Queued)
-            && !crate::forms::can_queue_for_submission(form_code)
-        {
+        if matches!(status, FilingStatus::Queued) {
             return Err(DbError::Other(format!(
-                "Form {form_code} is scaffold-only and cannot be queued for submission"
+                "Form {form_code} cannot enter Queued state through generic draft persistence; use its dedicated reviewed queue path"
             )));
         }
 
@@ -1775,6 +2409,108 @@ mod tests {
         draft
     }
 
+    fn submitted_2551q_draft(db: &Database, profile: &TaxpayerProfile) -> Form2551QDraft {
+        insert_test_profile(db, profile);
+        let queued = queued_graduated_draft(profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("queued draft should persist before the test submission");
+        let (mut claimed, token) = match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .expect("queued draft claim should execute")
+        {
+            Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("the exact queued generation should be claimed"),
+        };
+        let filename = claimed.default_submission_filename();
+        claimed.transition_to_submitted(filename);
+        claimed.submitted_at = Some("2026-04-25T04:00:00+00:00".to_string());
+        db.finish_claimed_2551q_submission(&claimed, &token)
+            .expect("the claimed draft should become Submitted");
+        db.get_2551q_draft(&claimed.tin, claimed.taxable_year, claimed.quarter)
+            .unwrap()
+            .unwrap()
+    }
+
+    fn insert_2551q_receipt(
+        db: &Database,
+        submitted: &Form2551QDraft,
+        filename: &str,
+        received_date: &str,
+        received_time: &str,
+    ) -> i64 {
+        db.conn
+            .execute(
+                "INSERT INTO submission_receipts
+                    (filename, tin, form_type, period, received_date, received_time, raw_text)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'test receipt')",
+                params![
+                    filename,
+                    &submitted.tin,
+                    AUDITED_2551Q_RECEIPT_FORM,
+                    submitted.period_code(),
+                    received_date,
+                    received_time
+                ],
+            )
+            .unwrap();
+        db.conn.last_insert_rowid()
+    }
+
+    fn assert_2551q_confirmation_rejected_without_draft_mutation(
+        db: &Database,
+        confirmation: &Form2551QDraft,
+    ) {
+        let before = db
+            .conn
+            .query_row(
+                "SELECT status, data_json, updated_at FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &confirmation.tin,
+                    i64::from(confirmation.taxable_year),
+                    i64::from(confirmation.quarter)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert!(db.save_confirmed_2551q_draft(confirmation).is_err());
+        let after = db
+            .conn
+            .query_row(
+                "SELECT status, data_json, updated_at FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &confirmation.tin,
+                    i64::from(confirmation.taxable_year),
+                    i64::from(confirmation.quarter)
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(after, before);
+    }
+
     fn editable_1601c_draft(profile: &TaxpayerProfile) -> Form1601CDraft {
         let mut draft = Form1601CDraft::new_from_profile(profile, 2026, 5);
         draft.any_taxes_withheld = false;
@@ -1910,7 +2646,11 @@ mod tests {
             .try_to_bir_xml_payload()
             .expect("queued 1601C should produce checked XML");
         assert_eq!(
-            crate::bir_xml::parse_bir_xml_checked(&xml).unwrap(),
+            crate::bir_xml::parse_bir_xml_with_codec_checked(
+                &xml,
+                bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+            )
+            .unwrap(),
             queued_fields
         );
         assert_eq!(
@@ -2134,6 +2874,124 @@ mod tests {
     }
 
     #[test]
+    fn orphaned_1601c_claimed_at_blocks_replacement_cancellation_and_reclaim() {
+        let db = test_db();
+        let queued = queued_1601c_draft(&test_profile());
+        db.save_queued_1601c_draft(&queued).unwrap();
+        let stored = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        let expected_fingerprint = stored.queued_submission_fingerprint.clone();
+        let expected_retry = stored.next_retry_at.clone();
+        let expected_attempts = stored.submission_attempts;
+
+        let mut claimed_replacement = stored.clone();
+        claimed_replacement.submission_claimed_at = Some("2026-05-10T04:00:00+00:00".to_string());
+        assert!(
+            db.replace_unclaimed_queued_1601c_submission(
+                &claimed_replacement,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .is_err(),
+            "replacement input carrying only claimed_at is still claimed"
+        );
+
+        let mut orphaned = stored;
+        orphaned.submission_claimed_at = Some("2026-05-10T04:00:00+00:00".to_string());
+        let orphaned_json = serde_json::to_string(&orphaned).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1
+                 WHERE tin = ?2 AND form_code = '1601C'
+                   AND taxable_year = ?3 AND quarter = ?4",
+                params![
+                    &orphaned_json,
+                    &orphaned.tin,
+                    i64::from(orphaned.taxable_year),
+                    i64::from(orphaned.month)
+                ],
+            )
+            .unwrap();
+
+        assert!(
+            db.cancel_queued_1601c_submission(&orphaned).is_err(),
+            "orphaned claimed_at must make cancellation fail closed"
+        );
+        let mut retry = orphaned.clone();
+        retry.submission_claimed_at = None;
+        retry.record_submission_failure("must not retry orphaned claim".to_string());
+        assert!(
+            !db.replace_unclaimed_queued_1601c_submission(
+                &retry,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .unwrap()
+        );
+        assert!(matches!(
+            db.claim_queued_1601c_submission(
+                &orphaned.tin,
+                orphaned.taxable_year,
+                orphaned.month,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .unwrap(),
+            Claim1601CSubmissionResult::Superseded
+        ));
+        let after = db
+            .get_1601c_draft(&orphaned.tin, orphaned.taxable_year, orphaned.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::to_string(&after).unwrap(), orphaned_json);
+    }
+
+    #[test]
+    fn token_only_1601c_claim_cannot_finalize_submission() {
+        let db = test_db();
+        let queued = queued_1601c_draft(&test_profile());
+        db.save_queued_1601c_draft(&queued).unwrap();
+        let mut orphaned = db
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        let claim_token = "token-without-claimed-at";
+        orphaned.submission_claim_token = Some(claim_token.to_string());
+        orphaned.submission_claimed_at = None;
+        let orphaned_json = serde_json::to_string(&orphaned).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1
+                 WHERE tin = ?2 AND form_code = '1601C'
+                   AND taxable_year = ?3 AND quarter = ?4",
+                params![
+                    &orphaned_json,
+                    &orphaned.tin,
+                    i64::from(orphaned.taxable_year),
+                    i64::from(orphaned.month)
+                ],
+            )
+            .unwrap();
+
+        let mut submitted = orphaned.clone();
+        submitted.transition_to_submitted(submitted.default_submission_filename());
+        assert!(
+            db.finish_claimed_1601c_submission(&submitted, claim_token)
+                .is_err()
+        );
+        let after = db
+            .get_1601c_draft(&orphaned.tin, orphaned.taxable_year, orphaned.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::to_string(&after).unwrap(), orphaned_json);
+    }
+
+    #[test]
     fn save_and_reopen_0605_preserves_independent_dates_codes_and_pdf_only_details() {
         use crate::forms::FormValidator;
         use crate::forms::form_0605::{
@@ -2301,7 +3159,10 @@ mod tests {
         let draft = queued_eight_percent_draft(&profile);
 
         let first_id = db.save_queued_2551q_draft_and_election(&draft).unwrap();
-        let second_id = db.save_queued_2551q_draft_and_election(&draft).unwrap();
+        assert!(
+            db.save_queued_2551q_draft_and_election(&draft).is_err(),
+            "an existing Queued snapshot must not be replaced by a stale requeue"
+        );
 
         let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
         let elections = saved_profile
@@ -2311,7 +3172,7 @@ mod tests {
             .collect::<Vec<_>>();
         let saved_draft = db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().unwrap();
 
-        assert_eq!(first_id, second_id);
+        assert!(first_id > 0);
         assert_eq!(elections.len(), 1);
         assert_eq!(elections[0].election, IncomeTaxElection::EightPercent);
         assert_eq!(elections[0].source_form, "2551Qv2018");
@@ -2619,7 +3480,514 @@ mod tests {
     }
 
     #[test]
-    fn network_claim_blocks_stale_cancel_and_finishes_by_token() {
+    fn generic_2551q_persistence_cannot_create_or_replace_state() {
+        let db = test_db();
+        let profile = test_profile();
+        let editable = Form2551QDraft::new_from_profile(&profile, 2026, 1);
+        let queued = queued_graduated_draft(&profile);
+
+        let error = db
+            .save_2551q_draft(&queued)
+            .expect_err("Queued state must use the dedicated reviewed queue path");
+
+        assert!(error.to_string().contains("editable Draft"));
+        for status in [FilingStatus::Draft, FilingStatus::Queued] {
+            assert!(
+                db.save_form_draft_v2(
+                    &editable.tin,
+                    "2551Q",
+                    editable.taxable_year,
+                    &FilingPeriod::Quarterly(editable.quarter),
+                    &status,
+                    &editable,
+                )
+                .is_err()
+            );
+            assert!(
+                db.save_form_draft(
+                    &editable.tin,
+                    "2551Q",
+                    editable.taxable_year,
+                    Some(editable.quarter),
+                    &status,
+                    &editable,
+                )
+                .is_err()
+            );
+        }
+        assert!(
+            db.get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn imported_2551q_cannot_create_or_replace_any_filing_state() {
+        let db = test_db();
+        let profile = test_profile();
+
+        assert!(
+            db.save_imported_form(&profile.tin.full(), "2551Q", 2035, Some(4), None)
+                .is_err()
+        );
+        let create_count: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM form_drafts
+                 WHERE tin = ?1 AND form_code = '2551Q' AND taxable_year = 2035",
+                params![profile.tin.full()],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(create_count, 0);
+
+        let cases = [
+            (2027, FilingStatus::Draft, false),
+            (2028, FilingStatus::Queued, false),
+            (2029, FilingStatus::Queued, true),
+            (2030, FilingStatus::Submitted, false),
+            (2031, FilingStatus::Confirmed, false),
+            (2032, FilingStatus::Paid, false),
+        ];
+        for (year, status, claimed) in cases {
+            let mut stored = Form2551QDraft::new_from_profile(&profile, year, 1);
+            stored.status = status.clone();
+            if matches!(
+                &status,
+                FilingStatus::Queued
+                    | FilingStatus::Submitted
+                    | FilingStatus::Confirmed
+                    | FilingStatus::Paid
+            ) {
+                stored.queued_submission_fingerprint = Some(format!("reviewed-{year}-fingerprint"));
+            }
+            if matches!(
+                &status,
+                FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+            ) {
+                stored.submitted_at = Some(format!("{year}-04-25T04:00:00+00:00"));
+                stored.submission_filename = Some(stored.default_submission_filename());
+            }
+            if matches!(&status, FilingStatus::Confirmed | FilingStatus::Paid) {
+                stored.confirmed_at = Some(format!("{year}-04-25T12:00:00+08:00"));
+            }
+            if claimed {
+                stored.submission_claim_token = Some("durable-network-claim".to_string());
+                stored.submission_claimed_at = Some(format!("{year}-04-25T04:00:01+00:00"));
+            }
+            let raw_json = serde_json::to_string(&stored).unwrap();
+            db.conn
+                .execute(
+                    "INSERT INTO form_drafts
+                        (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                     VALUES (?1, '2551Q', ?2, 1, 'Q1', ?3, ?4)",
+                    params![
+                        &stored.tin,
+                        i64::from(year),
+                        filing_status_to_db(&status),
+                        &raw_json
+                    ],
+                )
+                .unwrap();
+            let before = db
+                .conn
+                .query_row(
+                    "SELECT status, data_json, updated_at FROM form_drafts
+                     WHERE tin = ?1 AND form_code = '2551Q'
+                       AND taxable_year = ?2 AND quarter = 1",
+                    params![&stored.tin, i64::from(year)],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    },
+                )
+                .unwrap();
+
+            assert!(
+                db.save_imported_form(&stored.tin, "2551Q", year, Some(1), None)
+                    .is_err(),
+                "import must reject existing {status:?} state (claimed={claimed})"
+            );
+            let after = db
+                .conn
+                .query_row(
+                    "SELECT status, data_json, updated_at FROM form_drafts
+                     WHERE tin = ?1 AND form_code = '2551Q'
+                       AND taxable_year = ?2 AND quarter = 1",
+                    params![&stored.tin, i64::from(year)],
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    },
+                )
+                .unwrap();
+            assert_eq!(after, before);
+        }
+    }
+
+    #[test]
+    fn stale_editable_2551q_cannot_overwrite_a_queued_snapshot() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let editable = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+        db.save_2551q_draft(&editable).unwrap();
+
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued).unwrap();
+        let before = serde_json::to_value(
+            db.get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+
+        assert!(db.save_2551q_draft(&editable).is_err());
+        assert!(
+            db.save_form_draft_v2(
+                &editable.tin,
+                "2551Q",
+                editable.taxable_year,
+                &FilingPeriod::Quarterly(editable.quarter),
+                &FilingStatus::Draft,
+                &editable,
+            )
+            .is_err()
+        );
+        assert!(
+            db.save_form_draft(
+                &editable.tin,
+                "2551Q",
+                editable.taxable_year,
+                Some(editable.quarter),
+                &FilingStatus::Draft,
+                &editable,
+            )
+            .is_err()
+        );
+        let after = serde_json::to_value(
+            db.get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(after, before);
+    }
+
+    #[test]
+    fn editable_save_and_queue_require_matching_draft_column_and_json_status() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let editable = Form2551QDraft::new_from_effective_profile(&profile, 2026, 1);
+        db.save_2551q_draft(&editable).unwrap();
+        let queued = queued_graduated_draft(&profile);
+
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Submitted'
+                 WHERE tin = ?1 AND form_code = '2551Q'
+                   AND taxable_year = ?2 AND quarter = ?3",
+                params![
+                    &editable.tin,
+                    i64::from(editable.taxable_year),
+                    i64::from(editable.quarter)
+                ],
+            )
+            .unwrap();
+        assert!(db.save_2551q_draft(&editable).is_err());
+        assert!(db.save_queued_2551q_draft_and_election(&queued).is_err());
+
+        let mut immutable_json = editable.clone();
+        immutable_json.status = FilingStatus::Submitted;
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Draft', data_json = ?1
+                 WHERE tin = ?2 AND form_code = '2551Q'
+                   AND taxable_year = ?3 AND quarter = ?4",
+                params![
+                    serde_json::to_string(&immutable_json).unwrap(),
+                    &editable.tin,
+                    i64::from(editable.taxable_year),
+                    i64::from(editable.quarter)
+                ],
+            )
+            .unwrap();
+        assert!(db.save_2551q_draft(&editable).is_err());
+        assert!(db.save_queued_2551q_draft_and_election(&queued).is_err());
+    }
+
+    #[test]
+    fn exact_unclaimed_2551q_queue_revision_accepts_retry_cas() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("the reviewed queue generation should persist");
+        let stored = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        let expected_fingerprint = stored.queued_submission_fingerprint.clone();
+        let expected_retry = stored.next_retry_at.clone();
+        let expected_attempts = stored.submission_attempts;
+        let mut retry = stored;
+        retry.record_submission_failure("pre-network preparation failed".to_string());
+
+        assert!(
+            db.replace_unclaimed_queued_2551q_submission(
+                &retry,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .expect("the exact queue-generation CAS should execute")
+        );
+
+        let persisted = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Queued);
+        assert_eq!(
+            persisted.queued_submission_fingerprint,
+            expected_fingerprint
+        );
+        assert_eq!(persisted.submission_attempts, 1);
+        assert_eq!(persisted.next_retry_at, retry.next_retry_at);
+        assert_eq!(
+            persisted.last_error.as_deref(),
+            Some("pre-network preparation failed")
+        );
+        assert!(persisted.submission_claim_token.is_none());
+    }
+
+    #[test]
+    fn stale_2551q_queue_revision_cannot_overwrite_newer_generation() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("the reviewed queue generation should persist");
+        let original = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        let original_fingerprint = original.queued_submission_fingerprint.clone();
+        let original_retry = original.next_retry_at.clone();
+        let original_attempts = original.submission_attempts;
+
+        let mut newer_retry = original.clone();
+        newer_retry.record_submission_failure("newer worker retry".to_string());
+        assert!(
+            db.replace_unclaimed_queued_2551q_submission(
+                &newer_retry,
+                &original_fingerprint,
+                &original_retry,
+                original_attempts,
+            )
+            .unwrap()
+        );
+        let before_stale_write = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+
+        let mut stale_rejection = original;
+        stale_rejection.revert_to_draft();
+        assert!(
+            !db.replace_unclaimed_queued_2551q_submission(
+                &stale_rejection,
+                &original_fingerprint,
+                &original_retry,
+                original_attempts,
+            )
+            .expect("a stale CAS should return a clean miss")
+        );
+
+        let after_stale_write = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(after_stale_write).unwrap(),
+            serde_json::to_value(before_stale_write).unwrap()
+        );
+    }
+
+    #[test]
+    fn orphaned_2551q_claimed_at_blocks_replacement_and_reclaim() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued).unwrap();
+        let stored = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        let expected_fingerprint = stored.queued_submission_fingerprint.clone();
+        let expected_retry = stored.next_retry_at.clone();
+        let expected_attempts = stored.submission_attempts;
+
+        let mut claimed_replacement = stored.clone();
+        claimed_replacement.submission_claimed_at = Some("2026-04-25T04:00:00+00:00".to_string());
+        assert!(
+            db.replace_unclaimed_queued_2551q_submission(
+                &claimed_replacement,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .is_err(),
+            "replacement input carrying only claimed_at is still claimed"
+        );
+
+        let mut orphaned = stored.clone();
+        orphaned.submission_claimed_at = Some("2026-04-25T04:00:00+00:00".to_string());
+        let orphaned_json = serde_json::to_string(&orphaned).unwrap();
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1
+                 WHERE tin = ?2 AND form_code = '2551Q'
+                   AND taxable_year = ?3 AND quarter = ?4",
+                params![
+                    &orphaned_json,
+                    &orphaned.tin,
+                    i64::from(orphaned.taxable_year),
+                    i64::from(orphaned.quarter)
+                ],
+            )
+            .unwrap();
+
+        let mut retry = orphaned.clone();
+        retry.submission_claimed_at = None;
+        retry.record_submission_failure("must not retry orphaned claim".to_string());
+        assert!(
+            !db.replace_unclaimed_queued_2551q_submission(
+                &retry,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .unwrap(),
+            "stored orphaned claimed_at must make replacement a clean CAS miss"
+        );
+        assert!(matches!(
+            db.claim_queued_2551q_submission(
+                &orphaned.tin,
+                orphaned.taxable_year,
+                orphaned.quarter,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .unwrap(),
+            Claim2551QSubmissionResult::Superseded
+        ));
+        let after = db
+            .get_2551q_draft(&orphaned.tin, orphaned.taxable_year, orphaned.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::to_string(&after).unwrap(), orphaned_json);
+    }
+
+    #[test]
+    fn cancellation_uses_exact_queued_json_and_allows_invalid_unclaimed_state() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued).unwrap();
+
+        let mut changed = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        changed.profile_snapshot_stale = true;
+        changed.profile_snapshot_stale_reason = Some("profile changed".to_string());
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1
+                 WHERE tin = ?2 AND form_code = '2551Q'
+                   AND taxable_year = ?3 AND quarter = ?4",
+                params![
+                    serde_json::to_string(&changed).unwrap(),
+                    &queued.tin,
+                    i64::from(queued.taxable_year),
+                    i64::from(queued.quarter)
+                ],
+            )
+            .unwrap();
+
+        assert!(
+            db.cancel_queued_2551q_submission(&queued).is_err(),
+            "a stale open view must not overwrite newer queue audit state"
+        );
+        let canceled = db
+            .cancel_queued_2551q_submission(&changed)
+            .expect("an exact unclaimed queue may be canceled even when revalidation would fail");
+        assert_eq!(canceled.status, FilingStatus::Draft);
+        assert!(canceled.profile_snapshot_stale);
+        assert!(canceled.queued_submission_fingerprint.is_none());
+    }
+
+    #[test]
+    fn exact_unclaimed_2551q_queue_revision_accepts_fifth_failure_draft_cas() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let mut queued = queued_graduated_draft(&profile);
+        queued.submission_attempts = 4;
+        queued.next_retry_at = Some("2026-07-24T00:00:00Z".to_string());
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("the fourth-retry queue generation should persist");
+        let stored = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        let expected_fingerprint = stored.queued_submission_fingerprint.clone();
+        let expected_retry = stored.next_retry_at.clone();
+        let expected_attempts = stored.submission_attempts;
+        let mut exhausted = stored;
+        exhausted.record_submission_failure("fifth preparation failure".to_string());
+        assert_eq!(exhausted.status, FilingStatus::Draft);
+
+        assert!(
+            db.replace_unclaimed_queued_2551q_submission(
+                &exhausted,
+                &expected_fingerprint,
+                &expected_retry,
+                expected_attempts,
+            )
+            .expect("the exact fifth-attempt CAS should execute")
+        );
+
+        let persisted = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Draft);
+        assert_eq!(persisted.submission_attempts, 5);
+        assert!(persisted.queued_submission_fingerprint.is_none());
+        assert!(persisted.next_retry_at.is_none());
+        assert_eq!(
+            persisted.last_error.as_deref(),
+            Some("fifth preparation failure")
+        );
+    }
+
+    #[test]
+    fn network_claim_completion_rejects_mutation_and_finishes_exact_submission() {
         let db = test_db();
         let profile = test_profile();
         insert_test_profile(&db, &profile);
@@ -2658,16 +4026,433 @@ mod tests {
             Some(token.as_str())
         );
 
-        claimed.transition_to_submitted("queued.xml".to_string());
+        let mut arbitrary_clear = claimed.clone();
+        arbitrary_clear.submission_claim_token = None;
+        arbitrary_clear.submission_claimed_at = None;
+        assert!(
+            db.finish_claimed_2551q_submission(&arbitrary_clear, &token)
+                .is_err(),
+            "a worker may not clear an unknown-outcome claim without a terminal or retry transition"
+        );
+
+        let expected_filename = claimed.default_submission_filename();
+        let mut wrong_status = claimed.clone();
+        wrong_status.submission_claim_token = None;
+        wrong_status.submission_claimed_at = None;
+        wrong_status.status = FilingStatus::Confirmed;
+        assert!(
+            db.finish_claimed_2551q_submission(&wrong_status, &token)
+                .is_err()
+        );
+
+        let mut mutated = claimed.clone();
+        mutated.transition_to_submitted(expected_filename.clone());
+        mutated.schedule_1[0].taxable_amount += 1.0;
+        assert!(
+            db.finish_claimed_2551q_submission(&mutated, &token)
+                .is_err()
+        );
+
+        let mut missing_metadata = claimed.clone();
+        missing_metadata.transition_to_submitted(expected_filename.clone());
+        missing_metadata.submitted_at = None;
+        assert!(
+            db.finish_claimed_2551q_submission(&missing_metadata, &token)
+                .is_err()
+        );
+
+        let mut changed_fingerprint = claimed.clone();
+        changed_fingerprint.transition_to_submitted(expected_filename.clone());
+        changed_fingerprint.queued_submission_fingerprint = Some("different".to_string());
+        assert!(
+            db.finish_claimed_2551q_submission(&changed_fingerprint, &token)
+                .is_err()
+        );
+
+        let mut wrong_filename = claimed.clone();
+        wrong_filename.transition_to_submitted("wrong.xml".to_string());
+        assert!(
+            db.finish_claimed_2551q_submission(&wrong_filename, &token)
+                .is_err()
+        );
+
+        claimed.transition_to_submitted(expected_filename.clone());
+        assert!(
+            db.finish_claimed_2551q_submission(&claimed, "wrong-token")
+                .is_err()
+        );
         db.finish_claimed_2551q_submission(&claimed, &token)
-            .expect("only the claim owner should finish the attempt");
+            .expect("only the claim owner may finish the exact transmitted snapshot");
         let submitted = db
             .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
             .unwrap()
             .unwrap();
         assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert_eq!(
+            submitted.submission_filename.as_deref(),
+            Some(expected_filename.as_str())
+        );
+        assert_eq!(
+            submitted.queued_submission_fingerprint,
+            queued.queued_submission_fingerprint
+        );
         assert!(submitted.submission_claim_token.is_none());
         assert!(submitted.submission_claimed_at.is_none());
+    }
+
+    #[test]
+    fn network_claim_completion_rejects_retry_and_exhaustion_states() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let queued = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&queued)
+            .expect("queued draft should persist before claiming");
+
+        let (mut claimed, token) = match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("the exact queued generation should be claimed"),
+        };
+        claimed.record_submission_failure("definitely pre-transmission".to_string());
+        assert!(
+            db.finish_claimed_2551q_submission(&claimed, &token)
+                .is_err(),
+            "post-claim transport failure has an unknown outcome and must not schedule a retry"
+        );
+
+        let still_claimed = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(still_claimed.status, FilingStatus::Queued);
+        assert_eq!(
+            still_claimed.submission_attempts,
+            queued.submission_attempts
+        );
+        assert_eq!(
+            still_claimed.queued_submission_fingerprint,
+            queued.queued_submission_fingerprint
+        );
+        assert_eq!(
+            still_claimed.submission_claim_token.as_deref(),
+            Some(token.as_str())
+        );
+        assert!(still_claimed.submission_claimed_at.is_some());
+        assert!(
+            still_claimed
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("outcome pending"))
+        );
+
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let mut queued = queued_graduated_draft(&profile);
+        queued.submission_attempts = 4;
+        queued.next_retry_at = Some("2026-07-24T00:00:00Z".to_string());
+        db.save_queued_2551q_draft_and_election(&queued).unwrap();
+        let (mut claimed, token) = match db
+            .claim_queued_2551q_submission(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &queued.queued_submission_fingerprint,
+                &queued.next_retry_at,
+                queued.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("the exact fourth-retry generation should be claimed"),
+        };
+        claimed.record_submission_failure("fifth failure after claim".to_string());
+        assert_eq!(claimed.status, FilingStatus::Draft);
+        assert!(
+            db.finish_claimed_2551q_submission(&claimed, &token)
+                .is_err(),
+            "retry exhaustion after claim must not clear an unknown-outcome claim"
+        );
+        let still_claimed = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(still_claimed.status, FilingStatus::Queued);
+        assert_eq!(still_claimed.submission_attempts, 4);
+        assert_eq!(
+            still_claimed.submission_claim_token.as_deref(),
+            Some(token.as_str())
+        );
+        assert!(still_claimed.submission_claimed_at.is_some());
+    }
+
+    #[test]
+    fn receipt_confirmation_accepts_audited_alias_binds_time_and_preserves_submission_filename() {
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let submitted_filename = submitted.submission_filename.clone().unwrap();
+        let receipt_filename = submitted_filename
+            .replace("#test@example.com#", "")
+            .replace("2551Qv2018", "2551Q");
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "12:00:00");
+        db.conn
+            .execute(
+                "UPDATE submission_receipts SET form_type = '2551Q' WHERE id = ?1",
+                params![receipt_id],
+            )
+            .unwrap();
+
+        let mut confirmation = submitted.clone();
+        confirmation.transition_to_confirmed(
+            "2099-01-01T00:00:00Z".to_string(),
+            Some(receipt_id),
+            Some(receipt_filename),
+        );
+        db.save_confirmed_2551q_draft(&confirmation)
+            .expect("the exact stripped receipt filename should confirm the submission");
+
+        let persisted = db
+            .get_2551q_draft(&submitted.tin, submitted.taxable_year, submitted.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Confirmed);
+        assert_eq!(persisted.receipt_id, Some(receipt_id));
+        assert_eq!(
+            persisted.confirmed_at.as_deref(),
+            Some("2026-04-25T12:00:00+08:00")
+        );
+        assert_eq!(
+            persisted.submission_filename.as_deref(),
+            Some(submitted_filename.as_str())
+        );
+    }
+
+    #[test]
+    fn unpersisted_receipt_cannot_fall_through_to_manual_confirmation() {
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let filename = submitted
+            .submission_filename
+            .as_deref()
+            .unwrap()
+            .replace("#test@example.com#", "");
+        let receipt = crate::db::SubmissionReceipt {
+            id: None,
+            filename,
+            tin: submitted.tin.clone(),
+            form_type: AUDITED_2551Q_RECEIPT_FORM.to_string(),
+            period: submitted.period_code(),
+            received_date: "2026-04-25".to_string(),
+            received_time: "12:00:00".to_string(),
+            source_from: None,
+            raw_text: "unpersisted receipt".to_string(),
+            raw_html: None,
+            created_at: None,
+        };
+
+        assert!(db.confirm_2551q_from_receipt(&receipt).is_err());
+        let persisted = db
+            .get_2551q_draft(&submitted.tin, submitted.taxable_year, submitted.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Submitted);
+        assert!(persisted.confirmed_at.is_none());
+        assert!(persisted.receipt_id.is_none());
+    }
+
+    #[test]
+    fn receipt_confirmation_rejects_missing_mismatched_old_and_invalid_receipts() {
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let submitted_filename = submitted.submission_filename.clone().unwrap();
+        let receipt_filename = submitted_filename.replace("#test@example.com#", "");
+
+        let mut missing = submitted.clone();
+        missing.transition_to_confirmed(
+            "2099-01-01T00:00:00Z".to_string(),
+            Some(999_999),
+            Some(receipt_filename.clone()),
+        );
+        assert_2551q_confirmation_rejected_without_draft_mutation(&db, &missing);
+
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "12:00:00");
+        let mut confirmation = submitted.clone();
+        confirmation.transition_to_confirmed(
+            "2099-01-01T00:00:00Z".to_string(),
+            Some(receipt_id),
+            Some(receipt_filename.clone()),
+        );
+
+        let mut arbitrary_caller_filename = confirmation.clone();
+        arbitrary_caller_filename.submission_filename =
+            Some("123456789000-2551Qv2018-122026Q1-unreviewed-copy.xml".to_string());
+        assert_2551q_confirmation_rejected_without_draft_mutation(&db, &arbitrary_caller_filename);
+
+        let expected_period = submitted.period_code();
+        let receipt_filename_without_extension = receipt_filename
+            .strip_suffix(".xml")
+            .expect("test filename");
+        let mismatches = [
+            ("tin", "000000000000", submitted.tin.as_str()),
+            ("form_type", "2550Q", AUDITED_2551Q_RECEIPT_FORM),
+            ("period", "122026Q2", expected_period.as_str()),
+            (
+                "filename",
+                "123456789000-2551Qv2018-122026Q1-copy.xml",
+                receipt_filename.as_str(),
+            ),
+            (
+                "filename",
+                receipt_filename_without_extension,
+                receipt_filename.as_str(),
+            ),
+        ];
+        for (column, invalid, valid) in mismatches {
+            db.conn
+                .execute(
+                    &format!("UPDATE submission_receipts SET {column} = ?1 WHERE id = ?2"),
+                    params![invalid, receipt_id],
+                )
+                .unwrap();
+            assert_2551q_confirmation_rejected_without_draft_mutation(&db, &confirmation);
+            db.conn
+                .execute(
+                    &format!("UPDATE submission_receipts SET {column} = ?1 WHERE id = ?2"),
+                    params![valid, receipt_id],
+                )
+                .unwrap();
+        }
+
+        db.conn
+            .execute(
+                "UPDATE submission_receipts
+                 SET received_time = '11:59:59'
+                 WHERE id = ?1",
+                params![receipt_id],
+            )
+            .unwrap();
+        assert_2551q_confirmation_rejected_without_draft_mutation(&db, &confirmation);
+        db.conn
+            .execute(
+                "UPDATE submission_receipts
+                 SET received_date = 'not-a-date', received_time = '12:00:00'
+                 WHERE id = ?1",
+                params![receipt_id],
+            )
+            .unwrap();
+        assert_2551q_confirmation_rejected_without_draft_mutation(&db, &confirmation);
+    }
+
+    #[test]
+    fn manual_2551q_confirmation_remains_an_explicit_receiptless_path() {
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let mut stale_confirmation = submitted.clone();
+        stale_confirmation.transition_to_confirmed(
+            "2026-04-25T03:59:59+00:00".to_string(),
+            None,
+            None,
+        );
+        assert_2551q_confirmation_rejected_without_draft_mutation(&db, &stale_confirmation);
+
+        let mut confirmation = submitted.clone();
+        confirmation.transition_to_confirmed("2026-04-25T12:30:00+08:00".to_string(), None, None);
+
+        db.save_confirmed_2551q_draft(&confirmation)
+            .expect("manual confirmation should remain available without a receipt");
+        let persisted = db
+            .get_2551q_draft(&submitted.tin, submitted.taxable_year, submitted.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Confirmed);
+        assert_eq!(persisted.receipt_id, None);
+        assert_eq!(
+            persisted.confirmed_at.as_deref(),
+            Some("2026-04-25T12:30:00+08:00")
+        );
+        assert_eq!(persisted.submission_filename, submitted.submission_filename);
+    }
+
+    #[test]
+    fn stale_2551q_requeue_cannot_resurrect_submitted_confirmed_or_paid_state() {
+        let db = test_db();
+        let profile = test_profile();
+        insert_test_profile(&db, &profile);
+        let stale_queue = queued_graduated_draft(&profile);
+        db.save_queued_2551q_draft_and_election(&stale_queue)
+            .expect("initial queue insertion should succeed");
+
+        let (mut claimed, token) = match db
+            .claim_queued_2551q_submission(
+                &stale_queue.tin,
+                stale_queue.taxable_year,
+                stale_queue.quarter,
+                &stale_queue.queued_submission_fingerprint,
+                &stale_queue.next_retry_at,
+                stale_queue.submission_attempts,
+            )
+            .unwrap()
+        {
+            Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
+            _ => panic!("the exact queued generation should be claimed"),
+        };
+        let filename = claimed.default_submission_filename();
+        claimed.transition_to_submitted(filename);
+        db.finish_claimed_2551q_submission(&claimed, &token)
+            .unwrap();
+        assert!(
+            db.save_queued_2551q_draft_and_election(&stale_queue)
+                .is_err(),
+            "Submitted must not be resurrected as Queued"
+        );
+
+        let mut confirmed = db
+            .get_2551q_draft(
+                &stale_queue.tin,
+                stale_queue.taxable_year,
+                stale_queue.quarter,
+            )
+            .unwrap()
+            .unwrap();
+        let confirmed_at = confirmed.submitted_at.clone().unwrap();
+        confirmed.transition_to_confirmed(confirmed_at, None, None);
+        db.save_confirmed_2551q_draft(&confirmed).unwrap();
+        assert!(
+            db.save_queued_2551q_draft_and_election(&stale_queue)
+                .is_err(),
+            "Confirmed must not be resurrected as Queued"
+        );
+
+        confirmed.transition_to_paid();
+        db.save_paid_2551q_draft(&confirmed).unwrap();
+        assert!(
+            db.save_queued_2551q_draft_and_election(&stale_queue)
+                .is_err(),
+            "Paid must not be resurrected as Queued"
+        );
+        assert_eq!(
+            db.get_2551q_draft(
+                &stale_queue.tin,
+                stale_queue.taxable_year,
+                stale_queue.quarter,
+            )
+            .unwrap()
+            .unwrap()
+            .status,
+            FilingStatus::Paid
+        );
     }
 
     #[test]
@@ -2693,7 +4478,8 @@ mod tests {
             Claim2551QSubmissionResult::Claimed { draft, token } => (draft, token),
             _ => panic!("the exact queued generation should be claimed"),
         };
-        claimed.transition_to_submitted("authoritative-submission.xml".to_string());
+        let submission_filename = claimed.default_submission_filename();
+        claimed.transition_to_submitted(submission_filename.clone());
         db.finish_claimed_2551q_submission(&claimed, &token)
             .expect("the claim owner should advance the stored return");
 
@@ -2717,14 +4503,15 @@ mod tests {
         assert_eq!(submitted.status, FilingStatus::Submitted);
         assert_eq!(
             submitted.submission_filename.as_deref(),
-            Some("authoritative-submission.xml")
+            Some(submission_filename.as_str())
         );
         assert_eq!(submitted.taxpayer_name, "Test Taxpayer");
         assert!(submitted.profile_snapshot_stale);
 
         let mut confirmed = submitted.clone();
-        confirmed.transition_to_confirmed("2026-04-25T12:00:00Z".to_string(), Some(42), None);
-        db.save_2551q_draft(&confirmed)
+        let confirmed_at = confirmed.submitted_at.clone().unwrap();
+        confirmed.transition_to_confirmed(confirmed_at, None, None);
+        db.save_confirmed_2551q_draft(&confirmed)
             .expect("confirmation transition should persist");
         let confirmed = db
             .reconcile_immutable_2551q_profile_snapshot(
@@ -2735,15 +4522,15 @@ mod tests {
             )
             .expect("confirmed marker reconciliation should preserve confirmation");
         assert_eq!(confirmed.status, FilingStatus::Confirmed);
-        assert_eq!(confirmed.receipt_id, Some(42));
+        assert_eq!(confirmed.receipt_id, None);
         assert_eq!(
             confirmed.submission_filename.as_deref(),
-            Some("authoritative-submission.xml")
+            Some(submission_filename.as_str())
         );
 
         let mut paid = confirmed;
         paid.transition_to_paid();
-        db.save_2551q_draft(&paid)
+        db.save_paid_2551q_draft(&paid)
             .expect("payment transition should persist");
         let paid = db
             .reconcile_immutable_2551q_profile_snapshot(
@@ -2754,7 +4541,7 @@ mod tests {
             )
             .expect("paid marker reconciliation should preserve payment");
         assert_eq!(paid.status, FilingStatus::Paid);
-        assert_eq!(paid.receipt_id, Some(42));
+        assert_eq!(paid.receipt_id, None);
         assert_eq!(paid.taxpayer_name, "Test Taxpayer");
 
         let stored = db
@@ -2766,7 +4553,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(stored.status, FilingStatus::Paid);
-        assert_eq!(stored.receipt_id, Some(42));
+        assert_eq!(stored.receipt_id, None);
         assert_eq!(stored.taxpayer_name, "Test Taxpayer");
         assert!(stored.profile_snapshot_stale);
     }
@@ -2855,6 +4642,16 @@ mod tests {
                 .as_deref()
                 .is_some_and(|message| message.contains("contact support"))
         );
+        assert!(
+            db.reconcile_immutable_2551q_profile_snapshot(
+                &queued.tin,
+                queued.taxable_year,
+                queued.quarter,
+                &profile,
+            )
+            .is_err(),
+            "profile reconciliation must not mutate the exact claimed JSON snapshot"
+        );
 
         assert!(matches!(
             db.claim_queued_2551q_submission(
@@ -2869,6 +4666,10 @@ mod tests {
             Claim2551QSubmissionResult::Superseded
         ));
 
+        assert!(
+            db.save_queued_2551q_draft_and_election(&queued).is_err(),
+            "a claimed queue snapshot must not be replaced through requeue"
+        );
         let mut stale_cancel = queued;
         stale_cancel.revert_to_draft();
         assert!(db.save_2551q_draft(&stale_cancel).is_err());
@@ -2923,13 +4724,13 @@ mod tests {
             }
             _ => panic!("a changed current profile must not be claimed"),
         }
-        assert!(
-            db.get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
-                .unwrap()
-                .unwrap()
-                .submission_claim_token
-                .is_none()
-        );
+        let stored = db
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.status, FilingStatus::Draft);
+        assert!(stored.queued_submission_fingerprint.is_none());
+        assert!(stored.submission_claim_token.is_none());
     }
 
     #[test]
@@ -2983,8 +4784,15 @@ mod tests {
             .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
             .unwrap()
             .unwrap();
-        assert_eq!(stored.status, FilingStatus::Queued);
+        assert_eq!(stored.status, FilingStatus::Draft);
+        assert!(stored.queued_submission_fingerprint.is_none());
         assert!(stored.submission_claim_token.is_none());
+        assert!(
+            stored
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("effective taxpayer profile"))
+        );
     }
 
     #[test]
@@ -3103,6 +4911,34 @@ mod tests {
     }
 
     #[test]
+    fn generic_draft_persistence_cannot_queue_a_transport_capable_form() {
+        let db = test_db();
+        let result = db.save_form_draft_v2(
+            "123456789000",
+            "2551Q",
+            2026,
+            &FilingPeriod::Quarterly(1),
+            &FilingStatus::Queued,
+            &TestDraft { value: 1 },
+        );
+
+        assert!(result.is_err());
+        let persisted: i64 = db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM form_drafts
+                 WHERE tin = '123456789000'
+                   AND form_code = '2551Q'
+                   AND taxable_year = 2026
+                   AND status = 'Queued'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(persisted, 0);
+    }
+
+    #[test]
     fn annual_and_open_ended_progress_use_period_key_semantics() {
         let db = test_db();
         db.save_form_draft_v2(
@@ -3152,15 +4988,8 @@ mod tests {
         monthly.month = 12;
         monthly.compute();
         db.save_1601c_draft(&monthly).unwrap();
-        db.save_form_draft_v2(
-            "123456789000",
-            "2551Q",
-            2026,
-            &FilingPeriod::Quarterly(4),
-            &FilingStatus::Queued,
-            &TestDraft { value: 2 },
-        )
-        .unwrap();
+        let quarterly = Form2551QDraft::new_from_profile(&profile, 2026, 4);
+        db.save_2551q_draft(&quarterly).unwrap();
 
         let mut summaries = db.list_draft_summaries("123456789000", 2026).unwrap();
         summaries.sort_by(|a, b| a.form_code.cmp(&b.form_code));

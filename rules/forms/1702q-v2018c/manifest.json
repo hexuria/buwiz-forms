@@ -1,0 +1,46 @@
+{
+  "$schema": "../../schema/form-manifest.schema.json",
+  "schema_version": "1.0.0",
+  "form_id": "1702q-v2018c",
+  "form_code": "1702Q",
+  "revision": "2018-01-01",
+  "revision_label": "January 2018 ENCS, runtime variant C",
+  "package_version": "7.9.6.0",
+  "status": "complete",
+  "official_assets": [
+    {"asset_id":"package-7.9.6","kind":"official-package-executable","path":"C:\\eBIRForms\\BIRForms.exe","sha256":"de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca","size":57506304,"revision_binding":"Installed package from which the inspected runtime was extracted."},
+    {"asset_id":"official-hta-runtime","kind":"runtime-extracted-hta","path":"C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702Qv2018C.hta","sha256":"7184de87a76401da98da3df38dab9e29f848acf6150b425e36574f0a2443ab01","size":674724,"revision_binding":"HTA title, application name, printed header, form type, and help bind the January 2018 revision."},
+    {"asset_id":"official-help-runtime","kind":"runtime-extracted-help-hta","path":"C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1702Qv2018.hta","sha256":"74e101d8db53526799bcdc59c8777c6872e31a9420335b325b9a94fa018c8606","size":27102,"revision_binding":"Guidelines and Instructions for BIR Form 1702Q January 2018 ENCS."},
+    {"asset_id":"official-pdf-2018","kind":"official-form-pdf","path":"C:\\Mac\\Home\\Downloads\\forms\\1702Qv2018\\1702Q 2018ENCS final2.pdf","sha256":"589e22190b9211571cb8a0ba14c97c17dff250f3b8ee9f9e8f6cc3b37b1b1be4","size":1218152,"revision_binding":"Official printed January 2018 ENCS form."},
+    {"asset_id":"xml-final-dummy","kind":"dummy-profile-representative-save","path":"C:\\eBIRForms\\savefile\\00000000000000-1702Qv2018C-2025Q1.xml","sha256":"d97b1e9ba64dab51ab43c56a1e7058a80468730aa0aa8c61ab0e3b7c8c2d71ce","size":7852,"revision_binding":"Filename and 113-element serialization order identify 1702Qv2018C; read only and dummy data."}
+  ],
+  "counts": {
+    "typed_fields": 113,
+    "runtime_serializable_elements": 113,
+    "unique_serialized_keys": 112,
+    "validation_rules": 39,
+    "calculations": 25,
+    "negative_fixtures": 26,
+    "confirmed_official_bugs": 10,
+    "unverified_gaps": 2
+  },
+  "artifacts": {
+    "fields": "fields.json",
+    "validations": "validations.json",
+    "calculations": "calculations.json",
+    "workflow": "workflow.json",
+    "evidence": "evidence.md",
+    "audit": "audit.md",
+    "gaps": "gaps.md",
+    "positive_fixture": "fixtures/positive-minimal.json",
+    "negative_fixtures": "fixtures/negative-cases.json",
+    "calculation_fixtures": "fixtures/calculation-boundaries.json",
+    "runtime_control_fixture": "fixtures/runtime-control-inventory-v796.json"
+  },
+  "scope_notes": [
+    "Research artifacts only; no renderer, migration status, release evidence, or capability flags were changed.",
+    "Older installed 1702Q and 1702Qv2008C runtimes were excluded from this exact-revision package.",
+    "Online submission, Final Copy confirmation, encrypted-copy creation, and representative-save mutation were not performed.",
+    "Post-confirmation workflow behavior is source-audited and explicitly remains a gap for execution evidence."
+  ]
+}

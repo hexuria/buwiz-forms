@@ -1,0 +1,238 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2550m-v2007",
+    "cases":  [
+                  {
+                      "case_id":  "2550m-s1-row-output-tax-source-boundary",
+                      "calculation_id":  "2550m-s1-row-output-tax",
+                      "inputs":  {
+                                     "source_formula":  "output tax = sales/receipts * 0.12"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s1-totals-source-boundary",
+                      "calculation_id":  "2550m-s1-totals",
+                      "inputs":  {
+                                     "source_formula":  "sum sales and sum output tax independently"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item13b-source-boundary",
+                      "calculation_id":  "2550m-item13b",
+                      "inputs":  {
+                                     "source_formula":  "13B = 13A * 0.12"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item16a-source-boundary",
+                      "calculation_id":  "2550m-item16a",
+                      "inputs":  {
+                                     "source_formula":  "16A = 12A + 13A + 14 + 15"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item16b-source-boundary",
+                      "calculation_id":  "2550m-item16b",
+                      "inputs":  {
+                                     "source_formula":  "16B = 12B + 13B"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item17f-source-boundary",
+                      "calculation_id":  "2550m-item17f",
+                      "inputs":  {
+                                     "source_formula":  "17F = 17A + 17B + 17C + 17D + 17E"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s2-row-source-boundary",
+                      "calculation_id":  "2550m-s2-row",
+                      "inputs":  {
+                                     "source_formula":  "input tax = net-of-VAT amount * 0.12"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s2-totals-source-boundary",
+                      "calculation_id":  "2550m-s2-totals",
+                      "inputs":  {
+                                     "source_formula":  "sum net amounts and input tax"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s3a-row-source-boundary",
+                      "calculation_id":  "2550m-s3a-row",
+                      "inputs":  {
+                                     "source_formula":  "input = amount * 0.12; allowable = input / recognized life; balance = input - allowable"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s3a-totals-source-boundary",
+                      "calculation_id":  "2550m-s3a-totals",
+                      "inputs":  {
+                                     "source_formula":  "sum amount, allowable input tax, and balance columns"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s3b-row-source-boundary",
+                      "calculation_id":  "2550m-s3b-row",
+                      "inputs":  {
+                                     "source_formula":  "allowable = prior balance / recognized life; balance = prior balance - allowable"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s3b-totals-source-boundary",
+                      "calculation_id":  "2550m-s3b-totals",
+                      "inputs":  {
+                                     "source_formula":  "sum remaining balance from all Schedule 3B rows"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s3-total-source-boundary",
+                      "calculation_id":  "2550m-s3-total",
+                      "inputs":  {
+                                     "source_formula":  "Schedule 3 total = Part A balance + Part B balance"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s6-totals-source-boundary",
+                      "calculation_id":  "2550m-s6-totals",
+                      "inputs":  {
+                                     "source_formula":  "sum total withheld and applied-current amount independently"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s7-totals-source-boundary",
+                      "calculation_id":  "2550m-s7-totals",
+                      "inputs":  {
+                                     "source_formula":  "sum amount paid and applied-current amount independently"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s8-totals-source-boundary",
+                      "calculation_id":  "2550m-s8-totals",
+                      "inputs":  {
+                                     "source_formula":  "sum total withheld and applied-current amount independently"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item18-paired-output-tax-source-boundary",
+                      "calculation_id":  "2550m-item18-paired-output-tax",
+                      "inputs":  {
+                                     "source_formula":  "each paired output-tax field = its base * 0.12"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item18p-source-boundary",
+                      "calculation_id":  "2550m-item18p",
+                      "inputs":  {
+                                     "source_formula":  "18P = 18A + 18C + 18E + 18G + 18I + 18K + 18M + 18N"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item19-source-boundary",
+                      "calculation_id":  "2550m-item19",
+                      "inputs":  {
+                                     "source_formula":  "19 = 17F + 18B + 18D + 18F + 18H + 18J + 18L + 18O"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s4-allocation-source-boundary",
+                      "calculation_id":  "2550m-s4-allocation",
+                      "inputs":  {
+                                     "source_formula":  "allocated = taxable-government-sales / total-sales * non-direct input tax; total = direct + allocated; result = total - standard input tax"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s4-standard-input-source-boundary",
+                      "calculation_id":  "2550m-s4-standard-input",
+                      "inputs":  {
+                                     "source_formula":  "standard input tax = 13A * 0.07 (despite static default 5.00)"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-s5-allocation-source-boundary",
+                      "calculation_id":  "2550m-s5-allocation",
+                      "inputs":  {
+                                     "source_formula":  "allocated = exempt sales / total sales * non-direct input tax; total = direct + allocated"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item20f-source-boundary",
+                      "calculation_id":  "2550m-item20f",
+                      "inputs":  {
+                                     "source_formula":  "20F = 20A + 20B + 20C + 20D + 20E"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item21-source-boundary",
+                      "calculation_id":  "2550m-item21",
+                      "inputs":  {
+                                     "source_formula":  "21 = 19 - 20F"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item22-source-boundary",
+                      "calculation_id":  "2550m-item22",
+                      "inputs":  {
+                                     "source_formula":  "22 = 16B - 21"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item23g-source-boundary",
+                      "calculation_id":  "2550m-item23g",
+                      "inputs":  {
+                                     "source_formula":  "23G = 23A + 23B + 23C + 23D + 23E + 23F"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item25d-source-boundary",
+                      "calculation_id":  "2550m-item25d",
+                      "inputs":  {
+                                     "source_formula":  "25D = 25A + 25B + 25C"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item24-source-boundary",
+                      "calculation_id":  "2550m-item24",
+                      "inputs":  {
+                                     "source_formula":  "24 = 22 - 23G"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  },
+                  {
+                      "case_id":  "2550m-item26-source-boundary",
+                      "calculation_id":  "2550m-item26",
+                      "inputs":  {
+                                     "source_formula":  "26 = 24 + 25D"
+                                 },
+                      "official_output":  "Derived by the pinned formula; executable numeric vectors remain a documented gap."
+                  }
+              ]
+}

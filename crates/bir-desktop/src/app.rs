@@ -1287,25 +1287,71 @@ impl AppState {
             && let Some(tin) = &self.active_profile_tin
             && let Some(profile) = self.profiles.iter().find(|p| p.tin.full() == *tin)
         {
-            let draft = if let Ok(db) = self.db.lock() {
-                db.get_form_draft::<bir_core::forms::form_2550q::Form2550QDraft>(
-                    tin,
-                    "2550Q",
-                    year,
-                    Some(quarter),
-                )
-                .ok()
-                .flatten()
-                .unwrap_or_else(|| {
-                    bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
-                        profile, year, quarter,
+            let load_result = self
+                .db
+                .lock()
+                .map_err(|_| "2550Q draft database lock is unavailable".to_string())
+                .and_then(|db| {
+                    db.get_form_draft::<bir_core::forms::form_2550q::Form2550QDraft>(
+                        tin,
+                        "2550Q",
+                        year,
+                        Some(quarter),
                     )
-                })
-            } else {
-                bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
+                    .map_err(|error| error.to_string())
+                });
+            let mut draft = match load_result {
+                Ok(Some(draft)) => draft,
+                Ok(None) => bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
                     profile, year, quarter,
-                )
+                ),
+                Err(error) => {
+                    tracing::error!(
+                        %error,
+                        tin,
+                        year,
+                        quarter,
+                        "Refusing to replace an unreadable 2550Q draft"
+                    );
+                    self.active_view = ActiveView::Dashboard;
+                    push_notification(
+                        "error",
+                        "2550Q could not be opened",
+                        &format!(
+                            "The draft could not be read safely, so it was not opened. \
+                             Your stored data was not replaced. Details: {error}"
+                        ),
+                        window,
+                        cx,
+                    );
+                    cx.notify();
+                    return;
+                }
             };
+            if let Err(error) =
+                bir_core::form_rules::prepare_form_2550q_live_row_identities(&mut draft)
+            {
+                tracing::error!(
+                    %error,
+                    tin,
+                    year,
+                    quarter,
+                    "Refusing to open a 2550Q draft with unsafe row identities"
+                );
+                self.active_view = ActiveView::Dashboard;
+                push_notification(
+                    "error",
+                    "2550Q could not be opened",
+                    &format!(
+                        "The draft's row identities could not be prepared safely, so it was not \
+                         opened. No changes were saved. Details: {error}"
+                    ),
+                    window,
+                    cx,
+                );
+                cx.notify();
+                return;
+            }
             self.pending_form_2550q_draft = Some(draft);
             self.active_view = ActiveView::Form2550Q;
             cx.notify();

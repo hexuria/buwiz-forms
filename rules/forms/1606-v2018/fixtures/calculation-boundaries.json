@@ -1,0 +1,75 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1606-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "fmv-unique-max",
+                      "inputs":  {
+                                     "C":  90,
+                                     "D":  10,
+                                     "B":  20,
+                                     "A":  100
+                                 },
+                      "calculation_id":  "1606-fmv-pair-max",
+                      "official_output":  120,
+                      "official_pair_sums":  [
+                                                 120,
+                                                 100
+                                             ]
+                  },
+                  {
+                      "inputs":  {
+                                     "C":  100,
+                                     "D":  20,
+                                     "B":  20,
+                                     "A":  100
+                                 },
+                      "tie_branch":  "C+D",
+                      "calculation_id":  "1606-fmv-pair-max",
+                      "case_id":  "fmv-tied-max",
+                      "official_pair_sums":  [
+                                                 120,
+                                                 120
+                                             ],
+                      "official_output":  120
+                  },
+                  {
+                      "case_id":  "cash-base",
+                      "inputs":  {
+                                     "fmv":  1200000,
+                                     "gross":  1000000
+                                 },
+                      "calculation_id":  "1606-taxable-base-cash",
+                      "official_output":  1200000
+                  },
+                  {
+                      "case_id":  "foreclosure-ignores-gross",
+                      "inputs":  {
+                                     "gross":  1500000,
+                                     "fmv":  1200000,
+                                     "bid":  1300000
+                                 },
+                      "calculation_id":  "1606-taxable-base-foreclosure",
+                      "official_output":  1300000
+                  },
+                  {
+                      "case_id":  "selected-rate",
+                      "inputs":  {
+                                     "rate":  1.5,
+                                     "taxable_base":  1000000
+                                 },
+                      "calculation_id":  "1606-tax-required",
+                      "official_output":  15000
+                  },
+                  {
+                      "case_id":  "negative-total",
+                      "inputs":  {
+                                     "tax_due":  -100,
+                                     "penalties":  0
+                                 },
+                      "official_item36":  -100,
+                      "calculation_id":  "1606-overpayment-controls",
+                      "item37_enabled":  true
+                  }
+              ]
+}

@@ -553,7 +553,11 @@ mod tests {
         )
         .unwrap();
         let plaintext = decrypt_and_decompress(&prepared.encrypted, BIR_IAF_PASSPHRASE).unwrap();
-        let parsed = parse_bir_xml_checked(std::str::from_utf8(&plaintext).unwrap()).unwrap();
+        let parsed = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            std::str::from_utf8(&plaintext).unwrap(),
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .unwrap();
 
         assert_eq!(
             parsed.keys().cloned().collect::<BTreeSet<_>>(),

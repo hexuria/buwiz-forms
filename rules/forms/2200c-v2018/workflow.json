@@ -1,0 +1,129 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200c-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 excise-tax return for cosmetic procedures with ten fixed Part V rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L9319-L9335",
+                                           "encrypted-field-audit-v796"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks date, RDO, name, address, and contact number before serializing 181 controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateAll:L3177-L3240",
+                                           "official-hta-runtime#validate:L9289-L9317"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs validateAll and disables the form after the first-error graph passes."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "encrypted-field-audit-v796"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The revision-matched dummy final copy decrypts in memory to exactly 181 unique keys; values are excluded."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#submitToEFPS:L3826-L4300"
+                                       ],
+                       "confidence":  "low",
+                       "official_behavior":  "Online transport was not exercised; its eFPS mapping contains absent identifiers copied from another form."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate"
+                                            ],
+                            "guard":  "validateAll passes."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables editable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Compresses/encrypts the serialized copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile"
+                                            ],
+                            "guard":  "Finalization succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#submitToEFPS"
+                                            ],
+                            "guard":  "Not certified in this audit."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return date",
+                          "RDO and taxpayer identity",
+                          "Registered address/contact/email",
+                          "Location",
+                          "Tax relief choice",
+                          "Manner of payment",
+                          "Part V row completeness"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+
+                         ]
+}

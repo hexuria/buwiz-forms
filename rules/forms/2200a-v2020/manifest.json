@@ -1,0 +1,101 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200a-v2020",
+    "form_code":  "2200A",
+    "revision":  "2020-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Av2020.hta",
+                                "sha256":  "1df302eeb1352eccb88f6aa7a23fdcc185b6fbb4d15435996250f985a0198e2c",
+                                "size":  440229,
+                                "revision_binding":  "January 2020 ENCS runtime."
+                            },
+                            {
+                                "asset_id":  "legacy-runtime-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200A.hta",
+                                "sha256":  "192f730cc713179f5a1d8233cb5133cdd62bd3e5896b54546da14b82fa226a3f",
+                                "size":  714847,
+                                "revision_binding":  "Legacy predecessor, used only to exclude the sample."
+                            },
+                            {
+                                "asset_id":  "packaged-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200Av2020.hta",
+                                "sha256":  "344b6a6f92d3854ab8b4bceb6aad2b33518d4f1116469a2a2f2572d85573ecde",
+                                "size":  17404,
+                                "revision_binding":  "January 2020 packaged instructions."
+                            },
+                            {
+                                "asset_id":  "legacy-help-excluded",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200A.hta",
+                                "sha256":  "7f62c7979beafb26328557b35171dcb9cc5c3c9a272b88b4130130498023c146",
+                                "size":  25578,
+                                "revision_binding":  "Legacy instructions, excluded from current legal facts."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2200Av2020\\2200-A Jan 2020 ENCS Final version2.pdf",
+                                "sha256":  "c294bd45da56aa641f40ed5ed22b6c7c782860e84c2da6431c3340bd73194879",
+                                "size":  1160320,
+                                "revision_binding":  "January 2020 ENCS official form."
+                            },
+                            {
+                                "asset_id":  "legacy-encrypted-sample-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2200A\\2200A-final-copy-#email-redacted#.xml",
+                                "sha256":  "fdb9f1939c0350b45e11d5aac5b68df6ec72a5439d6aaa8c394476fd9505ffe6",
+                                "size":  1333,
+                                "revision_binding":  "Excluded: 134/134 keys match legacy; only 6/134 match January 2020."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  284,
+                   "runtime_field_families":  8,
+                   "fields_total":  292,
+                   "typed_fields":  292,
+                   "validation_rules":  40,
+                   "confirmed_official_bugs":  10,
+                   "calculations":  11,
+                   "negative_fixtures":  32,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "excluded_legacy_encrypted_keys":  "fixtures/excluded-legacy-encrypted-field-keys-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No decrypted values or email-bearing filenames emitted.",
+                        "Legacy 134-key sample excluded.",
+                        "283 static serialized occurrences + runtime RDO selector + 8 unbounded Others families preserved.",
+                        "Five repeated identity keys occur three times each and are preserved with occurrence suffixes."
+                    ]
+}

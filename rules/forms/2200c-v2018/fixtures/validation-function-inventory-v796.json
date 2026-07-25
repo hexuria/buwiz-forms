@@ -1,0 +1,565 @@
+{
+    "source_sha256":  "d9f47fba52eafa26f03fedb113db4ef1a0074635359d991f1cd7a160383a705c",
+    "function_count":  38,
+    "functions":  [
+                      {
+                          "name":  "Save_Schedule",
+                          "start_line":  2686,
+                          "end_line":  2705,
+                          "body_sha256":  "9b35189a858c12881212f78d0a94bf3e424e848a6b9b4ba41b3930e5947fb862",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "SaveAndClose",
+                          "start_line":  2741,
+                          "end_line":  2746,
+                          "body_sha256":  "f44ce5e9deff45b290a8e8ddaf2be54d1903c243aedc282129a11fea6fc17f4d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "Save_popDiv",
+                          "start_line":  2773,
+                          "end_line":  2788,
+                          "body_sha256":  "0e237d5acc63093e71fe4e576f21079e6591b082396ed64d9b271794c93bc294",
+                          "alerts":  [
+                                         "$elem.val()"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "CheckEmptyDivDesc",
+                          "start_line":  2814,
+                          "end_line":  2831,
+                          "body_sha256":  "64a65a00c5e87ca9936095b7ad5ac302ca37a17e0c37fb0cba6c9bd824856993",
+                          "alerts":  [
+                                         "\"Cannot add row. There is an empty description on \" + LetterIteration((i * 2) + 3) + tabledesc + ((i * 2) + 3)",
+                                         "\"Cannot add row. There is an empty description on \" + LetterIteration((i * 2) + 4) + tabledesc + ((i * 2) + 4)"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "ConditionSave",
+                          "start_line":  2838,
+                          "end_line":  2844,
+                          "body_sha256":  "44fdee266bebd6a9799f6f9630ed991ae4e28b1a8be93c3be75af266ccc94fe2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "maskDate",
+                          "start_line":  2845,
+                          "end_line":  2852,
+                          "body_sha256":  "092d7b521efa54770ab6d017b05b348a552a06d44d14393eb9285c880c98da1f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAll",
+                          "start_line":  3177,
+                          "end_line":  3241,
+                          "body_sha256":  "f00aae928bc10b8db01ba30ae02014dedbb7060e587fac9b214a4f7678e2f630",
+                          "alerts":  [
+                                         "\"Month field on Page 1 Item 1 is required.\"",
+                                         "\"Please enter a valid RDO Code on Page 1 Item 6.\"",
+                                         "\"Region field on Page 1 Item 11 is required.\"",
+                                         "\"Province field on Page 1 Item 11 is required.\"",
+                                         "\"City field on Page 1 Item 11 is required.\"",
+                                         "\"Availing of Tax Relief field on Page 1 Item 12 is required.\"",
+                                         "\"Specify Tax Relief field on Page 1 Item 12A is required.\"",
+                                         "\"Manner of Payment on Page 1 Part II is required.\"",
+                                         "\"Specfy Manner of Payment field on Page 1 Part II Item 15 is required.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:rdoPg1I12TaxReliefNo",
+                                              "frm2200C:rdoPg1I12TaxReliefYes",
+                                              "frm2200C:rdoPg1Pt2MOPOther",
+                                              "frm2200C:rdoPg1Pt2MOPPaymentActual",
+                                              "frm2200C:rdoPg1Pt2MOPPrepayment",
+                                              "frm2200C:txPg1I8ZipCode",
+                                              "frm2200C:txtPg1I12TaxReliefSpecify",
+                                              "frm2200C:txtPg1I1Day",
+                                              "frm2200C:txtPg1I1Month",
+                                              "frm2200C:txtPg1I1Year",
+                                              "frm2200C:txtPg1I6RDO",
+                                              "frm2200C:txtPg1Pt1I10Email",
+                                              "frm2200C:txtPg1Pt1I11City",
+                                              "frm2200C:txtPg1Pt1I11Province",
+                                              "frm2200C:txtPg1Pt1I11Region",
+                                              "frm2200C:txtPg1Pt1I7RegisteredName",
+                                              "frm2200C:txtPg1Pt1I8RegisteredAddress",
+                                              "frm2200C:txtPg1Pt1I9ContactNumber",
+                                              "frm2200C:txtPg1Pt2MOPOtherDesc"
+                                          ]
+                      },
+                      {
+                          "name":  "checkEmptyTIN",
+                          "start_line":  3242,
+                          "end_line":  3255,
+                          "body_sha256":  "a08e2353f97f3f251f0fb83e1c71c1084422f565a0e09e70066214d424ce87b2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateTIN",
+                          "start_line":  3256,
+                          "end_line":  3274,
+                          "body_sha256":  "08bc625f3835cf09bd4ca1ed8c2fca3126233962340a0bed90b8fd19f199e281",
+                          "alerts":  [
+                                         "\u0027Please check TIN numbers on Page\u0027 + msg + i"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkMandatory",
+                          "start_line":  3275,
+                          "end_line":  3285,
+                          "body_sha256":  "a6496d9246b2f39c88c9797581a3e27d6166a91a26a845941f9a9faee5f2d280",
+                          "alerts":  [
+                                         "msg"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkPartVFields",
+                          "start_line":  3286,
+                          "end_line":  3312,
+                          "body_sha256":  "ef9a14669afd9925e31d7744ad74fee99474701dc221cb63c16b7ec418f19ed9",
+                          "alerts":  [
+                                         "\"Please complete row #\" +row + \" in Page 2 Part V.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:ACtotAmountBill",
+                                              "frm2200C:CPPexcise",
+                                              "frm2200C:CPPexmpt",
+                                              "frm2200C:CPPnonexcise"
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  3313,
+                          "end_line":  3383,
+                          "body_sha256":  "f227cd3cad6741678f281f467d760abbc01afdd47cdb36dd5caa339be61e161f",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format) in Page 1 Item 1.\u0027",
+                                         "\u0027Page 1 Item 1 Date cannot be a future date \u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:txtPg1I1Day",
+                                              "frm2200C:txtPg1I1Month",
+                                              "frm2200C:txtPg1I1Year"
+                                          ]
+                      },
+                      {
+                          "name":  "validateNotCurrent",
+                          "start_line":  3384,
+                          "end_line":  3446,
+                          "body_sha256":  "963eee04747661aa2f8ab80487c91e8152b7c09289f7b286ffecca3eaeab6821",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateIssueDateSched9",
+                          "start_line":  3508,
+                          "end_line":  3553,
+                          "body_sha256":  "7c480d996c9dc5abf3668714805cb3531eb2c13ce6a69fccbf3abbc780f9bac2",
+                          "alerts":  [
+                                         "\"Please enter a valid Month on Page 1 Item 2\"",
+                                         "\"Please enter a valid Year End on Page 1 Item 2\"",
+                                         "\"Valid Issue Date is from \" + validDateString + \" up to \" + filingDateString + \".\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:txtPg1I1Month",
+                                              "frm2200C:txtPg1I1Year"
+                                          ]
+                      },
+                      {
+                          "name":  "validateEmail",
+                          "start_line":  3554,
+                          "end_line":  3566,
+                          "body_sha256":  "22d946c7530dc8502654a45c3edee4791b1dc53d33ded0ae806ad0a93ee28a63",
+                          "alerts":  [
+                                         "\"Please enter a valid e-mail address on page 1 item 10\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:txtPg1Pt1I10Email"
+                                          ]
+                      },
+                      {
+                          "name":  "validateCTCDate",
+                          "start_line":  3567,
+                          "end_line":  3602,
+                          "body_sha256":  "6172e7b858460eb73d44b4a871fabf0d11dc07ee57623bafc97e058cfdef001e",
+                          "alerts":  [
+                                         "\u0027CTC year should be \u0027 + currentDate.getFullYear() + \u0027 only for Page 1 Item 24\u0027",
+                                         "\u0027CTC year should not be less than \u0027 + (currentDate.getFullYear() * 1 - 50).toString() + \u0027 for Page 1 Item 24\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "Check_rdoPg1I5ATC",
+                          "start_line":  3603,
+                          "end_line":  3621,
+                          "body_sha256":  "6acad46dc9521733496dbee9037535659237c5e993ed8c71a7ec5352aa986a5b",
+                          "alerts":  [
+                                         "\u0027Please select an ATC on Page 1 Item 5\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:rdoPg1I5ATC"
+                                          ]
+                      },
+                      {
+                          "name":  "checkYear",
+                          "start_line":  3638,
+                          "end_line":  3650,
+                          "body_sha256":  "6c82ae4d183cc90a56181e40366719dd4aefefb30b8b1a083bf695e609cf7c7a",
+                          "alerts":  [
+                                         "\u0027Year shall not be greater than the present year and not earlier than 2018.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:txtPg1I1Year"
+                                          ]
+                      },
+                      {
+                          "name":  "submitOnline",
+                          "start_line":  3809,
+                          "end_line":  3814,
+                          "body_sha256":  "b9cfc65d2cfe49888199229e42167ec8fc30c712b842410e0cb850e76e1517a6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkconnection",
+                          "start_line":  3815,
+                          "end_line":  3823,
+                          "body_sha256":  "75268b4c3e2c8e8db4f783f94342af0393331ba4db888543558b3b23534a8a75",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "submitToEFPS",
+                          "start_line":  3824,
+                          "end_line":  3827,
+                          "body_sha256":  "cab9d8d389abf42a4fc53c48a225bc4666e36f74b3ce080ecb9364697deb8eb2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "convertDateXML",
+                          "start_line":  3842,
+                          "end_line":  3850,
+                          "body_sha256":  "d4c05f62050f339396b02ead4c17d519fbf939e18f46aa613efaabf9d377d575",
+                          "alerts":  [
+                                         "d.getElementById(\u0027frm2200C:\u0027+element).value"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  8546,
+                          "end_line":  8666,
+                          "body_sha256":  "5e450d4fdc1304984d2a99c900ecc74e76d43203b318db0a4820c12c1196c86f",
+                          "alerts":  [
+                                         "\"File \u0027\" + xmlFileName + \"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:btnNextPage",
+                                              "frm2200C:btnPrevPage",
+                                              "frm2200C:txtPg1Pt1I10Email"
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  8685,
+                          "end_line":  8697,
+                          "body_sha256":  "280ba68dd9932d35eb3f1d8857a988a566ddc30121e5c43f7cdef40145eedd65",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  8747,
+                          "end_line":  9062,
+                          "body_sha256":  "d8f2659d4d5f4fe16bcd742ec00760a3531a69c372510b68e179c0df4bfed34e",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027or\u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"p3GrossSales \u003e\u003e\u003e \" + elemValue + \" \\r\\n p3BasicTax \u003e\u003e\u003e \" + p3BasicTax",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:rdoPg1I2AmendedNo",
+                                              "frm2200C:rdoPg1I2AmendedYes",
+                                              "frm2200C:txPg1I8ZipCode",
+                                              "frm2200C:txtPg1I6RDO",
+                                              "frm2200C:txtPg1Pt1I13MainLine",
+                                              "frm2200C:txtPg1Pt1I7RegisteredName",
+                                              "frm2200C:txtPg1Pt1I8RegisteredAddress",
+                                              "frm2200C:txtPg1Pt1I9ContactNumber",
+                                              "frm2200C:txtPg1Pt2I20TotalIncome",
+                                              "frm2200C:txtPg1Pt2I21AddPenalty",
+                                              "frm2200C:txtPg1Pt2I22TotalAmount",
+                                              "frm2200C:txtPg1TIN1",
+                                              "frm2200C:txtPg1TIN2",
+                                              "frm2200C:txtPg1TIN3",
+                                              "frm2200C:txtPg1TIN4",
+                                              "frm2200C:txtPg2Pt4I31NetSales"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  9063,
+                          "end_line":  9288,
+                          "body_sha256":  "0c3f31c2637fe6dfbf99e356f3872c17a342b9725710f31547d621f0cbd5c2d2",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"3==\" + p3TPZip",
+                                         "\"p3GrossSales \u003e\u003e\u003e \" + elemValue + \" \\r\\n p3BasicTax \u003e\u003e\u003e \" + p3BasicTax",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:rdoPg1I2AmendedNo",
+                                              "frm2200C:rdoPg1I2AmendedYes",
+                                              "frm2200C:txPg1I8ZipCode",
+                                              "frm2200C:txtPg1I6RDO",
+                                              "frm2200C:txtPg1Pt1I13MainLine",
+                                              "frm2200C:txtPg1Pt1I7RegisteredName",
+                                              "frm2200C:txtPg1Pt1I8RegisteredAddress",
+                                              "frm2200C:txtPg1Pt1I9ContactNumber",
+                                              "frm2200C:txtPg1Pt2I20TotalIncome",
+                                              "frm2200C:txtPg1Pt2I21AddPenalty",
+                                              "frm2200C:txtPg1Pt2I22TotalAmount",
+                                              "frm2200C:txtPg1TIN1",
+                                              "frm2200C:txtPg1TIN2",
+                                              "frm2200C:txtPg1TIN3",
+                                              "frm2200C:txtPg1TIN4",
+                                              "frm2200C:txtPg2Pt4I31NetSales"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  9289,
+                          "end_line":  9320,
+                          "body_sha256":  "87e2e64de22297f0d27f456f878e09d7fcc40b17e76db447431cded1e01abd90",
+                          "alerts":  [
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:btnEdit",
+                                              "frm2200C:btnFinalCopy",
+                                              "frm2200C:btnNextPage",
+                                              "frm2200C:btnPrevPage",
+                                              "frm2200C:btnValidate"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  9321,
+                          "end_line":  9369,
+                          "body_sha256":  "059e7387efaaca4973410dbe41044e491b805ac800397c4a085e531bef83fcb6",
+                          "alerts":  [
+                                         "\"Please enter correct date on Item 1.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:rdoPg1Pt1I6RDO",
+                                              "frm2200C:txtPg1I1Day",
+                                              "frm2200C:txtPg1I1Month",
+                                              "frm2200C:txtPg1I1Year",
+                                              "frm2200C:txtPg1Pt1I7RegisteredName",
+                                              "frm2200C:txtPg1Pt1I8RegisteredAddress",
+                                              "frm2200C:txtPg1Pt1I9ContactNumber"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  9389,
+                          "end_line":  9435,
+                          "body_sha256":  "765b4b909e90d1ddcee5085a558bef394481eb7cca268c6cd59f9bab772cbd66",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:txtLOB",
+                                              "frm2200C:txtPg1I6RDO",
+                                              "frm2200C:txtPg1Pt1I10Email",
+                                              "frm2200C:txtPg1Pt1I7RegisteredName",
+                                              "frm2200C:txtPg1Pt1I8RegisteredAddress",
+                                              "frm2200C:txtPg1Pt1I8RegisteredAddress2",
+                                              "frm2200C:txtPg1Pt1I9ContactNumber",
+                                              "frm2200C:txtPg1TIN1",
+                                              "frm2200C:txtPg1TIN2",
+                                              "frm2200C:txtPg1TIN3",
+                                              "frm2200C:txtPg1TIN4"
+                                          ]
+                      },
+                      {
+                          "name":  "processPrev",
+                          "start_line":  9755,
+                          "end_line":  9765,
+                          "body_sha256":  "c293d18cbcc288ac87cc46f0871b6dc9d4c102c33df951c262569503b12d9ffd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "processNext",
+                          "start_line":  9766,
+                          "end_line":  9780,
+                          "body_sha256":  "80c81bb19bbe35dfda78c444d647482455aad1539691659597dcd2dad034a8f8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "processSubmit",
+                          "start_line":  9811,
+                          "end_line":  9834,
+                          "body_sha256":  "5ce9092e73cdbbe0744376f000a56c38354f6fe8b20dff927fd7540685094ee7",
+                          "alerts":  [
+                                         "\u0027eBIRForms Offline to eBIRForms Online is under construction\u0027",
+                                         "\u0027eBIRForms Offline to eFPS is under construction\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200C:SubmitToAIF",
+                                              "frm2200C:SubmitToeFPS"
+                                          ]
+                      },
+                      {
+                          "name":  "processSubmit2",
+                          "start_line":  9835,
+                          "end_line":  9865,
+                          "body_sha256":  "694b83051681f013890c94ac107b9c5b43a47094e865356b7d0df6df9b1a7202",
+                          "alerts":  [
+                                         "\" A \u0027Final copy\u0027 of your tax return has been generated.\"",
+                                         "\"Please click the \u0027Final Copy\u0027 button to electronically file your accomplished tax return form.\"",
+                                         "\u0027eBIRForms Offline to eFPS is under construction\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkconnection",
+                          "start_line":  10071,
+                          "end_line":  10079,
+                          "body_sha256":  "75268b4c3e2c8e8db4f783f94342af0393331ba4db888543558b3b23534a8a75",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "ShowSubmitPage",
+                          "start_line":  10080,
+                          "end_line":  10087,
+                          "body_sha256":  "e7c2651b2d9d209b718022cd2bf566ceb0d2a6958c1748c9e66994c1e5989365",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "cancelSubmitPage",
+                          "start_line":  10088,
+                          "end_line":  10092,
+                          "body_sha256":  "9934feffd6f4f99981957711c25e30041dd8220392aeeed62b67fca92bf05c89",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  10273,
+                          "end_line":  10297,
+                          "body_sha256":  "545992dfbdd2ef603f1aa58158b5ea201d14730109b6af7d408d4d42ebaee332",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  10304,
+                          "end_line":  10317,
+                          "body_sha256":  "062684317221b5ffa22d513e42fcda5d2563459109fa0a5b82780cc1170b81bf",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

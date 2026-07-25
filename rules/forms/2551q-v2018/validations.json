@@ -1,0 +1,1050 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Main Validate and Save preflight alert on the first failing active branch and return.",
+    "rules":  [
+                  {
+                      "rule_id":  "2551q-input-year-revision",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Year is below 2018.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please file using the old version of the form.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L4600-L4607"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Alerts and rewrites the year to 2018.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-input-money",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A money field loses focus.",
+                      "fields":  [
+                                     "money-fields"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletter:L4421-L4430"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "parseFloat/toFixed(2); NaN becomes 0.00.",
+                      "recommended_app_behavior":  "Use decimal parsing with explicit syntax and rounding.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-input-integer",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "An integer-like field loses focus.",
+                      "fields":  [
+                                     "integer-fields"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletterWithout2Decimal:L4863-L4871"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "parseFloat/toFixed(0); NaN becomes blank.",
+                      "recommended_app_behavior":  "Validate integer syntax before conversion.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-item2-blank-year",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "Year is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please indicate a valid Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateItem2:L5458-L5478"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-item2-month",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "Year-ended month equals zero.",
+                      "fields":  [
+                                     "frm2551Qv2018:rtnMonth"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please choose a valid Month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateItem2:L5458-L5478"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-item2-future-year",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  3,
+                      "condition":  "Year exceeds current system year.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Invalid date entry on Item 2. Entry should not be later than Current Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateItem2:L5458-L5478"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-item2-future-month",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  4,
+                      "condition":  "Year equals current year and selected month is later than current system month.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtYear",
+                                     "frm2551Qv2018:rtnMonth"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Invalid date entry on Item 2. Entry should not be later than Current Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateItem2:L5458-L5478"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-treaty-toggle",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Treaty Yes is not selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:taxTreaty_1",
+                                     "frm2551Qv2018:txtTaxReliefSpecify"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#chageTreaty:L4872-L4880"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Disables and clears the relief selector; Yes enables it.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-amended-toggle",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Amended No is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:amendedRtn_1",
+                                     "frm2551Qv2018:amendedRtn_2",
+                                     "frm2551Qv2018:txt16"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#updateAmended:L4881-L4901"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Disables and zeros Item 16; amended Yes enables it unless the 8% option is active.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-tax-rate-net",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Graduated/net-taxable-income option is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:taxRate1"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#taxRateOption:L3117-L3176"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Enables credit, penalty, and Schedule 1 controls.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-tax-rate-eight-percent",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "8% option is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:taxRate2",
+                                     "frm2551Qv2018:txt15",
+                                     "frm2551Qv2018:txt16",
+                                     "frm2551Qv2018:txt17",
+                                     "frm2551Qv2018:txt20",
+                                     "frm2551Qv2018:txt21",
+                                     "frm2551Qv2018:txt22",
+                                     "Schedule 1"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#taxRateOption:L3117-L3176"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Zeros and disables all listed figures and all six ATC rows for compliance-only filing.",
+                      "recommended_app_behavior":  "Apply the exact revision rule only for eligible taxpayers and preserve an audit explanation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-atc-row-enable",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "An ATC row selection is zero or nonzero.",
+                      "fields":  [
+                                     "drpATC{1..6}",
+                                     "txtATCAmt{1..6}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#drpATCChanged:L2976-L2997"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Zero selection disables and zeros amount/rate; a selected ATC enables amount and copies the catalog rate.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-atc-sequence",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "First ATC row is empty or populated.",
+                      "fields":  [
+                                     "drpATC1",
+                                     "drpATC2",
+                                     "drpATC3",
+                                     "drpATC4",
+                                     "drpATC5",
+                                     "drpATC6"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDrpdwn:L3090-L3116"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Rows 2-6 are cleared/disabled while row 1 is empty; otherwise they are enabled.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-atc-duplicate-catalog",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "Catalog substring filter loads two PT010 entries at 3% and 1%.",
+                      "fields":  [
+                                     "drpATC{1..6}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#loadATC:L3290-L3330"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Both entries are exposed because the filter only checks for substring 2551_ and does not deduplicate by code or effective period.",
+                      "recommended_app_behavior":  "Resolve ATC rate by return period and an effective-dated authoritative table; never present conflicting same-code rates.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-calendar",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Neither calendar nor fiscal type is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:forThe_1",
+                                     "frm2551Qv2018:forThe_2"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Select a calendar type on Item no. 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-month",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Year-ended month has selectedIndex zero.",
+                      "fields":  [
+                                     "frm2551Qv2018:rtnMonth"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter valid Year Ended month on item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-year-min",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Year numeric value is below 1900.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Invalid date entry on Item no.2. Entry should not be lower than 1900.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Main Validate accepts 1900-2017, conflicting with validateYear which rewrites values below 2018 when that handler runs.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-quarter",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "No quarter is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:qtr_1",
+                                     "frm2551Qv2018:qtr_2",
+                                     "frm2551Qv2018:qtr_3",
+                                     "frm2551Qv2018:qtr_4"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Select a Quarter on Item no. 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-year-blank",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Year is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter valid year on item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "This branch is effectively unreachable because blank coerces to zero and fails the earlier below-1900 branch first.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-tin",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtTIN1",
+                                     "frm2551Qv2018:txtTIN2",
+                                     "frm2551Qv2018:txtTIN3",
+                                     "frm2551Qv2018:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only nonblank segments are enforced; no digit shape or TIN checksum.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-rdo",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "RDO code is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-name",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:registeredName"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-telephone",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Telephone number is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:telNo"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter Telephone Number on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-address",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:registeredAddress"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-zip",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:zipCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter Zip Code on Item 9A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-treaty",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Treaty Yes is selected and relief selector remains at index zero.",
+                      "fields":  [
+                                     "frm2551Qv2018:taxTreaty_1",
+                                     "frm2551Qv2018:txtTaxReliefSpecify"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please specify Tax Relief on Item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-zero-atc",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Neither tax-rate option is selected and first ATC plus amount are zero.",
+                      "fields":  [
+                                     "frm2551Qv2018:taxRate1",
+                                     "frm2551Qv2018:taxRate2",
+                                     "drpATC1",
+                                     "txtATCAmt1"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "If you are filing zero transaction, please select the applicable ATC in Page 2 Schedule 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-amount-without-atc",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Neither tax-rate option is selected, first ATC is zero, and first amount is nonzero.",
+                      "fields":  [
+                                     "frm2551Qv2018:taxRate1",
+                                     "frm2551Qv2018:taxRate2",
+                                     "drpATC1",
+                                     "txtATCAmt1"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please select an ATC in Schedule 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-net-zero-atc",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Graduated/net option is selected and first ATC is zero.",
+                      "fields":  [
+                                     "frm2551Qv2018:taxRate1",
+                                     "drpATC1"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "If you are filing zero transaction, please select the applicable ATC in Page 2 Schedule 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-overpayment-raw",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Raw Item 24 compares below zero and neither disposition is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:txt24",
+                                     "frm2551Qv2018:overPayment1",
+                                     "frm2551Qv2018:overPayment2"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please specify If overpayment below Item 24.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Raw JavaScript less-than coercion catches unformatted negative values.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-overpayment-formatted",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "NumWithComma(Item 24) is below zero and neither disposition is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:txt24",
+                                     "frm2551Qv2018:overPayment1",
+                                     "frm2551Qv2018:overPayment2"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please select overpayment option.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4608-L4723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The duplicate parsed check catches comma-formatted negative values and emits a different alert.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-validate-line-business-disabled",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Line of business is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtLineofBus"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4650-L4653"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The entire intended validation is commented out.",
+                      "recommended_app_behavior":  "Enforce any field that remains legally required for this revision.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-save-month",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Year-ended month is unselected.",
+                      "fields":  [
+                                     "frm2551Qv2018:rtnMonth"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter valid Year Ended month on item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4902-L4927"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-save-quarter",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "No quarter is selected.",
+                      "fields":  [
+                                     "frm2551Qv2018:qtr_1",
+                                     "frm2551Qv2018:qtr_2",
+                                     "frm2551Qv2018:qtr_3",
+                                     "frm2551Qv2018:qtr_4"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Select a Quarter on Item no. 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4902-L4927"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-save-tin",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtTIN1",
+                                     "frm2551Qv2018:txtTIN2",
+                                     "frm2551Qv2018:txtTIN3",
+                                     "frm2551Qv2018:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4902-L4927"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only nonblank pieces are checked.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-save-rdo-disabled",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  null,
+                      "condition":  "RDO code is 000.",
+                      "fields":  [
+                                     "frm2551Qv2018:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4916-L4919"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The entire RDO Save guard is commented out.",
+                      "recommended_app_behavior":  "Reject the placeholder RDO code consistently in Save and Validate.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2551q-save-name",
+                      "form_id":  "2551q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2551Qv2018:registeredName"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops or the input is normalized by this branch.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4920-L4924"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

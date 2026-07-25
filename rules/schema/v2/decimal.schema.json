@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/decimal.schema.json",
+  "title": "eBIRForms executable rules IR v2 decimal semantics",
+  "$defs": {
+    "decimal_literal": {
+      "type": "string",
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$"
+    },
+    "decimal_policy": {
+      "type": "object",
+      "required": [
+        "precision",
+        "scale",
+        "division_scale",
+        "rounding",
+        "overflow"
+      ],
+      "properties": {
+        "precision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 38
+        },
+        "scale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "division_scale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "rounding": {
+          "$ref": "rounding.schema.json#/$defs/rounding"
+        },
+        "overflow": {
+          "enum": [
+            "error",
+            "clamp"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/decimal_policy"
+}

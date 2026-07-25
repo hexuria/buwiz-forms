@@ -1,0 +1,267 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0619e-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-0619e-save-004-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-save-004-tin"
+                  },
+                  {
+                      "case_id":  "case-02-0619e-save-005-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-save-005-rdo"
+                  },
+                  {
+                      "case_id":  "case-03-0619e-save-006-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-save-006-name"
+                  },
+                  {
+                      "case_id":  "case-04-0619e-save-008-amended-version",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "A finalized/versioned return exists and Amended Return is not Yes."
+                                    },
+                      "expected_message":  "If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-save-008-amended-version"
+                  },
+                  {
+                      "case_id":  "case-05-0619e-validate-009-month-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing month is blank."
+                                    },
+                      "expected_message":  "Please enter a valid month on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-009-month-required"
+                  },
+                  {
+                      "case_id":  "case-06-0619e-validate-010-current-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing month equals the current month in the current year."
+                                    },
+                      "expected_message":  "Invalid month on Item 1. Month should not be a current Date",
+                      "expected_behavior":  "The source rejects the current month and rewinds the select before recomputing due date.",
+                      "rule_id":  "0619e-validate-010-current-month"
+                  },
+                  {
+                      "case_id":  "case-07-0619e-validate-011-future-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing month is after the current month in the current year."
+                                    },
+                      "expected_message":  "Invalid month on Item 1. Month should not be a future Date",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-011-future-month"
+                  },
+                  {
+                      "case_id":  "case-08-0619e-validate-012-year-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-012-year-required"
+                  },
+                  {
+                      "case_id":  "case-09-0619e-validate-013-year-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing year exceeds current year."
+                                    },
+                      "expected_message":  "Invalid year on Item 1. Year should not be a future Date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-013-year-future"
+                  },
+                  {
+                      "case_id":  "case-10-0619e-validate-014-year-floor",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing year is before 2018."
+                                    },
+                      "expected_message":  "Invalid entry on Item 1. Entry should not be a previous year from 2018.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-014-year-floor"
+                  },
+                  {
+                      "case_id":  "case-11-0619e-validate-015-due-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any due-date component is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Date on Item 2",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-015-due-required"
+                  },
+                  {
+                      "case_id":  "case-12-0619e-validate-016-due-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Due month is outside 1..12."
+                                    },
+                      "expected_message":  "Please enter a valid Month on Item 2",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-016-due-month"
+                  },
+                  {
+                      "case_id":  "case-13-0619e-validate-017-due-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Due day is outside 1..31 or violates the selected month/leap year."
+                                    },
+                      "expected_message":  "Please enter a valid Day on Item 2",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-017-due-day"
+                  },
+                  {
+                      "case_id":  "case-14-0619e-validate-018-due-year-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Due year exceeds current year."
+                                    },
+                      "expected_message":  "Year should not be a future Date. Please enter a valid Year on Item 2",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-018-due-year-future"
+                  },
+                  {
+                      "case_id":  "case-15-0619e-validate-019-due-year-floor",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Due year is before 2018."
+                                    },
+                      "expected_message":  "Previous year from 2018 is not applicable for this Form. Please enter a valid Year on Item 2",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-019-due-year-floor"
+                  },
+                  {
+                      "case_id":  "case-16-0619e-validate-021-withheld-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither withheld/remitted Yes nor No is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-021-withheld-choice"
+                  },
+                  {
+                      "case_id":  "case-17-0619e-validate-022-category-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither private nor government category is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 12.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-022-category-choice"
+                  },
+                  {
+                      "case_id":  "case-18-0619e-validate-023-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-023-tin"
+                  },
+                  {
+                      "case_id":  "case-19-0619e-validate-025-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-025-rdo"
+                  },
+                  {
+                      "case_id":  "case-20-0619e-validate-026-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer/withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-026-name"
+                  },
+                  {
+                      "case_id":  "case-21-0619e-validate-027-contact",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-027-contact"
+                  },
+                  {
+                      "case_id":  "case-22-0619e-validate-028-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Primary registered-address line is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-028-address"
+                  },
+                  {
+                      "case_id":  "case-23-0619e-validate-029-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 10A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-029-zip"
+                  },
+                  {
+                      "case_id":  "case-24-0619e-validate-030-email",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email is blank."
+                                    },
+                      "expected_message":  "Please enter valid Email Address on Item 13.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-030-email"
+                  },
+                  {
+                      "case_id":  "case-25-0619e-validate-032-tax14-conditional",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 4 Yes is selected and Item 14 equals numeric zero."
+                                    },
+                      "expected_message":  "Please fill up Part II - Tax Remittance if item 4 is set to Yes.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "0619e-validate-032-tax14-conditional"
+                  },
+                  {
+                      "case_id":  "case-26-0619e-validate-037-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All active Validate branches pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "Validate disables controls and enables Edit/Final Copy.",
+                      "rule_id":  "0619e-validate-037-success"
+                  }
+              ]
+}

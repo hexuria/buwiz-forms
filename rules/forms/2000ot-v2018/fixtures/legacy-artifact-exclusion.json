@@ -1,0 +1,15 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2000ot-v2018",
+    "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\2000OT\\2000OT-final-copy-#email-redacted#.xml",
+    "ciphertext_sha256":  "1ec8c2829f0fac2e57e55d119d10e25d9755e6c53955010c073211cb59f6a11a",
+    "zlib_header":  "78da",
+    "decrypted_byte_count":  5519,
+    "decrypted_sha256":  "75d040d198e76be1dc9c69d29673eefb23fdcde3fae826c89a672921fe6b2075",
+    "field_count":  78,
+    "unique_field_count":  78,
+    "field_inventory_sha256":  "4e979a609c41fa0a603ebfa7adc5640b0aa7066fa6a40eae7a0ecec66c94a539",
+    "encrypted_only_field":  "frm2000_OT:txtDateMonth",
+    "xml_version":  null,
+    "values_emitted":  false
+}

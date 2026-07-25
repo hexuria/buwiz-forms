@@ -1,0 +1,1105 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702q-v2018c",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate and Save stop at the first ordered rejection. Validate contains an earlier silent no-quarter return that makes its later Item 3 alert unreachable.",
+    "rules":  [
+                  {
+                      "rule_id":  "1702q-input-001",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A monetary field handled by blockletter is blank, nonnumeric, or negative on blur.",
+                      "fields":  [
+                                     "money-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletter:L5986-L6000"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Nonnumeric and negative values are silently replaced with 0.00; numeric values are rounded with binary parseFloat().toFixed(2).",
+                      "recommended_app_behavior":  "Reject malformed or negative values explicitly and use decimal arithmetic.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-input-002",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A whole-number field handled by blockletterWithout2Decimal loses focus.",
+                      "fields":  [
+                                     "whole-number-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletterWithout2Decimal:L6002-L6012"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Nonnumeric input is cleared; numeric input is rounded with toFixed(0).",
+                      "recommended_app_behavior":  "Reject invalid values explicitly and document rounding.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-input-003",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A payment date is malformed or later than the current date.",
+                      "fields":  [
+                                     "payment-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6014-L6080"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Malformed dates are cleared with the format alert; future dates are cleared with `This date cannot be a future date.`",
+                      "recommended_app_behavior":  "Apply calendar-valid MM/DD/YYYY parsing and the same future-date boundary.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-input-004",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "A numeric key filter receives a second decimal point or malformed pasted value.",
+                      "fields":  [
+                                     "money-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "shared-string-util#numbersonly:L148-L174",
+                                          "official-hta-runtime#blockletter:L5986-L6000"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The package permits multiple dots during key entry; blur later coerces malformed text to 0.00.",
+                      "recommended_app_behavior":  "Permit at most one decimal separator and validate pasted/programmatic values.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-001",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Calendar-year mode is selected.",
+                      "fields":  [
+                                     "frm1702q:rbForClndrFscl_1",
+                                     "frm1702q:rbYrEndMonth",
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkFilingYear:L8040-L8075"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Month is forced to 12 and disabled; the two-digit year is cleared.",
+                      "recommended_app_behavior":  "Apply the same dependency transactionally.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-002",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Fiscal-year mode is selected.",
+                      "fields":  [
+                                     "frm1702q:rbForClndrFscl_2",
+                                     "frm1702q:rbYrEndMonth",
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkFilingYear:L8040-L8075"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Month is cleared and enabled; the two-digit year is cleared.",
+                      "recommended_app_behavior":  "Apply the same dependency transactionally.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-003",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "validateYear runs while no quarter is selected.",
+                      "fields":  [
+                                     "frm1702q:rbQuarter_1",
+                                     "frm1702q:rbQuarter_2",
+                                     "frm1702q:rbQuarter_3"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L7907-L7938"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The function returns silently before applying year-range checks.",
+                      "recommended_app_behavior":  "Report the missing quarter and validate year independently of quarter selection.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-004",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "validateYear detects a future fiscal quarter.",
+                      "fields":  [
+                                     "frm1702q:rbForClndrFscl_2",
+                                     "frm1702q:rbYrEndMonth",
+                                     "frm1702q:txtYrEndYear",
+                                     "quarter-selection"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L7907-L8032"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The change handler returns silently, whereas final Validate shows `Future filing is not allowed.` for the same boundary.",
+                      "recommended_app_behavior":  "Use one shared predicate and one explicit message.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-005",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "validateFiscalMonth compares the four-digit input year with Date.getYear().",
+                      "fields":  [
+                                     "frm1702q:rbYrEndMonth",
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Date (Page 1 Item 2) cannot be greater than current date when filing for Fiscal Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateFiscalMonth:L8129-L8142"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Date.getYear() returns years since 1900, so ordinary four-digit input years always satisfy inputYear \u003e currentYear; current/future-month logic is applied under the wrong year comparison.",
+                      "recommended_app_behavior":  "Use getFullYear() and compare a complete year-month value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-006",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Other-ATC checkbox is cleared.",
+                      "fields":  [
+                                     "frm1702q:rbATC_2",
+                                     "frm1702q:cbATC_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#rbATC2_Selected:L8148-L8155"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ATC select is cleared and disabled.",
+                      "recommended_app_behavior":  "Apply the same dependency.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-007",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "An ATC selection changes.",
+                      "fields":  [
+                                     "frm1702q:cbATC_2",
+                                     "schedule-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#ATCEnableDisableSchedules:L8157-L8235"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Schedule 1A-only, Schedule 1B-only, or combined Schedules 1-4 are enabled according to the exact ATC switch.",
+                      "recommended_app_behavior":  "Represent the switch as revision-scoped ATC metadata.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-008",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A rate-bearing ATC is selected for any August, or for July 2020.",
+                      "fields":  [
+                                     "frm1702q:cbATC_2",
+                                     "frm1702q:Sched2:txtTax10"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#Sched2Item10TaxRate:L9021-L9080"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Because `CreateYear == 2020 \u0026\u0026 CreateMonth == 07 || CreateMonth == 08` lacks parentheses, every August in every year enables a manual 0.00 rate.",
+                      "recommended_app_behavior":  "Parenthesize the 2020 month condition and bind rates to effective periods.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-change-009",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Amended Return No is selected for a combined regular-rate ATC.",
+                      "fields":  [
+                                     "frm1702q:rbAmendedRtn_2",
+                                     "frm1702q:Sched4:txtTax6"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#ProcessAmended:L6629-L6681"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Schedule 4 Item 6 is reset to 0.00 and disabled.",
+                      "recommended_app_behavior":  "Apply the same dependency.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-001",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Two-digit year is blank or nonnumeric.",
+                      "fields":  [
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Invalid year entered. Please provide a valid year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6089-L6096"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-002",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Fiscal/calendar year-end month is blank or nonnumeric.",
+                      "fields":  [
+                                     "frm1702q:rbYrEndMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please provide a valid fiscal year-end month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6100-L6107"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-003",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "No quarter is selected during the preliminary selectedQuarter branch.",
+                      "fields":  [
+                                     "frm1702q:rbQuarter_1",
+                                     "frm1702q:rbQuarter_2",
+                                     "frm1702q:rbQuarter_3"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6111-L6122"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate returns silently before reaching its later explicit missing-quarter alert.",
+                      "recommended_app_behavior":  "Show `Please select Quarter in Item 3.` and do not silently return.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-004",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Calendar-year input is earlier than 2018.",
+                      "fields":  [
+                                     "frm1702q:rbForClndrFscl_1",
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Year (Page 1 Item 2) should not be earlier than January 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6126-L6130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-005",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Calendar-year input is later than the current year.",
+                      "fields":  [
+                                     "frm1702q:rbForClndrFscl_1",
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Year (Page 1 Item 2) cannot be greater than the current year for Calendar Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6131-L6135"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-006",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Fiscal-year input is earlier than 2018.",
+                      "fields":  [
+                                     "frm1702q:rbForClndrFscl_2",
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Year (Page 1 Item 2) should not be earlier than January 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6139-L6143"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-007",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Selected fiscal quarter end is later than the current date.",
+                      "fields":  [
+                                     "frm1702q:rbForClndrFscl_2",
+                                     "frm1702q:rbYrEndMonth",
+                                     "frm1702q:txtYrEndYear",
+                                     "quarter-selection"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Future filing is not allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6144-L6210"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-008",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Month or year is blank after the preliminary checks.",
+                      "fields":  [
+                                     "frm1702q:rbYrEndMonth",
+                                     "frm1702q:txtYrEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid Date on Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6217-L6220"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "This branch is unreachable for blank/nonnumeric values because earlier checks already return.",
+                      "recommended_app_behavior":  "Consolidate date validation into one reachable rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-009",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "No quarter is selected at the explicit Item 3 check.",
+                      "fields":  [
+                                     "quarter-selection"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please select Quarter in Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6222-L6225"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "This message is unreachable because the preliminary selectedQuarter branch returns silently first.",
+                      "recommended_app_behavior":  "Move this message to the preliminary branch.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-010",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Neither MCIT nor other ATC checkbox is selected.",
+                      "fields":  [
+                                     "frm1702q:rbATC_1",
+                                     "frm1702q:rbATC_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please select ATC on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6228-L6231"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-011",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Other ATC is checked but the ATC select is blank.",
+                      "fields":  [
+                                     "frm1702q:rbATC_2",
+                                     "frm1702q:cbATC_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please select ATC on Item 5",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6233-L6238"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-012",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Any TIN core segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1702q:txtTIN1",
+                                     "frm1702q:txtTIN2",
+                                     "frm1702q:txtTIN3",
+                                     "frm1702q:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6241-L6245"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-013",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "A TIN core segment is not exactly three characters or branch code is shorter than three.",
+                      "fields":  [
+                                     "frm1702q:txtTIN1",
+                                     "frm1702q:txtTIN2",
+                                     "frm1702q:txtTIN3",
+                                     "frm1702q:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6247-L6250"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Length is checked but no TIN checksum is invoked; branch length 3-5 is accepted.",
+                      "recommended_app_behavior":  "Validate the official TIN checksum and exact revision-appropriate branch shape.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-014",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "RDO value loosely equals numeric zero.",
+                      "fields":  [
+                                     "frm1702q:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6252-L6255"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-015",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm1702q:txtTaxpayerName1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6257-L6260"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-016",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1702q:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6262-L6265"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-017",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm1702q:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter Zip Code on Item 9A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6267-L6270"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-018",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "First DOM occurrence of contact number is blank.",
+                      "fields":  [
+                                     "frm1702q:txtTelNum#occurrence-1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter Contact Number on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6272-L6275"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-019",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Neither deduction method is selected.",
+                      "fields":  [
+                                     "frm1702q:rbMthdOfDdctns_1",
+                                     "frm1702q:rbMthdOfDdctns_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please select Method of Deductions on Item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6277-L6280"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-020",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Tax relief Yes is selected but Item 13A is blank.",
+                      "fields":  [
+                                     "frm1702q:rbTxRlf_1",
+                                     "frm1702q:txtTxRlfSpcfy"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please specify Special Law/International Tax Treaty on Item 13A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6282-L6288"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered Validate branch rejects the condition.",
+                      "recommended_app_behavior":  "Apply the same ordered validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-021",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "A Schedule 4 Item 6 description is nonblank but its amount equals exactly 0.00.",
+                      "fields":  [
+                                     "frm1702q:Sched4:txtOthrTxCrdts0",
+                                     "frm1702q:Sched4:txtOthrTxCrdtAmnt0",
+                                     "frm1702q:Sched4:txtOthrTxCrdts1",
+                                     "frm1702q:Sched4:txtOthrTxCrdtAmnt1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please input Other Tax Credits/Payments amount on Schedule 4 Item 6",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6290-L6295"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only exact string 0.00 is rejected; equivalent zero spellings can bypass the rule.",
+                      "recommended_app_behavior":  "Compare parsed decimal value to zero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-validate-022",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "A Schedule 4 Item 6 description is blank but its amount is not exactly 0.00.",
+                      "fields":  [
+                                     "frm1702q:Sched4:txtOthrTxCrdts0",
+                                     "frm1702q:Sched4:txtOthrTxCrdtAmnt0",
+                                     "frm1702q:Sched4:txtOthrTxCrdts1",
+                                     "frm1702q:Sched4:txtOthrTxCrdtAmnt1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please specify Other Tax Credits/Payments on Schedule 4 Item 6",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6298-L6303"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The check is string-based rather than decimal-value-based.",
+                      "recommended_app_behavior":  "Compare parsed decimal value and normalized description.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-save-001",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "No quarter is selected.",
+                      "fields":  [
+                                     "quarter-selection"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please select quarter in Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6731-L6735"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Save stops before serialization.",
+                      "recommended_app_behavior":  "Apply the same preflight and preserve the exact distinction from full Validate.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-save-002",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "A TIN core segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1702q:txtTIN1",
+                                     "frm1702q:txtTIN2",
+                                     "frm1702q:txtTIN3",
+                                     "frm1702q:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6736-L6740"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save checks only nonblank TIN parts, not length or checksum.",
+                      "recommended_app_behavior":  "Reuse full identity validation before saving.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-save-003",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "RDO code is blank.",
+                      "fields":  [
+                                     "frm1702q:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6741-L6745"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save rejects blank but not placeholder numeric zero, unlike Validate.",
+                      "recommended_app_behavior":  "Use the same RDO predicate for Save and Validate.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702q-save-004",
+                      "form_id":  "1702q-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm1702q:txtTaxpayerName1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Official processing applies the documented rejection or mutation.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6746-L6750"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Save stops before serialization.",
+                      "recommended_app_behavior":  "Apply the same preflight.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

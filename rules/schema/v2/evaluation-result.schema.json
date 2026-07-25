@@ -1,0 +1,688 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/evaluation-result.schema.json",
+  "title": "eBIRForms executable rules IR v2 complete evaluation wire contracts",
+  "description": "Models successful bir-rules EvaluationRequest, EvaluationExpectation, and EvaluationResult values. EvaluationError is a separate fail-closed error channel and is never represented as a successful result.",
+  "$defs": {
+    "repeated_group_instance": {
+      "type": "object",
+      "required": [
+        "group_id",
+        "instance_id"
+      ],
+      "properties": {
+        "group_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "instance_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_instance": {
+      "type": "object",
+      "required": [
+        "field_id",
+        "group_path"
+      ],
+      "properties": {
+        "field_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "group_path": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/repeated_group_instance"
+          },
+          "uniqueItems": true,
+          "description": "Stable repeated-group path ordered outermost to innermost. The runtime additionally rejects a repeated group_id appearing twice with different instance IDs."
+        }
+      },
+      "additionalProperties": false
+    },
+    "raw_value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "state": {
+              "const": "absent"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "text"
+          ],
+          "properties": {
+            "state": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "raw_field_value": {
+      "type": "object",
+      "required": [
+        "field",
+        "value"
+      ],
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/field_instance"
+        },
+        "value": {
+          "$ref": "#/$defs/raw_value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "raw_input_snapshot": {
+      "type": "object",
+      "required": [
+        "repeated_group_instances",
+        "fields"
+      ],
+      "properties": {
+        "repeated_group_instances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/repeated_group_instance"
+          },
+          "uniqueItems": true,
+          "description": "Serialized in stable group/instance order."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/raw_field_value"
+          },
+          "uniqueItems": true,
+          "description": "Serialized in stable FieldInstance order. The runtime rejects duplicate FieldInstance values even when their raw values differ."
+        }
+      },
+      "additionalProperties": false
+    },
+    "exact_decimal": {
+      "type": "string",
+      "pattern": "^(?:0|-?(?:[1-9][0-9]*)(?:\\.[0-9]{0,27}[1-9])?|-?0\\.[0-9]{0,27}[1-9])$",
+      "description": "Exact fixed-point decimal accepted by ExactDecimal; serialization normalizes leading/trailing zeroes."
+    },
+    "canonical_date": {
+      "type": "object",
+      "required": [
+        "year",
+        "month",
+        "day"
+      ],
+      "properties": {
+        "year": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "day": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        }
+      },
+      "additionalProperties": false,
+      "description": "The validating Rust deserializer additionally enforces real calendar days and leap years."
+    },
+    "canonical_value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "absent"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "blank"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "integer"
+            },
+            "value": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "decimal"
+            },
+            "value": {
+              "$ref": "#/$defs/exact_decimal"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "date"
+            },
+            "value": {
+              "$ref": "#/$defs/canonical_date"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "context_value": {
+      "type": "object",
+      "required": [
+        "id",
+        "value"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "value": {
+          "$ref": "#/$defs/canonical_value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context_value_snapshot": {
+      "type": "object",
+      "required": [
+        "values"
+      ],
+      "properties": {
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/context_value"
+          },
+          "uniqueItems": true,
+          "description": "Serialized in stable context-value ID order. The runtime rejects duplicate IDs even if their values differ."
+        }
+      },
+      "additionalProperties": false
+    },
+    "canonical_field_value": {
+      "type": "object",
+      "required": [
+        "field",
+        "raw",
+        "canonical"
+      ],
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/field_instance"
+        },
+        "raw": {
+          "$ref": "#/$defs/raw_value"
+        },
+        "canonical": {
+          "$ref": "#/$defs/canonical_value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evaluation_request": {
+      "type": "object",
+      "required": [
+        "rule_set",
+        "context",
+        "input_revision",
+        "context_fingerprint",
+        "context_values",
+        "raw_inputs"
+      ],
+      "properties": {
+        "rule_set": {
+          "$ref": "common.schema.json#/$defs/form_revision_key"
+        },
+        "context": {
+          "$ref": "common.schema.json#/$defs/validation_context"
+        },
+        "input_revision": {
+          "$ref": "common.schema.json#/$defs/input_revision"
+        },
+        "context_fingerprint": {
+          "$ref": "common.schema.json#/$defs/context_fingerprint"
+        },
+        "context_values": {
+          "$ref": "#/$defs/context_value_snapshot"
+        },
+        "raw_inputs": {
+          "$ref": "#/$defs/raw_input_snapshot"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule_field_ref": {
+      "type": "object",
+      "required": [
+        "field",
+        "xml_key",
+        "serialized_occurrence"
+      ],
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/field_instance"
+        },
+        "xml_key": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/runtime_stable_id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serialized_occurrence": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "serialized_occurrence": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "serialized_occurrence"
+            ]
+          },
+          "then": {
+            "properties": {
+              "xml_key": {
+                "$ref": "common.schema.json#/$defs/runtime_stable_id"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "issue_order": {
+      "type": "object",
+      "required": [
+        "rule_order",
+        "occurrence"
+      ],
+      "properties": {
+        "rule_order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule_execution": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "instance"
+      ],
+      "properties": {
+        "rule_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "instance": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/repeated_group_instance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule_violation": {
+      "type": "object",
+      "required": [
+        "execution",
+        "phase",
+        "order",
+        "fields",
+        "official_message",
+        "message",
+        "assessment",
+        "severity",
+        "profile"
+      ],
+      "properties": {
+        "execution": {
+          "$ref": "#/$defs/rule_execution"
+        },
+        "phase": {
+          "$ref": "common.schema.json#/$defs/validation_phase"
+        },
+        "order": {
+          "$ref": "#/$defs/issue_order"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule_field_ref"
+          }
+        },
+        "official_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "assessment": {
+          "$ref": "common.schema.json#/$defs/assessment"
+        },
+        "severity": {
+          "$ref": "common.schema.json#/$defs/severity"
+        },
+        "profile": {
+          "$ref": "common.schema.json#/$defs/behavior_profile"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule_expectation": {
+      "type": "object",
+      "required": [
+        "execution",
+        "order"
+      ],
+      "properties": {
+        "execution": {
+          "$ref": "#/$defs/rule_execution"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "derived_output_expectation": {
+      "type": "object",
+      "required": [
+        "calculation_id",
+        "output_id",
+        "instance"
+      ],
+      "properties": {
+        "calculation_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "output_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "instance": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/repeated_group_instance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "evaluation_expectation": {
+      "type": "object",
+      "required": [
+        "rules",
+        "outputs"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule_expectation"
+          },
+          "uniqueItems": true,
+          "description": "Applicable rules in strictly increasing reviewed order."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/derived_output_expectation"
+          },
+          "uniqueItems": true,
+          "description": "Required named outputs in reviewed topological/emission order."
+        }
+      },
+      "additionalProperties": false
+    },
+    "validation_report": {
+      "type": "object",
+      "required": [
+        "rule_set",
+        "context",
+        "input_revision",
+        "context_fingerprint",
+        "expected_rules",
+        "evaluated_rules",
+        "violations"
+      ],
+      "properties": {
+        "rule_set": {
+          "$ref": "common.schema.json#/$defs/form_revision_key"
+        },
+        "context": {
+          "$ref": "common.schema.json#/$defs/validation_context"
+        },
+        "input_revision": {
+          "$ref": "common.schema.json#/$defs/input_revision"
+        },
+        "context_fingerprint": {
+          "$ref": "common.schema.json#/$defs/context_fingerprint"
+        },
+        "expected_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule_expectation"
+          },
+          "uniqueItems": true,
+          "description": "Complete applicable executable rule inventory in strictly increasing reviewed order."
+        },
+        "evaluated_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule_execution"
+          },
+          "uniqueItems": true,
+          "description": "Must exactly equal expected_rules projected to execution, in the same order; enforced by ValidationReport deserialization."
+        },
+        "violations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule_violation"
+          },
+          "uniqueItems": true,
+          "description": "Strictly ordered by IssueOrder. Every violation must reference an expected rule and match the report phase/profile."
+        }
+      },
+      "additionalProperties": false
+    },
+    "derived_value": {
+      "type": "object",
+      "required": [
+        "calculation_id",
+        "output_id",
+        "instance",
+        "value"
+      ],
+      "properties": {
+        "calculation_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "output_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "instance": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/repeated_group_instance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/canonical_value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evaluation_result": {
+      "type": "object",
+      "required": [
+        "report",
+        "canonical_inputs",
+        "expected_outputs",
+        "derived_outputs"
+      ],
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/validation_report"
+        },
+        "canonical_inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/canonical_field_value"
+          },
+          "uniqueItems": true,
+          "description": "Complete, strictly ordered normalization coverage. Each record echoes the exact RawValue from the request."
+        },
+        "expected_outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/derived_output_expectation"
+          },
+          "uniqueItems": true,
+          "description": "Required (calculation_id, output_id, instance) identities in reviewed order."
+        },
+        "derived_outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/derived_value"
+          },
+          "uniqueItems": true,
+          "description": "Must exactly equal expected_outputs projected to (calculation_id, output_id, instance), in the same order; enforced by EvaluationResult deserialization."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/evaluation_result"
+}

@@ -1,0 +1,44 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0619f-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "december-rollover",
+                      "filing_year":  2025,
+                      "calculation_id":  "0619f-due-date",
+                      "official_output":  "01/10/2026",
+                      "filing_month":  12
+                  },
+                  {
+                      "rule_id":  "0619f-input-004-tax-type-wb",
+                      "official_item15":  100,
+                      "item14_before":  75,
+                      "item13":  100,
+                      "case_id":  "wb-branch",
+                      "official_item14_after":  0
+                  },
+                  {
+                      "item13_before":  100,
+                      "rule_id":  "0619f-input-005-tax-type-wf",
+                      "item14":  75,
+                      "official_item15":  75,
+                      "case_id":  "wf-branch",
+                      "official_item13_after":  0
+                  },
+                  {
+                      "item15":  100,
+                      "recommended_behavior":  "reject or apply the legally correct amended-return rule",
+                      "calculation_id":  "0619f-item17-net",
+                      "case_id":  "negative-net",
+                      "item16":  125,
+                      "official_output":  -25
+                  },
+                  {
+                      "case_id":  "total-remittance",
+                      "item17":  1000,
+                      "calculation_id":  "0619f-item19-total",
+                      "item18d":  60,
+                      "official_output":  1060
+                  }
+              ]
+}

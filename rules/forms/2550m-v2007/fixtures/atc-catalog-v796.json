@@ -1,0 +1,262 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2550m-v2007",
+    "package_version":  "7.9.6.0",
+    "source_sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+    "selection_semantics":  "The HTA filters the shared catalog for 2550M/2550Q and exposes 36 selector slots. Catalog entries carry no rate; output tax is hard-coded to 12%.",
+    "entry_count":  36,
+    "entries":  [
+                    {
+                        "source_index":  392,
+                        "code":  "VB010",
+                        "description":  "VAT-ON BUSINESS SERVICES-IN GENERAL",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  393,
+                        "code":  "VB100",
+                        "description":  "VAT-ON BUS SERV-HOTEL, MOTELS, ETC",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  394,
+                        "code":  "VB101",
+                        "description":  "VAT -ON BUSINESS SERVICES -RESTAURANTS, CATERERS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  395,
+                        "code":  "VB102",
+                        "description":  "VAT -ON BUS. SERVICES -DEALERS ON SEC/LENDING INVESTORS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  396,
+                        "code":  "VB105",
+                        "description":  "VAT -COMMON CARRIERS -LAND BASED (ROAD FREIGHT)",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  397,
+                        "code":  "VB106",
+                        "description":  "VAT -COMMON CARRIERS -DOMESTIC OCEAN-GOING VESSEL",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  398,
+                        "code":  "VB107",
+                        "description":  "VAT -COMMON CARRIERS -INTER-ISLAND SHIPPING VESSEL",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  399,
+                        "code":  "VB108",
+                        "description":  "VAT -COMMON CARRIERS -AIRCRAFT",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  400,
+                        "code":  "VB109",
+                        "description":  "VAT -FRANCHISE HOLDERS -TELEPHONE",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  401,
+                        "code":  "VB111",
+                        "description":  "VAT -FRANCHISE HOLDERS -RADIO/TELEPHONE BROAD.",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  402,
+                        "code":  "VB112",
+                        "description":  "VAT -FRANCHISE HOLDERS -OTHERS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  403,
+                        "code":  "VB113",
+                        "description":  "VAT -NON-LIFE INSURANCE COMPANIES",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  404,
+                        "code":  "VC010",
+                        "description":  "VAT -ON CONSTRUCTION",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  405,
+                        "code":  "VD010",
+                        "description":  "COMPULSORY SOCIAL SECURITY PUBLIC ADMIN AND DEFENSE",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  406,
+                        "code":  "VH010",
+                        "description":  "VAT -ON COMMUNITY, PERSONAL AND HOUSEHOLD SERVICES",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  407,
+                        "code":  "VI010",
+                        "description":  "VAT -ON IMPORTATION OF GOODS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  408,
+                        "code":  "VM010",
+                        "description":  "VAT -MANUFACTURING IN GEN.",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  409,
+                        "code":  "VM020",
+                        "description":  "VAT ON MANUFACTURING - FOOD, PRODUCTS AND BEVERAGES",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  410,
+                        "code":  "VM030",
+                        "description":  "VAT ON MANUFACTURING - CEMENT",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  411,
+                        "code":  "VM040",
+                        "description":  "VAT ON MANUFACTURING - TOBACCO",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  412,
+                        "code":  "VM050",
+                        "description":  "VAT ON MANUFACTURING - FLOUR",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  413,
+                        "code":  "VM100",
+                        "description":  "VAT -MANUFACTURING -PESTICIDES",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  414,
+                        "code":  "VM110",
+                        "description":  "VAT ON MANUFACTURING - ALCOHOL",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  415,
+                        "code":  "VM120",
+                        "description":  "VAT ON MANUFACTURING - PETROLEUM",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  416,
+                        "code":  "VM130",
+                        "description":  "VAT ON MANUFACTURING - AUTOMOBILES",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  417,
+                        "code":  "VM140",
+                        "description":  "VAT ON MANUFACTURING - NON ESSENTIALS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  418,
+                        "code":  "VM150",
+                        "description":  "VAT ON MANUFACTURING - PHARMACUETICALS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  419,
+                        "code":  "VM160",
+                        "description":  "VAT ON MANUFACTURING - SUGAR",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  420,
+                        "code":  "VP100",
+                        "description":  "VAT - SALE OF REAL PROPERTY",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  421,
+                        "code":  "VP101",
+                        "description":  "VAT - LEASE OF REAL PROPERTY",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  422,
+                        "code":  "VP102",
+                        "description":  "VAT - SALE/LEASE OF INTANGIBLE PROPERTY",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  423,
+                        "code":  "VQ010",
+                        "description":  "VAT ON MINING AND QUARYING",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  424,
+                        "code":  "VS010",
+                        "description":  "VAT -ON STORAGE AND WAREHOUSING",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  425,
+                        "code":  "VT010",
+                        "description":  "VAT -ON WHOLESALE AND RETAIL TRADE",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  591,
+                        "code":  "VS062",
+                        "description":  "ON SERVICES RENDERED BY PERSONS ENGAGED IN THE PRACTICE OF PROFESSION OR CALLING AND PROFESSIONAL SERVICES RENDERED BY GENERAL PROFESSIONAL PARTNERSHIPS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    },
+                    {
+                        "source_index":  592,
+                        "code":  "VS210",
+                        "description":  "ON SERVICES RENDERED BY STOCK, REAL ESTATE, COMMERCIAL, CUSTOMS, INSURANCE AND IMMIGRATION BROKERS",
+                        "form_types":  "2550M|2550Q",
+                        "catalog_rate":  null
+                    }
+                ]
+}

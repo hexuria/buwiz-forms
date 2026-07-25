@@ -1,0 +1,118 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1801-v2018",
+    "form_code":  "1801",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018 ENCS",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1801v2018.hta",
+                                "sha256":  "d19c4ebe40ed109094ef43687ed5486a003bd11a67a251bdd5545a41c2f46d8d",
+                                "size":  228576,
+                                "revision_binding":  "APPLICATIONNAME 1801v2018 and printed January 2018 ENCS."
+                            },
+                            {
+                                "asset_id":  "official-help-v2018",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1801v2018.hta",
+                                "sha256":  "21fc91fffadb99b78f9495cca3c25e8ba14e76a4467a181adbd73ef5607c68f5",
+                                "size":  19913,
+                                "revision_binding":  "Revision-matched January 2018 help; six-percent rate, one-year deadline, and documentary requirements."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1801v2018\\1801 Jan 2018 ENCS.pdf",
+                                "sha256":  "ec49207aab9b035d1913d41091b677d9df690e01b391ed2c2f4c34cf43a524c6",
+                                "size":  812403,
+                                "revision_binding":  "January 2018 Form 1801."
+                            },
+                            {
+                                "asset_id":  "official-guidelines-pdf",
+                                "kind":  "official-guidelines-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1801v2018\\1801 Guidelines.pdf",
+                                "sha256":  "06cbd878536d2960ef556fbfb29a23e9a58896f1ae4e43623a6f389c916f7e0a",
+                                "size":  158264,
+                                "revision_binding":  "Local guidelines distributed with the January 2018 form assets."
+                            },
+                            {
+                                "asset_id":  "legacy-hta-excluded",
+                                "kind":  "runtime-extracted-hta-legacy",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1801.hta",
+                                "sha256":  "c102cf9b62a73dbe491e6e181e33384668d5fd8152e49b4005ee4563f4cb908b",
+                                "size":  313365,
+                                "revision_binding":  "Legacy APPLICATIONNAME 1801; excluded."
+                            },
+                            {
+                                "asset_id":  "legacy-help-excluded",
+                                "kind":  "official-runtime-help-legacy",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1801.hta",
+                                "sha256":  "c0f36cb2700668dd1cba093afe02f614bdb561e4bb01932f2d21bca1a0c9fcb9",
+                                "size":  21167,
+                                "revision_binding":  "Legacy help; excluded from revision-specific claims."
+                            },
+                            {
+                                "asset_id":  "legacy-editable-save-excluded",
+                                "kind":  "dummy-profile-editable-save-legacy",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-1801-07222026.xml",
+                                "sha256":  "cd1ceb8cfb2e1daac21f0e948c25b0ba62e7d4cdf8a0e4a73710daaf96ac7001",
+                                "size":  7759,
+                                "revision_binding":  "111-key legacy artifact; values excluded."
+                            },
+                            {
+                                "asset_id":  "legacy-final-copy-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy-legacy",
+                                "path":  "C:\\eBIRForms\\IAF_RDO_Copy\\1801-final-copy-#email-redacted#.xml",
+                                "sha256":  "6ab3445921227b0537d9370bd08fdf92672fbada6edf781fcac86f74684ea603",
+                                "size":  1047,
+                                "revision_binding":  "Legacy final copy; values excluded."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  138,
+                   "runtime_field_families":  37,
+                   "fields_total":  175,
+                   "typed_fields":  175,
+                   "validation_rules":  37,
+                   "confirmed_official_bugs":  21,
+                   "calculations":  20,
+                   "negative_fixtures":  33,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "legacy_artifact_exclusion":  "fixtures/legacy-artifact-exclusion.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer, typed model, migration, capability, or release metadata changed.",
+                        "No source values or email-bearing filenames are copied.",
+                        "The source-derived serializer model has 138 concrete control definitions and 37 indexed families; two initial rows per family yield 212 baseline entries.",
+                        "The available 111-key plaintext save and encrypted final copy are legacy frm1801 artifacts and are explicitly excluded.",
+                        "The malformed official Tax Debit Memo number ID is preserved literally as frm1801v2018taxkNum."
+                    ]
+}

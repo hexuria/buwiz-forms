@@ -1,0 +1,262 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1800-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-form-pdf",
+                                           "official-guidelines-pdf"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 donor tax return; one return per donor per donation date, with prior same-year net gifts carried into the computation."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML:L3113-L3447",
+                                           "official-hta-runtime#initialValidateBeforeSave:L5072-L5096"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save first runs checkDate1, then checks donor TIN blankness, RDO 000, and donor name; it serializes a 166-entry five-row baseline plus any added indexed schedule rows."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L4650-L4736"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate actively checks only treaty description, donor TIN blankness, RDO, and donation date before disabling controls."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML",
+                                           "legacy-artifact-exclusion"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Source shows final-copy encryption after the same serializer, but no frm1800v2018 revision-matched final-copy sample was available."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXMLsubmit",
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Collapses two address pairs.",
+                                                 "Forces txtCurrentPage to 1."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L3113-L3447"
+                                            ],
+                            "guard":  "checkDate1 and narrow Save checks pass, and version-file guards permit the write."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Shows the exact success alert."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L4650-L4736"
+                                            ],
+                            "guard":  "All active source-ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls and preserves conditional disabled state."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L4852-L4968"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates an encrypted/compressed final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#openAlertEmail:L5784-L5829"
+                                            ],
+                            "guard":  "File-version and connectivity/finalization flow permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L5830-L5920"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Donation date and donor identity/RDO",
+                          "At least one donee and complete background information",
+                          "Gift schedules and valuation support",
+                          "Allowable deductions, prior same-year gifts, credits, and penalties as applicable"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "relationship-statement",
+                                     "label":  "Sworn statement of donor-donee relationship.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Applicable filing.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-credit-proof",
+                                     "label":  "Proof of claimed tax credit.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Tax credit is claimed.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "title-copy",
+                                     "label":  "Owner copy with photocopy or certified true copy of TCT/CCT/OCT.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Real property is donated.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-declaration",
+                                     "label":  "Certified true copy of latest tax declaration for lot and/or improvement.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Applicable real property.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "no-improvement",
+                                     "label":  "Assessor Certificate of No Improvement.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Donated real property has no declared improvement.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "stock-valuation",
+                                     "label":  "Proof of share valuation at donation date.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Shares are donated.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "other-property-valuation",
+                                     "label":  "Proof of valuation of other personal property.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "deduction-proof",
+                                     "label":  "Proof of claimed deductions.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Deductions are claimed.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-debit-memo",
+                                     "label":  "Tax Debit Memo used as payment.",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf",
+                                                         "legacy-help-supporting-only#attachments"
+                                                     ],
+                                     "required_when":  "Applicable payment mode.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-guidelines-pdf",
+                                                     "legacy-help-supporting-only#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Event-based: within 30 days after the donation date."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-guidelines-pdf",
+                                                     "legacy-help-supporting-only#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not quarterly; the same 30-day donation-relative deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-guidelines-pdf",
+                                                     "legacy-help-supporting-only#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not quarterly; the same 30-day donation-relative deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-guidelines-pdf",
+                                                     "legacy-help-supporting-only#deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not quarterly; the same 30-day donation-relative deadline applies."
+                             }
+                         ]
+}

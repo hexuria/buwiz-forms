@@ -15,7 +15,7 @@ use gpui_component::*;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use bir_core::db::Database;
+use bir_core::db::{Database, ReceiptConfirmationOutcome};
 use bir_core::forms::form_2551q::{
     FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY, Form2551QDraft, Item13Election, OverpaymentDisposition,
     Schedule1Row, TaxPeriodBasis,
@@ -398,6 +398,7 @@ impl Form2551QView {
                         && let Ok(Some(updated)) = db_guard.get_2551q_draft(&tin, year, quarter)
                         && (this.draft.status != updated.status
                             || this.draft.submission_claim_token != updated.submission_claim_token
+                            || this.draft.submission_claimed_at != updated.submission_claimed_at
                             || this.draft.last_error != updated.last_error)
                     {
                         this.draft = updated;
@@ -858,7 +859,7 @@ impl Form2551QView {
         self.draft.transition_to_paid();
         let save_result = match self.db.lock() {
             Ok(db) => db
-                .save_2551q_draft(&self.draft)
+                .save_paid_2551q_draft(&self.draft)
                 .map_err(|error| error.to_string()),
             Err(_) => Err("The form database is temporarily unavailable".to_string()),
         };
@@ -879,7 +880,8 @@ impl Form2551QView {
         if matches!(self.draft.status, FilingStatus::Paid) {
             return; // Guard: cannot revert a Paid form
         }
-        if self.draft.submission_claim_token.is_some() {
+        if self.draft.submission_claim_token.is_some() || self.draft.submission_claimed_at.is_some()
+        {
             use gpui_component::WindowExt;
             self.status_message = Some(
                 "Submission outcome is pending and requires support-assisted reconciliation."
@@ -899,52 +901,57 @@ impl Form2551QView {
             return;
         }
         let before_revert = self.draft.clone();
-        self.draft.revert_to_draft();
-        if let Ok(db) = self.db.lock()
-            && let Ok(Some(profile)) = db.get_profile(&self.draft.tin)
-        {
-            // Reverting is the explicit consent boundary for replacing a
-            // filed snapshot with the effective profile segment for this
-            // filing period. Non-Draft snapshots are otherwise immutable.
-            let _ = self.draft.reconcile_with_effective_profile(&profile);
-        }
         let persistence_result = match self.db.lock() {
             Ok(db) => db
-                .save_2551q_draft(&self.draft)
-                .map(|_| ())
+                .cancel_queued_2551q_submission(&before_revert)
+                .and_then(|mut canceled| {
+                    if let Some(profile) = db.get_profile(&canceled.tin)? {
+                        // Reverting is the explicit consent boundary for
+                        // replacing the reviewed snapshot with the current
+                        // effective profile segment.
+                        let _ = canceled.reconcile_with_effective_profile(&profile);
+                        db.save_2551q_draft(&canceled)?;
+                    }
+                    Ok(canceled)
+                })
                 .map_err(|_| "database_write"),
             Err(_) => Err("database_lock"),
         };
         use gpui_component::WindowExt;
-        if let Err(error_category) = persistence_result {
-            tracing::warn!(error_category, "2551Q queue cancellation was rejected");
-            self.draft = match self.db.lock() {
-                Ok(db) => db
-                    .get_2551q_draft(
-                        &before_revert.tin,
-                        before_revert.taxable_year,
-                        before_revert.quarter,
-                    )
-                    .ok()
-                    .flatten()
-                    .unwrap_or(before_revert),
-                Err(_) => before_revert,
-            };
-            self.status_message =
-                Some("Submission has already started and can no longer be canceled.".to_string());
-            window.push_notification(
-                gpui_component::notification::Notification::new()
-                    .message(
-                        "Submission has already started. The queued return was not canceled."
-                            .to_string(),
-                    )
-                    .with_type(gpui_component::notification::NotificationType::Warning)
-                    .autohide(true),
-                cx,
-            );
-            cx.notify();
-            return;
-        }
+        let canceled = match persistence_result {
+            Ok(canceled) => canceled,
+            Err(error_category) => {
+                tracing::warn!(error_category, "2551Q queue cancellation was rejected");
+                self.draft = match self.db.lock() {
+                    Ok(db) => db
+                        .get_2551q_draft(
+                            &before_revert.tin,
+                            before_revert.taxable_year,
+                            before_revert.quarter,
+                        )
+                        .ok()
+                        .flatten()
+                        .unwrap_or(before_revert),
+                    Err(_) => before_revert,
+                };
+                self.status_message = Some(
+                    "Submission has already started and can no longer be canceled.".to_string(),
+                );
+                window.push_notification(
+                    gpui_component::notification::Notification::new()
+                        .message(
+                            "Submission has already started. The queued return was not canceled."
+                                .to_string(),
+                        )
+                        .with_type(gpui_component::notification::NotificationType::Warning)
+                        .autohide(true),
+                    cx,
+                );
+                cx.notify();
+                return;
+            }
+        };
+        self.draft = canceled;
         self.is_validated = false;
         self.validation_errors.clear();
         self.status_message = None;
@@ -1002,11 +1009,30 @@ impl Form2551QView {
                 let stripped_filename = bir_core::receipt::split_bir_filename(&our_filename)
                     .map(|(t, f, p)| format!("{}-{}-{}.xml", t, f, p.split('#').next().unwrap_or(&p)))
                     .unwrap_or(our_filename);
+                let unversioned_filename =
+                    stripped_filename.replacen("-2551Qv2018-", "-2551Q-", 1);
+                let receipt = if let Some(receipt) =
+                    db_guard.get_submission_receipt_by_filename(&stripped_filename)?
+                {
+                    Some(receipt)
+                } else {
+                    db_guard.get_submission_receipt_by_filename(&unversioned_filename)?
+                };
 
-                if let Some(_receipt) = db_guard.get_submission_receipt_by_filename(&stripped_filename)? {
-                    // Receipt exists, ensure the draft status is Confirmed
-                    let _ = db_guard.confirm_2551q_from_receipt(&_receipt);
-                    if let Some(updated) = db_guard.get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)? {
+                if let Some(receipt) = receipt {
+                    if db_guard.confirm_2551q_from_receipt(&receipt)?
+                        == ReceiptConfirmationOutcome::Confirmed
+                    {
+                        let updated = db_guard
+                            .get_2551q_draft(&draft.tin, draft.taxable_year, draft.quarter)?
+                            .ok_or_else(|| anyhow::anyhow!(
+                                "The confirmed 2551Q draft disappeared while processing its receipt"
+                            ))?;
+                        if updated.status != FilingStatus::Confirmed {
+                            return Err(anyhow::anyhow!(
+                                "The receipt matched, but Confirmed status was not persisted"
+                            ));
+                        }
                         return Ok(Some(updated));
                     }
                 }
@@ -1141,31 +1167,46 @@ impl Form2551QView {
             Ok(receipt) => {
                 if let Ok(db) = self.db.lock() {
                     match db.save_submission_receipt(&receipt) {
-                        Ok((saved, _is_new)) => {
-                            if saved.filename == self.draft.default_submission_filename()
-                                || self.draft.submission_filename.as_deref()
-                                    == Some(&saved.filename)
-                            {
-                                let before_confirmation = self.draft.clone();
-                                self.draft.transition_to_confirmed(
-                                    format!("{}T{}", saved.received_date, saved.received_time),
-                                    saved.id,
-                                    Some(saved.filename),
-                                );
-                                match db.save_2551q_draft(&self.draft) {
-                                    Ok(_) => cx.emit(Form2551QEvent::Confirmed),
+                        Ok((saved, _is_new)) => match db.confirm_2551q_from_receipt(&saved) {
+                            Ok(ReceiptConfirmationOutcome::Confirmed) => {
+                                match db.get_2551q_draft(
+                                    &self.draft.tin,
+                                    self.draft.taxable_year,
+                                    self.draft.quarter,
+                                ) {
+                                    Ok(Some(updated))
+                                        if updated.status == FilingStatus::Confirmed =>
+                                    {
+                                        self.draft = updated;
+                                        self.status_message =
+                                            Some("Receipt imported and confirmed".to_string());
+                                        cx.emit(Form2551QEvent::Confirmed);
+                                    }
+                                    Ok(_) => {
+                                        self.status_message = Some(
+                                                "Receipt matched, but Confirmed status was not persisted"
+                                                    .to_string(),
+                                            );
+                                    }
                                     Err(error) => {
-                                        self.draft = before_confirmation;
                                         self.status_message = Some(format!(
-                                            "Receipt was imported, but Confirmed status could not be saved: {error}"
+                                            "Receipt matched, but the confirmed return could not be reloaded: {error}"
                                         ));
-                                        cx.notify();
-                                        return;
                                     }
                                 }
                             }
-                            self.status_message = Some("Receipt imported".to_string());
-                        }
+                            Ok(ReceiptConfirmationOutcome::Ignored) => {
+                                self.status_message = Some(
+                                        "Receipt imported, but it does not confirm this submitted return"
+                                            .to_string(),
+                                    );
+                            }
+                            Err(error) => {
+                                self.status_message = Some(format!(
+                                    "Receipt was imported, but confirmation was rejected: {error}"
+                                ));
+                            }
+                        },
                         Err(err) => {
                             self.status_message = Some(format!("Receipt save failed: {err}"));
                         }
@@ -1346,7 +1387,7 @@ impl Form2551QView {
                         this.draft.payment_receipt_path = Some(path_str);
                         let save_result = match this.db.lock() {
                             Ok(db) => db
-                                .save_2551q_draft(&this.draft)
+                                .save_2551q_payment_receipt_path(&this.draft)
                                 .map_err(|error| error.to_string()),
                             Err(_) => {
                                 Err("The form database is temporarily unavailable".to_string())
@@ -1559,7 +1600,8 @@ impl Render for Form2551QView {
         let is_calendar = matches!(self.draft.tax_period_basis, TaxPeriodBasis::Calendar);
         let item_13_election = self.draft.item_13_election;
         let overpayment_disposition = self.draft.overpayment_disposition;
-        let submission_claim_active = self.draft.submission_claim_token.is_some();
+        let submission_claim_active = self.draft.submission_claim_token.is_some()
+            || self.draft.submission_claimed_at.is_some();
 
         let title_block = <Self as FormViewTrait>::render_header(self, cx);
 
@@ -2769,10 +2811,14 @@ impl Render for Form2551QView {
                                                     .label("Mark as Confirmed Manually")
                                                     .on_click(cx.listener(|this, _, window, cx| {
                                                         let before_confirmation = this.draft.clone();
-                                                        this.draft.status = FilingStatus::Confirmed;
+                                                        this.draft.transition_to_confirmed(
+                                                            chrono::Utc::now().to_rfc3339(),
+                                                            None,
+                                                            None,
+                                                        );
                                                         let save_result = match this.db.lock() {
                                                             Ok(db) => db
-                                                                .save_2551q_draft(&this.draft)
+                                                                .save_confirmed_2551q_draft(&this.draft)
                                                                 .map_err(|error| error.to_string()),
                                                             Err(_) => Err("The form database is temporarily unavailable".to_string()),
                                                         };

@@ -1,0 +1,15 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702rt-v2018c",
+    "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\1702RTv2018c\\00000000000000-1702RTv2018C-122025#email-redacted#.xml",
+    "ciphertext_sha256":  "e45db05bb89c2513054e7f075e41a09e9ec35c9590982619dcfb1dfb57602501",
+    "zlib_header":  "78da",
+    "decrypted_byte_count":  22271,
+    "decrypted_sha256":  "fc0ee1febf0e80a4116e7f274d49a12c939f5140ce592f5e2af48577d1206c99",
+    "field_count":  258,
+    "unique_field_count":  258,
+    "field_inventory_sha256":  "2e294eb7da3dfeff23dff785b8a971fba2100b4ecba4569c5a18044b6d0caced",
+    "encrypted_only_field":  null,
+    "xml_version":  null,
+    "values_emitted":  false
+}

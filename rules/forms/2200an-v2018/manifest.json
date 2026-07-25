@@ -1,0 +1,100 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200an-v2018",
+    "form_code":  "2200AN",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200ANv2018.hta",
+                                "sha256":  "23b5502509383379d993fe724e28fdf2d13010b75cd2694c394bc8c72af34f29",
+                                "size":  649261,
+                                "revision_binding":  "January 2018 ENCS runtime."
+                            },
+                            {
+                                "asset_id":  "legacy-runtime-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200AN.hta",
+                                "sha256":  "e3f84d83c3455424c66c9223d124b65f30027d3c57ff4af793b6b5b54feeecb4",
+                                "size":  408985,
+                                "revision_binding":  "Legacy predecessor, used only for sample exclusion."
+                            },
+                            {
+                                "asset_id":  "packaged-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2200AN.hta",
+                                "sha256":  "72c3e8fca3d9ba6eab423081db51f9444afb83b44b801a222bddabdde70da7af",
+                                "size":  13592,
+                                "revision_binding":  "Unversioned packaged instructions; deadline fact only."
+                            },
+                            {
+                                "asset_id":  "official-guide-pdf",
+                                "kind":  "official-guidelines-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2200ANv2018\\2200-AN Jan 2018 ENCS guidelines final.pdf",
+                                "sha256":  "d3b5599f459eeb354a05bd70dd9b9ea526a7660f8337c37dbc4ca48c643d6c25",
+                                "size":  590928,
+                                "revision_binding":  "January 2018 ENCS guidelines."
+                            },
+                            {
+                                "asset_id":  "official-annex-pdf",
+                                "kind":  "official-annex-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2200ANv2018\\2200-AN Jan 2018 ENCS Annex A.pdf",
+                                "sha256":  "da64d008464d213c7c3ceb60f4fc752a4cae2d271abd2414bbd4f85a305915a2",
+                                "size":  792404,
+                                "revision_binding":  "January 2018 ENCS Annex A."
+                            },
+                            {
+                                "asset_id":  "legacy-encrypted-sample-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2200AN\\2200AN-final-copy-#email-redacted#.xml",
+                                "sha256":  "9e217dae0c2fe171104510f4ce3bca20ce1c3decb872f70c730ab8306f503670",
+                                "size":  1645,
+                                "revision_binding":  "Excluded: 196/209 form keys use legacy frm2200AN namespace; only 7 keys overlap current IDs."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  218,
+                   "runtime_field_families":  0,
+                   "fields_total":  218,
+                   "typed_fields":  218,
+                   "validation_rules":  38,
+                   "confirmed_official_bugs":  12,
+                   "calculations":  13,
+                   "negative_fixtures":  34,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "excluded_legacy_encrypted_keys":  "fixtures/excluded-legacy-encrypted-field-keys-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No decrypted values or email-bearing filenames emitted.",
+                        "Legacy 209-key sample excluded by namespace.",
+                        "217 static serialized controls + one runtime RDO selector; no current dynamic field families."
+                    ]
+}

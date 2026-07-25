@@ -1,0 +1,94 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1601c-v2018",
+    "form_code":  "1601C",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1601Cv2018.hta",
+                                "sha256":  "3fb7b4185264e47c9d77b0def4301fa696e7b4424ad30b4e973c7c0b1f759879",
+                                "size":  275902,
+                                "revision_binding":  "January 2018 ENCS runtime; selected instead of the co-installed legacy 1601C runtime."
+                            },
+                            {
+                                "asset_id":  "packaged-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1601Cv2018.hta",
+                                "sha256":  "2395005a36fe8220e0d1fd5d6efa659456d0c4bc1e33a65ca5c67898ececf532",
+                                "size":  21985,
+                                "revision_binding":  "Packaged January 2018 instructions; content is revision-bound despite defective APPLICATIONNAME 0605."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1601Cv2018\\1601C final Jan 2018 with DPA.pdf",
+                                "sha256":  "c8faaa71015337a73b4ceb96bfb265c539589ab5e10eb27899bb81f87f417397",
+                                "size":  934424,
+                                "revision_binding":  "January 2018 ENCS official form with DPA."
+                            },
+                            {
+                                "asset_id":  "xml-encrypted",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1601Cv2018\\1601C-final-copy-#email-redacted#.xml",
+                                "sha256":  "4501f3514a1883d0137d126101d02b3f0fa94daf7f6e39398b3729c9104c51d3",
+                                "size":  1068,
+                                "revision_binding":  "Revision-matched 101-key dummy final copy; values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-plaintext",
+                                "kind":  "dummy-profile-plaintext-save",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1601Cv2018\\1601C-save-#email-redacted#.xml",
+                                "sha256":  "794892fc33c0fd7882a91327095f396fb1683d5b3c0d4cb1cb63916f981cad4c",
+                                "size":  7428,
+                                "revision_binding":  "Revision-matched 100-key dummy save; values excluded."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  101,
+                   "runtime_field_families":  8,
+                   "fields_total":  109,
+                   "typed_fields":  109,
+                   "validation_rules":  54,
+                   "confirmed_official_bugs":  14,
+                   "calculations":  11,
+                   "negative_fixtures":  39,
+                   "unverified_gaps":  1
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "plaintext_field_audit":  "fixtures/plaintext-field-audit-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "schedule_families":  "fixtures/schedule-family-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer or release metadata changed.",
+                        "No decrypted values or email-bearing filenames emitted.",
+                        "The 101-key final-copy inventory is lossless; the paired plaintext save omits txtAddress2.",
+                        "Eight source-unbounded Schedule I families preserve rows beyond observed indices 0-2.",
+                        "The co-installed legacy 1601C runtime is excluded from the January 2018 binding."
+                    ]
+}

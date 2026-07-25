@@ -1,0 +1,237 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2553-v1999",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2553-validate-001-year-type",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Calendar nor Fiscal is selected."
+                                    },
+                      "expected_message":  "Please select an option for item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-001-year-type"
+                  },
+                  {
+                      "case_id":  "case-02-2553-validate-002-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 2 month has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please select valid month on item 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-002-month"
+                  },
+                  {
+                      "case_id":  "case-03-2553-validate-003-year-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 2 year is blank."
+                                    },
+                      "expected_message":  "Please enter valid year on item 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-003-year-required"
+                  },
+                  {
+                      "case_id":  "case-04-2553-validate-004-year-minimum",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 2 year is less than 1900."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.2. Entry should not be lower than 1900.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-004-year-minimum"
+                  },
+                  {
+                      "case_id":  "case-05-2553-validate-005-quarter",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No Item 3 quarter is selected."
+                                    },
+                      "expected_message":  "Select a Quarter on Item no. 3.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-005-quarter"
+                  },
+                  {
+                      "case_id":  "case-06-2553-validate-006-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-006-tin"
+                  },
+                  {
+                      "case_id":  "case-07-2553-validate-007-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is 0."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-007-rdo"
+                  },
+                  {
+                      "case_id":  "case-08-2553-validate-008-business",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Line of business or occupation is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Line of Business/Occupation on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-008-business"
+                  },
+                  {
+                      "case_id":  "case-09-2553-validate-009-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-009-name"
+                  },
+                  {
+                      "case_id":  "case-10-2553-validate-010-telephone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-010-telephone"
+                  },
+                  {
+                      "case_id":  "case-11-2553-validate-011-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-011-address"
+                  },
+                  {
+                      "case_id":  "case-12-2553-validate-012-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 12.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-012-zip"
+                  },
+                  {
+                      "case_id":  "case-13-2553-validate-013-overpayment",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 23 coerces to a negative JavaScript number and neither disposition is selected."
+                                    },
+                      "expected_message":  "Please indicate refund type for overpayment in Item 23.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-013-overpayment"
+                  },
+                  {
+                      "case_id":  "case-14-2553-validate-014-atc-amount",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "For any Item 14-18 row, ATC is nonblank and taxable amount loosely equals zero."
+                                    },
+                      "expected_message":  "Please enter a valid amount for Item {row}C.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-014-atc-amount"
+                  },
+                  {
+                      "case_id":  "case-15-2553-validate-015-treaty",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 13 Yes is selected and the treaty selector value is 0."
+                                    },
+                      "expected_message":  "Please select a Tax Treaty from the list.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-validate-015-treaty"
+                  },
+                  {
+                      "case_id":  "case-16-2553-input-016-atc-duplicate",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "Selected ATC code and description duplicate another Item 14-18 row."
+                                    },
+                      "expected_message":  "Invalid input. Selected ATC already defined.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-input-016-atc-duplicate"
+                  },
+                  {
+                      "case_id":  "case-17-2553-input-017-fiscal-december",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Fiscal Year is selected while month ended is December."
+                                    },
+                      "expected_message":  "You have entered invalid month for Fiscal Year",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-input-017-fiscal-december"
+                  },
+                  {
+                      "case_id":  "case-18-2553-input-018-calendar-nondecember",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Calendar Year is selected while month ended is not December."
+                                    },
+                      "expected_message":  "You have entered a filing year not ending in December. This filing will be considered as a Fiscal Year Filing.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-input-018-calendar-nondecember"
+                  },
+                  {
+                      "case_id":  "case-19-2553-input-019-fiscal-december-coerce",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Fiscal Year is selected while month ended is December."
+                                    },
+                      "expected_message":  "You have entered a filing year ending in December. This filing will be considered as a Calendar Year Filing.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-input-019-fiscal-december-coerce"
+                  },
+                  {
+                      "case_id":  "case-20-2553-save-020-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-save-020-tin"
+                  },
+                  {
+                      "case_id":  "case-21-2553-save-021-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-save-021-rdo"
+                  },
+                  {
+                      "case_id":  "case-22-2553-save-022-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2553-save-022-name"
+                  },
+                  {
+                      "case_id":  "case-23-2553-defect-023-future-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 2 year is later than the current year."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.2. Entry should not be later than Current Date.",
+                      "expected_behavior":  "The entire future-year branch is commented out, so future years pass.",
+                      "rule_id":  "2553-defect-023-future-year"
+                  }
+              ]
+}

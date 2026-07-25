@@ -1,0 +1,83 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "form_code":  "2551Q",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018 ENCS",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed package used for extraction."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2551Qv2018.hta",
+                                "sha256":  "dc5c19710400e9bd15ceccd1bbeafc5290074b17b2d460af5f8921c6a7f93186",
+                                "size":  230243,
+                                "revision_binding":  "APPLICATIONNAME 2551Qv2018 and January 2018 printed header."
+                            },
+                            {
+                                "asset_id":  "official-installed-help",
+                                "kind":  "runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2551Qv2018.hta",
+                                "sha256":  "8e5010d9b103076aa571612ed31f69b3a61c05d1af786c6256ac76b502f7d470",
+                                "size":  20100,
+                                "revision_binding":  "January 2018 ENCS instructions."
+                            },
+                            {
+                                "asset_id":  "official-pdf-2018",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2551Qv2018\\2551Q Jan 2018 ENCS final rev 3_copy.pdf",
+                                "sha256":  "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24",
+                                "size":  564749,
+                                "revision_binding":  "January 2018 ENCS official form."
+                            },
+                            {
+                                "asset_id":  "atc-catalog-runtime",
+                                "kind":  "official-package-xml",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
+                                "sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+                                "size":  153753,
+                                "revision_binding":  "Catalog loaded by the exact HTA; substring filtering yields 23 entries."
+                            }
+                        ],
+    "counts":  {
+                   "typed_fields":  99,
+                   "confirmed_official_bugs":  13,
+                   "serialization_occurrences":  99,
+                   "atc_records_for_form":  23,
+                   "distinct_serialized_keys":  98,
+                   "negative_fixtures":  37,
+                   "calculations":  8,
+                   "validation_rules":  37,
+                   "unverified_gaps":  1
+               },
+    "artifacts":  {
+                      "audit":  "audit.md",
+                      "validations":  "validations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "gaps":  "gaps.md",
+                      "atc_catalog_fixture":  "fixtures/atc-catalog-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "fields":  "fields.json",
+                      "calculations":  "calculations.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research artifacts only; no renderer, migration, release, or capability changes.",
+                        "No representative XML was supplied for 2551Q; inventory is exhaustively derived from the pinned deterministic saveXML predicate and frmMain source.",
+                        "No real taxpayer data, online submission, or official-artifact mutation was used.",
+                        "The 99 entries model serialized occurrences; txtEmail occurs twice under the same serialized key.",
+                        "Six ATC rows are bounded static controls; there is no unbounded runtime row family."
+                    ]
+}

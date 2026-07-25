@@ -1,0 +1,186 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604c-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#frmMain",
+                                           "official-help#revision"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Two-page January 2018 annual information return with 12 fixed monthly remittance rows and conditional refund fields."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3369-L3393",
+                                           "xml-editable-v1"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only nonblank TIN components, RDO not 000, and agent name, then serializes 119 flat keys."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L2986-L3184"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Source-ordered Validate checks background/refund/row completeness and disables controls on success."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "encrypted-field-audit-v796",
+                                           "official-hta-runtime#saveEncryptedProfile:L2101-L2263"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Encrypted companion has the identical 119-key inventory; final-copy remains coupled to profile/connectivity."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L3967"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L3369-L3393"
+                                            ],
+                            "guard":  "Three narrow checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Print, Edit, Upload, and Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm:L2986-L3184"
+                                            ],
+                            "guard":  "All active ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls but keeps TIN/branch locked."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm:L3284-L3302"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted artifact."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "encrypted-field-audit-v796"
+                                            ],
+                            "guard":  "Profile/confirmation/connectivity permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L3967"
+                                            ],
+                            "guard":  "Connectivity and send succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "January 2018 revision",
+                          "Taxable year 2018 or later",
+                          "Employer/withholding-agent identity",
+                          "Applicable monthly remittance and refund information"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "alphalist-employees",
+                                     "label":  "Alphalist of Employees declared and certified using BIR Form 2316",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L160-L166"
+                                                     ],
+                                     "required_when":  "Always for the annual compensation withholding information return, as applicable.",
+                                     "official_ui_enforcement":  "External attachment presence is not checked.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "alphalist-minimum-wage",
+                                     "label":  "Alphalist of Minimum Wage Earners declared and certified using BIR Form 2316",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L160-L166"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "External attachment presence is not checked.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "authorization-letter",
+                                     "label":  "Authorization letter",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L166-L168"
+                                                     ],
+                                     "required_when":  "Filed by an authorized representative.",
+                                     "official_ui_enforcement":  "Not locally checked.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L107-L109"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "File on or before January 31 of the year following the calendar year in which compensation and other income payments were paid or accrued."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L107-L109"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not quarterly; annual January 31 deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L107-L109"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not quarterly; annual January 31 deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L107-L109"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not quarterly; annual January 31 deadline applies."
+                             }
+                         ]
+}

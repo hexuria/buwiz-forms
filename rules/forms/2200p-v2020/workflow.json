@@ -1,0 +1,160 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200p-v2020",
+    "revision":  "2020-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "revision-help"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2020 petroleum-products excise return with 27 fixed schedule rows and unbounded add-more rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save runs the narrow date/RDO/name/address/contact graph."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateAll",
+                                           "official-hta-runtime#checkPartVFields"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate checks identity, locations, relief/payment, balance and Schedule 1 completeness."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "excluded-legacy-encrypted-field-keys-v796"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The available 330-key artifact belongs to the predecessor and is excluded."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate"
+                                            ],
+                            "guard":  "Validate graph passes."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts/compresses copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile"
+                                            ],
+                            "guard":  "Finalization succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return date",
+                          "RDO/identity",
+                          "Production/removal locations",
+                          "Tax relief",
+                          "Payment manner",
+                          "Sufficient prepayment",
+                          "Schedule rows"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "revision-help#L150-L152"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of petroleum products from the place of production."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "revision-help#L150-L152"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of petroleum products from the place of production."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "revision-help#L150-L152"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of petroleum products from the place of production."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "revision-help#L150-L152"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of petroleum products from the place of production."
+                             }
+                         ]
+}

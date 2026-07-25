@@ -1,0 +1,351 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1707-v2021",
+    "revision":  "2021-04-01",
+    "evaluation_order":  [
+                             "1707-rate-selection",
+                             "1707-schedule2-popup-subtotal",
+                             "1707-schedule2-total",
+                             "1707-schedule3-popup-subtotal",
+                             "1707-schedule3-total",
+                             "1707-installment-period-tax",
+                             "1707-item10-tax-base",
+                             "1707-item11-expenses",
+                             "1707-item12-net-capital-gain",
+                             "1707-item13-tax-due",
+                             "1707-item14-installment-tax",
+                             "1707-item16-tax-payable",
+                             "1707-item17-penalties",
+                             "1707-item18-payable"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1707-rate-selection",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I13AppTaxRate",
+                                             "frm1707:txtPg2P4Sch1I6ApplcRate"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:rdoPg1I9TransDescInstallment"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Installment sets Schedule 1 rate to 15 and clears Item 13 rate; other transaction types set Item 13 rate to 15 and clear Schedule 1 rate.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "transactionType",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#transactionType:L4476-L4497"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-schedule2-popup-subtotal",
+                             "outputs":  [
+                                             "Pg2Pt4S2SubTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2Pt4S2_{N\u003e=1}Col4"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum popup Schedule 2 tax-base amounts.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "Sum_Pg2Pt4S2",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg2Pt4S2:L2980-L2996"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-schedule2-total",
+                             "outputs":  [
+                                             "frm1707:txtPg2P4Sch2TotAmount"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2P4Sch2TaxBaseSellPrice1",
+                                            "frm1707:txtPg2P4Sch2TaxBaseSellPrice2",
+                                            "frm1707:txtPg2P4Sch2TaxBaseSellPrice3",
+                                            "frm1707:txtPg2P4Sch2TaxBaseSellPrice4"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum fixed Schedule 2 rows; row 4 carries the popup subtotal when multiple Others rows exist.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageTwoSched2Comp",
+                             "depends_on":  [
+                                                "1707-schedule2-popup-subtotal"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageTwoSched2Comp:L4387-L4397"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-schedule3-popup-subtotal",
+                             "outputs":  [
+                                             "Pg2Pt4S3SubTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2Pt4S3_{N\u003e=1}Col2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum popup Schedule 3 amounts.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "Sum_Pg2Pt4S3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg2Pt4S3:L3158-L3174"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-schedule3-total",
+                             "outputs":  [
+                                             "frm1707:txtPg2P4Sch3TotAmount"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2P4Sch3Amount1",
+                                            "frm1707:txtPg2P4Sch3Amount2",
+                                            "frm1707:txtPg2P4Sch3Amount3",
+                                            "frm1707:txtPg2P4Sch3Amount4"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum fixed Schedule 3 rows; row 4 carries the popup subtotal when multiple Others rows exist.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageTwoSched3Comp",
+                             "depends_on":  [
+                                                "1707-schedule3-popup-subtotal"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageTwoSched3Comp:L4399-L4409"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-installment-period-tax",
+                             "outputs":  [
+                                             "frm1707:txtPg2P4Sch1I7PeriodTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2P4Sch1I5InstallmentAmt",
+                                            "frm1707:txtPg2P4Sch1I6ApplcRate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Schedule 1 Item 7 = installment amount Ã— applicable rate / 100.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-rate-selection"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4289-L4295"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item10-tax-base",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I10TaxBase"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2P4Sch2TotAmount"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 10 copies Schedule 2 total tax base.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-schedule2-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4297-L4300"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item11-expenses",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I11AllowExpnse"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2P4Sch3TotAmount"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 11 copies Schedule 3 allowable expenses.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-schedule3-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4302-L4305"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item12-net-capital-gain",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I12NetCptalChnged"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg1P2I10TaxBase",
+                                            "frm1707:txtPg1P2I11AllowExpnse"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 12 = Item 10 - Item 11.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-item10-tax-base",
+                                                "1707-item11-expenses"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4307-L4311"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item13-tax-due",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I13TaxDueForTrans"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg1P2I12NetCptalChnged",
+                                            "frm1707:txtPg1P2I13AppTaxRate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For cash, foreclosure, or other transactions, Item 13 = max(0, Item 12 Ã— rate / 100).",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-rate-selection",
+                                                "1707-item12-net-capital-gain"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4312-L4343"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item14-installment-tax",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I14TaxDuePmtPriod"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg2P4Sch1I7PeriodTaxDue"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For installment transactions, Item 14 copies Schedule 1 Item 7; otherwise it is zero.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-installment-period-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4345-L4357"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item16-tax-payable",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I16TaxPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg1P2I13TaxDueForTrans",
+                                            "frm1707:txtPg1P2I14TaxDuePmtPriod",
+                                            "frm1707:txtPg1P2I15TaxPaidInPrevRtrn"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Installment: Item 14 - Item 15; otherwise Item 13 - Item 15.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-item13-tax-due",
+                                                "1707-item14-installment-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4364-L4376"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item17-penalties",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I17TotPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg1P2I17Surcharge",
+                                            "frm1707:txtPg1P2I17Interest",
+                                            "frm1707:txtPg1P2I17Compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 17 = surcharge + interest + compromise.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4378-L4383"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707-item18-payable",
+                             "outputs":  [
+                                             "frm1707:txtPg1P2I18TotAmtPyable"
+                                         ],
+                             "inputs":  [
+                                            "frm1707:txtPg1P2I16TaxPayable",
+                                            "frm1707:txtPg1P2I17TotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If tax payable is negative and penalties are positive, Item 18 equals penalties; otherwise Item 18 = tax payable + penalties.",
+                             "rounding":  "Source applies toFixed(2) and formatCurrency at each displayed output.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "1707-item16-tax-payable",
+                                                "1707-item17-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4385-L4398"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "When tax payable is negative and penalties are zero, the source exposes a negative total amount payable; represent the credit separately and payable as zero.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

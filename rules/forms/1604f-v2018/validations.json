@@ -1,0 +1,2344 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604f-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate calls checkYear first, but that helper only alerts and does not stop. Later branches return on the first active failure. Schedule order is 1 then 2 then 3, quarter 1 through 4, with date/TRA/tax/date-format checks. Save checks only TIN, RDO, and name.",
+    "rules":  [
+                  {
+                      "rule_id":  "1604f-save-001",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1604f:tinA",
+                                     "frm1604f:tinB",
+                                     "frm1604f:tinC",
+                                     "frm1604f:branchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4711-L4716"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked.",
+                      "recommended_app_behavior":  "Permit lossless drafts, but require exact shape and checksum before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-save-002",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "RDO code equals literal 000.",
+                      "fields":  [
+                                     "frm1604f:rdoCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4717-L4720"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-save-003",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Withholding agent name is blank.",
+                      "fields":  [
+                                     "frm1604f:registeredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4721-L4725"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message cites Item 7, while the printed name is Item 6.",
+                      "recommended_app_behavior":  "Report Item 6.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-save-004",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Any other field, including taxable year, is invalid or incomplete.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L4711-L4727"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save omits year, address, ZIP, contact, category, tax relief, schedule, and format checks.",
+                      "recommended_app_behavior":  "Save drafts losslessly and report completeness separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-001-year-alert-only",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Year is 2017 or earlier, or later than the current full year.",
+                      "fields":  [
+                                     "frm1604f:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid data entry on item no. 1. Entry should be current or prior year but not be earlier than the effectivity date of January 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3789-L3794",
+                                          "official-hta-runtime#checkYear:L4406-L4413"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "checkYear alerts but returns no failure signal; Validate continues after dismissal.",
+                      "recommended_app_behavior":  "Return a structured blocking error for years outside 2018 through the current year.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-002-year-blank",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Taxable year is blank after the non-blocking checkYear alert.",
+                      "fields":  [
+                                     "frm1604f:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3795-L3799"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Blank year produces two consecutive alerts: effectivity first, then blank.",
+                      "recommended_app_behavior":  "Emit one precise required-field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-003-tax-relief-detail",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Item 11 Yes is selected and Item 11A relief detail is blank.",
+                      "fields":  [
+                                     "frm1604f:taxRelief_1",
+                                     "frm1604f:availedTaxRelief"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please specify the Special Treaty or International Law the payee is availing in item 11A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3801-L3805"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-004-year-below1900",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Taxable year coerces below 1900.",
+                      "fields":  [
+                                     "frm1604f:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3812-L3816"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The earlier effectivity alert did not stop; this second alert finally stops only values below 1900.",
+                      "recommended_app_behavior":  "Use the single 2018-through-current-year boundary.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-005-tin",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1604f:tinA",
+                                     "frm1604f:tinB",
+                                     "frm1604f:tinC",
+                                     "frm1604f:branchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3818-L3822"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "No segment length, digit, or checksum check follows.",
+                      "recommended_app_behavior":  "Require exact shape and checksum before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-006-rdo",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "RDO selectedIndex is zero.",
+                      "fields":  [
+                                     "frm1604f:rdoCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3823-L3828"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-007-name",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Withholding agent name is blank.",
+                      "fields":  [
+                                     "frm1604f:registeredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer\u0027s Name on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3834-L3838"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message cites Item 7; the printed name is Item 6.",
+                      "recommended_app_behavior":  "Report Item 6.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-008-phone",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1604f:telephoneNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Telephone Number on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3839-L3843"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message cites Item 8; contact number is Item 9.",
+                      "recommended_app_behavior":  "Report Item 9.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-009-address",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1604f:RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3844-L3848"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message cites Item 9; registered address is Item 7.",
+                      "recommended_app_behavior":  "Report Item 7.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-010-zip",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm1604f:zipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3849-L3853"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message cites Item 10; ZIP code is Item 7A.",
+                      "recommended_app_behavior":  "Report Item 7A.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-011-category",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Neither private nor government category is selected.",
+                      "fields":  [
+                                     "frm1604f:categoryAgent_1",
+                                     "frm1604f:categoryAgent_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3877-L3881"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row1-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Schedule 1 1st Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date1",
+                                     "frm1604f:txtSched1TRA1",
+                                     "frm1604f:txtSched1TaxWheld1",
+                                     "frm1604f:txtSched1Pen1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row1-tra-placeholder",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Schedule 1 1st Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1TRA1",
+                                     "frm1604f:txtSched1TaxWheld1",
+                                     "frm1604f:txtSched1Pen1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3891-L3941"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "recommended_app_behavior":  "Report the actual 1st Quarter.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row1-tra-specific",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Schedule 1 1st Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date1",
+                                     "frm1604f:txtSched1TRA1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3943-L3974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row1-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Schedule 1 1st Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date1",
+                                     "frm1604f:txtSched1TaxWheld1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row1-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Schedule 1 1st Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row2-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Schedule 1 2nd Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date2",
+                                     "frm1604f:txtSched1TRA2",
+                                     "frm1604f:txtSched1TaxWheld2",
+                                     "frm1604f:txtSched1Pen2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row2-tra-placeholder",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Schedule 1 2nd Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1TRA2",
+                                     "frm1604f:txtSched1TaxWheld2",
+                                     "frm1604f:txtSched1Pen2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3891-L3941"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "recommended_app_behavior":  "Report the actual 2nd Quarter.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row2-tra-specific",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Schedule 1 2nd Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date2",
+                                     "frm1604f:txtSched1TRA2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3943-L3974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row2-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Schedule 1 2nd Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date2",
+                                     "frm1604f:txtSched1TaxWheld2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row2-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Schedule 1 2nd Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row3-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Schedule 1 3rd Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date3",
+                                     "frm1604f:txtSched1TRA3",
+                                     "frm1604f:txtSched1TaxWheld3",
+                                     "frm1604f:txtSched1Pen3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row3-tra-placeholder",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Schedule 1 3rd Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1TRA3",
+                                     "frm1604f:txtSched1TaxWheld3",
+                                     "frm1604f:txtSched1Pen3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3891-L3941"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "recommended_app_behavior":  "Report the actual 3rd Quarter.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row3-tra-specific",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Schedule 1 3rd Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date3",
+                                     "frm1604f:txtSched1TRA3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3943-L3974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row3-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Schedule 1 3rd Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date3",
+                                     "frm1604f:txtSched1TaxWheld3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row3-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Schedule 1 3rd Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row4-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Schedule 1 4th Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date4",
+                                     "frm1604f:txtSched1TRA4",
+                                     "frm1604f:txtSched1TaxWheld4",
+                                     "frm1604f:txtSched1Pen4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row4-tra-placeholder",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Schedule 1 4th Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1TRA4",
+                                     "frm1604f:txtSched1TaxWheld4",
+                                     "frm1604f:txtSched1Pen4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3891-L3941"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "recommended_app_behavior":  "Report the actual 4th Quarter.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row4-tra-specific",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Schedule 1 4th Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date4",
+                                     "frm1604f:txtSched1TRA4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3943-L3974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row4-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Schedule 1 4th Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date4",
+                                     "frm1604f:txtSched1TaxWheld4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched1-row4-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "Schedule 1 4th Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched1Date4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3888-L4019",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row1-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Schedule 2 1st Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date1",
+                                     "frm1604f:txtSched2TRA1",
+                                     "frm1604f:txtSched2TaxWheld1",
+                                     "frm1604f:txtSched2Pen1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row1-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Schedule 2 1st Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date1",
+                                     "frm1604f:txtSched2TRA1",
+                                     "frm1604f:txtSched2TaxWheld1",
+                                     "frm1604f:txtSched2Pen1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row1-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "Schedule 2 1st Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date1",
+                                     "frm1604f:txtSched2TaxWheld1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row1-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "Schedule 2 1st Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row2-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  36,
+                      "condition":  "Schedule 2 2nd Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date2",
+                                     "frm1604f:txtSched2TRA2",
+                                     "frm1604f:txtSched2TaxWheld2",
+                                     "frm1604f:txtSched2Pen2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row2-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  37,
+                      "condition":  "Schedule 2 2nd Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date2",
+                                     "frm1604f:txtSched2TRA2",
+                                     "frm1604f:txtSched2TaxWheld2",
+                                     "frm1604f:txtSched2Pen2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row2-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  38,
+                      "condition":  "Schedule 2 2nd Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date2",
+                                     "frm1604f:txtSched2TaxWheld2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row2-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  39,
+                      "condition":  "Schedule 2 2nd Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row3-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  40,
+                      "condition":  "Schedule 2 3rd Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date3",
+                                     "frm1604f:txtSched2TRA3",
+                                     "frm1604f:txtSched2TaxWheld3",
+                                     "frm1604f:txtSched2Pen3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row3-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  41,
+                      "condition":  "Schedule 2 3rd Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date3",
+                                     "frm1604f:txtSched2TRA3",
+                                     "frm1604f:txtSched2TaxWheld3",
+                                     "frm1604f:txtSched2Pen3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row3-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  42,
+                      "condition":  "Schedule 2 3rd Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date3",
+                                     "frm1604f:txtSched2TaxWheld3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row3-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  43,
+                      "condition":  "Schedule 2 3rd Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row4-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  44,
+                      "condition":  "Schedule 2 4th Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date4",
+                                     "frm1604f:txtSched2TRA4",
+                                     "frm1604f:txtSched2TaxWheld4",
+                                     "frm1604f:txtSched2Pen4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row4-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  45,
+                      "condition":  "Schedule 2 4th Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date4",
+                                     "frm1604f:txtSched2TRA4",
+                                     "frm1604f:txtSched2TaxWheld4",
+                                     "frm1604f:txtSched2Pen4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row4-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  46,
+                      "condition":  "Schedule 2 4th Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date4",
+                                     "frm1604f:txtSched2TaxWheld4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched2-row4-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  47,
+                      "condition":  "Schedule 2 4th Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched2Date4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4020-L4130",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row1-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  48,
+                      "condition":  "Schedule 3 1st Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date1",
+                                     "frm1604f:txtSched3TRA1",
+                                     "frm1604f:txtSched3TaxWheld1",
+                                     "frm1604f:txtSched3Pen1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row1-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  49,
+                      "condition":  "Schedule 3 1st Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date1",
+                                     "frm1604f:txtSched3TRA1",
+                                     "frm1604f:txtSched3TaxWheld1",
+                                     "frm1604f:txtSched3Pen1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row1-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  50,
+                      "condition":  "Schedule 3 1st Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date1",
+                                     "frm1604f:txtSched3TaxWheld1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row1-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  51,
+                      "condition":  "Schedule 3 1st Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row2-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  52,
+                      "condition":  "Schedule 3 2nd Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date2",
+                                     "frm1604f:txtSched3TRA2",
+                                     "frm1604f:txtSched3TaxWheld2",
+                                     "frm1604f:txtSched3Pen2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row2-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  53,
+                      "condition":  "Schedule 3 2nd Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date2",
+                                     "frm1604f:txtSched3TRA2",
+                                     "frm1604f:txtSched3TaxWheld2",
+                                     "frm1604f:txtSched3Pen2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row2-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  54,
+                      "condition":  "Schedule 3 2nd Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date2",
+                                     "frm1604f:txtSched3TaxWheld2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row2-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  55,
+                      "condition":  "Schedule 3 2nd Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row3-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  56,
+                      "condition":  "Schedule 3 3rd Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date3",
+                                     "frm1604f:txtSched3TRA3",
+                                     "frm1604f:txtSched3TaxWheld3",
+                                     "frm1604f:txtSched3Pen3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row3-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  57,
+                      "condition":  "Schedule 3 3rd Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date3",
+                                     "frm1604f:txtSched3TRA3",
+                                     "frm1604f:txtSched3TaxWheld3",
+                                     "frm1604f:txtSched3Pen3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row3-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  58,
+                      "condition":  "Schedule 3 3rd Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date3",
+                                     "frm1604f:txtSched3TaxWheld3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row3-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  59,
+                      "condition":  "Schedule 3 3rd Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row4-date",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  60,
+                      "condition":  "Schedule 3 4th Quarter is started but Date of Remittance is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date4",
+                                     "frm1604f:txtSched3TRA4",
+                                     "frm1604f:txtSched3TaxWheld4",
+                                     "frm1604f:txtSched3Pen4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row4-tra",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  61,
+                      "condition":  "Schedule 3 4th Quarter is started but TRA/eROR/eAR is blank.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date4",
+                                     "frm1604f:txtSched3TRA4",
+                                     "frm1604f:txtSched3TaxWheld4",
+                                     "frm1604f:txtSched3Pen4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row4-tax",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  62,
+                      "condition":  "Schedule 3 4th Quarter has a date and Taxes Withheld compares equal to 0.00.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date4",
+                                     "frm1604f:txtSched3TaxWheld4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-sched3-row4-date-format",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  63,
+                      "condition":  "Schedule 3 4th Quarter Date of Remittance fails validateMonthDayYearDate.",
+                      "fields":  [
+                                     "frm1604f:txtSched3Date4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4131-L4241",
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed dates reuse the missing-date message.",
+                      "recommended_app_behavior":  "Report the expected MM/DD/YYYY shape and invalid component.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-validate-060-success",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  64,
+                      "condition":  "All active checks return no failure.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4289-L4300"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-schedule-empty-row",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "All identifying and amount fields in a quarter row are blank or zero.",
+                      "fields":  [
+                                     "schedule-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3883-L4287"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "A wholly empty row passes.",
+                      "recommended_app_behavior":  "Keep unused schedule rows optional.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-schedule-penalty-optional",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "A populated row has Penalties equal to 0.00.",
+                      "fields":  [
+                                     "schedule-penalty-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3883-L4287"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "No rule requires a positive penalty; it is included only when present.",
+                      "recommended_app_behavior":  "Keep penalties optional and typed as nonnegative decimal.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-date-month-zero",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A date uses month 00 with a two-digit valid day and four-digit year.",
+                      "fields":  [
+                                     "schedule-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateMonthDayYearDate:L4340-L4403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The lower-bound comparison is month \u003c 0, so 00 bypasses all month-day branches and is accepted.",
+                      "recommended_app_behavior":  "Parse strictly and require month 01 through 12.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-date-numeric-check",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A date component is malformed but the first truthy component is numeric.",
+                      "fields":  [
+                                     "schedule-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateMonthDayYearDate:L4352-L4373"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "isNaN(result[0] || result[1] || result[2]) tests only the first truthy component; later coercive comparisons catch some but not all malformed forms.",
+                      "recommended_app_behavior":  "Parse each component independently without coercion.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-year-change-clear",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A valid changed year is confirmed.",
+                      "fields":  [
+                                     "frm1604f:txtYear",
+                                     "all-schedule-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Changing the return period will clear all entered computed data. Do you want to continue?",
+                      "source_refs":  [
+                                          "official-hta-runtime#yearMessage:L4415-L4430",
+                                          "official-hta-runtime#clearPartII:L4432-L4520"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Confirm clears all three schedules; cancel does not restore the previous year.",
+                      "recommended_app_behavior":  "Use a reversible update and restore the prior period on cancel.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-tax-relief-toggle",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 11 is switched to No.",
+                      "fields":  [
+                                     "frm1604f:taxRelief_2",
+                                     "frm1604f:availedTaxRelief"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#TaxReliefEnable:L3599-L3610"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Item 11A is disabled and cleared.",
+                      "recommended_app_behavior":  "Retain explicit conditional clearing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-tax-relief-answer-omitted",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Neither Item 11 Yes nor No is selected.",
+                      "fields":  [
+                                     "frm1604f:taxRelief_1",
+                                     "frm1604f:taxRelief_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3789-L4300",
+                                          "official-help#item11:L142-L146"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate never requires an Item 11 choice; the static UI defaults No.",
+                      "recommended_app_behavior":  "Require an explicit typed answer when no trusted default is established.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-top-agent-omitted",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Private category is selected but neither Item 8A option is selected.",
+                      "fields":  [
+                                     "frm1604f:categoryAgent_1",
+                                     "frm1604f:privateAgent_1",
+                                     "frm1604f:privateAgent_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3789-L4300",
+                                          "official-help#item8a:L134-L136"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate ignores Item 8A; the static UI defaults No.",
+                      "recommended_app_behavior":  "Require Item 8A when private category makes it applicable.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-email-unvalidated",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "A nonblank malformed taxpayer email is present.",
+                      "fields":  [
+                                     "frm1604f:email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3789-L4300",
+                                          "official-help#item10:L139-L141"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Email is optional and never format-checked.",
+                      "recommended_app_behavior":  "Allow blank; validate format when nonblank.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-line-business-commented",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Line of business is blank.",
+                      "fields":  [
+                                     "frm1604f:description"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Line of Business on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3829-L3833"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The entire branch is commented out and the field is not serialized in the reviewed save.",
+                      "recommended_app_behavior":  "Do not present it as an active rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-refund-fields-commented",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Legacy refund fields are inspected.",
+                      "fields":  [
+                                     "frm1604f:txtRefMonth",
+                                     "frm1604f:txtRefDate",
+                                     "frm1604f:txtRefYear",
+                                     "frm1604f:select13"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L3854-L3876",
+                                          "official-hta-runtime#changeRefund:L3574-L3597"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The validation and enable/disable code are commented out; these fields are absent from the reviewed save.",
+                      "recommended_app_behavior":  "Do not model them as active revision behavior.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-unreachable-schedule-fallback",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Schedule loop reaches an x value other than 1, 2, or 3.",
+                      "fields":  [
+                                     "schedule-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the Date of Remittance for \u003cmonth\u003e. You may refer to your 1603-Q for the said quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L4242-L4280"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The outer loop only uses x=1..3, so the final else and its literal placeholder messages are unreachable.",
+                      "recommended_app_behavior":  "Exclude unreachable fallback text from user-facing validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-final-001",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested after validation.",
+                      "fields":  [
+                                     "txtFinalFlag",
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveEncryptedProfile:L2760-L2850",
+                                          "encrypted-field-audit-v796"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The reviewed encrypted artifact decrypts to exactly the same 105-key inventory as the plaintext save.",
+                      "recommended_app_behavior":  "Preserve all 105 fields losslessly and keep finalization distinct from transport.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604f-submit-001",
+                      "form_id":  "1604f-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Online transport is invoked.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveXMLsubmit:L3269-L3452",
+                                          "official-hta-runtime#sendEmail:L5332-L5446"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Transport exists but was not exercised.",
+                      "recommended_app_behavior":  "Keep local validation and finalization independently testable.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

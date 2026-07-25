@@ -1,4 +1,8 @@
-//! Form data model and validation engine.
+//! Legacy schema-backed form-data prototype.
+//!
+//! Production typed forms live under `crate::forms`. The reviewed rule runtime
+//! lives in `bir-rules`; this compatibility module must not become a second
+//! validation implementation.
 
 use crate::schema::{FieldType, FormSchema};
 use std::collections::BTreeMap;

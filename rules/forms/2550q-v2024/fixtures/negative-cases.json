@@ -1,0 +1,387 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2550q-validate-year-type",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Calendar nor Fiscal year is selected."
+                                    },
+                      "expected_message":  "Please choose a year type on Item 1.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-year-type"
+                  },
+                  {
+                      "case_id":  "case-02-2550q-validate-quarter",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No quarter is selected."
+                                    },
+                      "expected_message":  "Item 3 is a required field.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-quarter"
+                  },
+                  {
+                      "case_id":  "case-03-2550q-validate-future-period",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return-period date is later than the system date outside the hard-coded exception."
+                                    },
+                      "expected_message":  "Should not accept advance filing.",
+                      "expected_behavior":  "Future dates are rejected except a stale hard-coded year-ended-2025 exception for November/December 2024 and January 2025.",
+                      "rule_id":  "2550q-validate-future-period"
+                  },
+                  {
+                      "case_id":  "case-04-2550q-validate-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 7.",
+                      "expected_behavior":  "Only nonblank segments are checked; no digit shape or TIN checksum is enforced.",
+                      "rule_id":  "2550q-validate-tin"
+                  },
+                  {
+                      "case_id":  "case-05-2550q-validate-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 8.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-rdo"
+                  },
+                  {
+                      "case_id":  "case-06-2550q-validate-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 9.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-name"
+                  },
+                  {
+                      "case_id":  "case-07-2550q-validate-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Registered Address on Item 10.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-address"
+                  },
+                  {
+                      "case_id":  "case-08-2550q-validate-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s ZIP Code on Item 10A.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-zip"
+                  },
+                  {
+                      "case_id":  "case-09-2550q-validate-contact",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Contact Number on Item 11.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-contact"
+                  },
+                  {
+                      "case_id":  "case-10-2550q-validate-email",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email address is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Email Address on Item 12.",
+                      "expected_behavior":  "Only nonblank content is checked; syntax is not validated.",
+                      "rule_id":  "2550q-validate-email"
+                  },
+                  {
+                      "case_id":  "case-11-2550q-validate-classification",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No taxpayer classification is selected."
+                                    },
+                      "expected_message":  "Please choose taxpayer classification on Item 13.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-classification"
+                  },
+                  {
+                      "case_id":  "case-12-2550q-validate-treaty",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Treaty Yes is selected and Item 14A is blank."
+                                    },
+                      "expected_message":  "Specify cannot be empty field on item 14A.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-treaty"
+                  },
+                  {
+                      "case_id":  "case-13-2550q-validate-19-nan",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 19 amount parses as NaN."
+                                    },
+                      "expected_message":  "Other Credits (Item 19) is a required field",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-19-nan"
+                  },
+                  {
+                      "case_id":  "case-14-2550q-validate-19-description",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 19 amount is positive and description is blank."
+                                    },
+                      "expected_message":  "Item 19 specify is a required field.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-19-description"
+                  },
+                  {
+                      "case_id":  "case-15-2550q-validate-19-value",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 19 description is nonblank and amount is zero."
+                                    },
+                      "expected_message":  "Item 19 value is required when specify is provided.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-19-value"
+                  },
+                  {
+                      "case_id":  "case-16-2550q-validate-42-nan",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 42 amount parses as NaN."
+                                    },
+                      "expected_message":  " (Item 42) is a required field",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-42-nan"
+                  },
+                  {
+                      "case_id":  "case-17-2550q-validate-42-description",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 42 amount is positive and description is blank."
+                                    },
+                      "expected_message":  "Specify field (Item 42) is required ",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-42-description"
+                  },
+                  {
+                      "case_id":  "case-18-2550q-validate-42-value",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 42 description is nonblank and amount is zero."
+                                    },
+                      "expected_message":  " (Item 42) value is required when Specify field is provided.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-42-value"
+                  },
+                  {
+                      "case_id":  "case-19-2550q-validate-47-nan",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 47 amount parses as NaN."
+                                    },
+                      "expected_message":  " (Item 47) is a required field.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-47-nan"
+                  },
+                  {
+                      "case_id":  "case-20-2550q-validate-47-description",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 47 amount is positive and description is blank."
+                                    },
+                      "expected_message":  "Specify field (Item 47) is required field.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-47-description"
+                  },
+                  {
+                      "case_id":  "case-21-2550q-validate-47-value",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 47 description is nonblank and amount is zero."
+                                    },
+                      "expected_message":  " (Item 47) value is required when Specify field is provided.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-47-value"
+                  },
+                  {
+                      "case_id":  "case-22-2550q-validate-56-nan",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Nonblank Item 56 amount parses as NaN."
+                                    },
+                      "expected_message":  " (Item 56) must be a valid number.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-56-nan"
+                  },
+                  {
+                      "case_id":  "case-23-2550q-validate-56-description",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 56 amount is positive and description is blank."
+                                    },
+                      "expected_message":  "Specify field (Item 56) is required field.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-56-description"
+                  },
+                  {
+                      "case_id":  "case-24-2550q-validate-56-value",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 56 description is nonblank and amount is blank or zero."
+                                    },
+                      "expected_message":  "(Item 56) value is required when Specify field is provided.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-validate-56-value"
+                  },
+                  {
+                      "case_id":  "case-25-2550q-validate-19-unreachable",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 19 description is blank and amount exceeds 1000."
+                                    },
+                      "expected_message":  "",
+                      "expected_behavior":  "The branch is unreachable because the earlier blank-description/positive-amount branch already returns; it also has no alert.",
+                      "rule_id":  "2550q-validate-19-unreachable"
+                  },
+                  {
+                      "case_id":  "case-26-2550q-save-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 7.",
+                      "expected_behavior":  "Save checks only nonblank TIN pieces.",
+                      "rule_id":  "2550q-save-tin"
+                  },
+                  {
+                      "case_id":  "case-27-2550q-save-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code equals 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 8.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-save-rdo"
+                  },
+                  {
+                      "case_id":  "case-28-2550q-save-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 9.",
+                      "expected_behavior":  "The VAT-return save alert incorrectly labels the taxpayer a withholding agent.",
+                      "rule_id":  "2550q-save-name"
+                  },
+                  {
+                      "case_id":  "case-29-2550q-s1-empty",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any materialized Schedule 1 row field is blank."
+                                    },
+                      "expected_message":  "Empty fields are not allowed ",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-s1-empty"
+                  },
+                  {
+                      "case_id":  "case-30-2550q-s1-date-empty",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 purchase date is blank."
+                                    },
+                      "expected_message":  "Date Purchase cannot be an empty field.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-s1-date-empty"
+                  },
+                  {
+                      "case_id":  "case-31-2550q-s1-date-cutoff",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 purchase date is after December 31, 2021."
+                                    },
+                      "expected_message":  "Only dates on or before December 31, 2021 are allowed.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-s1-date-cutoff"
+                  },
+                  {
+                      "case_id":  "case-32-2550q-s1-source",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 source code is neither I nor D."
+                                    },
+                      "expected_message":  "Invalid input\nAccept only I and D ",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-s1-source"
+                  },
+                  {
+                      "case_id":  "case-33-2550q-s1-life",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 estimated life exceeds 60."
+                                    },
+                      "expected_message":  "Invalid Input it should be 1 to 60",
+                      "expected_behavior":  "The message says 1 to 60 but the source does not explicitly reject zero.",
+                      "rule_id":  "2550q-s1-life"
+                  },
+                  {
+                      "case_id":  "case-34-2550q-s3-empty",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any materialized Schedule 3 row field is blank."
+                                    },
+                      "expected_message":  "Empty fields are not allowed ",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-s3-empty"
+                  },
+                  {
+                      "case_id":  "case-35-2550q-s3-year",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return-period year is 2000 or earlier."
+                                    },
+                      "expected_message":  "Only values 2000 and beyond are allowed.",
+                      "expected_behavior":  "The condition year \u003c= 2000 \u0026\u0026 year \u003c= 2020 reduces to year \u003c= 2000, contradicting the message at the boundary.",
+                      "rule_id":  "2550q-s3-year"
+                  },
+                  {
+                      "case_id":  "case-36-2550q-s4-empty",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any materialized Schedule 4 row field is blank."
+                                    },
+                      "expected_message":  "Empty fields are not allowed ",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-s4-empty"
+                  },
+                  {
+                      "case_id":  "case-37-2550q-other-row-add",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "An Item 19/42/47/56 additional row has a blank description or nonpositive amount."
+                                    },
+                      "expected_message":  "Empty fields are not allowed",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-other-row-add"
+                  },
+                  {
+                      "case_id":  "case-38-2550q-other-row-close",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Save-and-close finds an incomplete Item 19/42/47/56 additional row."
+                                    },
+                      "expected_message":  "Please fill up all required fields and ensure amounts are greater than zero.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2550q-other-row-close"
+                  }
+              ]
+}

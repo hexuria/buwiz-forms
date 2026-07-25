@@ -1,0 +1,373 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702ex-v2018c",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1702ex-popup-s1-17",
+                             "1702ex-popup-s2-4",
+                             "1702ex-popup-s3-3",
+                             "1702ex-popup-s3-6",
+                             "1702ex-popup-s3-8",
+                             "1702ex-net-sales",
+                             "1702ex-total-gross",
+                             "1702ex-itemized-total",
+                             "1702ex-osd",
+                             "1702ex-net-taxable",
+                             "1702ex-tax-due",
+                             "1702ex-overpayment",
+                             "1702ex-relief-total",
+                             "1702ex-page1-copies",
+                             "1702ex-total-payable"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1702ex-popup-s1-17",
+                             "outputs":  [
+                                             "frm1702EX:txtPg3Pt6S1I17Others"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg3Pt6S1I17_{N\u003e=1}Col2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Schedule 1 Item 17 popup amounts.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "Sum_Pg3Pt6S1I17",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg3Pt6S1I17:L3561-L3579"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-popup-s2-4",
+                             "outputs":  [
+                                             "frm1702EX:txtPg3Pt6S2I4SpecialAllowable"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg3Pt6S2I4_{N\u003e=1}Col3"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Schedule 2 Item 4 popup amounts.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "Sum_Pg3Pt6S2I4",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg3Pt6S2I4:L3727-L3744"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-popup-s3-3",
+                             "outputs":  [
+                                             "frm1702EX:txtPg3Pt6S3I3OtherIncome"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg3Pt6S3I3_{N\u003e=1}Col2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Schedule 3 Item 3 popup amounts.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "Sum_Pg3Pt6S3I3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg3Pt6S3I3:L3860-L3878"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-popup-s3-6",
+                             "outputs":  [
+                                             "frm1702EX:txtPg3Pt6S3I6NonDeductible"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg3Pt6S3I6_{N\u003e=1}Col2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Schedule 3 Item 6 popup amounts.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "Sum_Pg3Pt6S3I6",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg3Pt6S3I6:L3993-L4012"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-popup-s3-8",
+                             "outputs":  [
+                                             "frm1702EX:txtPg3Pt6S3I8SpecialDeductions"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg3Pt6S3I8_{N\u003e=1}Col2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Schedule 3 Item 8 popup amounts.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "Sum_Pg3Pt6S3I8",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg3Pt6S3I8:L4127-L4141"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-net-sales",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt4I30NetSalesReceiptsRevFees"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt4I28SalesReceiptsRevFees",
+                                            "frm1702EX:txtPg2Pt4I29SalesRetAllowanceDisc"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 30 = Item 28 - Item 29.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "FormatAmount",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#FormatAmount:L5528-L5535"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-total-gross",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt4I34TotalGross"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt4I30NetSalesReceiptsRevFees",
+                                            "frm1702EX:txtPg2Pt4I31CostSales",
+                                            "frm1702EX:txtPg2Pt4I32GrossIncome",
+                                            "frm1702EX:txtPg2Pt4I33AddOther"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 34 aggregates net sales less cost plus other gross income components.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "FormatAmount",
+                             "depends_on":  [
+                                                "1702ex-net-sales"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#FormatAmount:L5528-L5628"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-itemized-total",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt4I37TotalItemized"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg3Pt6S1I18TotOrdinaryAllowableItemDeduc",
+                                            "frm1702EX:txtPg3Pt6S2I5TotSpecialAllowedItemDeduc"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Items 35/36 copy schedule totals; Item 37 is their sum.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "amountComputation",
+                             "depends_on":  [
+                                                "1702ex-popup-s1-17",
+                                                "1702ex-popup-s2-4"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#amountComputation:L5630-L5649"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-osd",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt4I38OptionalStandardDeduc"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt4I34TotalGross"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "When OSD is selected, Item 38 = Item 34 Ã— 40%.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "amountComputation",
+                             "depends_on":  [
+                                                "1702ex-total-gross"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#amountComputation:L5651-L5661"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-net-taxable",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt4I39NetTaxable"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt4I34TotalGross",
+                                            "frm1702EX:txtPg2Pt4I37TotalItemized",
+                                            "frm1702EX:txtPg2Pt4I38OptionalStandardDeduc"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Net taxable = total gross less the selected deduction method.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "amountComputation",
+                             "depends_on":  [
+                                                "1702ex-itemized-total",
+                                                "1702ex-osd"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#amountComputation:L5639-L5666"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-tax-due",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt4I41TaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt4I39NetTaxable",
+                                            "frm1702EX:txtPg2Pt4I40TaxRate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 41 = Item 39 Ã— Item 40 / 100.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "amountComputation",
+                             "depends_on":  [
+                                                "1702ex-net-taxable"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#amountComputation:L5668-L5672"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-overpayment",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt4I51TotalOverpayment"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt4I41TaxDue",
+                                            "frm1702EX:txtPg2Pt4I50TotalTaxCrPmt"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 51 = Item 41 - Item 50.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "amountComputation",
+                             "depends_on":  [
+                                                "1702ex-tax-due"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#amountComputation:L5673-L5677"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-relief-total",
+                             "outputs":  [
+                                             "frm1702EX:txtPg2Pt5I54TotalTaxReliefAvailment"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt5I52RegularIncomeOtherwiseDue",
+                                            "frm1702EX:txtPg2Pt5I53SpecialAllowableItemizedDeduc"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 54 = Item 52 + Item 53.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "compTaxReliefAvail",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compTaxReliefAvail:L5725-L5736"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-page1-copies",
+                             "outputs":  [
+                                             "frm1702EX:txtPg1Pt2I18TaxDue",
+                                             "frm1702EX:txtPg1Pt2I19TotalTaxCrPmt",
+                                             "frm1702EX:txtPg1Pt2I20TotalOverpmt"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg2Pt4I41TaxDue",
+                                            "frm1702EX:txtPg2Pt4I50TotalTaxCrPmt",
+                                            "frm1702EX:txtPg2Pt4I51TotalOverpayment"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Copy Items 41, 50, and 51 to Page 1 Items 18, 19, and 20.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "amountComputation",
+                             "depends_on":  [
+                                                "1702ex-tax-due",
+                                                "1702ex-overpayment"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#amountComputation:L5681-L5692"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702ex-total-payable",
+                             "outputs":  [
+                                             "frm1702EX:txtPg1Pt2I22TotalAmtPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1702EX:txtPg1Pt2I20TotalOverpmt",
+                                            "frm1702EX:txtPg1Pt2I21PenaltyCompromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item 20 is nonnegative, add penalties; if negative with positive penalties, payable is penalties; otherwise payable retains the negative amount.",
+                             "rounding":  "Most monetary results use toFixed(0) before formatCurrency; popup totals use source-specific formatting.",
+                             "trigger":  "amountComputation",
+                             "depends_on":  [
+                                                "1702ex-page1-copies"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#amountComputation:L5694-L5708"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Do not expose a negative amount payable; represent overpayment separately and payable as applicable positive penalties.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

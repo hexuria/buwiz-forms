@@ -1,0 +1,437 @@
+{
+    "source_sha256":  "e44331e99dd8edb8d6fd01529f82e5d6612a9640307c7421b8be397ac87ebe33",
+    "function_count":  19,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  2231,
+                          "end_line":  2411,
+                          "body_sha256":  "54fbd54035eb196b1edcd41e16ea2b08d9f437f4fbf81ac21ec45537d626ae43",
+                          "alerts":  [
+                                         "\"\" +fileName",
+                                         "\"File \u0027\" + xmlFileName + \"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\u0027Exception : \u0027+e.description",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:btnNextPage",
+                                              "frm2000OT:btnPrevPage",
+                                              "frm2000OT:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  2412,
+                          "end_line":  2757,
+                          "body_sha256":  "2830cc91cee01c02bb36ace32281296c414cf06631ba8dcbfad1c965e57ae330",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:AmendedRtn_1",
+                                              "frm2000OT:AmendedRtn_2",
+                                              "frm2000OT:txtAddress",
+                                              "frm2000OT:txtAddress2",
+                                              "frm2000OT:txtBranchCode",
+                                              "frm2000OT:txtCurrentPage",
+                                              "frm2000OT:txtLineBus",
+                                              "frm2000OT:txtOtherName",
+                                              "frm2000OT:txtOtherName2",
+                                              "frm2000OT:txtRDOCode",
+                                              "frm2000OT:txtTax19",
+                                              "frm2000OT:txtTax20A",
+                                              "frm2000OT:txtTax20B",
+                                              "frm2000OT:txtTax20C",
+                                              "frm2000OT:txtTax20D",
+                                              "frm2000OT:txtTax21",
+                                              "frm2000OT:txtTaxpayerName",
+                                              "frm2000OT:txtTelNum",
+                                              "frm2000OT:txtTIN1",
+                                              "frm2000OT:txtTIN2",
+                                              "frm2000OT:txtTIN3",
+                                              "frm2000OT:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2758,
+                          "end_line":  3007,
+                          "body_sha256":  "93634194982dc19352de346e777835368715c873ac517a96d3f7fad7555e09ba",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:AmendedRtn_1",
+                                              "frm2000OT:AmendedRtn_2",
+                                              "frm2000OT:txtAddress",
+                                              "frm2000OT:txtAddress2",
+                                              "frm2000OT:txtBranchCode",
+                                              "frm2000OT:txtCurrentPage",
+                                              "frm2000OT:txtLineBus",
+                                              "frm2000OT:txtOtherName",
+                                              "frm2000OT:txtOtherName2",
+                                              "frm2000OT:txtRDOCode",
+                                              "frm2000OT:txtTax19",
+                                              "frm2000OT:txtTax20A",
+                                              "frm2000OT:txtTax20B",
+                                              "frm2000OT:txtTax20C",
+                                              "frm2000OT:txtTax20D",
+                                              "frm2000OT:txtTax21",
+                                              "frm2000OT:txtTaxpayerName",
+                                              "frm2000OT:txtTelNum",
+                                              "frm2000OT:txtTIN1",
+                                              "frm2000OT:txtTIN2",
+                                              "frm2000OT:txtTIN3",
+                                              "frm2000OT:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  3681,
+                          "end_line":  3768,
+                          "body_sha256":  "90a6d0308910f259b970b7d85ef22897bf1e8fd4d0654479f142aac9e0432eea",
+                          "alerts":  [
+                                         "\"Please enter a valid date on Item 1.\"",
+                                         "\"Please choose an ATC on item 3.\"",
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 7.\"",
+                                         "\"Please enter a valid Telephone Number on Item 9.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 8.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 8A.\"",
+                                         "\"Please choose one (1) Other Party to the transaction on item 11.\"",
+                                         "\"Please enter a name for item 11A. The name that you will enter corresponds to your choice in item 11.\"",
+                                         "\"Please enter TIN for item 11B. The TIN that you will enter is the TIN of your entry in item 11A.\"",
+                                         "\"Please choose one (1) Nature of Transaction on item 12.\"",
+                                         "\"Please enter the address of the Location of Real Property in item 13.\"",
+                                         "\"Please enter the address of the Location of Real Property in item 13.\"",
+                                         "\"Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:ATC_1",
+                                              "frm2000OT:ATC_2",
+                                              "frm2000OT:ATC_3",
+                                              "frm2000OT:optParty_1",
+                                              "frm2000OT:optParty_2",
+                                              "frm2000OT:rbTransNature_1",
+                                              "frm2000OT:rbTransNature_2",
+                                              "frm2000OT:rbTransNature_3",
+                                              "frm2000OT:txtAddress",
+                                              "frm2000OT:txtBranchCode",
+                                              "frm2000OT:txtOtherName",
+                                              "frm2000OT:txtOtherTIN",
+                                              "frm2000OT:txtRDOCode",
+                                              "frm2000OT:txtRealLocation",
+                                              "frm2000OT:txtTaxpayerName",
+                                              "frm2000OT:txtTelNum",
+                                              "frm2000OT:txtTIN1",
+                                              "frm2000OT:txtTIN2",
+                                              "frm2000OT:txtTIN3",
+                                              "frm2000OT:txtTransactionDate",
+                                              "frm2000OT:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "disableAllControl",
+                          "start_line":  3769,
+                          "end_line":  3845,
+                          "body_sha256":  "3e424d98eb1396ef929e234a1319e2ca3d869532a285e4b615c74ff315a640cc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:AmendedRtn_1",
+                                              "frm2000OT:AmendedRtn_2",
+                                              "frm2000OT:ATC_1",
+                                              "frm2000OT:ATC_2",
+                                              "frm2000OT:ATC_3",
+                                              "frm2000OT:btnFinalCopy",
+                                              "frm2000OT:btnSched1Add",
+                                              "frm2000OT:btnSched1Delete",
+                                              "frm2000OT:cmdEdit",
+                                              "frm2000OT:cmdValidate",
+                                              "frm2000OT:optParty_1",
+                                              "frm2000OT:optParty_2",
+                                              "frm2000OT:rbTransNature_1",
+                                              "frm2000OT:rbTransNature_2",
+                                              "frm2000OT:rbTransNature_3",
+                                              "frm2000OT:sched1A:txtArea",
+                                              "frm2000OT:sched1A:txtClassification",
+                                              "frm2000OT:sched1A:txtFMVCol1",
+                                              "frm2000OT:sched1A:txtFMVCol2",
+                                              "frm2000OT:sched1A:txtLoc",
+                                              "frm2000OT:sched1A:txtLot",
+                                              "frm2000OT:sched1A:txtOCTNo",
+                                              "frm2000OT:sched1A:txtTaxDecNo",
+                                              "frm2000OT:sched1B:txtDSTPaid",
+                                              "frm2000OT:sched1B:txtNameOfCorpStock",
+                                              "frm2000OT:sched1B:txtNoOfSharesSold",
+                                              "frm2000OT:sched1B:txtParValOfShares",
+                                              "frm2000OT:sched1B:txtStockCertNo",
+                                              "frm2000OT:Sched2:txtGrossSellingPrice",
+                                              "frm2000OT:Sched2:txtOthers",
+                                              "frm2000OT:Sched2:txtOthersAmount",
+                                              "frm2000OT:txtCurrentPage",
+                                              "frm2000OT:txtOtherName",
+                                              "frm2000OT:txtOtherName2",
+                                              "frm2000OT:txtOtherTIN",
+                                              "frm2000OT:txtRealLocation",
+                                              "frm2000OT:txtSheets",
+                                              "frm2000OT:txtTax18",
+                                              "frm2000OT:txtTax20A",
+                                              "frm2000OT:txtTax20B",
+                                              "frm2000OT:txtTax20C",
+                                              "frm2000OT:txtTransactionDate"
+                                          ]
+                      },
+                      {
+                          "name":  "enableAllControl",
+                          "start_line":  3846,
+                          "end_line":  3918,
+                          "body_sha256":  "cc299947ef0e50489bb906aa530e48847a25d90901be47c0017bffa9cbfecf56",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:AmendedRtn_1",
+                                              "frm2000OT:AmendedRtn_2",
+                                              "frm2000OT:ATC_1",
+                                              "frm2000OT:ATC_2",
+                                              "frm2000OT:ATC_3",
+                                              "frm2000OT:btnFinalCopy",
+                                              "frm2000OT:btnSched1Add",
+                                              "frm2000OT:btnSched1Delete",
+                                              "frm2000OT:cmdEdit",
+                                              "frm2000OT:cmdValidate",
+                                              "frm2000OT:optParty_1",
+                                              "frm2000OT:optParty_2",
+                                              "frm2000OT:rbTransNature_1",
+                                              "frm2000OT:rbTransNature_2",
+                                              "frm2000OT:rbTransNature_3",
+                                              "frm2000OT:sched1A:txtArea",
+                                              "frm2000OT:sched1A:txtClassification",
+                                              "frm2000OT:sched1A:txtFMVCol1",
+                                              "frm2000OT:sched1A:txtFMVCol2",
+                                              "frm2000OT:sched1A:txtLoc",
+                                              "frm2000OT:sched1A:txtLot",
+                                              "frm2000OT:sched1A:txtOCTNo",
+                                              "frm2000OT:sched1A:txtTaxDecNo",
+                                              "frm2000OT:sched1B:txtDSTPaid",
+                                              "frm2000OT:sched1B:txtNameOfCorpStock",
+                                              "frm2000OT:sched1B:txtNoOfSharesSold",
+                                              "frm2000OT:sched1B:txtParValOfShares",
+                                              "frm2000OT:sched1B:txtStockCertNo",
+                                              "frm2000OT:Sched2:txtGrossSellingPrice",
+                                              "frm2000OT:Sched2:txtOthers",
+                                              "frm2000OT:Sched2:txtOthersAmount",
+                                              "frm2000OT:txtCurrentPage",
+                                              "frm2000OT:txtOtherName",
+                                              "frm2000OT:txtOtherName2",
+                                              "frm2000OT:txtOtherTIN",
+                                              "frm2000OT:txtRealLocation",
+                                              "frm2000OT:txtSheets",
+                                              "frm2000OT:txtTax18",
+                                              "frm2000OT:txtTax20A",
+                                              "frm2000OT:txtTax20B",
+                                              "frm2000OT:txtTax20C",
+                                              "frm2000OT:txtTransactionDate"
+                                          ]
+                      },
+                      {
+                          "name":  "processPrev",
+                          "start_line":  3940,
+                          "end_line":  3950,
+                          "body_sha256":  "afa9b7036249a4df35f41e258aa728e140eaee31b25f3e52803b1a7f5415d6fe",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "processNext",
+                          "start_line":  3951,
+                          "end_line":  3981,
+                          "body_sha256":  "aeec6291f1e362ed9bb4583e24a88d350fecb33fbc17198b70b58e1839b43eb6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  3982,
+                          "end_line":  4040,
+                          "body_sha256":  "abbb2f3773c06f295a28ab977de05e3b6d3158bd65b3be05317a6d65f64b3d3a",
+                          "alerts":  [
+                                         "\"Please enter a valid Transaction Date on Item 1.\"",
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Taxpayer\u0027s Name on Item 7.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:txtBranchCode",
+                                              "frm2000OT:txtRDOCode",
+                                              "frm2000OT:txtTaxpayerName",
+                                              "frm2000OT:txtTIN1",
+                                              "frm2000OT:txtTIN2",
+                                              "frm2000OT:txtTIN3",
+                                              "frm2000OT:txtTransactionDate"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  4144,
+                          "end_line":  4182,
+                          "body_sha256":  "43553d45b09c941592c782ba2ee1579440982b888953bc71554eda67f7c20dae",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:txtAddress",
+                                              "frm2000OT:txtAddress2",
+                                              "frm2000OT:txtBranchCode",
+                                              "frm2000OT:txtLineBus",
+                                              "frm2000OT:txtRDOCode",
+                                              "frm2000OT:txtTaxpayerName",
+                                              "frm2000OT:txtTelNum",
+                                              "frm2000OT:txtTIN1",
+                                              "frm2000OT:txtTIN2",
+                                              "frm2000OT:txtTIN3",
+                                              "frm2000OT:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  4514,
+                          "end_line":  4528,
+                          "body_sha256":  "14f76e35de9e7d84047b843194fa84956361d0f4d2c14640eb1b4fb49e0c10df",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  4786,
+                          "end_line":  4799,
+                          "body_sha256":  "f1160b3ff6683a273b2251e3f895bbad4afebce645bb0470f8c9869ba91f86df",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  4980,
+                          "end_line":  5052,
+                          "body_sha256":  "0c6d286d2d2ece6f8bfde444c742cad5a412be7a6d6b8d34c9e8347f1d122f43",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027",
+                                         "\u0027This date cannot be prior to 2018.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "ProcessAmended",
+                          "start_line":  5089,
+                          "end_line":  5099,
+                          "body_sha256":  "2e0deee45da5033287975f827fb78ad33ea61eb4613abe211f9a6cf9377d0a10",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:AmendedRtn_1",
+                                              "frm2000OT:txtTax18"
+                                          ]
+                      },
+                      {
+                          "name":  "ProcessAmended2",
+                          "start_line":  5100,
+                          "end_line":  5107,
+                          "body_sha256":  "8a6ffe589c717d7f0d652ccaec4895a213cd8a228b60492271a4af0c386c072c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:AmendedRtn_1",
+                                              "frm2000OT:txtTax18"
+                                          ]
+                      },
+                      {
+                          "name":  "processNatureOfTransaction",
+                          "start_line":  5727,
+                          "end_line":  5739,
+                          "body_sha256":  "9f10aa99d721c22143d34523285c4e5073ffec7636553476ece56efbff8e11ff",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:rbTransNature_1",
+                                              "frm2000OT:rbTransNature_2",
+                                              "frm2000OT:rbTransNature_3",
+                                              "frm2000OT:txtRealLocation"
+                                          ]
+                      },
+                      {
+                          "name":  "processNatureOfTransaction2",
+                          "start_line":  5740,
+                          "end_line":  5751,
+                          "body_sha256":  "78451123d9c8ce18267bf46848f365aadcbdf3563fa6b0b698434fa7f8c5743d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:rbTransNature_1",
+                                              "frm2000OT:rbTransNature_2",
+                                              "frm2000OT:rbTransNature_3",
+                                              "frm2000OT:txtRealLocation"
+                                          ]
+                      },
+                      {
+                          "name":  "enableSaveButton",
+                          "start_line":  5752,
+                          "end_line":  5765,
+                          "body_sha256":  "f28b633f4257fca6dfe23fbb2b258c6706d484f9c7a16c35517bd513c48bf693",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:txtBranchCode",
+                                              "frm2000OT:txtTIN1",
+                                              "frm2000OT:txtTIN2",
+                                              "frm2000OT:txtTIN3",
+                                              "frm2000OT:txtTransactionDate"
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  5783,
+                          "end_line":  5796,
+                          "body_sha256":  "9353fa46a2729e95410355e23bdba5f7d1fcdf3fe736b726bed61eb31bb27511",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

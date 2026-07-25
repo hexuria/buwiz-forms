@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 14;
+const CURRENT_MIGRATION_VERSION: i32 = 17;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -267,6 +267,18 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v8/v9 migration inference. Rows are retained for audit and existing
         // draft/snapshot access; only their active filing authority changes.
         "SELECT 1; -- v14 marker: deactivate stale migration Forms Set rows (Rust-side)",
+        // v15: Preserve exact raw editor state and immutable rules-based Final
+        // Copy snapshots. Columns are added idempotently in Rust because early
+        // development builds may contain a partially applied schema.
+        "SELECT 1; -- v15 marker: versioned form-rule editor/finalization state (Rust-side)",
+        // v16: Bind every immutable Final Copy XML payload to an opaque checked
+        // serializer proof. Existing rows remain readable only after proof
+        // columns are populated by a reviewed migration.
+        "SELECT 1; -- v16 marker: checked Final Copy payload proof (Rust-side)",
+        // v17: Persist every component of the exact reviewed FormRevisionKey.
+        // Nullable additive columns leave projected legacy pins fail-closed
+        // until a reviewed migration supplies the omitted identity fields.
+        "SELECT 1; -- v17 marker: exact form-rule revision identity (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -308,6 +320,18 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             if version == 14 {
                 migrate_v14_stale_migration_backfills(conn)?;
             }
+
+            if version == 15 {
+                migrate_v15_form_rule_state(conn)?;
+            }
+
+            if version == 16 {
+                migrate_v16_checked_final_copy_payload(conn)?;
+            }
+
+            if version == 17 {
+                migrate_v17_exact_form_rule_identity(conn)?;
+            }
         } else {
             break;
         }
@@ -323,6 +347,255 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // only examines still-active generated migration rows.
     migrate_v14_stale_migration_backfills(conn)?;
 
+    // Heal partially upgraded v15 databases. All DDL below is idempotent.
+    migrate_v15_form_rule_state(conn)?;
+
+    // Heal partially upgraded v16 databases. Nullable additions deliberately
+    // leave legacy Final Copies fail-closed until a reviewed proof exists.
+    migrate_v16_checked_final_copy_payload(conn)?;
+
+    // Heal partially upgraded v17 databases without inferring any omitted
+    // exact-key component from a registry or from mutable application state.
+    migrate_v17_exact_form_rule_identity(conn)?;
+
+    Ok(())
+}
+
+/// Add the omitted exact [`FormRevisionKey`](bir_rules::FormRevisionKey)
+/// components to draft pins, immutable Final Copies, and migration audit rows.
+///
+/// Columns remain nullable only for additive SQLite compatibility. Persistence
+/// writes every component for new pins. The read boundary rejects a projected
+/// legacy pin whose new columns are NULL, requiring a reviewed migration
+/// instead of silently resolving it through a current registry.
+fn migrate_v17_exact_form_rule_identity(conn: &Connection) -> Result<(), DbError> {
+    let table_columns: [(&str, &[(&str, &str)]); 3] = [
+        (
+            "form_drafts",
+            &[
+                ("rule_set_form_code", "TEXT"),
+                ("rule_set_form_revision", "TEXT"),
+                ("rule_set_official_package_version", "TEXT"),
+            ],
+        ),
+        (
+            "form_finalizations",
+            &[
+                ("rule_set_form_code", "TEXT"),
+                ("rule_set_form_revision", "TEXT"),
+                ("rule_set_official_package_version", "TEXT"),
+            ],
+        ),
+        (
+            "form_rule_migrations",
+            &[
+                ("from_rule_set_form_code", "TEXT"),
+                ("from_rule_set_form_revision", "TEXT"),
+                ("from_rule_set_official_package_version", "TEXT"),
+                ("to_rule_set_form_code", "TEXT"),
+                ("to_rule_set_form_revision", "TEXT"),
+                ("to_rule_set_official_package_version", "TEXT"),
+            ],
+        ),
+    ];
+
+    let mut added_columns = 0usize;
+    for (table, required_columns) in table_columns {
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1",
+                [table],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if !table_exists {
+            continue;
+        }
+
+        let column_names = {
+            let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+            stmt.query_map([], |row| row.get::<_, String>(1))?
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()?
+        };
+        for (column, definition) in required_columns {
+            if !column_names.contains(*column) {
+                conn.execute(
+                    &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+                    [],
+                )?;
+                added_columns += 1;
+            }
+        }
+    }
+
+    if added_columns > 0 {
+        info!(
+            "v17 migration: added {} exact form-rule identity columns",
+            added_columns
+        );
+    }
+    Ok(())
+}
+
+/// Add the opaque checked-payload proof alongside existing Final Copy XML.
+///
+/// The columns are nullable only for additive SQLite compatibility. The load
+/// boundary rejects NULL, malformed, or mismatched proof data.
+fn migrate_v16_checked_final_copy_payload(conn: &Connection) -> Result<(), DbError> {
+    let has_finalizations: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master
+             WHERE type='table' AND name='form_finalizations'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if !has_finalizations {
+        return Ok(());
+    }
+
+    let column_names = {
+        let mut stmt = conn.prepare("PRAGMA table_info(form_finalizations)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?
+    };
+
+    let mut added_columns = 0usize;
+    for (column, definition) in [
+        ("payload_proof_json", "TEXT"),
+        ("payload_proof_sha256", "TEXT"),
+    ] {
+        if !column_names.contains(column) {
+            conn.execute(
+                &format!("ALTER TABLE form_finalizations ADD COLUMN {column} {definition}"),
+                [],
+            )?;
+            added_columns += 1;
+        }
+    }
+
+    if added_columns > 0 {
+        info!(
+            "v16 migration: added {} checked Final Copy proof columns",
+            added_columns
+        );
+    }
+    Ok(())
+}
+
+/// Add raw editor persistence and immutable rule-evaluation snapshots.
+///
+/// Raw input remains separate from `data_json`, which continues to hold the
+/// last canonical typed draft during migration. Finalizations and explicit
+/// ruleset migrations are append-only audit records.
+fn migrate_v15_form_rule_state(conn: &Connection) -> Result<(), DbError> {
+    let has_form_drafts: bool = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='form_drafts'",
+            [],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+    if !has_form_drafts {
+        return Ok(());
+    }
+
+    let column_names = {
+        let mut stmt = conn.prepare("PRAGMA table_info(form_drafts)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?
+    };
+
+    let mut added_columns = 0usize;
+    for (column, definition) in [
+        ("editor_state_json", "TEXT"),
+        ("storage_revision", "INTEGER NOT NULL DEFAULT 0"),
+        ("rule_set_id", "TEXT"),
+        ("rule_set_sha256", "TEXT"),
+        ("behavior_profile", "TEXT"),
+        ("active_finalization_id", "INTEGER"),
+    ] {
+        if !column_names.contains(column) {
+            conn.execute(
+                &format!("ALTER TABLE form_drafts ADD COLUMN {column} {definition}"),
+                [],
+            )?;
+            added_columns += 1;
+        }
+    }
+
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS form_finalizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_draft_id INTEGER NOT NULL,
+            source_storage_revision INTEGER NOT NULL,
+            rule_set_id TEXT NOT NULL,
+            rule_set_sha256 TEXT NOT NULL,
+            behavior_profile TEXT NOT NULL,
+            input_sha256 TEXT NOT NULL,
+            context_sha256 TEXT NOT NULL,
+            canonical_sha256 TEXT NOT NULL,
+            derived_sha256 TEXT NOT NULL,
+            report_sha256 TEXT NOT NULL,
+            xml_sha256 TEXT NOT NULL,
+            raw_snapshot_json TEXT NOT NULL,
+            canonical_json TEXT NOT NULL,
+            derived_json TEXT NOT NULL,
+            validation_report_json TEXT NOT NULL,
+            xml_payload TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            invalidated_at TEXT,
+            FOREIGN KEY (form_draft_id) REFERENCES form_drafts(id) ON DELETE CASCADE,
+            UNIQUE (
+                form_draft_id,
+                source_storage_revision,
+                rule_set_sha256,
+                input_sha256,
+                context_sha256
+            )
+        );
+        CREATE INDEX IF NOT EXISTS idx_form_finalizations_draft
+            ON form_finalizations(form_draft_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS form_rule_migrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            form_draft_id INTEGER NOT NULL,
+            from_rule_set_id TEXT,
+            from_rule_set_sha256 TEXT,
+            to_rule_set_id TEXT NOT NULL,
+            to_rule_set_sha256 TEXT NOT NULL,
+            from_snapshot_sha256 TEXT NOT NULL,
+            to_snapshot_sha256 TEXT NOT NULL,
+            diff_json TEXT NOT NULL,
+            result TEXT NOT NULL,
+            accepted_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (form_draft_id) REFERENCES form_drafts(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_form_rule_migrations_draft
+            ON form_rule_migrations(form_draft_id, accepted_at);",
+    )?;
+
+    let finalization_columns = {
+        let mut stmt = conn.prepare("PRAGMA table_info(form_finalizations)")?;
+        stmt.query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<std::collections::BTreeSet<_>, _>>()?
+    };
+    if !finalization_columns.contains("derived_sha256") {
+        // Existing development rows remain readable only after the persistence
+        // layer can prove a derived digest. NULL deliberately fails closed.
+        conn.execute(
+            "ALTER TABLE form_finalizations ADD COLUMN derived_sha256 TEXT",
+            [],
+        )?;
+        added_columns += 1;
+    }
+
+    if added_columns > 0 {
+        info!(
+            "v15 migration: added {} missing form-rule state columns",
+            added_columns
+        );
+    }
     Ok(())
 }
 
@@ -1234,6 +1507,8 @@ mod tests {
             "per_year_forms",
             "profile_calendar_links",
             "profile_calendar_events",
+            "form_finalizations",
+            "form_rule_migrations",
         ];
         for table in tables {
             let exists: bool = conn
@@ -1248,6 +1523,234 @@ mod tests {
                 .unwrap_or(false);
             assert!(exists, "Table '{}' should exist after migration", table);
         }
+    }
+
+    #[test]
+    fn test_v15_adds_versioned_editor_and_finalization_state() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+
+        let form_draft_columns = {
+            let mut stmt = conn.prepare("PRAGMA table_info(form_drafts)").unwrap();
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                .unwrap()
+        };
+        for column in [
+            "editor_state_json",
+            "storage_revision",
+            "rule_set_id",
+            "rule_set_sha256",
+            "behavior_profile",
+            "active_finalization_id",
+        ] {
+            assert!(
+                form_draft_columns.contains(column),
+                "missing v15 form_drafts column {column}"
+            );
+        }
+
+        // The healer must remain safe after user_version has already advanced.
+        migrate_v15_form_rule_state(&conn).unwrap();
+        let finalization_tables: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'table'
+                   AND name IN ('form_finalizations', 'form_rule_migrations')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(finalization_tables, 2);
+
+        let finalization_columns = {
+            let mut stmt = conn
+                .prepare("PRAGMA table_info(form_finalizations)")
+                .unwrap();
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                .unwrap()
+        };
+        assert!(finalization_columns.contains("derived_sha256"));
+    }
+
+    #[test]
+    fn test_v16_adds_checked_final_copy_proof_columns_idempotently() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        migrate_v16_checked_final_copy_payload(&conn).unwrap();
+
+        let finalization_columns = {
+            let mut stmt = conn
+                .prepare("PRAGMA table_info(form_finalizations)")
+                .unwrap();
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .unwrap()
+                .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                .unwrap()
+        };
+
+        assert!(finalization_columns.contains("payload_proof_json"));
+        assert!(finalization_columns.contains("payload_proof_sha256"));
+    }
+
+    #[test]
+    fn test_v17_adds_exact_rule_identity_columns_without_inference() {
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE form_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                rule_set_id TEXT,
+                rule_set_sha256 TEXT,
+                behavior_profile TEXT
+            );
+            INSERT INTO form_drafts (
+                rule_set_id,
+                rule_set_sha256,
+                behavior_profile
+            ) VALUES (
+                '2550q-v2024',
+                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                'filing_safe'
+            );
+            PRAGMA user_version = 16;",
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+        migrate_v17_exact_form_rule_identity(&conn).unwrap();
+
+        let expected_columns = [
+            (
+                "form_drafts",
+                &[
+                    "rule_set_form_code",
+                    "rule_set_form_revision",
+                    "rule_set_official_package_version",
+                ][..],
+            ),
+            (
+                "form_finalizations",
+                &[
+                    "rule_set_form_code",
+                    "rule_set_form_revision",
+                    "rule_set_official_package_version",
+                ][..],
+            ),
+            (
+                "form_rule_migrations",
+                &[
+                    "from_rule_set_form_code",
+                    "from_rule_set_form_revision",
+                    "from_rule_set_official_package_version",
+                    "to_rule_set_form_code",
+                    "to_rule_set_form_revision",
+                    "to_rule_set_official_package_version",
+                ][..],
+            ),
+        ];
+        for (table, required_columns) in expected_columns {
+            let column_names = {
+                let mut stmt = conn
+                    .prepare(&format!("PRAGMA table_info({table})"))
+                    .unwrap();
+                stmt.query_map([], |row| row.get::<_, String>(1))
+                    .unwrap()
+                    .collect::<Result<std::collections::BTreeSet<_>, _>>()
+                    .unwrap()
+            };
+            for column in required_columns {
+                assert!(
+                    column_names.contains(*column),
+                    "missing v17 {table} column {column}"
+                );
+            }
+        }
+
+        let legacy_pin: (
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ) = conn
+            .query_row(
+                "SELECT rule_set_id,
+                        rule_set_sha256,
+                        behavior_profile,
+                        rule_set_form_code,
+                        rule_set_form_revision,
+                        rule_set_official_package_version
+                 FROM form_drafts
+                 WHERE id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(legacy_pin.0, "2550q-v2024");
+        assert_eq!(
+            legacy_pin.1,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+        assert_eq!(legacy_pin.2, "filing_safe");
+        assert_eq!(
+            (legacy_pin.3, legacy_pin.4, legacy_pin.5),
+            (None, None, None)
+        );
+    }
+
+    #[test]
+    fn test_v15_preserves_legacy_draft_json_unpinned() {
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE form_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tin TEXT NOT NULL,
+                form_code TEXT NOT NULL,
+                taxable_year INTEGER NOT NULL,
+                quarter INTEGER,
+                period_key TEXT,
+                status TEXT NOT NULL DEFAULT 'Draft',
+                data_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(tin, form_code, taxable_year, quarter)
+            );
+            INSERT INTO form_drafts
+                (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+            VALUES
+                ('123456789000', '2550Q', 2026, 1, 'Q1', 'Draft',
+                 '{\"legacy\":true}');
+            PRAGMA user_version = 14;",
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+
+        let stored: (String, Option<String>, i64, Option<String>) = conn
+            .query_row(
+                "SELECT data_json, editor_state_json, storage_revision, rule_set_id
+                 FROM form_drafts WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(stored.0, "{\"legacy\":true}");
+        assert_eq!(stored.1, None);
+        assert_eq!(stored.2, 0);
+        assert_eq!(stored.3, None);
     }
 
     #[test]

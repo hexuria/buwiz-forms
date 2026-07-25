@@ -1,0 +1,52 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701a-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "2018-400k",
+                      "inputs":  {
+                                     "year":  2018,
+                                     "taxable":  400000
+                                 },
+                      "calculation_id":  "1701a-tax-table-2018-2022",
+                      "official_output":  "30000"
+                  },
+                  {
+                      "case_id":  "2018-8m",
+                      "inputs":  {
+                                     "year":  2018,
+                                     "taxable":  8000000
+                                 },
+                      "calculation_id":  "1701a-tax-table-2018-2022",
+                      "official_output":  "2410000"
+                  },
+                  {
+                      "case_id":  "2023-400k",
+                      "inputs":  {
+                                     "year":  2023,
+                                     "taxable":  400000
+                                 },
+                      "calculation_id":  "1701a-tax-table-2023-plus",
+                      "official_output":  "22500"
+                  },
+                  {
+                      "case_id":  "2023-8m",
+                      "inputs":  {
+                                     "year":  2023,
+                                     "taxable":  8000000
+                                 },
+                      "calculation_id":  "1701a-tax-table-2023-plus",
+                      "official_output":  "2202500"
+                  },
+                  {
+                      "case_id":  "item29-negative",
+                      "inputs":  {
+                                     "item28":  200,
+                                     "item24":  -100
+                                 },
+                      "calculation_id":  "1701a-item29",
+                      "official_output":  "-100",
+                      "recommended_review":  "Determine whether penalties should produce 100."
+                  }
+              ]
+}

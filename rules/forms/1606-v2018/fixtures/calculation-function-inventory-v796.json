@@ -1,0 +1,140 @@
+{
+    "source_sha256":  "e7c7831e29cdd110a5cc325cb0bed7ee620684c21a483d59b25555c41d378a80",
+    "function_count":  8,
+    "functions":  [
+                      {
+                          "name":  "computeOfTaxRequired",
+                          "start_line":  3156,
+                          "end_line":  3161,
+                          "body_sha256":  "31eed782c8d2f61f781ddfc41f01e59cd22b38f9b8811c829752258929796d13",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:txtTax",
+                                              "frm1606:txtTaxR",
+                                              "frm1606:txtTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxDue",
+                          "start_line":  3162,
+                          "end_line":  3168,
+                          "body_sha256":  "dcb737eee49ddfd540be6723d3b65f8f9b96de40b3751265104f85e2cd97ace1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:txtLess",
+                                              "frm1606:txtTaxDue",
+                                              "frm1606:txtTaxR"
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  3169,
+                          "end_line":  3175,
+                          "body_sha256":  "ef2ced6b10a3ccef69feae1b8cc5220c4625674e2c2ede762ee3ff4e203e9fe4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:txtCompromise",
+                                              "frm1606:txtInterest",
+                                              "frm1606:txtSurcharge",
+                                              "frm1606:txtTotalPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOfTotalAmtDue",
+                          "start_line":  3176,
+                          "end_line":  3194,
+                          "body_sha256":  "f15aa217d766bc298f855aef92c941db5e39969b4168a31bb880653f5445f74a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:opt37:_1",
+                                              "frm1606:opt37:_2",
+                                              "frm1606:txtTaxDue",
+                                              "frm1606:txtTotal",
+                                              "frm1606:txtTotalPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "checkiftaxwheldisYes",
+                          "start_line":  3209,
+                          "end_line":  3221,
+                          "body_sha256":  "676b53e90f46f6b953c54bfdba95cb169d93c1e981448d5f33cc0886aaf14ac4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:j_id252:_1",
+                                              "frm1606:j_id252:_2",
+                                              "frm1606:j_id392:_1",
+                                              "frm1606:j_id392:_2"
+                                          ]
+                      },
+                      {
+                          "name":  "computeFMVLI",
+                          "start_line":  3393,
+                          "end_line":  3400,
+                          "body_sha256":  "3435ae06f1ae404cae3d31e7d0a44960e15aba45e67ae47b7e606333e1cbed4c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVLI",
+                                              "frm1606:txtFMVZonal"
+                                          ]
+                      },
+                      {
+                          "name":  "compareFMVLI",
+                          "start_line":  3401,
+                          "end_line":  3442,
+                          "body_sha256":  "27af43c59a31507330ad0c6a60b677f9229ec123bb3d9b51530065c0b8826d87",
+                          "alerts":  [
+                                         "\"FMV27ab =\"+FMV27ab",
+                                         "\"FMV27cd =\"+FMV27cd",
+                                         "\"FMV27bc =\"+FMV27bc",
+                                         "\"FMV27ad =\"+FMV27ad"
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:j_id395:_3",
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVLI",
+                                              "frm1606:txtFMVZonal",
+                                              "frm1606:txtGross",
+                                              "frm1606:txtSelling"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxableBase",
+                          "start_line":  3443,
+                          "end_line":  3474,
+                          "body_sha256":  "fd13f9b24156f208d47e66df08744e78b81121e553c62384f45c2cbc44c398f6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:j_id395:_2",
+                                              "frm1606:j_id395:_3",
+                                              "frm1606:j_id395:_4",
+                                              "frm1606:j_id395:_5",
+                                              "frm1606:txtBid",
+                                              "frm1606:txtFMVLI",
+                                              "frm1606:txtGross",
+                                              "frm1606:txtInstallment",
+                                              "frm1606:txtOthers28E",
+                                              "frm1606:txtSelling",
+                                              "frm1606:txtTax"
+                                          ]
+                      }
+                  ]
+}

@@ -1,0 +1,1687 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550m-v2007",
+    "revision":  "2007-02-01",
+    "first_error_behavior":  "Main Validate and each schedule validator alert and return on the first active failing branch; schedule validators run only when their modal OK action is used.",
+    "rules":  [
+                  {
+                      "rule_id":  "2550m-input-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A decimal input loses focus.",
+                      "fields":  [
+                                     "money-fields"
+                                 ],
+                      "accepted_behavior":  "A parseable value is converted to two decimals.",
+                      "rejected_behavior":  "NaN becomes 0.00; JavaScript binary floating-point is used.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletter:L3953-L3963"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "parseFloat/toFixed(2) normalization.",
+                      "recommended_app_behavior":  "Use bounded decimal parsing and explicit rounding.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-input-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "An integer-like input loses focus.",
+                      "fields":  [
+                                     "integer-fields"
+                                 ],
+                      "accepted_behavior":  "A parseable value is rounded to zero decimals.",
+                      "rejected_behavior":  "NaN becomes blank.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletterWithout2Decimal:L3965-L3975"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "parseFloat/toFixed(0) normalization.",
+                      "recommended_app_behavior":  "Validate integer syntax before conversion.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-modal-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 2, 6, 7, or 8 is opened with year \u003c= 2000.",
+                      "fields":  [
+                                     "frm2550m:txtYear"
+                                 ],
+                      "accepted_behavior":  "Year greater than 2000 opens the schedule.",
+                      "rejected_behavior":  "The schedule is blocked.",
+                      "exact_message":  "Please input a valid Return period year. Please enter 2000 above.",
+                      "source_refs":  [
+                                          "official-hta-runtime#showSched2:L4051-L4085",
+                                          "official-hta-runtime#showSched6",
+                                          "official-hta-runtime#showSched7",
+                                          "official-hta-runtime#showSched8"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The duplicated conjunction \u003c=2000 \u0026\u0026 \u003c=2020 reduces to \u003c=2000, so year 2000 is rejected although Validate accepts it.",
+                      "recommended_app_behavior":  "Use the same inclusive \u003e=2000 rule in every phase.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s1-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 1 OK is clicked with zero/blank sales or output tax.",
+                      "fields":  [
+                                     "frm2550m:txtAmountSalesN",
+                                     "frm2550m:txtOutputTaxN"
+                                 ],
+                      "accepted_behavior":  "The modal closes despite the invalid row.",
+                      "rejected_behavior":  "No rejection occurs; the intended alert is commented out.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifFieldEmptySched1:L3991-L4005"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Schedule 1 row validation is an intentional no-op after a QAD change.",
+                      "recommended_app_behavior":  "Require selected ATC rows to have valid sales and a recomputed output tax.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s2-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "A Schedule 2 row has blank purchase date or description.",
+                      "fields":  [
+                                     "txtDatePurchased{N\u003e=0}",
+                                     "txtDescription{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Both are nonblank.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Please enter valid row {row} data for Schedule 2.\\nEmpty fields are not allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched2:L4144-L4152"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Blank date/description is rejected.",
+                      "recommended_app_behavior":  "Retain with row-specific structured errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s2-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  2,
+                      "condition":  "A Schedule 2 row amount exceeds 1,000,000.",
+                      "fields":  [
+                                     "txtAmt{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003c= 1,000,000.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter valid data.\\n Aggregate amount should not exceed P1 Million.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched2:L4154-L4156"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Per-row cap is enforced.",
+                      "recommended_app_behavior":  "Use decimal comparison and clarify whether the statutory cap is per row or aggregate.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s2-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  3,
+                      "condition":  "Schedule 2 date does not split into three numeric components.",
+                      "fields":  [
+                                     "txtDatePurchased{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Three numeric components proceed.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a valid date for Date of Purchase on row {row}.\\nPlease enter a date in the MM/DD/YYYY format.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched2:L4158-L4217"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Ad-hoc split/isNaN validation is used.",
+                      "recommended_app_behavior":  "Use strict calendar-date parsing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s2-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  4,
+                      "condition":  "Schedule 2 date has an impossible day or, except February, is outside the return month/year.",
+                      "fields":  [
+                                     "txtDatePurchased{N\u003e=0}",
+                                     "frm2550m:RtnYear",
+                                     "frm2550m:txtYear"
+                                 ],
+                      "accepted_behavior":  "Date passes the branch checks.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Invalid entry on row {row}. Date of Purchase must be within the Return Period only.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched2:L4170-L4211"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Month 02 skips the return-period comparison entirely; month/day lower bounds and unknown months are also not checked.",
+                      "recommended_app_behavior":  "Use a real date and require exact return month/year.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s2-005",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  5,
+                      "condition":  "Schedule 2 net-of-VAT amount is \u003c= 0.",
+                      "fields":  [
+                                     "txtAmt{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter amount for Net of VAT on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched2:L4223-L4226"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain using decimal comparison.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s2-006",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  6,
+                      "condition":  "Schedule 2 total amount exceeds 1,000,000 when OK is clicked.",
+                      "fields":  [
+                                     "txtmodalTotalAmt"
+                                 ],
+                      "accepted_behavior":  "Total \u003c= 1,000,000.",
+                      "rejected_behavior":  "Modal remains open.",
+                      "exact_message":  "The total aggregate amount should not exceed 1 Million.\\n Please re-enter the values of Schedule 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#getSched2Modal:L4087-L4111"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Aggregate cap is enforced after row validation.",
+                      "recommended_app_behavior":  "Retain with exact decimal sum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3a-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "Schedule 3A date/description is blank or allowable input tax compares equal to zero.",
+                      "fields":  [
+                                     "txtDatePurchased3A{N\u003e=0}",
+                                     "txtDescription3A{N\u003e=0}",
+                                     "txtAllowInputTax3A{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "All checks pass.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter valid row {row} data for Schedule 3A.\\nEmpty fields are not allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4419-L4428"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Computed allowable tax is treated as required.",
+                      "recommended_app_behavior":  "Validate source fields, then compute allowable tax deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3a-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  2,
+                      "condition":  "Schedule 3A date is malformed or outside the return period.",
+                      "fields":  [
+                                     "txtDatePurchased3A{N\u003e=0}",
+                                     "frm2550m:RtnYear",
+                                     "frm2550m:txtYear"
+                                 ],
+                      "accepted_behavior":  "Legacy branches pass.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Invalid entry on row {row}. Date of Purchase must be within the Return Period only.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4434-L4494"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The same February/lower-bound date defects as Schedule 2 apply.",
+                      "recommended_app_behavior":  "Use strict calendar and period comparison.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3a-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  3,
+                      "condition":  "Schedule 3A amount is \u003c= 0.",
+                      "fields":  [
+                                     "txtAmt3A{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter amount for Net of VAT on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4500-L4503"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3a-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  4,
+                      "condition":  "Schedule 3A estimated life is outside 1..999.",
+                      "fields":  [
+                                     "txtEstLife3A{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Value 1..999.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a value 1 to 999 for Estimated Life on row {row} Schedule 3Part A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4504-L4507"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Bounds are correct; message lacks spacing.",
+                      "recommended_app_behavior":  "Retain bounds and fix presentation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3a-005",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  5,
+                      "condition":  "Schedule 3A recognized life is outside 1..60.",
+                      "fields":  [
+                                     "txtRecogLife3A{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Value 1..60.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a value 1 to 60 for Recognized Life on row {row}Part A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4508-L4511"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Bounds are enforced; message lacks spacing.",
+                      "recommended_app_behavior":  "Retain bounds and fix presentation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3a-006",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  6,
+                      "condition":  "Schedule 3A is committed in AandB mode with rows and total \u003c= 1,000,000.",
+                      "fields":  [
+                                     "txtmodalTotalAmountSched3"
+                                 ],
+                      "accepted_behavior":  "Total \u003e 1,000,000.",
+                      "rejected_behavior":  "Schedule is rejected.",
+                      "exact_message":  "The total aggregate amount does not exceed 1 Million.\\n Please re-enter the values of Schedule 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4514-L4522"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Schedule 3A is reserved for aggregate acquisitions above one million.",
+                      "recommended_app_behavior":  "Retain with exact decimal comparison.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3b-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "Schedule 3B row has blank date or description.",
+                      "fields":  [
+                                     "txtDatePurchased3B{N\u003e=0}",
+                                     "txtDescription3B{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Both are nonblank.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "If you don\u0027t have any entries for Schedule 3b,\\nplease delete the row on this schedule if not applicable.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4524-L4531"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Blank placeholder row must be deleted.",
+                      "recommended_app_behavior":  "Allow an explicit empty schedule or require complete rows.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3b-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  2,
+                      "condition":  "Schedule 3B date is malformed, future, or in the current return month.",
+                      "fields":  [
+                                     "txtDatePurchased3B{N\u003e=0}",
+                                     "frm2550m:RtnYear",
+                                     "frm2550m:txtYear"
+                                 ],
+                      "accepted_behavior":  "Prior-period date passes.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Invalid entry on row {row}. Date of Purchase must be within the Return Period only.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4532-L4607"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The comparison rejects current-month dates but the message says within return period; February and lower-bound defects remain.",
+                      "recommended_app_behavior":  "Require the legally intended prior-period acquisition range with a correct message.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3b-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  3,
+                      "condition":  "Schedule 3B amount is \u003c= 0.",
+                      "fields":  [
+                                     "txtAmt3B{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter amount for Net of VAT on row {row}.\\nValue must be greater than 0 in Part B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4610-L4613"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3b-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  4,
+                      "condition":  "Schedule 3B estimated life is outside 1..999.",
+                      "fields":  [
+                                     "txtEstLife3B{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Value 1..999.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a value 1 to 999 for Estimated Life on row {row} Schedule 3Part B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4614-L4617"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Bounds enforced; message lacks spacing.",
+                      "recommended_app_behavior":  "Retain bounds and fix message.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s3b-005",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  5,
+                      "condition":  "Schedule 3B recognized life is outside 1..60.",
+                      "fields":  [
+                                     "txtRecogLife3B{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Value 1..60.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a value 1 to 60 for Recognized Life on row {row}Part B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched3:L4618-L4621"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Bounds enforced; message lacks spacing.",
+                      "recommended_app_behavior":  "Retain bounds and fix message.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s4-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 is opened when Item 13A \u003c= 0.",
+                      "fields":  [
+                                     "frm2550m:txtTax13A"
+                                 ],
+                      "accepted_behavior":  "Positive Item 13A opens it.",
+                      "rejected_behavior":  "Schedule is blocked.",
+                      "exact_message":  "Please enter a valid value on Item 13A to be able to load the Schedule 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#showSched4:L5158-L5196"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Legacy Schedule 4 remains active in this revision.",
+                      "recommended_app_behavior":  "For periods from January 2021 follow RMC 36-2021: deactivate Item 20B/Schedule 4 and use Item 23C/Schedule 8.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s4-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 OK is clicked with incomplete/invalid values.",
+                      "fields":  [
+                                     "Schedule4"
+                                 ],
+                      "accepted_behavior":  "Always accepted.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched4:L5212-L5214"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validation function unconditionally returns true.",
+                      "recommended_app_behavior":  "Validate denominators and nonnegative inputs when the legacy schedule is applicable.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s5-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 5 is opened when Item 15 \u003c= 0.",
+                      "fields":  [
+                                     "frm2550m:txtTax15"
+                                 ],
+                      "accepted_behavior":  "Positive Item 15 opens it.",
+                      "rejected_behavior":  "Schedule is blocked.",
+                      "exact_message":  "Please enter a valid value on Item 15 to be able to load the Schedule 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#showSched5:L5272-L5305"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Exempt-sales schedule requires exempt sales.",
+                      "recommended_app_behavior":  "Retain dependency.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s5-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 5 OK is clicked with incomplete/invalid values.",
+                      "fields":  [
+                                     "Schedule5"
+                                 ],
+                      "accepted_behavior":  "Always accepted.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched5:L5321-L5323"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validation function unconditionally returns true.",
+                      "recommended_app_behavior":  "Validate denominator and nonnegative inputs.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s6-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "A Schedule 6 row has blank period covered or agent name.",
+                      "fields":  [
+                                     "txtPeriodCovered{N\u003e=0}",
+                                     "txtNameAgent{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Both are nonblank.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter valid row {row} data for Schedule 6.\\nEmpty fields are not allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched5384"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Required row text is checked.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s6-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  2,
+                      "condition":  "A Schedule 6 period date is malformed or outside the return period.",
+                      "fields":  [
+                                     "txtPeriodCovered{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Legacy date branches pass.",
+                      "rejected_behavior":  "Row is rejected using a copied purchase-date message.",
+                      "exact_message":  "Please enter a valid date for Date of Purchase on row {row}.\\nPlease enter a date in the MM/DD/YYYY format.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched6"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Copied message mislabels Period Covered as Date of Purchase and shares the February date bug.",
+                      "recommended_app_behavior":  "Use strict date parsing and the correct field label.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s6-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Income Payment is \u003c= 0.",
+                      "fields":  [
+                                     "IncomePayment{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a valid amount for Income Payment on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched6"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s6-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Total Tax Withheld is \u003c= 0.",
+                      "fields":  [
+                                     "TotalWithheld{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a valid amount for Total Tax Withheld on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched6"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s6-005",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Applied Current Month is \u003c= 0.",
+                      "fields":  [
+                                     "AppliedCurr{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a valid amount for Applied Current Month on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched6"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s8-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "A Schedule 8 row has blank period covered or agent name.",
+                      "fields":  [
+                                     "txtPeriodCoveredSch8{N\u003e=0}",
+                                     "txtNameAgentSch8{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Both are nonblank.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter valid row {row} data for Schedule 8.\\nEmpty fields are not allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched6139"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Required row text is checked.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s8-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  2,
+                      "condition":  "A Schedule 8 period date is malformed or outside the return period.",
+                      "fields":  [
+                                     "txtPeriodCoveredSch8{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Legacy date branches pass.",
+                      "rejected_behavior":  "Row is rejected using a copied purchase-date message.",
+                      "exact_message":  "Please enter a valid date for Date of Purchase on row {row}.\\nPlease enter a date in the MM/DD/YYYY format.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched8"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Copied message mislabels Period Covered as Date of Purchase and shares the February date bug.",
+                      "recommended_app_behavior":  "Use strict date parsing and the correct field label.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s8-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Income Payment is \u003c= 0.",
+                      "fields":  [
+                                     "IncomePaymentSch8{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a valid amount for Income Payment on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched8"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s8-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Total Tax Withheld is \u003c= 0.",
+                      "fields":  [
+                                     "TotalWithheldSch8{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a valid amount for Total Tax Withheld on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched8"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s8-005",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Applied Current Month is \u003c= 0.",
+                      "fields":  [
+                                     "AppliedCurrSch8{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter a valid amount for Applied Current Month on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched8"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s6-006",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  6,
+                      "condition":  "Schedule 6 applied amount exceeds total withheld.",
+                      "fields":  [
+                                     "txtAppliedCurr{N\u003e=0}",
+                                     "txtTotalWithheld{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Applied \u003c= withheld.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "The Applied Current Month on row {row} should not be greater than the Total Tax Withheld.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched6:L5469-L5471"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Comparison is active.",
+                      "recommended_app_behavior":  "Retain with decimal arithmetic.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s7-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "Schedule 7 row has a blank period, miller, taxpayer, or OR number.",
+                      "fields":  [
+                                     "txtPeriodCoveredSch7{N\u003e=0}",
+                                     "txtNameMillerSch7{N\u003e=0}",
+                                     "txtNameTaxPayerSch7{N\u003e=0}",
+                                     "txtORNumSch7{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "All are nonblank.",
+                      "rejected_behavior":  "Row is rejected.",
+                      "exact_message":  "Please enter valid row {row} data for Schedule 7.\\nEmpty fields are not allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched7:L5764-L5773"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Required row text is checked.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s7-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  2,
+                      "condition":  "Schedule 7 period date is malformed or outside return period.",
+                      "fields":  [
+                                     "txtPeriodCoveredSch7{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Legacy branches pass.",
+                      "rejected_behavior":  "Row is rejected using a copied purchase-date message.",
+                      "exact_message":  "Please enter a valid date for Date of Purchase on row {row}.\\nPlease enter a date in the MM/DD/YYYY format.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched7:L5773-L5833"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Copied label and February bug.",
+                      "recommended_app_behavior":  "Use strict parsing and correct label.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s7-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  3,
+                      "condition":  "Schedule 7 amount paid is \u003c= 0.",
+                      "fields":  [
+                                     "txtAmountPaidSch7{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row rejected.",
+                      "exact_message":  "Please enter a valid amount for Amount Paid on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched7:L5839-L5842"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s7-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  4,
+                      "condition":  "Schedule 7 applied amount is \u003c= 0.",
+                      "fields":  [
+                                     "txtAppliedCurrSch7{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Amount \u003e 0.",
+                      "rejected_behavior":  "Row rejected.",
+                      "exact_message":  "Please enter a valid amount for Applied Current Month on row {row}.\\nValue must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched7:L5843-L5846"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Positive amount required.",
+                      "recommended_app_behavior":  "Retain.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s7-005",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  5,
+                      "condition":  "Schedule 7 applied amount exceeds amount paid.",
+                      "fields":  [
+                                     "txtAppliedCurrSch7{N\u003e=0}",
+                                     "txtAmountPaidSch7{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Any positive applied amount passes.",
+                      "rejected_behavior":  "No comparison occurs because the block is commented out; its message also says Total Tax Withheld.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched7:L5847-L5849"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Over-application is accepted.",
+                      "recommended_app_behavior":  "Require applied \u003c= amount paid and use the correct label.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s8-006",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  6,
+                      "condition":  "Schedule 8 applied amount exceeds total withheld.",
+                      "fields":  [
+                                     "txtAppliedCurrSch8{N\u003e=0}",
+                                     "txtTotalWithheldSch8{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Any positive applied amount passes.",
+                      "rejected_behavior":  "No comparison occurs because the block is commented out.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkifEmptyFieldSched8:L6225-L6227"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Over-application is accepted.",
+                      "recommended_app_behavior":  "Require applied \u003c= total withheld.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-s8-007",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 8 is opened when Item 13A \u003c= 0.",
+                      "fields":  [
+                                     "frm2550m:txtTax13A"
+                                 ],
+                      "accepted_behavior":  "Positive Item 13A opens it.",
+                      "rejected_behavior":  "Schedule is blocked.",
+                      "exact_message":  "Please enter a valid value on Item 13A to be able to load the Schedule 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#showSched8"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "The withholding schedule is coupled to government sales.",
+                      "recommended_app_behavior":  "Retain only if confirmed by the applicable instructions.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Item 11 Yes is selected and classification is 0.",
+                      "fields":  [
+                                     "frm2550m:OptSpecialTax1",
+                                     "frm2550m:lstSpecialTax"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please select an option on item no. 11. Entry must not be empty.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6734-L6742"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Year is blank.",
+                      "fields":  [
+                                     "frm2550m:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please indicate a valid Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6743-L6747"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Year is in the future, or current-year month is in the future.",
+                      "fields":  [
+                                     "frm2550m:txtYear",
+                                     "frm2550m:RtnYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The entire future-period branch is commented out; the invalid period passes.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6748-L6757"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The entire future-period branch is commented out; the invalid period passes.",
+                      "recommended_app_behavior":  "Reject future periods using an explicit filing-period policy.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Year is below 2000.",
+                      "fields":  [
+                                     "frm2550m:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Invalid date entry on Item no.1. Entry should not be lower than 2000.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6758-L6762"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-005",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2550m:txtTIN1",
+                                     "frm2550m:txtTIN2",
+                                     "frm2550m:txtTIN3",
+                                     "frm2550m:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Only nonblankness is checked; length, characters, and checksum are not.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6763-L6767"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked; length, characters, and checksum are not.",
+                      "recommended_app_behavior":  "Validate exact segment lengths, digits, branch code, and TIN checksum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-006",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "RDO selectedIndex is zero.",
+                      "fields":  [
+                                     "frm2550m:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6768-L6772"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-007",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Line of business is blank.",
+                      "fields":  [
+                                     "frm2550m:txtLineBus"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please enter a valid Line of Business on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6773-L6777"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-008",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2550m:txtTaxPayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6778-L6782"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-009",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Telephone number is blank.",
+                      "fields":  [
+                                     "frm2550m:txtTelephoneNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please enter Taxpayer\u0027s telephone number on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6783-L6787"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-010",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm2550m:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6788-L6792"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-011",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm2550m:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching condition alerts and returns.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip code on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6793-L6797"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching condition alerts and returns.",
+                      "recommended_app_behavior":  "Retain with structured field errors.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-validate-012",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Month, amended choice, tax amounts, schedule consistency, arithmetic, or email is missing/malformed.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Validate still succeeds when the eleven active checks pass.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L6734-L6800"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate omits these material fields and calculations.",
+                      "recommended_app_behavior":  "Validate all applicable inputs and recompute authoritative amounts before locking.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-save-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any TIN segment or branch is blank.",
+                      "fields":  [
+                                     "frm2550m:txtTIN1",
+                                     "frm2550m:txtTIN2",
+                                     "frm2550m:txtTIN3",
+                                     "frm2550m:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "All are nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6974-L6979"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked.",
+                      "recommended_app_behavior":  "Use lossless draft saving; separately report invalid TIN shape.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-save-002",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm2550m:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Value differs from 000.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6980-L6983"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Placeholder RDO is rejected.",
+                      "recommended_app_behavior":  "Permit draft preservation while preventing finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-save-003",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2550m:txtTaxPayerName"
+                                 ],
+                      "accepted_behavior":  "Name is nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6984-L6988"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Draft save requires name.",
+                      "recommended_app_behavior":  "Preserve drafts even when incomplete.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-save-004",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Year/month, address, phone, ZIP, line of business, special tax, return values, or schedules are invalid.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Save proceeds if only TIN/RDO/name preflight passes.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6974-L6990",
+                                          "official-hta-runtime#saveXML:L3010-L3305"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save preflight is substantially narrower than Validate.",
+                      "recommended_app_behavior":  "Save losslessly, surface completeness separately, and never discard unknown fields.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-final-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Confirmation/network path proceeds.",
+                      "rejected_behavior":  "Offline fallback creates an encrypted copy and changes workflow state.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#finalcopy:L7515-L7581"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Final Copy is coupled to submission confirmation and connectivity.",
+                      "recommended_app_behavior":  "Offer a deterministic offline final copy independent of online transport.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550m-submit-001",
+                      "form_id":  "2550m-v2007",
+                      "revision":  "2007-02-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Submission email/body is prepared.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Payload is prepared.",
+                      "rejected_behavior":  "VAT form is mislabeled as Income Tax and Income Tax Return.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L7587-L7673"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Copied transport labels identify the wrong tax type.",
+                      "recommended_app_behavior":  "Identify Form 2550M as a VAT return.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

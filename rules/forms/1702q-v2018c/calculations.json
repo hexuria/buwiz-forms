@@ -1,0 +1,638 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702q-v2018c",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1702q-s1-item3",
+                             "1702q-s1-item5",
+                             "1702q-s1-item7",
+                             "1702q-s1-item9",
+                             "1702q-s1-item11",
+                             "1702q-s1-item13b",
+                             "1702q-s2-item3",
+                             "1702q-s2-item5",
+                             "1702q-s2-item6-osd",
+                             "1702q-s2-item7",
+                             "1702q-s2-item9",
+                             "1702q-s3-item4",
+                             "1702q-s3-item6",
+                             "1702q-s2-item11",
+                             "1702q-s2-item12",
+                             "1702q-s2-item13",
+                             "1702q-part2-item14",
+                             "1702q-s4-other-total",
+                             "1702q-s4-item7",
+                             "1702q-part2-item19",
+                             "1702q-part2-item16",
+                             "1702q-part2-item18",
+                             "1702q-part2-item20",
+                             "1702q-part2-item24",
+                             "1702q-part2-item25"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1702q-s1-item3",
+                             "outputs":  [
+                                             "frm1702q:Sched1:txtTax3A",
+                                             "frm1702q:Sched1:txtTax3B"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched1:txtTax1A",
+                                            "frm1702q:Sched1:txtTax2A",
+                                            "frm1702q:Sched1:txtTax1B",
+                                            "frm1702q:Sched1:txtTax2B"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "3A = 1A - 2A; 3B = 1B - 2B.",
+                             "rounding":  "Math.round to whole peso, then legacy JScript toLocaleString (the engine ignores modern currency-style options).",
+                             "trigger":  "Sched1_Computation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched1_Computation:L9184-L9209",
+                                                 "fixtures/calculation-boundaries.json#jscript-locale"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s1-item5",
+                             "outputs":  [
+                                             "frm1702q:Sched1:txtTax5A",
+                                             "frm1702q:Sched1:txtTax5B"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched1:txtTax4A",
+                                            "frm1702q:Sched1:txtTax3A",
+                                            "frm1702q:Sched1:txtTax4B",
+                                            "frm1702q:Sched1:txtTax3B"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "5A = 4A + 3A; 5B = 4B + 3B.",
+                             "rounding":  "Math.round to whole peso.",
+                             "trigger":  "Sched1_Computation",
+                             "depends_on":  [
+                                                "1702q-s1-item3"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched1_Computation:L9211-L9219"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s1-item7",
+                             "outputs":  [
+                                             "frm1702q:Sched1:txtTax7A",
+                                             "frm1702q:Sched1:txtTax7B"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched1:txtTax5A",
+                                            "frm1702q:Sched1:txtTax6A",
+                                            "frm1702q:Sched1:txtTax5B",
+                                            "frm1702q:Sched1:txtTax6B"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "7A = 5A - 6A; 7B = 5B - 6B.",
+                             "rounding":  "Math.round to whole peso.",
+                             "trigger":  "Sched1_Computation",
+                             "depends_on":  [
+                                                "1702q-s1-item5"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched1_Computation:L9221-L9229"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s1-item9",
+                             "outputs":  [
+                                             "frm1702q:Sched1:txtTax9A",
+                                             "frm1702q:Sched1:txtTax9B"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched1:txtTax7A",
+                                            "frm1702q:Sched1:txtTax8A",
+                                            "frm1702q:Sched1:txtTax7B",
+                                            "frm1702q:Sched1:txtTax8B"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "9A = 7A + 8A; 9B = 7B + 8B.",
+                             "rounding":  "Math.round to whole peso.",
+                             "trigger":  "Sched1_Computation",
+                             "depends_on":  [
+                                                "1702q-s1-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched1_Computation:L9231-L9239"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s1-item11",
+                             "outputs":  [
+                                             "frm1702q:Sched1:txtTax11A",
+                                             "frm1702q:Sched1:txtTax11B"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched1:txtTax9A",
+                                            "frm1702q:Sched1:txtTax10A",
+                                            "frm1702q:Sched1:txtTax9B",
+                                            "frm1702q:Sched1:txtTax10B"
+                                        ],
+                             "condition":  "11B is forced to zero when 9B \u003c= 0; 11A has no equivalent nonpositive guard.",
+                             "official_formula":  "11A = round(9A Ã— 10A / 100); 11B = 0 when 9B \u003c= 0, otherwise round(9B Ã— 10B / 100).",
+                             "rounding":  "Math.round to whole peso.",
+                             "trigger":  "Sched1_Computation",
+                             "depends_on":  [
+                                                "1702q-s1-item9"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched1_Computation:L9241-L9249"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Apply a documented nonnegative-tax predicate consistently to both columns if required by the official form instructions.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s1-item13b",
+                             "outputs":  [
+                                             "frm1702q:Sched1:txtTax13B",
+                                             "frm1702q:txtTax17"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched1:txtTax11A",
+                                            "frm1702q:Sched1:txtTax11B",
+                                            "frm1702q:Sched1:txtTax12B"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "13B = round((11A + 11B) - 12B); Part II Item 17 copies 13B.",
+                             "rounding":  "Math.round to whole peso. A separate netIncome handler can later clamp the same output to zero.",
+                             "trigger":  "Sched1_Computation; some Item 12B interactions also invoke netIncome",
+                             "depends_on":  [
+                                                "1702q-s1-item11"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched1_Computation:L9251-L9258",
+                                                 "official-hta-runtime#netIncome:L9847-L9862"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use one authoritative formula and one explicit nonnegative rule rather than event-order-dependent clamping.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item3",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax3"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax1",
+                                            "frm1702q:Sched2:txtTax2"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "3 = 1 - 2.",
+                             "rounding":  "Binary Number arithmetic, toFixed(2), then shared formatCurrency.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9247-L9254"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item5",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax5"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax3",
+                                            "frm1702q:Sched2:txtTax4"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "5 = 3 + 4.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+                                                "1702q-s2-item3"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9255-L9259"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item6-osd",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax6"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax5",
+                                            "frm1702q:rbMthdOfDdctns_2"
+                                        ],
+                             "condition":  "Optional Standard Deduction is selected.",
+                             "official_formula":  "6 = round(5 Ã— 0.40).",
+                             "rounding":  "Math.round to whole peso, despite wrapping toFixed(2) before the round.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+                                                "1702q-s2-item5"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9263-L9267"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item7",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax7"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax5",
+                                            "frm1702q:Sched2:txtTax6"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "7 = 5 - 6.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+                                                "1702q-s2-item5",
+                                                "1702q-s2-item6-osd"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9269-L9273"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item9",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax9"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax7",
+                                            "frm1702q:Sched2:txtTax8"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "9 = 7 + 8.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+                                                "1702q-s2-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9275-L9279"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s3-item4",
+                             "outputs":  [
+                                             "frm1702q:Sched3:txtTax4"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched3:txtTax1",
+                                            "frm1702q:Sched3:txtTax2",
+                                            "frm1702q:Sched3:txtTax3"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "4 = 1 + 2 + 3.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Sched3_Computation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched3_Computation:L9339-L9344"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s3-item6",
+                             "outputs":  [
+                                             "frm1702q:Sched3:txtTax6"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched3:txtTax4",
+                                            "frm1702q:Sched3:txtTax5"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "6 = 4 Ã— 5 / 100.",
+                             "rounding":  "Intermediate toFixed(2), then Math.round to whole peso.",
+                             "trigger":  "Sched3_Computation",
+                             "depends_on":  [
+                                                "1702q-s3-item4"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched3_Computation:L9346-L9351"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item11",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax11"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax9",
+                                            "frm1702q:Sched2:txtTax10"
+                                        ],
+                             "condition":  "If Item 9 is negative, output is 0.00.",
+                             "official_formula":  "11 = max(0, round(9 Ã— 10 / 100)).",
+                             "rounding":  "Product is formatted to five decimals and then Math.rounded to whole peso.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+                                                "1702q-s2-item9"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9284-L9294"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item12",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax12"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched3:txtTax6"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "12 copies Schedule 3 Item 6.",
+                             "rounding":  "Shared formatCurrency; source value is already whole-peso rounded.",
+                             "trigger":  "Sched2_Computation after Sched3_Computation",
+                             "depends_on":  [
+                                                "1702q-s3-item6"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9302-L9308"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s2-item13",
+                             "outputs":  [
+                                             "frm1702q:Sched2:txtTax13"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax11",
+                                            "frm1702q:Sched2:txtTax12"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "13 = max(11, 12). When 12 is larger, Part II Item 15 is reset to 0.00 and disabled.",
+                             "rounding":  "Inputs are already whole-peso rounded.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+                                                "1702q-s2-item11",
+                                                "1702q-s2-item12"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9313-L9328"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-part2-item14",
+                             "outputs":  [
+                                             "frm1702q:txtTax14"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched2:txtTax13"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Part II Item 14 copies Schedule 2 Item 13.",
+                             "rounding":  "Math.round to whole peso.",
+                             "trigger":  "Sched2_Computation",
+                             "depends_on":  [
+                                                "1702q-s2-item13"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched2_Computation:L9330-L9336"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s4-other-total",
+                             "outputs":  [
+                                             "other-tax-credit-total"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched4:txtOthrTxCrdtAmnt0",
+                                            "frm1702q:Sched4:txtOthrTxCrdtAmnt1"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Sum every current tblOthrTxCrdts amount row.",
+                             "rounding":  "NumWithComma parsing; no independent rounding until Item 7.",
+                             "trigger":  "ComputeOtherTaxCredits",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputeOtherTaxCredits:L9358-L9368"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-s4-item7",
+                             "outputs":  [
+                                             "frm1702q:Sched4:txtTax7"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched4:txtTax1",
+                                            "frm1702q:Sched4:txtTax2",
+                                            "frm1702q:Sched4:txtTax3",
+                                            "frm1702q:Sched4:txtTax4",
+                                            "frm1702q:Sched4:txtTax5",
+                                            "frm1702q:Sched4:txtTax6",
+                                            "other-tax-credit-total"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "7 = Items 1 + 2 + 3 + 4 + 5 + 6 + other-credit rows.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Sched4_Computation",
+                             "depends_on":  [
+                                                "1702q-s4-other-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched4_Computation:L9370-L9378"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-part2-item19",
+                             "outputs":  [
+                                             "frm1702q:txtTax19"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:Sched4:txtTax7"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Part II Item 19 copies Schedule 4 Item 7.",
+                             "rounding":  "No additional rounding.",
+                             "trigger":  "Sched4_Computation",
+                             "depends_on":  [
+                                                "1702q-s4-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sched4_Computation:L9380-L9384"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-part2-item16",
+                             "outputs":  [
+                                             "frm1702q:txtTax16"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:txtTax14",
+                                            "frm1702q:txtTax15"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "16 = 14 - 15.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Part2_Computation",
+                             "depends_on":  [
+                                                "1702q-part2-item14"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Part2_Computation:L9148-L9154"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-part2-item18",
+                             "outputs":  [
+                                             "frm1702q:txtTax18"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:txtTax16",
+                                            "frm1702q:txtTax17"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "18 = 16 + 17.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Part2_Computation",
+                             "depends_on":  [
+                                                "1702q-part2-item16",
+                                                "1702q-s1-item13b"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Part2_Computation:L9155-L9159"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-part2-item20",
+                             "outputs":  [
+                                             "frm1702q:txtTax20"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:txtTax18",
+                                            "frm1702q:txtTax19"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "20 = 18 - 19.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Part2_Computation",
+                             "depends_on":  [
+                                                "1702q-part2-item18",
+                                                "1702q-part2-item19"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Part2_Computation:L9160-L9164"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-part2-item24",
+                             "outputs":  [
+                                             "frm1702q:txtTax24"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:txtTax21",
+                                            "frm1702q:txtTax22",
+                                            "frm1702q:txtTax23"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "24 = 21 + 22 + 23.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Part2_Computation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Part2_Computation:L9165-L9169"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement the same revision-scoped formula with deterministic decimal arithmetic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702q-part2-item25",
+                             "outputs":  [
+                                             "frm1702q:txtTax25"
+                                         ],
+                             "inputs":  [
+                                            "frm1702q:txtTax20",
+                                            "frm1702q:txtTax24"
+                                        ],
+                             "condition":  "If Item 20 is negative and Item 24 is positive, output Item 24 alone; otherwise output 20 + 24.",
+                             "official_formula":  "25 = (20 \u003c 0 and 24 \u003e 0) ? 24 : 20 + 24.",
+                             "rounding":  "Binary Number arithmetic to two decimals.",
+                             "trigger":  "Part2_Computation",
+                             "depends_on":  [
+                                                "1702q-part2-item20",
+                                                "1702q-part2-item24"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Part2_Computation:L9170-L9182"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Preserve the signed arithmetic relationship unless an official instruction explicitly requires discarding the overpayment whenever penalties are positive.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

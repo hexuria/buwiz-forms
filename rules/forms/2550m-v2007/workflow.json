@@ -1,0 +1,213 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550m-v2007",
+    "revision":  "2007-02-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#addlistSched2/addlistSched3A/addlistSched3B/addlistSched6/addlistSched7/addlistSched8"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "One main return plus eight schedule modals; Schedules 2, 3A, 3B, 6, 7, and 8 have unbounded add-row arrays."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L6974-L6990",
+                                           "official-hta-runtime#saveXML:L3010-L3305"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save runs only TIN-nonblank, RDO-not-000, and taxpayer-name checks, then writes flat HTML-control state."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L6734-L6800",
+                                           "official-hta-runtime#disabledAllControl:L6805-L6872"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Eleven ordered checks run; on success all controls are disabled and an alert announces success."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#finalcopy:L7515-L7581"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy is coupled to confirmation/connectivity and creates encrypted workflow artifacts."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L7587-L7673"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Transport prepares a submission whose copied labels incorrectly call the VAT return an income-tax return."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes a plaintext local save."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L6974-L6990"
+                                            ],
+                            "guard":  "TIN segments/branch nonblank, RDO != 000, taxpayer name nonblank."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables post-validation actions."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L6734-L6800"
+                                            ],
+                            "guard":  "Eleven active ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables editable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L6873-L6946"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted copy and changes txtFinalFlag according to transport state."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#finalcopy:L7515-L7581"
+                                            ],
+                            "guard":  "User confirms the coupled workflow."
+                        },
+                        {
+                            "action":  "Online transport",
+                            "side_effects":  [
+                                                 "Prepares/sends encrypted artifact; no online submission was exercised for this research."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L7587-L7673"
+                                            ],
+                            "guard":  "Connectivity and transport proceed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Exact February 2007 ENCS revision",
+                          "Complete applicable background fields",
+                          "Complete applicable schedules",
+                          "For post-2020 periods apply later legal changes instead of blindly reproducing obsolete Schedule 4 behavior"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "vat-withheld-certificate",
+                                     "label":  "Certificate of Creditable VAT Withheld at Source",
+                                     "source_refs":  [
+                                                         "official-installed-help#attachments:L205-L213"
+                                                     ],
+                                     "required_when":  "Creditable VAT was withheld.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "sawt",
+                                     "label":  "Summary Alphalist of Withholding Taxes (SAWT)",
+                                     "source_refs":  [
+                                                         "official-installed-help#attachments:L205-L213"
+                                                     ],
+                                     "required_when":  "Creditable VAT withheld at source is claimed.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-debit-memo",
+                                     "label":  "Tax Debit Memo",
+                                     "source_refs":  [
+                                                         "official-installed-help#attachments:L205-L213"
+                                                     ],
+                                     "required_when":  "Tax debit is claimed.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-compliance-certificate",
+                                     "label":  "Tax Compliance Certificate",
+                                     "source_refs":  [
+                                                         "official-installed-help#attachments:L205-L213"
+                                                     ],
+                                     "required_when":  "Applicable to the claim/filing.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "authorization",
+                                     "label":  "Authorization letter",
+                                     "source_refs":  [
+                                                         "official-installed-help#attachments:L205-L213"
+                                                     ],
+                                     "required_when":  "Filed by an authorized representative.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help#filing-deadline",
+                                                     "official-rmc-5-2023",
+                                                     "official-rmc-52-2023"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Legacy February 2007 help says not later than the 20th day following the month. For periods beginning January 2023, RMC 5-2023 removed mandatory monthly filing and RMC 52-2023 permits optional monthly filing with no prescribed deadline."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help#filing-deadline",
+                                                     "official-rmc-5-2023",
+                                                     "official-rmc-52-2023"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Legacy February 2007 help says not later than the 20th day following the month. For periods beginning January 2023, RMC 5-2023 removed mandatory monthly filing and RMC 52-2023 permits optional monthly filing with no prescribed deadline."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help#filing-deadline",
+                                                     "official-rmc-5-2023",
+                                                     "official-rmc-52-2023"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Legacy February 2007 help says not later than the 20th day following the month. For periods beginning January 2023, RMC 5-2023 removed mandatory monthly filing and RMC 52-2023 permits optional monthly filing with no prescribed deadline."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help#filing-deadline",
+                                                     "official-rmc-5-2023",
+                                                     "official-rmc-52-2023"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Legacy February 2007 help says not later than the 20th day following the month. For periods beginning January 2023, RMC 5-2023 removed mandatory monthly filing and RMC 52-2023 permits optional monthly filing with no prescribed deadline."
+                             }
+                         ]
+}

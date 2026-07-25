@@ -1,0 +1,3 @@
+# Gaps â€” 2551Q January 2018 ENCS
+
+1. No dummy plaintext or encrypted 2551Q XML was supplied, so the 99-occurrence inventory is source-derived rather than black-box compared. The serialization predicate, DOM membership, duplicate `txtEmail`, and runtime RDO insertion are all pinned and deterministic; a future dummy save should verify the exact occurrence order without changing the source-derived universe.

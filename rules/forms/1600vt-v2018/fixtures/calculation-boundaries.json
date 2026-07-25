@@ -1,0 +1,12 @@
+{"schema_version":"1.0.0","form_id":"1600vt-v2018","cases":[
+{"case_id":"atc-row","calculation_id":"1600vt-atc-row","inputs":{"base":100,"rate":5},"official_output":"5.00"},
+{"case_id":"additional-total","calculation_id":"1600vt-additional-atc-total","inputs":{"rows6plus":[1,2]},"official_output":"3.00"},
+{"case_id":"item18","calculation_id":"1600vt-item18","inputs":{"rows1to5":[1,2,3,4,5],"additional":6},"official_output":"21.00"},
+{"case_id":"item21","calculation_id":"1600vt-item21","inputs":{"item19":2,"item20":3},"official_output":"5.00"},
+{"case_id":"item22","calculation_id":"1600vt-item22","inputs":{"item18":21,"item21":5},"official_output":"16.00"},
+{"case_id":"item26","calculation_id":"1600vt-item26","inputs":{"item23":1,"item24":2,"item25":3},"official_output":"6.00"},
+{"case_id":"item27-normal","calculation_id":"1600vt-item27","inputs":{"item22":16,"item26":6},"official_output":"22.00"},
+{"case_id":"item27-overremittance-bug","calculation_id":"1600vt-item27","inputs":{"item22":-10,"item26":5},"official_output":"5.00","recommended_output":"-5.00"},
+{"case_id":"schedule-row","calculation_id":"1600vt-s1-row","inputs":{"income":100,"rate":12},"official_output":"12.00"},
+{"case_id":"schedule-total","calculation_id":"1600vt-s1-total","inputs":{"rows":[1,2,3,4,5]},"official_output":"15.00"}
+]}

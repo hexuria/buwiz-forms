@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/form-manifest.schema.json",
+  "title": "Offline eBIRForms rule knowledge-base index or form manifest",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "knowledge_base": { "type": "string" },
+    "updated": { "type": "string", "format": "date" },
+    "forms": { "type": "array", "items": { "$ref": "#/$defs/indexForm" } },
+    "priority_queue": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+    "form_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "form_code": { "type": "string" },
+    "revision": { "type": "string" },
+    "package_version": { "type": "string" },
+    "status": { "enum": ["pending", "researching", "blocked", "complete"] },
+    "official_assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+    "counts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+    "artifacts": { "type": "object", "additionalProperties": { "type": "string" } },
+    "scope_notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "indexForm": {
+      "type": "object",
+      "required": ["form_id", "form_code", "revision", "priority", "status", "path"],
+      "properties": {
+        "form_id": { "type": "string" }, "form_code": { "type": "string" }, "revision": { "type": "string" },
+        "package_version": { "type": "string" }, "priority": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["pending", "researching", "blocked", "complete"] }, "path": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "asset": {
+      "type": "object",
+      "required": ["asset_id", "kind", "path", "sha256"],
+      "properties": {
+        "asset_id": { "type": "string" }, "kind": { "type": "string" }, "path": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "size": { "type": "integer", "minimum": 0 },
+        "revision_binding": { "type": "string" }, "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

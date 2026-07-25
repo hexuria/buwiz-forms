@@ -1,0 +1,464 @@
+{
+    "source_sha256":  "e6bf54d0fdffac4a459ceb4ff66f7afdaec10eec15f9b0e53501f66142758741",
+    "function_count":  18,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  2761,
+                          "end_line":  2851,
+                          "body_sha256":  "43de311e1fe8124038e66b289ac071b23b56b14537e8ff49450154c956f00ddc",
+                          "alerts":  [
+                                         "\"File \u0027\"+xmlFileName+\"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:btnNextPage",
+                                              "frm1604f:btnPrevPage",
+                                              "frm1604f:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  2869,
+                          "end_line":  2881,
+                          "body_sha256":  "48ce23955c13384033ada8e950417e2ab18a5d53b7d3aecfa214d60e9aa04a54",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  2930,
+                          "end_line":  3196,
+                          "body_sha256":  "ce67549dab59427c95e1f28f5316875c5203cba5dac7da184d97c2d7387beede",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:amendedRtn_1",
+                                              "frm1604f:amendedRtn_2",
+                                              "frm1604f:branchCode",
+                                              "frm1604f:description",
+                                              "frm1604f:rdoCode",
+                                              "frm1604f:registeredAddress",
+                                              "frm1604f:registeredName",
+                                              "frm1604f:telephoneNumber",
+                                              "frm1604f:tinA",
+                                              "frm1604f:tinB",
+                                              "frm1604f:tinC",
+                                              "frm1604f:txtCurrentPage",
+                                              "frm1604f:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  3197,
+                          "end_line":  3269,
+                          "body_sha256":  "abd89e27e7bbd744491a321109b001320e48be99ff82094dec5cc847ba1dcc12",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027",
+                                         "\u0027This date cannot be prior to 2018.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  3270,
+                          "end_line":  3453,
+                          "body_sha256":  "7273e929518878ba40f0f9904008cf41086034c7bdabee25af331961d3294b87",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:amendedRtn_1",
+                                              "frm1604f:amendedRtn_2",
+                                              "frm1604f:branchCode",
+                                              "frm1604f:description",
+                                              "frm1604f:rdoCode",
+                                              "frm1604f:registeredAddress",
+                                              "frm1604f:registeredName",
+                                              "frm1604f:telephoneNumber",
+                                              "frm1604f:tinA",
+                                              "frm1604f:tinB",
+                                              "frm1604f:tinC",
+                                              "frm1604f:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "TaxReliefEnable",
+                          "start_line":  3599,
+                          "end_line":  3611,
+                          "body_sha256":  "dc950f7f723c59ab71bdab89ef6bb4baaf636e8f3842be223aaf4bfd1a0d5f7c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:availedTaxRelief",
+                                              "frm1604f:taxRelief_1",
+                                              "frm1604f:taxRelief_2"
+                                          ]
+                      },
+                      {
+                          "name":  "disable11and12",
+                          "start_line":  3612,
+                          "end_line":  3620,
+                          "body_sha256":  "d937f10670c3f70336fba7155aff456c98cd6a01be3dd88e0326fa1f674ec975",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:select13",
+                                              "frm1604f:txt12",
+                                              "frm1604f:txtRefDate",
+                                              "frm1604f:txtRefMonth",
+                                              "frm1604f:txtRefYear"
+                                          ]
+                      },
+                      {
+                          "name":  "enable11and12",
+                          "start_line":  3621,
+                          "end_line":  3637,
+                          "body_sha256":  "7b02224dcb739ec743a35a5350922a5493b46f54a54d4f47725257792e57db6d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:releasedOfFunds_1",
+                                              "frm1604f:select13",
+                                              "frm1604f:txt12",
+                                              "frm1604f:txtRefDate",
+                                              "frm1604f:txtRefMonth",
+                                              "frm1604f:txtRefYear"
+                                          ]
+                      },
+                      {
+                          "name":  "validateForm",
+                          "start_line":  3789,
+                          "end_line":  4339,
+                          "body_sha256":  "d93c0bcd10264549d47ef527733b2c28f9c5fa772361c4f9e6f20d096eca66ab",
+                          "alerts":  [
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Please specify the Special Treaty or International Law the payee is availing in item 11A.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\") return; }*/ if(d.getElementById(\u0027frm1604f:txtYear\u0027).value*1 \u003c 1900) { alert(\"Invalid date entry on Item no.1. Entry should not be lower than 1900.\") return; } if( (d.getElementById(\u0027frm1604f:tinA\u0027).value == \"\" || d.getElementById(\u0027frm1604f:tinB\u0027).value == \"\" || d.getElementById(\u0027frm1604f:tinC\u0027).value == \"\" || d.getElementById(\u0027frm1604f:branchCode\u0027).value == \"\") ) { alert(\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Line of Business on Item 6.\"",
+                                         "\"Please enter a valid Taxpayer\u0027s Name on Item 7.\"",
+                                         "\"Please enter a valid Telephone Number on Item 8.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 9.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 10.\"",
+                                         "\"Invalid date entry on Item 11.\"",
+                                         "\"Please enter a valid day on item 11. Format should be MM/DD/YYYY.\") return; } if(d.getElementById(\u0027frm1604f:txt12\u0027).value == \"\"){ alert(\"Please enter Amount of Overremittance in Item 12.\"",
+                                         "\"Please select a month from the list on Item 13.\"",
+                                         "\"Please select an option for Item 8.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1602-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter the Date of Remittance for \u003cmonth\u003e. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1603-Q for the said Quarter.\"",
+                                         "\"Please enter the Date of Remittance for \u003cmonth\u003e. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1603-Q for the said Quarter.\"",
+                                         "\"Please enter the Taxes Withheld for the \u003cmonth\u003e. You may refer to your 1603-Q for the said Quarter.\"",
+                                         "\"Please enter the Date of Remittance for \u003cmonth\u003e. You may refer to your 1603-Q for the said quarter.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:availedTaxRelief",
+                                              "frm1604f:branchCode",
+                                              "frm1604f:categoryAgent_1",
+                                              "frm1604f:categoryAgent_2",
+                                              "frm1604f:cmdEdit",
+                                              "frm1604f:cmdValidate",
+                                              "frm1604f:description",
+                                              "frm1604f:rdoCode",
+                                              "frm1604f:registeredAddress",
+                                              "frm1604f:registeredName",
+                                              "frm1604f:releasedOfFunds_1",
+                                              "frm1604f:select13",
+                                              "frm1604f:taxRelief_1",
+                                              "frm1604f:telephoneNumber",
+                                              "frm1604f:tinA",
+                                              "frm1604f:tinB",
+                                              "frm1604f:tinC",
+                                              "frm1604f:txt12",
+                                              "frm1604f:txtRefDate",
+                                              "frm1604f:txtRefMonth",
+                                              "frm1604f:txtRefYear",
+                                              "frm1604f:txtSched",
+                                              "frm1604f:txtSched1Date1",
+                                              "frm1604f:txtYear",
+                                              "frm1604f:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validateMonthDayYearDate",
+                          "start_line":  4340,
+                          "end_line":  4405,
+                          "body_sha256":  "19bba07fffa52b943b3b599e403698b5db59e2c55e9feb9b368ce6cb6b779b38",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkYear",
+                          "start_line":  4406,
+                          "end_line":  4414,
+                          "body_sha256":  "f4f0be6bcda0b935058d7d4a8eedfa73f9acd924e0e2899328e1c5373a040ff0",
+                          "alerts":  [
+                                         "\"Invalid data entry on item no. 1. Entry should be current or prior year but not be earlier than the effectivity date of January 2018.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "yearMessage",
+                          "start_line":  4415,
+                          "end_line":  4431,
+                          "body_sha256":  "0e5a3c4de33bc86b55bca706fa562dfcea52bd4da9da716fff399e21167ed93c",
+                          "alerts":  [
+                                         "\"Invalid data entry on item no. 1. Entry should be current or prior year but not be earlier than the effectivity date of January 2018.\"",
+                                         "\"\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDate",
+                          "start_line":  4523,
+                          "end_line":  4570,
+                          "body_sha256":  "3241b20b91307d0f9d93e6c8bd8fbecf5cfd27981130e668aaa7836e1d157710",
+                          "alerts":  [
+                                         "\"Invalid Date.\"",
+                                         "dt.getMonth()+1",
+                                         "\"Please enter any of the following details TRA/eROR/eAR Number for the \"+actualMonth+\". You may refer to your 1601-FQ for the said quarter.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enabledDisabledControls",
+                          "start_line":  4591,
+                          "end_line":  4695,
+                          "body_sha256":  "9e4104faa6a7524349200fc095c4987a2d7589b14320f4c53a1743758b5f1ff7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:amendedRtn_1",
+                                              "frm1604f:amendedRtn_2",
+                                              "frm1604f:availedTaxRelief",
+                                              "frm1604f:branchCode",
+                                              "frm1604f:btnFinalCopy",
+                                              "frm1604f:categoryAgent_1",
+                                              "frm1604f:categoryAgent_2",
+                                              "frm1604f:description",
+                                              "frm1604f:privateAgent_1",
+                                              "frm1604f:privateAgent_2",
+                                              "frm1604f:rdoCode",
+                                              "frm1604f:registeredAddress",
+                                              "frm1604f:registeredName",
+                                              "frm1604f:releasedOfFunds_1",
+                                              "frm1604f:releasedOfFunds_2",
+                                              "frm1604f:taxRelief_1",
+                                              "frm1604f:taxRelief_2",
+                                              "frm1604f:telephoneNumber",
+                                              "frm1604f:tinA",
+                                              "frm1604f:tinB",
+                                              "frm1604f:tinC",
+                                              "frm1604f:txtSched",
+                                              "frm1604f:txtSched1Adj",
+                                              "frm1604f:txtSched1Date1",
+                                              "frm1604f:txtSched1Date2",
+                                              "frm1604f:txtSched1Date3",
+                                              "frm1604f:txtSched1Date4",
+                                              "frm1604f:txtSched1Pen1",
+                                              "frm1604f:txtSched1Pen2",
+                                              "frm1604f:txtSched1Pen3",
+                                              "frm1604f:txtSched1Pen4",
+                                              "frm1604f:txtSched1TaxWheld1",
+                                              "frm1604f:txtSched1TaxWheld2",
+                                              "frm1604f:txtSched1TaxWheld3",
+                                              "frm1604f:txtSched1TaxWheld4",
+                                              "frm1604f:txtSched1TRA1",
+                                              "frm1604f:txtSched1TRA2",
+                                              "frm1604f:txtSched1TRA3",
+                                              "frm1604f:txtSched1TRA4",
+                                              "frm1604f:txtSched2Date1",
+                                              "frm1604f:txtSched2Date2",
+                                              "frm1604f:txtSched2Date3",
+                                              "frm1604f:txtSched2Date4",
+                                              "frm1604f:txtSched2Pen1",
+                                              "frm1604f:txtSched2Pen2",
+                                              "frm1604f:txtSched2Pen3",
+                                              "frm1604f:txtSched2Pen4",
+                                              "frm1604f:txtSched2TaxWheld1",
+                                              "frm1604f:txtSched2TaxWheld2",
+                                              "frm1604f:txtSched2TaxWheld3",
+                                              "frm1604f:txtSched2TaxWheld4",
+                                              "frm1604f:txtSched2TRA1",
+                                              "frm1604f:txtSched2TRA2",
+                                              "frm1604f:txtSched2TRA3",
+                                              "frm1604f:txtSched2TRA4",
+                                              "frm1604f:txtSheets",
+                                              "frm1604f:txtYear",
+                                              "frm1604f:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  4711,
+                          "end_line":  4764,
+                          "body_sha256":  "4f29e20b5cf93d1050c10399bd5fba71df23be0127f3b38377d70186bea0b243",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 7.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:branchCode",
+                                              "frm1604f:rdoCode",
+                                              "frm1604f:registeredName",
+                                              "frm1604f:tinA",
+                                              "frm1604f:tinB",
+                                              "frm1604f:tinC"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  4857,
+                          "end_line":  4895,
+                          "body_sha256":  "3c496c62c7474761a348819248d09a8932a16996594ee143a9e4ccba0488c24c",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1604f:branchCode",
+                                              "frm1604f:email",
+                                              "frm1604f:rdoCode",
+                                              "frm1604f:registeredAddress",
+                                              "frm1604f:registeredName",
+                                              "frm1604f:telephoneNumber",
+                                              "frm1604f:tinA",
+                                              "frm1604f:tinB",
+                                              "frm1604f:tinC",
+                                              "frm1604f:txtLineBus",
+                                              "frm1604f:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  5233,
+                          "end_line":  5246,
+                          "body_sha256":  "52ccee1d7987f14a7f3d603fffaae3ed9cd2a5d5d22aea407bdcea3d624593c7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  5454,
+                          "end_line":  5467,
+                          "body_sha256":  "b2de3d87b1305516855a2c21157d501b0ba75cb503b0603dff5bcce26578e3ac",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

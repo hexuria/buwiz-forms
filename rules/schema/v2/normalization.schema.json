@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/normalization.schema.json",
+  "title": "eBIRForms executable rules IR v2 normalization nodes",
+  "$defs": {
+    "pipeline": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "step": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/trim"
+        },
+        {
+          "$ref": "#/$defs/change_case"
+        },
+        {
+          "$ref": "#/$defs/replace_literal"
+        },
+        {
+          "$ref": "#/$defs/strip_characters"
+        },
+        {
+          "$ref": "#/$defs/digits_only"
+        },
+        {
+          "$ref": "#/$defs/normalize_newlines"
+        },
+        {
+          "$ref": "#/$defs/date_format"
+        },
+        {
+          "$ref": "#/$defs/decimal_format"
+        }
+      ]
+    },
+    "trim": {
+      "type": "object",
+      "required": [
+        "kind",
+        "side"
+      ],
+      "properties": {
+        "kind": {
+          "const": "trim"
+        },
+        "side": {
+          "enum": [
+            "both",
+            "start",
+            "end"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "change_case": {
+      "type": "object",
+      "required": [
+        "kind",
+        "case"
+      ],
+      "properties": {
+        "kind": {
+          "const": "change-case"
+        },
+        "case": {
+          "enum": [
+            "upper",
+            "lower"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "replace_literal": {
+      "type": "object",
+      "required": [
+        "kind",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "kind": {
+          "const": "replace-literal"
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "strip_characters": {
+      "type": "object",
+      "required": [
+        "kind",
+        "characters"
+      ],
+      "properties": {
+        "kind": {
+          "const": "strip-characters"
+        },
+        "characters": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "digits_only": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "digits-only"
+        }
+      },
+      "additionalProperties": false
+    },
+    "normalize_newlines": {
+      "type": "object",
+      "required": [
+        "kind",
+        "style"
+      ],
+      "properties": {
+        "kind": {
+          "const": "normalize-newlines"
+        },
+        "style": {
+          "enum": [
+            "lf",
+            "crlf"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "date_format": {
+      "type": "object",
+      "required": [
+        "kind",
+        "format"
+      ],
+      "properties": {
+        "kind": {
+          "const": "date-format"
+        },
+        "format": {
+          "enum": [
+            "yyyy-mm-dd",
+            "mm/dd/yyyy",
+            "mm-dd-yyyy"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "decimal_format": {
+      "type": "object",
+      "required": [
+        "kind",
+        "grouping",
+        "rounding"
+      ],
+      "properties": {
+        "kind": {
+          "const": "decimal-format"
+        },
+        "grouping": {
+          "enum": [
+            "none",
+            "comma"
+          ]
+        },
+        "rounding": {
+          "$ref": "rounding.schema.json#/$defs/rounding"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/pipeline"
+}

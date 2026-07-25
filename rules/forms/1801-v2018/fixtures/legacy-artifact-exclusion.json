@@ -1,0 +1,16 @@
+{
+    "schema_version":  "1.0.0",
+    "target_form_id":  "1801-v2018",
+    "plaintext_sha256":  "cd1ceb8cfb2e1daac21f0e948c25b0ba62e7d4cdf8a0e4a73710daaf96ac7001",
+    "encrypted_sha256":  "6ab3445921227b0537d9370bd08fdf92672fbada6edf781fcac86f74684ea603",
+    "plaintext_key_count":  111,
+    "plaintext_inventory_sha256":  "c82bc9762711506ac134187ca823581528fd4c163efbe31ddabd73ee01dde9ef",
+    "observed_prefix":  "104 frm1801: keys plus seven unprefixed legacy metadata keys",
+    "required_prefix":  "frm1801v2018:",
+    "values_emitted":  false,
+    "disposition":  "excluded from target revision field evidence",
+    "source_paths":  [
+                         "C:\\eBIRForms\\savefile\\00000000000000-1801-07222026.xml",
+                         "C:\\eBIRForms\\IAF_RDO_Copy\\1801-final-copy-#email-redacted#.xml"
+                     ]
+}

@@ -1,0 +1,829 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701ms-v2024",
+    "revision":  "2024-08-01",
+    "evaluation_order":  [
+                             "1701ms-regular-tax-table",
+                             "1701ms-part4a-item3",
+                             "1701ms-part4a-item4",
+                             "1701ms-b1-item7",
+                             "1701ms-b1-item9",
+                             "1701ms-b1-item10d",
+                             "1701ms-b1-item11-osd",
+                             "1701ms-b1-item12",
+                             "1701ms-b1-item14",
+                             "1701ms-b1-item15",
+                             "1701ms-b1-item17",
+                             "1701ms-b1-item18a",
+                             "1701ms-b1-item18b",
+                             "1701ms-b2-item21",
+                             "1701ms-b2-item23",
+                             "1701ms-b2-item24",
+                             "1701ms-b2-item25",
+                             "1701ms-part2-item19",
+                             "1701ms-part2-item21",
+                             "1701ms-part2-item22",
+                             "1701ms-part2-item23",
+                             "1701ms-part5-item10",
+                             "1701ms-part2-item24",
+                             "1701ms-part2-item25",
+                             "1701ms-part2-item27",
+                             "1701ms-part2-item28",
+                             "1701ms-part2-item29",
+                             "1701ms-part2-item30",
+                             "1701ms-part6-relief",
+                             "1701ms-indexed-schedule-totals"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1701ms-regular-tax-table",
+                             "outputs":  [
+                                             "regular-income-tax"
+                                         ],
+                             "inputs":  [
+                                            "taxable-income"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "0 through 250,000: 0; \u003c=400,000: 15% of excess over 250,000; \u003c=800,000: 22,500 + 20% over 400,000; \u003c=2,000,000: 102,500 + 25% over 800,000; \u003c=8,000,000: 402,500 + 30% over 2,000,000; above 8,000,000: 2,202,500 + 35% over 8,000,000.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeRegularIncomeTax",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeRegularIncomeTax:L12870-L12895"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part4a-item3",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxableCompensationIncomea",
+                                             "frm1701MS:txtTaxableCompensationIncomeb"
+                                         ],
+                             "inputs":  [
+                                            "frm1701MS:txtGrossa",
+                                            "frm1701MS:txtGrossb",
+                                            "frm1701MS:txtLessNonTaxablea",
+                                            "frm1701MS:txtLessNonTaxableb"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 3 = gross compensation - non-taxable compensation.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "calculateNo3TP/SP",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculateNo3TP:L11647-L11688",
+                                                 "official-hta-runtime#calculateNo3SP:L11690-L11738"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part4a-item4",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxpayerNo4a",
+                                             "frm1701MS:txtTaxpayerNo4b"
+                                         ],
+                             "inputs":  [
+                                            "frm1701MS:txtTaxableCompensationIncomea",
+                                            "frm1701MS:txtTaxableCompensationIncomeb"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 4 = round(regular tax table(Item 3)).",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "calculateNo3TP/SP",
+                             "depends_on":  [
+                                                "1701ms-regular-tax-table",
+                                                "1701ms-part4a-item3"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculateNo3TP:L11663-L11668",
+                                                 "official-hta-runtime#calculateNo3SP:L11707-L11712"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item7",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxableCompensationIncomeNo7a",
+                                             "frm1701MS:txtTaxableCompensationIncomeNo7b"
+                                         ],
+                             "inputs":  [
+                                            "frm1701MS:txtSalesRevenueNo5a",
+                                            "frm1701MS:txtSalesRevenueNo5b",
+                                            "frm1701MS:txtSalesReturnsNo6a",
+                                            "frm1701MS:txtSalesReturnsNo6b"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "7 = sales/revenue/fees - returns/allowances/discounts.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "calculateNo7a/b",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculateNo7a:L11741-L11748",
+                                                 "official-hta-runtime#calculateNo7b:L11750-L11757"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item9",
+                             "outputs":  [
+                                             "frm1701MS:txtGrossIncomeNo9a",
+                                             "frm1701MS:txtGrossIncomeNo9b"
+                                         ],
+                             "inputs":  [
+                                            "frm1701MS:txtTaxableCompensationIncomeNo7a",
+                                            "frm1701MS:txtTaxableCompensationIncomeNo7b",
+                                            "frm1701MS:txtCostofSalesNo8a",
+                                            "frm1701MS:txtCostofSalesNo8b"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "9 = 7 - 8.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeNo9/computeNo9b",
+                             "depends_on":  [
+                                                "1701ms-b1-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeNo9:L11760-L11769",
+                                                 "official-hta-runtime#computeNo9b:L11771-L11780"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item10d",
+                             "outputs":  [
+                                             "frm1701MS:txtTotalAllowableItemixedDeductionsNo10a",
+                                             "frm1701MS:txtTotalAllowableItemixedDeductionsNo10b"
+                                         ],
+                             "inputs":  [
+                                            "item10A",
+                                            "item10B",
+                                            "item10C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "10D = 10A + 10B + 10C.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTotalAllowableDeductionsNo10a/b",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAllowableDeductionsNo10a:L11783-L11788",
+                                                 "official-hta-runtime#computeTotalAllowableDeductionsNo10b:L11790-L11795"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item11-osd",
+                             "outputs":  [
+                                             "frm1701MS:txtOptionalDeductionNo11a",
+                                             "frm1701MS:txtOptionalDeductionNo11b"
+                                         ],
+                             "inputs":  [
+                                            "frm1701MS:txtTaxableCompensationIncomeNo7a",
+                                            "frm1701MS:txtTaxableCompensationIncomeNo7b"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If OSD selected, 11 = round(7 * 40%).",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeOptionalDeductionNo11a/b",
+                             "depends_on":  [
+                                                "1701ms-b1-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOptionalDeductionNo11a:L11798-L11806",
+                                                 "official-hta-runtime#computeOptionalDeductionNo11b:L11808-L11816"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item12",
+                             "outputs":  [
+                                             "frm1701MS:txtNetIncomeLossNo12a",
+                                             "frm1701MS:txtNetIncomeLossNo12b"
+                                         ],
+                             "inputs":  [
+                                            "item9",
+                                            "item10D",
+                                            "item11",
+                                            "deduction-method"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Itemized: 12 = 9 - 10D; OSD: 12 = 9 - 11.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeNetIncomeLossNo12TP/SP",
+                             "depends_on":  [
+                                                "1701ms-b1-item9",
+                                                "1701ms-b1-item10d",
+                                                "1701ms-b1-item11-osd"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeNetIncomeLossNo12TP:L11819-L11839",
+                                                 "official-hta-runtime#computeNetIncomeLossNo12SP:L11841-L11858"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item14",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxableIncomeBusinesNo14a",
+                                             "frm1701MS:txtTaxableIncomeBusinesNo14b"
+                                         ],
+                             "inputs":  [
+                                            "frm1701MS:txtNetIncomeLossNo12a",
+                                            "frm1701MS:txtNetIncomeLossNo12b",
+                                            "frm1701MS:txtNonOperatingIncomeNo13a",
+                                            "frm1701MS:txtNonOperatingIncomeNo13b"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "14 = 12 + 13.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTotalIncomeBusinessNo14TP/SP",
+                             "depends_on":  [
+                                                "1701ms-b1-item12"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalIncomeBusinessNo14TP:L11861-L11876",
+                                                 "official-hta-runtime#computeTotalIncomeBusinessNo14SP:L11878-L11891"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item15",
+                             "outputs":  [
+                                             "frm1701MS:txtCompensationBusinessNo15a",
+                                             "frm1701MS:txtCompensationBusinessNo15b"
+                                         ],
+                             "inputs":  [
+                                            "part4A-item3",
+                                            "part4B1-item14",
+                                            "income-source",
+                                            "tax-regime"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Generally sum positive Item 3 and positive Item 14; spouse compensation-only uses Item 14 alone; 8% branches do not compute.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTaxableIncome15TP/SP",
+                             "depends_on":  [
+                                                "1701ms-part4a-item3",
+                                                "1701ms-b1-item14"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxableIncome15TP:L11894-L11931",
+                                                 "official-hta-runtime#computeTaxableIncome15SP:L11933-L11978"
+                                             ],
+                             "assessment":  "ambiguous",
+                             "recommended_app_behavior":  "Re-derive spouse compensation-only handling against the official guide before implementation.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item17",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxDueSpeciala",
+                                             "frm1701MS:txtTaxDueSpecialb"
+                                         ],
+                             "inputs":  [
+                                            "item9",
+                                            "item14",
+                                            "item16-rate",
+                                            "tax-regime"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Exempt branch: round(Item14 * rate/100); special/preferential branch: round(max(0,Item9) * rate/100).",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTaxDueNo17TP/SP",
+                             "depends_on":  [
+                                                "1701ms-b1-item9",
+                                                "1701ms-b1-item14"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxDueNo17TP:L11980-L12017",
+                                                 "official-hta-runtime#computeTaxDueNo17SP:L12020-L12057"
+                                             ],
+                             "assessment":  "ambiguous",
+                             "recommended_app_behavior":  "Preserve both formulas and verify the surprising taxable calculation for the exempt branch.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item18a",
+                             "outputs":  [
+                                             "frm1701MS:TotalTaxDueCompensationATP",
+                                             "frm1701MS:TotalTaxDueCompensationASP"
+                                         ],
+                             "inputs":  [
+                                            "item17",
+                                            "part4A-item4",
+                                            "income-source",
+                                            "tax-regime"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For applicable exempt/special paths, 18A is generally Item17 + compensation tax Item4; mixed special copies Item17 directly to Part II Item19.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "totalTaxDue18ATP/ASP",
+                             "depends_on":  [
+                                                "1701ms-b1-item17",
+                                                "1701ms-part4a-item4"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#totalTaxDue18ATP:L12096-L12112",
+                                                 "official-hta-runtime#totalTaxDue18ASP:L12114-L12130"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b1-item18b",
+                             "outputs":  [
+                                             "frm1701MS:TotalTaxDueCompensationBTP",
+                                             "frm1701MS:TotalTaxDueCompensationBSP"
+                                         ],
+                             "inputs":  [
+                                            "frm1701MS:txtCompensationBusinessNo15a",
+                                            "frm1701MS:txtCompensationBusinessNo15b"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If graduated rates, 18B = round(regular tax table(max-valid Item15)); negative/non-finite becomes 0.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "totalTaxDue18BTP/BSP",
+                             "depends_on":  [
+                                                "1701ms-regular-tax-table",
+                                                "1701ms-b1-item15"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#totalTaxDue18BTP:L12135-L12160",
+                                                 "official-hta-runtime#totalTaxDue18BSP:L12162-L12187"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b2-item21",
+                             "outputs":  [
+                                             "frm1701MS:txtTotalIncomeNo21a",
+                                             "frm1701MS:txtTotalIncomeNo21b"
+                                         ],
+                             "inputs":  [
+                                            "item19",
+                                            "item20"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21 = 19 + 20.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTotalIncomeNo21a/b",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalIncomeNo21a:L12190-L12195",
+                                                 "official-hta-runtime#computeTotalIncomeNo21b:L12197-L12202"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b2-item23",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxableIncomeLoss23A",
+                                             "frm1701MS:txtTaxableIncomeLoss23B"
+                                         ],
+                             "inputs":  [
+                                            "item21",
+                                            "item22"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23 = 21 - 22.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeIncomeLoss/computeIncomeLossb",
+                             "depends_on":  [
+                                                "1701ms-b2-item21"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeIncomeLoss:L12205-L12209",
+                                                 "official-hta-runtime#computeIncomeLossb:L12212-L12216"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b2-item24",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxDueBusinessIncome24A",
+                                             "frm1701MS:txtTaxDueBusinessIncome24B"
+                                         ],
+                             "inputs":  [
+                                            "item23"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item23 \u003e= 1, 24 = round(Item23 * 8%); otherwise 0.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeBusinessIncome/computeBusinessIncomeb",
+                             "depends_on":  [
+                                                "1701ms-b2-item23"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeBusinessIncome:L12219-L12231",
+                                                 "official-hta-runtime#computeBusinessIncomeb:L12234-L12246"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-b2-item25",
+                             "outputs":  [
+                                             "frm1701MS:txtCompensationBusinessNo25a",
+                                             "frm1701MS:txtCompensationBusinessNo25b",
+                                             "frm1701MS:txtIncomeTaxRegularNo22a",
+                                             "frm1701MS:txtIncomeTaxRegularNo22b"
+                                         ],
+                             "inputs":  [
+                                            "part4A-item4",
+                                            "part4B2-item24",
+                                            "8%-regime"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If 8% selected, 25 = compensation tax Item4 + business tax Item24, and Part II Item22 receives the same value; otherwise 0.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "totalTaxDueCompensationAndBusinessIncome25TP/SP",
+                             "depends_on":  [
+                                                "1701ms-part4a-item4",
+                                                "1701ms-b2-item24"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#totalTaxDueCompensationAndBusinessIncome25TP:L12250-L12261",
+                                                 "official-hta-runtime#totalTaxDueCompensationAndBusinessIncome25SP:L12264-L12275"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item19",
+                             "outputs":  [
+                                             "frm1701MS:txtIncomeTaxDueNo19a",
+                                             "frm1701MS:txtIncomeTaxDueNo19b"
+                                         ],
+                             "inputs":  [
+                                            "item17",
+                                            "item18A",
+                                            "tax-regime"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Special copies Item17; exempt writes 0; otherwise copies Item18A.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeIncomeTaxDueNo19a/b",
+                             "depends_on":  [
+                                                "1701ms-b1-item17",
+                                                "1701ms-b1-item18a"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeIncomeTaxDueNo19a:L11203-L11221",
+                                                 "official-hta-runtime#computeIncomeTaxDueNo19b:L11239-L11258"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item21",
+                             "outputs":  [
+                                             "frm1701MS:txtNetSpecialRateNo21a",
+                                             "frm1701MS:txtNetSpecialRateNo21b"
+                                         ],
+                             "inputs":  [
+                                            "item19",
+                                            "item20"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21 = 19 - share of other agency Item20.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "calculateSpecialRateNo21a/b",
+                             "depends_on":  [
+                                                "1701ms-part2-item19"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculateSpecialRateNo21a:L11276-L11285",
+                                                 "official-hta-runtime#calculateSpecialRateNo21b:L11287-L11297"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item22",
+                             "outputs":  [
+                                             "frm1701MS:txtIncomeTaxRegularNo22a",
+                                             "frm1701MS:txtIncomeTaxRegularNo22b"
+                                         ],
+                             "inputs":  [
+                                            "tax-regime",
+                                            "part4A-item4",
+                                            "part4B1-item18B",
+                                            "part4B2-item25"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Conditional copy from the regular-tax source appropriate to exempt/special, graduated, compensation-only, or 8% branches.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeP2No22TP/SP and B2 Item25",
+                             "depends_on":  [
+                                                "1701ms-part4a-item4",
+                                                "1701ms-b1-item18b",
+                                                "1701ms-b2-item25"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2No22TP:L11300-L11320",
+                                                 "official-hta-runtime#computeP2No22SP:L11322-L11350"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item23",
+                             "outputs":  [
+                                             "frm1701MS:txtTotalIncomeTaxDueNo23a",
+                                             "frm1701MS:txtTotalIncomeTaxDueNo23b"
+                                         ],
+                             "inputs":  [
+                                            "item21",
+                                            "item22"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23 = 21 + 22.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeP2No23TP/SP",
+                             "depends_on":  [
+                                                "1701ms-part2-item21",
+                                                "1701ms-part2-item22"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2No23TP:L11353-L11358",
+                                                 "official-hta-runtime#computeP2No23SP:L11360-L11364"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part5-item10",
+                             "outputs":  [
+                                             "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10a",
+                                             "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10b"
+                                         ],
+                             "inputs":  [
+                                            "Part V Items 1..9 by column"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "10 = sum Items 1 through 9, treating parse failures as 0.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeCreditsPaymentsPartVNo10a/b",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeCreditsPaymentsPartVNo10a:L12742-L12751",
+                                                 "official-hta-runtime#computeCreditsPaymentsPartVNo10b:L12754-L12763"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item24",
+                             "outputs":  [
+                                             "frm1701MS:txtTotalTaxCreditsPartIINo24a",
+                                             "frm1701MS:txtTotalTaxCreditsPartIINo24b"
+                                         ],
+                             "inputs":  [
+                                            "Part V Item10"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Part II 24 copies Part V Item10.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeP2No24TP/SP",
+                             "depends_on":  [
+                                                "1701ms-part5-item10"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2No24TP:L11367-L11369",
+                                                 "official-hta-runtime#computeP2No24SP:L11371-L11373"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item25",
+                             "outputs":  [
+                                             "frm1701MS:txtTaxPayableNo25a",
+                                             "frm1701MS:txtTaxPayableNo25b"
+                                         ],
+                             "inputs":  [
+                                            "item23",
+                                            "item24"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "25 = 23 - 24.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeP2No25TP/SP",
+                             "depends_on":  [
+                                                "1701ms-part2-item23",
+                                                "1701ms-part2-item24"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2No25TP:L11376-L11383",
+                                                 "official-hta-runtime#computeP2No25SP:L11397-L11404"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item27",
+                             "outputs":  [
+                                             "frm1701MS:txtAmountPayableNo27a",
+                                             "frm1701MS:txtAmountPayableNo27b"
+                                         ],
+                             "inputs":  [
+                                            "item25",
+                                            "item26"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "27 = 25 - 26.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "calculateP2No27TP/SP",
+                             "depends_on":  [
+                                                "1701ms-part2-item25"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculateP2No27TP:L11503-L11507",
+                                                 "official-hta-runtime#calculateP2No27SP:L11509-L11513"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item28",
+                             "outputs":  [
+                                             "frm1701MS:txtTotalPenaltiesNo28a",
+                                             "frm1701MS:txtTotalPenaltiesNo28b"
+                                         ],
+                             "inputs":  [
+                                            "surcharge",
+                                            "interest",
+                                            "compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "28D = surcharge + interest + compromise.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTotalPenaltiesNo28a/b",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalPenaltiesNo28a:L11516-L11519",
+                                                 "official-hta-runtime#computeTotalPenaltiesNo28b:L11521-L11524"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item29",
+                             "outputs":  [
+                                             "frm1701MS:txtTotalAmountPayableNo29a",
+                                             "frm1701MS:txtTotalAmountPayableNo29b"
+                                         ],
+                             "inputs":  [
+                                            "item27",
+                                            "item28D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item27 \u003c 0 and penalties \u003e 0, Item29 = penalties only; otherwise Item29 = Item27 + penalties.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTotalAmountPayableNo29a/b",
+                             "depends_on":  [
+                                                "1701ms-part2-item27",
+                                                "1701ms-part2-item28"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAmountPayableNo29a:L11527-L11542",
+                                                 "official-hta-runtime#computeTotalAmountPayableNo29b:L11544-L11558"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Verify whether a negative Item27 should offset penalties; preserve official behavior separately.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part2-item30",
+                             "outputs":  [
+                                             "frm1701MS:txtAggregateAmountPayable30a"
+                                         ],
+                             "inputs":  [
+                                            "item29A",
+                                            "item29B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If one Item29 is negative and the other positive, discard the negative and use the positive; if both negative or both nonnegative, add them.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeAggregateAmountNo30",
+                             "depends_on":  [
+                                                "1701ms-part2-item29"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeAggregateAmountNo30:L11561-L11622"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Do not discard one spouse column when aggregating; re-derive from the official guide.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-part6-relief",
+                             "outputs":  [
+                                             "frm1701MS:totalTaxReliefAvailmentA",
+                                             "frm1701MS:totalTaxReliefAvailmentB"
+                                         ],
+                             "inputs":  [
+                                            "item10B",
+                                            "item14",
+                                            "item17",
+                                            "Part V item8"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "max(0, regularTax(item10B + item14) - item17 + special tax credits), rounded.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeTaxAvailmentTP/SP",
+                             "depends_on":  [
+                                                "1701ms-regular-tax-table",
+                                                "1701ms-b1-item14",
+                                                "1701ms-b1-item17"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxAvailmentTP:L12278-L12300",
+                                                 "official-hta-runtime#computeTaxAvailmentSP:L12302-L12324"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701ms-indexed-schedule-totals",
+                             "outputs":  [
+                                             "Items 10A, 10B, 13, 20, and Part V Item9 modal totals"
+                                         ],
+                             "inputs":  [
+                                            "21 indexed runtime families"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Each modal sums its materialized Amount column(s), rounds with Math.round in several schedules, and copies the total into the corresponding fixed return field.",
+                             "rounding":  "Whole-peso form: Math.round is used at tax-table/rate steps; formatCurrencyWithComma adds separators without a single consistent decimal policy.",
+                             "trigger":  "computeOtherSched410A through computeOtherSpecifySpouse",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOtherSched410A:L13157-L13173",
+                                                 "official-hta-runtime#computeOtherSched410aSpouse:L13317-L13345",
+                                                 "official-hta-runtime#computeOthersched410A1:L13818-L13842",
+                                                 "official-hta-runtime#computeOthersched410A2:L14164-L14198",
+                                                 "official-hta-runtime#computeOtherSched413A:L14496-L14517",
+                                                 "official-hta-runtime#computeOtherSched413B:L14904-L14961",
+                                                 "official-hta-runtime#computeOtherSched420A:L15199-L15236",
+                                                 "official-hta-runtime#computeOtherSched420B:L15514-L15549",
+                                                 "official-hta-runtime#computeOtherSpecify:L15692-L15716"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Use exact integer summation; preserve ID spelling defects only in compatibility import.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

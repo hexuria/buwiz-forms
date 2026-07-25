@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "types": [
+    {
+      "id": "string",
+      "storage": "string",
+      "description": "Uninterpreted serialized control value."
+    },
+    {
+      "id": "boolean",
+      "storage": "string",
+      "representations": [
+        "true",
+        "false"
+      ],
+      "description": "Per-control checked state; radio groups serialize every member."
+    },
+    {
+      "id": "money",
+      "storage": "string",
+      "description": "Official UI commonly serializes comma-grouped decimal strings; individual handlers determine sign and rounding."
+    },
+    {
+      "id": "digit-string",
+      "storage": "string",
+      "description": "Identifier segment whose leading zeroes are significant."
+    },
+    {
+      "id": "date",
+      "storage": "string",
+      "description": "Date text; exact format and range are form/control specific."
+    },
+    {
+      "id": "code",
+      "storage": "string",
+      "description": "Select or enumerated code whose meaning comes from HTML options and source behavior."
+    }
+  ]
+}

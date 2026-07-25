@@ -1,0 +1,92 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1602q-v2018",
+    "form_code":  "1602Q",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1602Qv2018.hta",
+                                "sha256":  "898f83932a3e85f39b9efc6ac0c148c3a1a05d00e5feab843e15360d6465cd2e",
+                                "size":  410850,
+                                "revision_binding":  "APPLICATIONNAME 1602Qv2018; printed January 2018."
+                            },
+                            {
+                                "asset_id":  "official-help-v2018",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1602Q.hta",
+                                "sha256":  "74f6b70ee6051946dfc054b6b17926f7f74f21db9a645350db24881ec09950b8",
+                                "size":  24618,
+                                "revision_binding":  "Revision-matched January 2018 guide and filing deadline."
+                            },
+                            {
+                                "asset_id":  "revision-matched-encrypted-sample",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1602Qv2018\\1602Qv2018-final-copy-#email-redacted#.xml",
+                                "sha256":  "ecda88d22aeaf98b5bf70a0937b88a295613589131d7e16ddd83c5913aea67f9",
+                                "size":  1072,
+                                "revision_binding":  "The 110-key inventory exactly equals the runtime DOM plus injected RDO select."
+                            },
+                            {
+                                "asset_id":  "mismatched-form-pdf-excluded",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1602Qv2019\\1602Q Jan 2019.pdf",
+                                "sha256":  "9cad9524ebf2042c7d9827b87afe77fd6f60cc8a596ec1b5f54ffbf2df49aa69",
+                                "size":  1121469,
+                                "revision_binding":  "January 2019 PDF; retained only as an explicit revision-mismatch exclusion."
+                            },
+                            {
+                                "asset_id":  "official-rmc-27-2018",
+                                "kind":  "official-bir-issuance",
+                                "path":  "https://bir-cdn.bir.gov.ph/local/pdf/RMC%20No%2027-2018.pdf",
+                                "sha256":  "2609208dbb5bb2fabfed0cef0ead1bc1cf7b5ea8e6efecbe631c1c9b79c28c51",
+                                "size":  697595,
+                                "revision_binding":  "Official implementing issuance retrieved 2026-07-23; supports the January 2018 revision context, not the field inventory."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  110,
+                   "runtime_field_families":  0,
+                   "fields_total":  110,
+                   "typed_fields":  110,
+                   "validation_rules":  36,
+                   "confirmed_official_bugs":  9,
+                   "calculations":  13,
+                   "negative_fixtures":  34,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer or release metadata changed.",
+                        "No decrypted values or email-bearing filenames are emitted.",
+                        "The 109 static serializer controls plus the runtime-injected RDO select exactly reproduce the encrypted sample 110-key inventory hash.",
+                        "The only local form PDF is January 2019 and is explicitly excluded from January 2018 revision evidence."
+                    ]
+}

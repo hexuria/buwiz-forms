@@ -17,19 +17,11 @@ above 1%. See `docs/form-print-readiness/priority-forms-readiness.md`.
 **Do not spend effort on text pixels. Ever.** That is where the previous 273
 commits went. Text correctness is proven by content assertions instead.
 
-The replacement criterion is `official-fidelity-v1`
-(`docs/form-print-readiness/official-fidelity-criterion-v1.md`), a **composite
-of six bound components**, currently **implemented and running in reporting
-mode but not gating**:
-
-| Component | Binds |
-| --- | --- |
-| `cell-edge-f1-v1` | displacement, per scoring cell, tolerance radius **1** |
-| `structural-ink-coverage-v1` | rules, boxes, fills — font-independent by construction |
-| `page-ink-budget-v1` | ink volume and exactly-white paper pixels (the tint attack) |
-| `static-text-exhaustive-v1` | every printed string, ordered — **the only thing standing between us and a wrong tax rate** |
-| `encoded-artwork-integrity-v1` | payload + raster crop hash + transform |
-| `official-complete-page-v2` | retained, **mandatory, never hidden**, no longer gating |
+The replacement criterion is `official-fidelity-v1`, a **composite of six bound
+components**, currently **implemented and running in reporting mode but not
+gating**. The component table lives in
+`docs/form-print-readiness/official-fidelity-criterion-v1.md` — read it before
+touching the criterion.
 
 Rules that are not negotiable:
 
@@ -98,6 +90,7 @@ are superseded by the per-form contract-derived lists.
 - `packages/form-specs/form-migration-status.json` and `form-release-evidence.json` are conservative truth. The trusted-producer registries in `scripts/audit_html_form_migration.py` are intentionally **empty frozensets**; a producer is registered only after the user reviews it. Hand-authored reports and untracked artifacts (`tmp/`, `test-results/`) can never promote a form.
 - Never set capability flags or `release_ready` to make an audit pass. `html_only` routing is not a release claim; forms stay `ScaffoldOnly` with `release_ready: false` until the complete evidence chain exists (visual parity, native print/export per platform, packaged-offline, rollback drill).
 - Promotion evidence lands in a dedicated evidence-only commit binding a clean curated source revision.
+- `npm run audit:forms:migration` needs `-- --require-clean-source` before evidence runs.
 
 ## Do not
 
@@ -108,23 +101,11 @@ are superseded by the per-form contract-derived lists.
 - Mutate confirmed COR facts directly; the replacement-version + review flow is the designed audit trail.
 - Spawn subagents with full conversation history; use compact prompts with exact file paths.
 
-## Key commands
-
-```sh
-rtk npm run audit:forms:migration          # migration/evidence audit (add -- --require-clean-source before evidence runs)
-rtk npm run audit:no-legacy                # legacy-absence audit
-rtk npm run contracts:check                # generated contracts match tracked files
-rtk npm run typecheck:forms && rtk npm run test:forms
-rtk npm run test:forms:visual              # the parity gate; artifacts land in test-results/form-renderer/
-rtk npm run references:generate            # rebuild references/manifest.json from Rust pins
-rtk cargo test --locked -p bir-print
-```
-
 ## Deep guidance
 
 - **Conversion strategy (start here for any new form): `docs/form-print-readiness/conversion-strategy-v2.md`** — structure-first calibration, generated geometry contracts, text via content assertions (never text-pixel chasing: all 35 source PDFs have substituted fonts, so text pixels are unwinnable by proof), dynamic-behaviour pattern library, and the 35-form wave plan.
 - **Recurring styling patterns (read before building OR reviewing any form): `docs/form-print-readiness/custom_form_styling.md`** — every defect found by eye during review, tagged by provenance, so a new form starts correct: uniform-1px borders (`border-thickness-decision.md`), the `> span` → money-grid-collapse specificity trap, comb `:not(:last-child)` dividers, empty-cell guides, grey-band vs white-knockout, pre-printed constants, and a per-form checklist.
-- Release-criterion design: `docs/form-print-readiness/official-fidelity-criterion-v1.md` (specified, not yet implemented or promotable).
+- Release-criterion design and the six-component table: `docs/form-print-readiness/official-fidelity-criterion-v1.md` (see the status statement above — reporting mode, not gating, baselines not pinned).
 - Process playbooks (follow them, as amended by the strategy above): `.codex/skills/ebirforms-convert-form-to-html/` and `.codex/skills/ebirforms-print-preview/`.
 - Honest per-form readiness numbers: `docs/form-print-readiness/priority-forms-readiness.md`.
-- `AGENT.md` covers only the legacy GPUI native-UI layer, not this migration.
+- `AGENTS.md` covers only the legacy GPUI native-UI layer, not this migration.

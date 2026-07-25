@@ -1,0 +1,307 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1707a-v2021",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1707a-validate-001-year-end-shape",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year-end components do not form a valid MM/DD/YYYY date."
+                                    },
+                      "expected_message":  "Please provide a valid date (MM/DD/YYYY format) on Item 1",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-001-year-end-shape"
+                  },
+                  {
+                      "case_id":  "case-02-1707a-validate-003-effectivity",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year end is before July 1, 2001."
+                                    },
+                      "expected_message":  "Valid input for the Month and Year is June 2001 onwards on Item 1.",
+                      "expected_behavior":  "The code uses July 1, 2001 while the message says June 2001 onwards.",
+                      "rule_id":  "1707a-validate-003-effectivity"
+                  },
+                  {
+                      "case_id":  "case-03-1707a-validate-004-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year end is after today."
+                                    },
+                      "expected_message":  "Year Ended should not be a future date on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-004-future"
+                  },
+                  {
+                      "case_id":  "case-04-1707a-validate-005-fiscal-december",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Fiscal is selected and year-end month is December."
+                                    },
+                      "expected_message":  "Month cannot be equal to December on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-005-fiscal-december"
+                  },
+                  {
+                      "case_id":  "case-05-1707a-validate-006-version-cutoff",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year end is on or before March 31, 2021."
+                                    },
+                      "expected_message":  "Year shall not be greater than the present year and not earlier than April 2021.",
+                      "expected_behavior":  "The branch replaces the year with current year minus one, and the message describes only a year despite a full-date cutoff.",
+                      "rule_id":  "1707a-validate-006-version-cutoff"
+                  },
+                  {
+                      "case_id":  "case-06-1707a-validate-007-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither individual nor corporation ATC is selected."
+                                    },
+                      "expected_message":  "Please select an ATC Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-007-atc"
+                  },
+                  {
+                      "case_id":  "case-07-1707a-validate-008-individual-calendar",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Individual ATC and Fiscal are both selected."
+                                    },
+                      "expected_message":  "If you are filing as Individual, please select Calendar on item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-008-individual-calendar"
+                  },
+                  {
+                      "case_id":  "case-08-1707a-validate-009-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO is 000."
+                                    },
+                      "expected_message":  "Please provide a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-009-rdo"
+                  },
+                  {
+                      "case_id":  "case-09-1707a-validate-010-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please provide a valid Line of Business/Occupation on Item 8.",
+                      "expected_behavior":  "The message labels the registered-name field as Line of Business/Occupation.",
+                      "rule_id":  "1707a-validate-010-name"
+                  },
+                  {
+                      "case_id":  "case-10-1707a-validate-011-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please provide a valid Registered Address on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-011-address"
+                  },
+                  {
+                      "case_id":  "case-11-1707a-validate-012-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Zip code is blank."
+                                    },
+                      "expected_message":  "Zip Code is required, please validate your registration information and update accordingly using BIR Form 1905, if necessary.",
+                      "expected_behavior":  "The branch alerts but does not return false, so validation continues.",
+                      "rule_id":  "1707a-validate-012-zip"
+                  },
+                  {
+                      "case_id":  "case-12-1707a-validate-013-treaty-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither treaty-relief Yes nor No is selected."
+                                    },
+                      "expected_message":  "Please choose at least one from item 12.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-013-treaty-choice"
+                  },
+                  {
+                      "case_id":  "case-13-1707a-validate-014-treaty-spec",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Treaty-relief Yes is selected and specification is blank."
+                                    },
+                      "expected_message":  "Please specify the tax relief on item 12A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-014-treaty-spec"
+                  },
+                  {
+                      "case_id":  "case-14-1707a-validate-015-schedule-presence",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Both Schedule 1 and Schedule 2 selling-price and cost totals are zero."
+                                    },
+                      "expected_message":  "You need to have at least one value on either Schedule 1 or Schedule 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-validate-015-schedule-presence"
+                  },
+                  {
+                      "case_id":  "case-15-1707a-schedule-016-date-shape",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A schedule date is not a valid MM/DD/YYYY date."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format) in Date of Transaction on row {row}{schedule}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-016-date-shape"
+                  },
+                  {
+                      "case_id":  "case-16-1707a-schedule-017-date-minimum",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A schedule transaction year is before 2001."
+                                    },
+                      "expected_message":  "The year should not be less than 2001 in Date of Transaction on row {row}{schedule}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-017-date-minimum"
+                  },
+                  {
+                      "case_id":  "case-17-1707a-schedule-018-date-after-period",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A schedule transaction date is after year end."
+                                    },
+                      "expected_message":  "The Date of Transaction should not be greater than the Taxable Period on row {row}{schedule}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-018-date-after-period"
+                  },
+                  {
+                      "case_id":  "case-18-1707a-schedule-019-date-range",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A schedule transaction date is more than one year before year end."
+                                    },
+                      "expected_message":  "The Date of Transaction should be in the range of up to one year until the Taxable Period on row {row}{schedule}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-019-date-range"
+                  },
+                  {
+                      "case_id":  "case-19-1707a-schedule-020-stock-numeric",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Corporate-stock name is entirely numeric."
+                                    },
+                      "expected_message":  "Name of Corporate Stock should not be all numeric in row {row}{schedule}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-020-stock-numeric"
+                  },
+                  {
+                      "case_id":  "case-20-1707a-schedule-021-negative-input",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Selling price or cost uses the parenthesized negative representation."
+                                    },
+                      "expected_message":  "There should be no negative value in row {row}{schedule}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-021-negative-input"
+                  },
+                  {
+                      "case_id":  "case-21-1707a-schedule-022-incomplete",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A nonempty fixed schedule row has any missing date, stock name, selling price, or cost."
+                                    },
+                      "expected_message":  "There is an empty item on {schedule}. Please fill in all items in row {row}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-022-incomplete"
+                  },
+                  {
+                      "case_id":  "case-22-1707a-schedule-023-gain-negative",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 capital gain is negative."
+                                    },
+                      "expected_message":  "Your Capital Gains is negative in row {row} Schedule 1\\n Please move and encode this in Schedule 2",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-023-gain-negative"
+                  },
+                  {
+                      "case_id":  "case-23-1707a-schedule-024-loss-negative",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 capital loss is negative."
+                                    },
+                      "expected_message":  "Your Capital Loss is negative in row {row} Schedule 2\\n Please move and encode this in Schedule 1",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-024-loss-negative"
+                  },
+                  {
+                      "case_id":  "case-24-1707a-schedule-025-modal-incomplete",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "An additional modal row is empty or partially populated."
+                                    },
+                      "expected_message":  "Row {row} is empty. Please remove row or fill in all items first in{schedule}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-schedule-025-modal-incomplete"
+                  },
+                  {
+                      "case_id":  "case-25-1707a-validate-026-overpayment",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax still payable is parenthesized negative."
+                                    },
+                      "expected_message":  "You have a negative value for Part 2 Item 19. \\n\\nIn case of overpayment apply for tax refund using BIR Form No. 1914 (Application for Tax Credits/Refunds)",
+                      "expected_behavior":  "The alert is shown but return false is commented out, so Validate succeeds.",
+                      "rule_id":  "1707a-validate-026-overpayment"
+                  },
+                  {
+                      "case_id":  "case-26-1707a-rate-027-upper",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Applicable tax rate is at least 100."
+                                    },
+                      "expected_message":  "Tax rate should be below 100.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-rate-027-upper"
+                  },
+                  {
+                      "case_id":  "case-27-1707a-save-029-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO is 000."
+                                    },
+                      "expected_message":  "Please select an RDO Code on Item 6.",
+                      "expected_behavior":  "Save labels the RDO as Item 6 while Validate labels it Item 7.",
+                      "rule_id":  "1707a-save-029-rdo"
+                  },
+                  {
+                      "case_id":  "case-28-1707a-save-030-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-save-030-name"
+                  },
+                  {
+                      "case_id":  "case-29-1707a-save-031-address",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Registered Address on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-save-031-address"
+                  },
+                  {
+                      "case_id":  "case-30-1707a-save-032-year-end",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "validateYearEnd fails."
+                                    },
+                      "expected_message":  "First validateYearEnd message.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1707a-save-032-year-end"
+                  }
+              ]
+}

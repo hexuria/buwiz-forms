@@ -1,0 +1,76 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200c-v2018",
+    "form_code":  "2200C",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2200Cv2018.hta",
+                                "sha256":  "d9f47fba52eafa26f03fedb113db4ef1a0074635359d991f1cd7a160383a705c",
+                                "size":  574266,
+                                "revision_binding":  "APPLICATIONNAME 2200Cv2018; printed January 2018."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2200Cv2018\\2200-C Jan 2018 final version3.pdf",
+                                "sha256":  "7b60d517ac6f3697e351aa89c124423d03dd7cac0961c4319b6507dd0ae64ce2",
+                                "size":  907430,
+                                "revision_binding":  "January 2018 form PDF."
+                            },
+                            {
+                                "asset_id":  "xml-encrypted-v1",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2200Cv2018\\2200Cv2018-final-copy-#email-redacted#.xml",
+                                "sha256":  "560b603f71cea0b00ab5151b8aba9620e7a943770d0ec84b086f112a87d31a48",
+                                "size":  1705,
+                                "revision_binding":  "Revision-matched 181-key dummy final copy; decrypted values excluded."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  181,
+                   "runtime_field_families":  0,
+                   "fields_total":  181,
+                   "typed_fields":  181,
+                   "validation_rules":  32,
+                   "confirmed_official_bugs":  6,
+                   "calculations":  13,
+                   "negative_fixtures":  27,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No decrypted values or email-bearing filenames emitted.",
+                        "180 static serialized controls plus one runtime RDO selector; no active runtime field families.",
+                        "Stale unreachable AddRow references are not modeled as 2200C families."
+                    ]
+}

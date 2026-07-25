@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "form_id": "1702q-v2018c",
+  "synthetic_only": true,
+  "cases": [
+    {"case_id":"malformed-payment-date","phase":"blur/change","mutations":{"payment-date-field":"02/30/2025"},"expected_message":"Please provide a valid date. (MM/DD/YYYY format)","rule_id":"1702q-input-003"},
+    {"case_id":"multiple-decimal-coercion","phase":"blur/change","mutations":{"money-field":"1.2.3"},"expected_message":null,"expected_behavior":"Official blur processing silently replaces malformed numeric text with 0.00.","rule_id":"1702q-input-004"},
+    {"case_id":"validate-no-quarter-silent-bug","phase":"validate","mutations":{"frm1702q:rbQuarter_1":"false","frm1702q:rbQuarter_2":"false","frm1702q:rbQuarter_3":"false"},"expected_message":null,"expected_behavior":"The preliminary selectedQuarter branch returns silently; the later Item 3 alert is unreachable.","rule_id":"1702q-validate-003"},
+    {"case_id":"blank-year","phase":"validate","mutations":{"frm1702q:txtYrEndYear":""},"expected_message":"Invalid year entered. Please provide a valid year.","rule_id":"1702q-validate-001"},
+    {"case_id":"blank-month","phase":"validate","mutations":{"frm1702q:rbYrEndMonth":""},"expected_message":"Please provide a valid fiscal year-end month.","rule_id":"1702q-validate-002"},
+    {"case_id":"pre-revision-calendar-year","phase":"validate","mutations":{"frm1702q:txtYrEndYear":"17"},"expected_message":"Year (Page 1 Item 2) should not be earlier than January 2018.","rule_id":"1702q-validate-004"},
+    {"case_id":"future-calendar-year","phase":"validate","mutations":{"frm1702q:txtYrEndYear":"99"},"expected_message":"Year (Page 1 Item 2) cannot be greater than the current year for Calendar Year.","rule_id":"1702q-validate-005"},
+    {"case_id":"future-fiscal-quarter","phase":"validate","mutations":{"frm1702q:rbForClndrFscl_1":"false","frm1702q:rbForClndrFscl_2":"true","frm1702q:txtYrEndYear":"99"},"expected_message":"Future filing is not allowed.","rule_id":"1702q-validate-007"},
+    {"case_id":"no-atc","phase":"validate","mutations":{"frm1702q:rbATC_1":"false","frm1702q:rbATC_2":"false"},"expected_message":"Please select ATC on Item 5.","rule_id":"1702q-validate-010"},
+    {"case_id":"other-atc-blank","phase":"validate","mutations":{"frm1702q:rbATC_1":"false","frm1702q:rbATC_2":"true","frm1702q:cbATC_2":""},"expected_message":"Please select ATC on Item 5","rule_id":"1702q-validate-011"},
+    {"case_id":"blank-tin-segment","phase":"validate","mutations":{"frm1702q:txtTIN2":""},"expected_message":"Please enter a valid TIN number on Item 6.","rule_id":"1702q-validate-012"},
+    {"case_id":"short-tin-segment","phase":"validate","mutations":{"frm1702q:txtTIN2":"12"},"expected_message":"Please enter a valid TIN number on Item 6.","rule_id":"1702q-validate-013"},
+    {"case_id":"tin-checksum-bug","phase":"validate","mutations":{"frm1702q:txtTIN1":"999","frm1702q:txtTIN2":"999","frm1702q:txtTIN3":"999","frm1702q:txtBranchCode":"999"},"expected_message":null,"expected_behavior":"Official source checks only segment lengths and does not validate a TIN checksum; branch lengths 3 through 5 pass.","rule_id":"1702q-validate-013"},
+    {"case_id":"zero-rdo","phase":"validate","mutations":{"frm1702q:txtRDOCode":"000"},"expected_message":"Please enter a valid RDO Code on Item 7.","rule_id":"1702q-validate-014"},
+    {"case_id":"blank-name","phase":"validate","mutations":{"frm1702q:txtTaxpayerName1":""},"expected_message":"Please enter a valid Taxpayer Name on Item 8.","rule_id":"1702q-validate-015"},
+    {"case_id":"blank-address","phase":"validate","mutations":{"frm1702q:txtAddress":""},"expected_message":"Please enter Taxpayer's Registered Address on Item 9.","rule_id":"1702q-validate-016"},
+    {"case_id":"blank-zip","phase":"validate","mutations":{"frm1702q:txtZipCode":""},"expected_message":"Please enter Zip Code on Item 9A.","rule_id":"1702q-validate-017"},
+    {"case_id":"blank-contact","phase":"validate","mutations":{"frm1702q:txtTelNum#occurrence-1":""},"expected_message":"Please enter Contact Number on Item 10.","rule_id":"1702q-validate-018"},
+    {"case_id":"no-deduction-method","phase":"validate","mutations":{"frm1702q:rbMthdOfDdctns_1":"false","frm1702q:rbMthdOfDdctns_2":"false"},"expected_message":"Please select Method of Deductions on Item 12.","rule_id":"1702q-validate-019"},
+    {"case_id":"relief-without-specification","phase":"validate","mutations":{"frm1702q:rbTxRlf_1":"true","frm1702q:rbTxRlf_2":"false","frm1702q:txtTxRlfSpcfy":""},"expected_message":"Please specify Special Law/International Tax Treaty on Item 13A.","rule_id":"1702q-validate-020"},
+    {"case_id":"other-credit-description-zero","phase":"validate","mutations":{"frm1702q:Sched4:txtOthrTxCrdts0":"TEST","frm1702q:Sched4:txtOthrTxCrdtAmnt0":"0.00"},"expected_message":"Please input Other Tax Credits/Payments amount on Schedule 4 Item 6","rule_id":"1702q-validate-021"},
+    {"case_id":"other-credit-zero-spelling-bypass","phase":"validate","mutations":{"frm1702q:Sched4:txtOthrTxCrdts0":"TEST","frm1702q:Sched4:txtOthrTxCrdtAmnt0":"0"},"expected_message":null,"expected_behavior":"Exact string comparison to 0.00 permits an equivalent zero spelling.","rule_id":"1702q-validate-021"},
+    {"case_id":"other-credit-amount-no-description","phase":"validate","mutations":{"frm1702q:Sched4:txtOthrTxCrdts0":"","frm1702q:Sched4:txtOthrTxCrdtAmnt0":"1.00"},"expected_message":"Please specify Other Tax Credits/Payments on Schedule 4 Item 6","rule_id":"1702q-validate-022"},
+    {"case_id":"save-no-quarter","phase":"save","mutations":{"frm1702q:rbQuarter_1":"false","frm1702q:rbQuarter_2":"false","frm1702q:rbQuarter_3":"false"},"expected_message":"Please select quarter in Item 3.","rule_id":"1702q-save-001"},
+    {"case_id":"save-zero-rdo-inconsistency","phase":"save","mutations":{"frm1702q:txtRDOCode":"000"},"expected_message":null,"expected_behavior":"Save rejects only blank RDO, unlike full Validate's loose numeric-zero check.","rule_id":"1702q-save-003"},
+    {"case_id":"august-rate-precedence-bug","phase":"blur/change","mutations":{"system_month":"08","system_year":"2025","selected_atc":"rate-bearing"},"expected_message":null,"expected_behavior":"Every August, not only August 2020, enables manual rate zero because of operator precedence.","rule_id":"1702q-change-008"}
+  ]
+}

@@ -1,0 +1,214 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "2551q-atc-row-tax",
+                             "2551q-schedule1-total",
+                             "2551q-item18",
+                             "2551q-item19",
+                             "2551q-item23",
+                             "2551q-item24",
+                             "2551q-eight-percent-zeroing",
+                             "2551q-overpayment-state"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2551q-atc-row-tax",
+                             "outputs":  [
+                                             "txtATCDue{1..6}"
+                                         ],
+                             "inputs":  [
+                                            "txtATCAmt{1..6}",
+                                            "txtATCRate{1..6}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For row N, tax due = amount * (rate / 100).",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "computeATC",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeATC:L2998-L3005"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2551q-schedule1-total",
+                             "outputs":  [
+                                             "txtTotalSched1",
+                                             "frm2551Qv2018:txt14"
+                                         ],
+                             "inputs":  [
+                                            "txtATCDue1",
+                                            "txtATCDue2",
+                                            "txtATCDue3",
+                                            "txtATCDue4",
+                                            "txtATCDue5",
+                                            "txtATCDue6"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum six ATC tax-due rows and copy the total to Item 14.",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "computeTotalSched1",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalSched1:L3006-L3017"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2551q-item18",
+                             "outputs":  [
+                                             "frm2551Qv2018:txt18"
+                                         ],
+                             "inputs":  [
+                                            "frm2551Qv2018:txt15",
+                                            "frm2551Qv2018:txt16",
+                                            "frm2551Qv2018:txt17"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "18 = 15 + 16 + 17.",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "computeItem18",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem18:L3019-L3025"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2551q-item19",
+                             "outputs":  [
+                                             "frm2551Qv2018:txt19"
+                                         ],
+                             "inputs":  [
+                                            "frm2551Qv2018:txt14",
+                                            "frm2551Qv2018:txt18"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "19 = 14 - 18.",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "computeItem19",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem19:L3026-L3031"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2551q-item23",
+                             "outputs":  [
+                                             "frm2551Qv2018:txt23"
+                                         ],
+                             "inputs":  [
+                                            "frm2551Qv2018:txt20",
+                                            "frm2551Qv2018:txt21",
+                                            "frm2551Qv2018:txt22"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23 = 20 + 21 + 22.",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "computeItem23",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem23:L3032-L3038"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2551q-item24",
+                             "outputs":  [
+                                             "frm2551Qv2018:txt24"
+                                         ],
+                             "inputs":  [
+                                            "frm2551Qv2018:txt19",
+                                            "frm2551Qv2018:txt23"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 19 + 23.",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "computeItem24",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem24:L3039-L3044"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2551q-eight-percent-zeroing",
+                             "outputs":  [
+                                             "frm2551Qv2018:txt15",
+                                             "frm2551Qv2018:txt16",
+                                             "frm2551Qv2018:txt17",
+                                             "frm2551Qv2018:txt20",
+                                             "frm2551Qv2018:txt21",
+                                             "frm2551Qv2018:txt22",
+                                             "Schedule 1"
+                                         ],
+                             "inputs":  [
+                                            "frm2551Qv2018:taxRate2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "When 8% is selected, all listed values and all six ATC rows are forced to zero, then Items 18/19/23/24 recompute.",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "taxRateOption",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#taxRateOption:L3117-L3176"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Apply only when the return-period law and taxpayer eligibility permit this option.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2551q-overpayment-state",
+                             "outputs":  [
+                                             "frm2551Qv2018:overPayment1",
+                                             "frm2551Qv2018:overPayment2"
+                                         ],
+                             "inputs":  [
+                                            "frm2551Qv2018:txt24"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item 24 \u003e= 0, clear and disable both overpayment dispositions; if negative, enable them.",
+                             "rounding":  "NumWithComma inputs and formatCurrency outputs; ATC rates divide by 100.",
+                             "trigger":  "refundOption",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#refundOption:L3054-L3068"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

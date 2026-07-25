@@ -1,0 +1,348 @@
+{
+    "source_sha256":  "1df302eeb1352eccb88f6aa7a23fdcc185b6fbb4d15435996250f985a0198e2c",
+    "function_count":  16,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  4721,
+                          "end_line":  4804,
+                          "body_sha256":  "4b74e92ae5616160e48601498be3a6cca91077da6a7d4495fbbe25d9cbef8700",
+                          "alerts":  [
+                                         "\"File \u0027\"+xmlFileName+\"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  4822,
+                          "end_line":  4834,
+                          "body_sha256":  "ebad62c1b598629013ba753eced0c214b40358b86df3c3581c2b344af1c6971d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  4883,
+                          "end_line":  5198,
+                          "body_sha256":  "1e00cef4d5d19426fd86d8b7ca4fc695dcc55c0a96fb7c3f16bf47bf751d0b06",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027or\u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"p3GrossSales \u003e\u003e\u003e \" + elemValue + \" \\r\\n p3BasicTax \u003e\u003e\u003e \" + p3BasicTax",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:amendedRtn_1",
+                                              "frm2200Av2020:amendedRtn_2",
+                                              "frm2200Av2020:branchCode",
+                                              "frm2200Av2020:phoneNumber",
+                                              "frm2200Av2020:rdoCode",
+                                              "frm2200Av2020:registeredAddress",
+                                              "frm2200Av2020:registeredName",
+                                              "frm2200Av2020:tinA",
+                                              "frm2200Av2020:tinB",
+                                              "frm2200Av2020:tinC",
+                                              "frm2200Av2020:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  5199,
+                          "end_line":  5425,
+                          "body_sha256":  "a2d48541ce38e7b34242e3954b2f84a21f87e9b0bf3b8927d7d0d5d783997085",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"3==\" + p3TPZip",
+                                         "\"p3GrossSales \u003e\u003e\u003e \" + elemValue + \" \\r\\n p3BasicTax \u003e\u003e\u003e \" + p3BasicTax",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:amendedRtn_1",
+                                              "frm2200Av2020:amendedRtn_2",
+                                              "frm2200Av2020:branchCode",
+                                              "frm2200Av2020:phoneNumber",
+                                              "frm2200Av2020:rdoCode",
+                                              "frm2200Av2020:registeredAddress",
+                                              "frm2200Av2020:registeredName",
+                                              "frm2200Av2020:tinA",
+                                              "frm2200Av2020:tinB",
+                                              "frm2200Av2020:tinC",
+                                              "frm2200Av2020:txtPen_Tot",
+                                              "frm2200Av2020:txtPg1Pt1I13MainLine",
+                                              "frm2200Av2020:txtPg1Pt2I20TotalIncome",
+                                              "frm2200Av2020:txtPg1Pt2I21AddPenalty",
+                                              "frm2200Av2020:txtPg1Pt2I22TotalAmount",
+                                              "frm2200Av2020:txtPg2Pt4I31NetSales",
+                                              "frm2200Av2020:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validateForm",
+                          "start_line":  5607,
+                          "end_line":  5748,
+                          "body_sha256":  "0a6a691b196dbfcfc0f2c4c3161c46b08bf176a41358dc7d09f895441804ab0e",
+                          "alerts":  [
+                                         "\"Please enter a valid month on Item 1.\"",
+                                         "\"Please enter a valid date on Item 1. Filing year is not a leap year.\"",
+                                         "\"Please enter a valid day on Item 1.\"",
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Invalid date entry on Item 1. Entry should not be lower than 1904.\"",
+                                         "\"Returning old forms is restricted to the last version up to the effectivity of the new form version.\"",
+                                         "\"Invalid date entry on Item 1. Date cannot be after the current date.\"",
+                                         "\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Taxpayer\u0027s Name on Item 6.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 7.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 7A.\"",
+                                         "\"Please enter a valid Telephone Number on Item 8.\"",
+                                         "\"Please enter a valid Place of Production on Item 10.\"",
+                                         "\"Please enter a valid Place of Removal on Item 11.\"",
+                                         "\"Please specify a Tax Relief on Item 12A.\"",
+                                         "\"Please enter a Manner of Payment on Part II.\"",
+                                         "\"Please specify a Scheme on Item 15.\"",
+                                         "\"YOU HAVE INSUFFICIENT FUND. PLEASE APPLY DEPOSIT TO PROCEED\") return; } d.getElementById(\u0027frm2200Av2020:cmdValidate\u0027).disabled = true; d.getElementById(\u0027btnPrint\u0027).disabled = false; d.getElementById(\u0027frm2200Av2020:cmdEdit\u0027).disabled = false; d.getElementById(\u0027btnUpload\u0027).disabled = false; enabledDisabledControls(true",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:branchCode",
+                                              "frm2200Av2020:cmdEdit",
+                                              "frm2200Av2020:cmdValidate",
+                                              "frm2200Av2020:optPayment_1",
+                                              "frm2200Av2020:optPayment_2",
+                                              "frm2200Av2020:optPayment_3",
+                                              "frm2200Av2020:optTreaty_1",
+                                              "frm2200Av2020:paymentOther",
+                                              "frm2200Av2020:phoneNumber",
+                                              "frm2200Av2020:prodCity",
+                                              "frm2200Av2020:rdoCode",
+                                              "frm2200Av2020:registeredAddress",
+                                              "frm2200Av2020:registeredName",
+                                              "frm2200Av2020:remCity",
+                                              "frm2200Av2020:tinA",
+                                              "frm2200Av2020:tinB",
+                                              "frm2200Av2020:tinC",
+                                              "frm2200Av2020:treatyY",
+                                              "frm2200Av2020:txtAmtPayable",
+                                              "frm2200Av2020:txtDateDay",
+                                              "frm2200Av2020:txtDateMonth",
+                                              "frm2200Av2020:txtDateYear",
+                                              "frm2200Av2020:txtPay_Tot",
+                                              "frm2200Av2020:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validateMonthDayYearDate",
+                          "start_line":  5758,
+                          "end_line":  5810,
+                          "body_sha256":  "3490af8c78b5b306f303381ace565329427508d5d9ee9d43bd0b6c63caf006ae",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enabledDisabledControls",
+                          "start_line":  5826,
+                          "end_line":  5923,
+                          "body_sha256":  "3d73592a1b0037d3fb251f60f0392a48912e12d695f48938f21c18f2c01808a2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:amendedRtn_1",
+                                              "frm2200Av2020:amendedRtn_2",
+                                              "frm2200Av2020:branchCode",
+                                              "frm2200Av2020:btnAdd",
+                                              "frm2200Av2020:btnDelete",
+                                              "frm2200Av2020:btnFinalCopy",
+                                              "frm2200Av2020:optPayment_1",
+                                              "frm2200Av2020:optPayment_2",
+                                              "frm2200Av2020:optPayment_3",
+                                              "frm2200Av2020:optTreaty_1",
+                                              "frm2200Av2020:optTreaty_2",
+                                              "frm2200Av2020:paymentOther",
+                                              "frm2200Av2020:phoneNumber",
+                                              "frm2200Av2020:prodCity",
+                                              "frm2200Av2020:prodProvince",
+                                              "frm2200Av2020:prodRegion",
+                                              "frm2200Av2020:rdoCode",
+                                              "frm2200Av2020:registeredAddress",
+                                              "frm2200Av2020:registeredName",
+                                              "frm2200Av2020:remCity",
+                                              "frm2200Av2020:remProvince",
+                                              "frm2200Av2020:remRegion",
+                                              "frm2200Av2020:tinA",
+                                              "frm2200Av2020:tinB",
+                                              "frm2200Av2020:tinC",
+                                              "frm2200Av2020:treatyY",
+                                              "frm2200Av2020:txtDateDay",
+                                              "frm2200Av2020:txtDateMonth",
+                                              "frm2200Av2020:txtDateYear",
+                                              "frm2200Av2020:txtLess_Balance",
+                                              "frm2200Av2020:txtLess_Excise",
+                                              "frm2200Av2020:txtPay_TaxPayment",
+                                              "frm2200Av2020:txtPen_Compromise",
+                                              "frm2200Av2020:txtPen_Interest",
+                                              "frm2200Av2020:txtPen_Surcharge",
+                                              "frm2200Av2020:txtPrevReturn",
+                                              "frm2200Av2020:txtSheets",
+                                              "frm2200Av2020:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  5938,
+                          "end_line":  5996,
+                          "body_sha256":  "bcdef20bcb8e754a298c85764bb4b821656262c30726d285a4a9d43187716667",
+                          "alerts":  [
+                                         "\"Please enter a valid Return Date\"",
+                                         "\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 7.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:branchCode",
+                                              "frm2200Av2020:rdoCode",
+                                              "frm2200Av2020:registeredName",
+                                              "frm2200Av2020:tinA",
+                                              "frm2200Av2020:tinB",
+                                              "frm2200Av2020:tinC",
+                                              "frm2200Av2020:txtDateDay",
+                                              "frm2200Av2020:txtDateMonth",
+                                              "frm2200Av2020:txtDateYear"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  6083,
+                          "end_line":  6120,
+                          "body_sha256":  "cc7bf4f1ebb30c634916854c1e9c772f487077b577098d4e1dd9423b03788fd4",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:branchCode",
+                                              "frm2200Av2020:phoneNumber",
+                                              "frm2200Av2020:rdoCode",
+                                              "frm2200Av2020:registeredAddress",
+                                              "frm2200Av2020:registeredName",
+                                              "frm2200Av2020:tinA",
+                                              "frm2200Av2020:tinB",
+                                              "frm2200Av2020:tinC",
+                                              "frm2200Av2020:txtEmail",
+                                              "frm2200Av2020:txtLineBus",
+                                              "frm2200Av2020:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  6452,
+                          "end_line":  6467,
+                          "body_sha256":  "4e696c94606ee19d4149af8d78c5a51f2da7b7e982f3fafb95e1185a87072e2b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enableSaveButton",
+                          "start_line":  6468,
+                          "end_line":  6481,
+                          "body_sha256":  "b6041f516fb8518139a9ca020dac683032e621fc06cdb024b224fa6f9c39374b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:branchCode",
+                                              "frm2200Av2020:tinA",
+                                              "frm2200Av2020:tinB",
+                                              "frm2200Av2020:tinC",
+                                              "frm2200Av2020:txtDateDay",
+                                              "frm2200Av2020:txtDateMonth",
+                                              "frm2200Av2020:txtDateYear"
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  6680,
+                          "end_line":  6693,
+                          "body_sha256":  "269e8623040ad0ec81687430a0a954009bde0351916ae07a21fea86fe0736b40",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  7111,
+                          "end_line":  7183,
+                          "body_sha256":  "38333144a40fe1265d275b9c0e4ea38c3ebaf1982e6fb23e3cdb328727a7724b",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027",
+                                         "\u0027This date cannot be prior to 2018.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "onTreatyClick",
+                          "start_line":  7200,
+                          "end_line":  7214,
+                          "body_sha256":  "15a7386532b73383fb586ec656a213576698298b8ed44f937b0b9b13a78e4a6e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:optTreaty_1",
+                                              "frm2200Av2020:optTreaty_2",
+                                              "frm2200Av2020:treatyY"
+                                          ]
+                      },
+                      {
+                          "name":  "changePayment",
+                          "start_line":  7215,
+                          "end_line":  7232,
+                          "body_sha256":  "de52e16986172736e351454a34fe8cad797c78a72888736f7692a020f005b045",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:optPayment_1",
+                                              "frm2200Av2020:optPayment_2",
+                                              "frm2200Av2020:optPayment_3",
+                                              "frm2200Av2020:paymentOther",
+                                              "frm2200Av2020:txtPay_TaxPayment"
+                                          ]
+                      },
+                      {
+                          "name":  "isValidDataOnSched1",
+                          "start_line":  7426,
+                          "end_line":  7500,
+                          "body_sha256":  "eeaa78c2402e85695c3aa4d475ea6a21f9ffcd4a0a66d16f4fcec0d8b28c01cf",
+                          "alerts":  [
+                                         "\"Please supply valid ATC Code for row #\" + i) return; } else { if (d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + i + \u0027_Desc\u0027).value != \"\") { if (d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + i + \u0027_Bracket\u0027).value != \"\") { if (d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + i + \u0027_Rate\u0027).value != \"\") { } else { alert (\"Applicable Tax Rate is required in row #\" + i) return; i++ } } else { alert (\"Tax Bracket/Unit of Measure is required in row #\" + i) return; } } else { alert (\"Description is required in row #\" + i) return; } } } else { alert (\"ATC is required in row #\" + i) return; } } } return result; // if (d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + i + \u0027_Atc\u0027).value == \"\" || // d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + i + \u0027_Desc\u0027).value == \"\" || // d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + i + \u0027_Bracket\u0027).value == \"\" || // d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + i + \u0027_Rate\u0027).value == \"\") { // alert (\"Fill required fields in row #\" + i) // return; // i++; // } // if (sched1Field.rows.length \u003e 0) { // var index = (sched1Index*1) - 1; // if(d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + index + \u0027_Atc\u0027).value == \"\"){ // if(index \u003e 0) { // alert(\"Please enter required details for other rows before adding more rows.\"",
+                                         "\"Please supply valid ATC Code for row #\" + index + \".\") // result = false; // } // } // if(result){ // if(d.getElementById(\u0027frm2200Av2020:txtSched1_xa_others\u0027 + index + \u0027_Rate\u0027).value == 0){ // if(index \u003e 0) { // alert(\"Please enter a valid Applicable Tax Rate for the specified row.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200Av2020:txtSched1_xa_others"
+                                          ]
+                      }
+                  ]
+}

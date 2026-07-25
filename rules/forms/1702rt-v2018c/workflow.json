@@ -1,0 +1,189 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702rt-v2018c",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#APPLICATIONNAME",
+                                           "official-hta-runtime#loadModalTable:L5144-L5328"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Four-page January 2018 ENCS regular corporate income-tax return with seven active unbounded modal schedules."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L10969-L11012",
+                                           "xml-editable-v1"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save alerts only the first of five narrow errors and then serializes a flat 258-key control state."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L10657-L10968"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs in source order and disables controls after the success alert."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "encrypted-field-audit-v796",
+                                           "official-hta-runtime#final-copy-functions"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Encrypted companion contains the identical 258-key inventory; finalization remains coupled to profile/connectivity paths."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#submit-functions",
+                                           "shared-1702rt-js"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML with 258 keys."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L10969-L11012"
+                                            ],
+                            "guard":  "Five narrow preflight checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Edit, upload, Final Copy and Add-more controls."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L10657-L10968"
+                                            ],
+                            "guard":  "All active source-ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted artifact with matching field inventory."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "encrypted-field-audit-v796"
+                                            ],
+                            "guard":  "Profile/confirmation/connectivity path permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "shared-1702rt-js"
+                                            ],
+                            "guard":  "Connectivity and credentials succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "January 2018 ENCS revision",
+                          "Return period 2018 or later",
+                          "Applicable corporate ATC and deduction method",
+                          "Required schedules for claimed deductions/credits"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "financial-statements",
+                                     "label":  "Audited financial statements or other statements required for the filing context",
+                                     "source_refs":  [
+                                                         "official-form-pdf#instructions"
+                                                     ],
+                                     "required_when":  "Required by applicable law/instructions for the filer.",
+                                     "official_ui_enforcement":  "No local document-presence check was identified.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-credit-certificates",
+                                     "label":  "Certificates or proof supporting claimed tax credits/payments",
+                                     "source_refs":  [
+                                                         "official-form-pdf#instructions",
+                                                         "official-hta-runtime#validate:L10737-L10773"
+                                                     ],
+                                     "required_when":  "A corresponding credit is claimed.",
+                                     "official_ui_enforcement":  "Description/amount consistency is checked for some payment rows; document presence is not.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "nolco-mcit-schedules",
+                                     "label":  "Supporting NOLCO and excess-MCIT schedules",
+                                     "source_refs":  [
+                                                         "official-hta-runtime#validateMCITYear:L7386-L7446",
+                                                         "official-hta-runtime#computeP4Sc3AI8TotalNOLCO:L8497-L8541"
+                                                     ],
+                                     "required_when":  "NOLCO or excess MCIT is claimed.",
+                                     "official_ui_enforcement":  "Schedule arithmetic/year checks exist; external attachment presence is not checked.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return deadline is governed by the filer fiscal/calendar year and applicable law; exact guide text for this revision remains unverified."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             }
+                         ]
+}

@@ -1,0 +1,663 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "revision":  "2024-04-01",
+    "evaluation_order":  [
+                             "2550q-schedule1-row",
+                             "2550q-schedule1-totals",
+                             "2550q-schedule3-totals",
+                             "2550q-schedule4-totals",
+                             "2550q-item15",
+                             "2550q-item16",
+                             "2550q-item17",
+                             "2550q-item20",
+                             "2550q-item21",
+                             "2550q-item25",
+                             "2550q-item26",
+                             "2550q-item31",
+                             "2550q-item34",
+                             "2550q-item37",
+                             "2550q-item39",
+                             "2550q-item43",
+                             "2550q-items44-46",
+                             "2550q-item47",
+                             "2550q-item50",
+                             "2550q-item51",
+                             "2550q-item52",
+                             "2550q-item53",
+                             "2550q-schedule2-allocation",
+                             "2550q-item57",
+                             "2550q-item59",
+                             "2550q-item60",
+                             "2550q-item61"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2550q-schedule1-row",
+                             "outputs":  [
+                                             "txtAllowedInputTax1{N\u003e=0}",
+                                             "txtBalanceInputTax1{N\u003e=0}"
+                                         ],
+                             "inputs":  [
+                                            "txtInputTax1{N\u003e=0}",
+                                            "txtRecognizedLife1{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "allowed input tax = input tax / recognized life * 3; balance = input tax - allowed input tax.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "computeSched1",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1:L6013-L6120"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-schedule1-totals",
+                             "outputs":  [
+                                             "schedule1 totals"
+                                         ],
+                             "inputs":  [
+                                            "all Schedule 1 rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum purchase amount, input tax, allowed input tax, and balance columns.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "computeSched1",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1:L6013-L6120"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-schedule3-totals",
+                             "outputs":  [
+                                             "Schedule 3 income total",
+                                             "Schedule 3 withholding total",
+                                             "frm2550qv2024:creditableVat"
+                                         ],
+                             "inputs":  [
+                                            "txtIncomePayment3{N\u003e=0}",
+                                            "txtTotalTaxWithHeld3{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Schedule 3 columns and transfer total tax withheld to creditable VAT.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "computeSched3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched3:L6358-L6389"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-schedule4-totals",
+                             "outputs":  [
+                                             "Schedule 4 amount total",
+                                             "frm2550qv2024:advVatPayment"
+                                         ],
+                             "inputs":  [
+                                            "txtAmountPaid4{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Schedule 4 amounts and transfer to advance VAT payment.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "computeSched4",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched4:L6598-L6635"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item15",
+                             "outputs":  [
+                                             "frm2550qv2024:excessInputTax"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:netVatPayable"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "15 = net VAT payable.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute15",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute15:L6773-L6778"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item16",
+                             "outputs":  [
+                                             "frm2550qv2024:creditableVat"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 3 withholding total"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "16 = Schedule 3 tax withheld total.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute16",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute16:L6779-L6783"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item17",
+                             "outputs":  [
+                                             "frm2550qv2024:advVatPayment"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 4 amount total"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "17 = Schedule 4 amount paid total.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute17",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute17:L6784-L6788"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item20",
+                             "outputs":  [
+                                             "frm2550qv2024:totalTaxCredits"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:creditableVat",
+                                            "frm2550qv2024:advVatPayment",
+                                            "frm2550qv2024:vatPaidReturn",
+                                            "frm2550qv2024:otherCreditsNo19"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "20 = 16 + 17 + 18 + 19.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute20",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute20:L7132-L7154"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item21",
+                             "outputs":  [
+                                             "frm2550qv2024:excessCredits"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:excessInputTax",
+                                            "frm2550qv2024:totalTaxCredits"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21 = 15 - 20.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute21",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute21:L7155-L7161"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item25",
+                             "outputs":  [
+                                             "frm2550qv2024:totalPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:surcharge",
+                                            "frm2550qv2024:interest",
+                                            "frm2550qv2024:compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "25 = surcharge + interest + compromise.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute25",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute25:L7162-L7168"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item26",
+                             "outputs":  [
+                                             "frm2550qv2024:totalPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:excessCredits",
+                                            "frm2550qv2024:totalPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item 21 is negative and penalties are positive, 26 = penalties; otherwise 26 = 21 + 25.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute26",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute26:L7169-L7185"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Represent a refund/excess-credit separately; do not silently discard it when penalties exist.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item31",
+                             "outputs":  [
+                                             "frm2550qv2024:outputVat",
+                                             "frm2550qv2024:outputTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:vatableSales"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "31A = vatable sales * 12%; 31B copies 31A.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute31AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute31AB:L7186-L7191"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item34",
+                             "outputs":  [
+                                             "frm2550qv2024:totalSales"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:vatableSales",
+                                            "frm2550qv2024:zeroRatedSales",
+                                            "frm2550qv2024:exemptSales"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "34 = vatable + zero-rated + exempt sales.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute34AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute34AB:L7192-L7199"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item37",
+                             "outputs":  [
+                                             "frm2550qv2024:totalAdjOutput"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:outputTaxDue",
+                                            "frm2550qv2024:lessOutputVat",
+                                            "frm2550qv2024:addOutputVat"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "37 = output tax due - less output VAT + additional output VAT.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute37AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute37AB:L7200-L7206"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item39",
+                             "outputs":  [
+                                             "frm2550qv2024:inputTaxDeferred"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 1 prior balance total"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "39 = Schedule 1 carried input-tax balance.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute39AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute39AB:L7207-L7212"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item43",
+                             "outputs":  [
+                                             "frm2550qv2024:totalInputTax"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:inputTaxCarried",
+                                            "frm2550qv2024:inputTaxDeferred",
+                                            "frm2550qv2024:transitionalInputTax",
+                                            "frm2550qv2024:presumptiveInputTax",
+                                            "frm2550qv2024:otherSpecify42"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "43 = 38 + 39 + 40 + 41 + 42 plus materialized additional Item 42 rows.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute43AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute43AB:L7555-L7577"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Iterate actual additional rows; do not use the source multi-row reference to a non-existent totalTaxPayableNo42.1 element.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-items44-46",
+                             "outputs":  [
+                                             "Item 44/45/46 input-tax amounts"
+                                         ],
+                             "inputs":  [
+                                            "Item 44/45/46 purchase amounts"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Each input-tax amount = corresponding purchase amount * 12%.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute44AB/compute45AB/compute46AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute44AB:L7578-L7595"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item47",
+                             "outputs":  [
+                                             "frm2550qv2024:otherSpecify47B"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:otherSpecify47"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "47B = 47A * 12%.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute47AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute47AB:L7596-L7602"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item50",
+                             "outputs":  [
+                                             "Item 50 purchase total",
+                                             "Item 50 input-tax total"
+                                         ],
+                             "inputs":  [
+                                            "Items 44 through 49"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "50 totals current purchases and their input taxes, including additional Item 47 rows.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute50AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute50AB:L7933-L7965"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Iterate actual additional Item 47 rows; do not rely on the suspicious txtVatableSales47A.1 reference.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item51",
+                             "outputs":  [
+                                             "frm2550qv2024:totalAvailInputTax"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:totalInputTax",
+                                            "Item 50 input-tax total"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "51 = 43 + 50B.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute51AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute51AB:L7966-L7971"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item52",
+                             "outputs":  [
+                                             "frm2550qv2024:importCapitalInputTax"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 1 carried balance"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "52 = Schedule 1 carried balance.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute52AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute52AB:L7972-L7977"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item53",
+                             "outputs":  [
+                                             "frm2550qv2024:inputTaxAttr"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 total attributable input tax"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "53 = Schedule 2 total attributable input tax.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute53AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute53AB:L7978-L7983"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-schedule2-allocation",
+                             "outputs":  [
+                                             "Schedule 2 ratable input tax",
+                                             "Schedule 2 attributable total"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:exemptSales",
+                                            "frm2550qv2024:totalSales",
+                                            "Schedule 2 non-direct input tax",
+                                            "Schedule 2 direct input tax"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "ratable = exempt sales / total sales * non-direct input tax; attributable = direct + ratable.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "Schedule 2 change handlers",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule2:L7984-L8309"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item57",
+                             "outputs":  [
+                                             "frm2550qv2024:totalDeductions"
+                                         ],
+                             "inputs":  [
+                                            "Items 52 through 56"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "57 = 52 + 53 + 54 + 55 + 56 plus additional Item 56 rows.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute57AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute57AB:L8310-L8334"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Iterate actual additional rows; do not use the suspicious totalTaxPayableNo56.1 reference.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item59",
+                             "outputs":  [
+                                             "frm2550qv2024:adjDeductions"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:totalDeductions",
+                                            "frm2550qv2024:addInputVat"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "59 = 57 + 58.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute59AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute59AB:L8335-L8340"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item60",
+                             "outputs":  [
+                                             "frm2550qv2024:totalAllowableInputTax"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:totalAvailInputTax",
+                                            "frm2550qv2024:adjDeductions"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "60 = 51 - 59.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute60AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute60AB:L8341-L8347"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimal arithmetic and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550q-item61",
+                             "outputs":  [
+                                             "frm2550qv2024:netVatPayable",
+                                             "frm2550qv2024:excessInputTax"
+                                         ],
+                             "inputs":  [
+                                            "frm2550qv2024:totalAdjOutput",
+                                            "frm2550qv2024:totalAllowableInputTax"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "61 = 37 - 60, then the result is copied back to Item 15/excess input tax.",
+                             "rounding":  "parseFloat/NumWithComma arithmetic followed by toFixed(2) and formatCurrency where called.",
+                             "trigger":  "compute61AB",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute61AB:L8348-L8405"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Preserve the dependency deliberately and avoid an accidental circular recalculation between Items 15 and 61.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

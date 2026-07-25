@@ -1,0 +1,102 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2000ot-v2018",
+    "form_code":  "2000OT",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018 ENCS",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000OTv2018.hta",
+                                "sha256":  "e44331e99dd8edb8d6fd01529f82e5d6612a9640307c7421b8be397ac87ebe33",
+                                "size":  360791,
+                                "revision_binding":  "APPLICATIONNAME 2000OTv2018; January 2018 ENCS."
+                            },
+                            {
+                                "asset_id":  "official-help-v2018",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000-OTv2018.hta",
+                                "sha256":  "e8dfb6463dacd15794db7029fa6032ab772292dd5af02b4b697915df6dcc4011",
+                                "size":  23614,
+                                "revision_binding":  "Revision-matched January 2018 guide and deadline."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2000-OTv2018\\2000-OT January 2018 ENCS v3.pdf",
+                                "sha256":  "64d987ef79ed57005c1f13f8c9a5732bde2bf40f57dd4ec9f2067ef96c3c492d",
+                                "size":  921224,
+                                "revision_binding":  "January 2018 Form 2000-OT."
+                            },
+                            {
+                                "asset_id":  "legacy-hta-excluded",
+                                "kind":  "runtime-extracted-hta-legacy",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2000OT.hta",
+                                "sha256":  "cb989655cc9161a7791e95a6a535604d16419bb38cfc69411d64a32b23ab19f6",
+                                "size":  248699,
+                                "revision_binding":  "Legacy split-date form; excluded."
+                            },
+                            {
+                                "asset_id":  "legacy-help-excluded",
+                                "kind":  "official-runtime-help-legacy",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2000-OT.hta",
+                                "sha256":  "62ebbd7a285d0f3f9a26732b21d5c9642761c583df1f9af66ef2983b23f52a74",
+                                "size":  18196,
+                                "revision_binding":  "Legacy help; excluded."
+                            },
+                            {
+                                "asset_id":  "legacy-final-copy-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy-legacy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2000OT\\2000OT-final-copy-#email-redacted#.xml",
+                                "sha256":  "1ec8c2829f0fac2e57e55d119d10e25d9755e6c53955010c073211cb59f6a11a",
+                                "size":  815,
+                                "revision_binding":  "Contains legacy frm2000_OT split-date key; excluded."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  123,
+                   "runtime_field_families":  17,
+                   "fields_total":  140,
+                   "typed_fields":  140,
+                   "validation_rules":  25,
+                   "confirmed_official_bugs":  11,
+                   "calculations":  11,
+                   "negative_fixtures":  21,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "legacy_artifact_exclusion":  "fixtures/legacy-artifact-exclusion.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No values or email-bearing filenames copied.",
+                        "Exact serializer projects 125 static controls to 123 baseline entries by collapsing address and counterparty-name continuation controls.",
+                        "Seventeen zero-based indexed families preserve expandable Schedule 1A/1B rows; index 0 is already in the baseline.",
+                        "The available 78-key encrypted sample is legacy because it contains frm2000_OT:txtDateMonth; it is excluded."
+                    ]
+}

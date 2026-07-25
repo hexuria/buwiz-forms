@@ -173,14 +173,25 @@ fn fetch_with_auth(
                             && let Ok((submission_receipt, is_new)) =
                                 db_guard.save_submission_receipt(&receipt)
                         {
-                            // Confirm the draft if we recognise the form type and it's a new receipt
-                            if is_new
-                                && (submission_receipt.form_type == "2551Qv2018"
-                                    || submission_receipt.form_type == "2551Q")
-                            {
-                                let _ = db_guard.confirm_2551q_from_receipt(&submission_receipt);
-
-                                // Send OS notification
+                            // Notify only after the authoritative receipt transition
+                            // confirms this exact submitted generation.
+                            let confirmed = if is_new {
+                                match db_guard.confirm_2551q_from_receipt(&submission_receipt) {
+                                    Ok(crate::db::ReceiptConfirmationOutcome::Confirmed) => true,
+                                    Ok(crate::db::ReceiptConfirmationOutcome::Ignored) => false,
+                                    Err(error) => {
+                                        tracing::warn!(
+                                            "Receipt {} was saved but could not confirm a 2551Q submission: {}",
+                                            submission_receipt.filename,
+                                            error
+                                        );
+                                        false
+                                    }
+                                }
+                            } else {
+                                false
+                            };
+                            if confirmed {
                                 if let Some((_, _, period)) =
                                     crate::receipt::split_bir_filename(&submission_receipt.filename)
                                     && let Some((year, quarter)) =

@@ -1,0 +1,2443 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1700-v2013",
+    "revision":  "2013-06-01",
+    "rules":  [
+                  {
+                      "rule_id":  "1700-save-001",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any taxpayer TIN segment is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I5TIN1",
+                                     "frm1700:txtPg1Pt1I5TIN2",
+                                     "frm1700:txtPg1Pt1I5TIN3"
+                                 ],
+                      "accepted_behavior":  "All three segments are nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid TIN number on Page 1 Part 1 Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9564-L9567"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked; branch code and checksum are ignored.",
+                      "recommended_app_behavior":  "Permit lossless drafts; require complete shape and checksum before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-save-002",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Taxpayer last name is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I8TaxFilerLastName"
+                                 ],
+                      "accepted_behavior":  "Last name is nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Page 1 Part 1 Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9569-L9572"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-save-003",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Registered address line 1 is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I9Address1"
+                                 ],
+                      "accepted_behavior":  "Line 1 is nonblank.",
+                      "rejected_behavior":  "Save is blocked even if lines 2/3 are populated.",
+                      "exact_message":  "Please enter a valid Registered Address on Page1 Part 1 Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9574-L9577"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save differs from Validate, which accepts any of the three address lines.",
+                      "recommended_app_behavior":  "Use one consistent address-presence rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-save-004",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I12ContactNo"
+                                 ],
+                      "accepted_behavior":  "Contact number is nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid Contact Number on Page 1 Part 1 Item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9579-L9582"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-save-005",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Other required/invalid fields exist.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Four narrow checks pass.",
+                      "rejected_behavior":  "No other rejection occurs during Save.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9558-L9590",
+                                          "official-hta-runtime#saveXML:L7009-L7368"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save is intentionally much narrower than Validate.",
+                      "recommended_app_behavior":  "Preserve drafts losslessly and report completeness separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-001",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Two-digit tax year is blank.",
+                      "fields":  [
+                                     "frm1700:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid Year End on Page 1 Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11324"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-002",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Tax year is nonnumeric, 00, below 13, negative, or greater than current year minus 2000 minus one.",
+                      "fields":  [
+                                     "frm1700:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 1 Item 1: \\nInvalid input. The Year should not be greater than {previous full year} .",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11325,11726-L11742"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The control accepts a two-digit year despite maxlength 4; years below 13 use a second message.",
+                      "recommended_app_behavior":  "Model the exact two-digit convention for compatibility and expose the full year in app UI.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-003",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Tax year numeric value is below 13.",
+                      "fields":  [
+                                     "frm1700:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 1 Item 1: \\nInvalid input. The Year should not be earlier than September 2013",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11737-L11739"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-004",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Neither Source of Income radio is selected.",
+                      "fields":  [
+                                     "frm1700:SourceOfIncome_1",
+                                     "frm1700:SourceOfIncome_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please select a Source of Income on Page 1 Item 4",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11326"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-005",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Neither Joint Filing radio is selected.",
+                      "fields":  [
+                                     "frm1700:rdoPg1Pt1I3JointFilingYes",
+                                     "frm1700:rdoPg1Pt1I3JointFilingNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please select a if it is joint filing on Page 1 Item 3",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11327"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-006-TIN1",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Taxpayer TIN1 is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I5TIN1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11328-L11331"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-006-TIN2",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Taxpayer TIN2 is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I5TIN2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11328-L11331"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-006-TIN3",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Taxpayer TIN3 is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I5TIN3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11328-L11331"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-006-BranchCode",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Taxpayer BranchCode is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I5BranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11328-L11331"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-010",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "RDO code is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I6RDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid RDO Code on Page 1 Item 6",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11332"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-011",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "PSOC is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I7Psoc"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid PSOC on Page 1 Item 7",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11333"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-012",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Tax filer last name is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I8TaxFilerLastName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid Tax Filer\u0027s Name on Page 1 Item 8",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11334"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-013",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "All three registered-address lines are blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I9Address1",
+                                     "frm1700:txtPg1Pt1I9Address2",
+                                     "frm1700:txtPg1Pt1I9Address3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid Registered Address on Page 1 Item 9",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11337"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-014",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Tax filer DOB is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I10DOB"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid Date of Birth (MM/DD/YYYY ) on Page 1 Item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11340"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-015",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Tax filer DOB is malformed or future.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I10DOB"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 1 Item 10:\\nPlease provide a valid date for Date of Birth (MM/DD/YYYY )",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11341,11856-L11868"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-016",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Tax filer email is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I11EmailAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid Email Address on Page 1 Item 11",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11342"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-017",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Tax filer contact number is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I12ContactNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please enter a valid Contact Number on Page 1 Item 12",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11343"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-018",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "No civil-status radio is selected.",
+                      "fields":  [
+                                     "frm1700:rdoPg1Pt1I13SingleInd",
+                                     "frm1700:rdoPg1Pt1I13MarriedInd",
+                                     "frm1700:rdoPg1Pt1I13LegalSeparatedInd",
+                                     "frm1700:rdoPg1Pt1I13WidowerInd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please select a Civil Status on Page 1 Item 13",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11344-L11348"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-019",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Neither taxpayer additional-exemption Yes nor No is selected.",
+                      "fields":  [
+                                     "frm1700:rdoPg1Pt1I14YesInd",
+                                     "frm1700:rdoPg1Pt1I14NoInd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field.  Please select either \u0027Yes or No; Claiming Additional Exemptions\u0027 on Page 1 Item 14",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11349"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-020-LastName",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "All spouse name controls are enabled and spouse LastName is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I16TaxSpouseLastName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid Name on Page 1 Item 16",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11351-L11355"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-020-FirstName",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "All spouse name controls are enabled and spouse FirstName is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I16TaxSpouseFirstName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid Name on Page 1 Item 16",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11351-L11355"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-020-MiddleName",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "All spouse name controls are enabled and spouse MiddleName is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I16TaxSpouseMiddleName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid Name on Page 1 Item 16",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11351-L11355"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-023-TIN1",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Joint Filing Yes is selected and spouse TIN1 is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I17SpouseTIN1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid TIN number on Page 1 Item 17",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11356-L11361"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-023-TIN2",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Joint Filing Yes is selected and spouse TIN2 is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I17SpouseTIN2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid TIN number on Page 1 Item 17",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11356-L11361"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-023-TIN3",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Joint Filing Yes is selected and spouse TIN3 is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I17SpouseTIN3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid TIN number on Page 1 Item 17",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11356-L11361"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-023-BranchCode",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Joint Filing Yes is selected and spouse BranchCode is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I17SpouseBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid TIN number on Item 17",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11356-L11361"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-027",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Spouse TIN checksum helper returns nonzero whenever spouse-name controls are enabled.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I17SpouseTIN1",
+                                     "frm1700:txtPg1Pt1I17SpouseTIN2",
+                                     "frm1700:txtPg1Pt1I17SpouseTIN3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "{shared checksum description} on Page 1 Item 17.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11362-L11363"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-028",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Spouse name controls are enabled and spouse DOB is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I19SpouseDOB"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid Date of Birth (MM/DD/YYYY ) on Page 1 Item 19",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11364"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-029",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Spouse DOB is malformed or future.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I19SpouseDOB"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 1 Item 19:\\nPlease provide a valid date for Date of Birth (MM/DD/YYYY )",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11365,11856-L11868"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-030",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Joint Filing Yes is selected and spouse email is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I20SpouseEmailAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid Email Address on Page 1 Item 20",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11366-L11368"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-031",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "Neither Gov ID nor CTC selector is checked.",
+                      "fields":  [
+                                     "frm1700:rdoPg1Pt2I32GovID",
+                                     "frm1700:rdoPg1Pt2I32CTC"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please select Gov ID or CTC on Page 1 Item 32",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11371,11571-L11587"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-032",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Gov ID/CTC number field is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt2I32GovID"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid Gov ID on Page 1 Item 32",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11373"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The same field is required with Gov ID wording for either selection.",
+                      "recommended_app_behavior":  "Use selection-specific labels while preserving stored key.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-033",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Date of issue is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1P23I33DateofIssue"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid Date on Page 1 Item 33",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11374"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-034",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "CTC/Gov ID issue date violates the official date window.",
+                      "fields":  [
+                                     "frm1700:txtPg1P23I33DateofIssue"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "This date cannot be a past date. / This date cannot be a future date. / CTC year should not be less than {current year - 50} for Page 1 Item 33",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11376,11881-L11922"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-035",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "CTC/Gov ID amount is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt2I34Amount"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid amount on Page 1 Item 34",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11378"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-036",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  36,
+                      "condition":  "Place of issue is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt2I35PlaceofIssue"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a Place of Issue on Page 1 Item 35",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11379"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-037",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  37,
+                      "condition":  "PSOC is blank (duplicate later check).",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I7Psoc"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid PSOC on Page 1 Item 7",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11381"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Unreachable after rule 011 unless the field changes during validation.",
+                      "recommended_app_behavior":  "Keep one PSOC rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-038",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  38,
+                      "condition":  "Either party claims additional exemptions and first dependent last name is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2LastName1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter Last Name of Dependent on Page 4 Table 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11383-L11384"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-039",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  39,
+                      "condition":  "Either party claims additional exemptions and first dependent first name is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2FirstName1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter First Name of Dependent on Page 4 Table 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11385"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-040",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  40,
+                      "condition":  "Page 2 Item 18 has a nonzero party amount and description is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I18TC",
+                                     "frm1700:txtPg2Pt4I18C1",
+                                     "frm1700:txtPg2Pt4I18C2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter a valid Other Payment description on Page 2 Item 18",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11392-L11394"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-041-1",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  41,
+                      "condition":  "Both Page 3 Item 6 totals equal string 0 and enabled Page 2 employer Item 1 compensation equals numeric zero.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I1ComIncomeC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 2 Item 1 Compensation Income should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11396-L11410,11415-L11429"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The same checks run twice: once in mandatoryFields and again in validateAll.",
+                      "recommended_app_behavior":  "Evaluate once in the same relative order.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-041-2",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  42,
+                      "condition":  "Both Page 3 Item 6 totals equal string 0 and enabled Page 2 employer Item 2 compensation equals numeric zero.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I2ComIncomeC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 2 Item 2 Compensation Income should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11396-L11410,11415-L11429"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The same checks run twice: once in mandatoryFields and again in validateAll.",
+                      "recommended_app_behavior":  "Evaluate once in the same relative order.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-041-3",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  43,
+                      "condition":  "Both Page 3 Item 6 totals equal string 0 and enabled Page 2 employer Item 3 compensation equals numeric zero.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I3ComIncomeC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 2 Item 3 Compensation Income should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11396-L11410,11415-L11429"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The same checks run twice: once in mandatoryFields and again in validateAll.",
+                      "recommended_app_behavior":  "Evaluate once in the same relative order.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-044",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  44,
+                      "condition":  "Details-of-payment amount is nonzero and differs from total amount payable.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt3I36Amount",
+                                     "frm1700:txtPg1Pt2I31"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Sum of Amount field in Details of Payment Segment must be equal to TOTAL AMOUNT PAYABLE",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11431,13425-L13433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-045",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  45,
+                      "condition":  "Details amount is nonzero and payment type, drawee bank, payment date, or number is missing.",
+                      "fields":  [
+                                     "frm1700:rdoPg1Pt3I36DeatilsofPaymentCash",
+                                     "frm1700:rdoPg1Pt3I36DeatilsofPaymentCheck",
+                                     "frm1700:txtPg1Pt2I36DraweeBank",
+                                     "frm1700:txtPg1Pt3I36DatePayment",
+                                     "frm1700:txtPg1Pt3I36Number",
+                                     "frm1700:txtPg1Pt3I36Amount"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please fill up Details of Payment.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11432,13435-L13450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Drawee bank is required even for cash; the else branch assigns misspelled isvalid.",
+                      "recommended_app_behavior":  "Require only fields applicable to the selected payment method.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-046",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  46,
+                      "condition":  "Neither taxpayer nor spouse is selected for employer Item 1.",
+                      "fields":  [
+                                     "frm1700:rdoPg2Pt4I1TaxFiler",
+                                     "frm1700:rdoPg2Pt4I1Spouse"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please select at least 1 employer on Page 2 Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11434-L11438"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-047-name-1",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  47,
+                      "condition":  "A party is selected for employer Item 1 and employer name is blank; Item 3 is exempt when name is literal OTHERS.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I1NameOfEmployer"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter Employer\u0027s Name on Page 2 Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11440-L11450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-047-tin-1",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  48,
+                      "condition":  "A party is selected for employer Item 1 and any employer TIN component is blank; Item 3 is exempt when name is literal OTHERS.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I1EMPTIN1",
+                                     "frm1700:txtPg2Pt4I1EMPTIN2",
+                                     "frm1700:txtPg2Pt4I1EMPTIN3",
+                                     "frm1700:txtPg2Pt4I1EMPTINBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter Employer\u0027s TIN on Page 2 Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11440-L11450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-047-name-2",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  49,
+                      "condition":  "A party is selected for employer Item 2 and employer name is blank; Item 3 is exempt when name is literal OTHERS.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I2NameOfEmployer"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter Employer\u0027s Name on Page 2 Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11440-L11450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-047-tin-2",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  50,
+                      "condition":  "A party is selected for employer Item 2 and any employer TIN component is blank; Item 3 is exempt when name is literal OTHERS.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I2EMPTIN1",
+                                     "frm1700:txtPg2Pt4I2EMPTIN2",
+                                     "frm1700:txtPg2Pt4I2EMPTIN3",
+                                     "frm1700:txtPg2Pt4I2EMPTINBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter Employer\u0027s TIN on Page 2 Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11440-L11450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-047-name-3",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  51,
+                      "condition":  "A party is selected for employer Item 3 and employer name is blank; Item 3 is exempt when name is literal OTHERS.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I3NameOfEmployer"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter Employer\u0027s Name on Page 2 Item 3",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11440-L11450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-047-tin-3",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  52,
+                      "condition":  "A party is selected for employer Item 3 and any employer TIN component is blank; Item 3 is exempt when name is literal OTHERS.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I3EMPTIN1",
+                                     "frm1700:txtPg2Pt4I3EMPTIN2",
+                                     "frm1700:txtPg2Pt4I3EMPTIN3",
+                                     "frm1700:txtPg2Pt4I3EMPTINBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Please enter Employer\u0027s TIN on Page 2 Item 3",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11440-L11450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-053",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  53,
+                      "condition":  "Payment date is invalid or future.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt3I36DatePayment"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 1 Item 36:\\nPlease provide a valid date for ",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11453,11869-L11880"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-054",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  54,
+                      "condition":  "Page 3 Item 15 taxpayer date of issue is invalid or future when nonblank.",
+                      "fields":  [
+                                     "frm1700:txtPg3Pt5I15DateofIssueC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 3 Item 15 Column 1:\\nPlease provide a valid date for Date of Issue (MM/DD/YYYY)",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11454-L11456"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-055",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  55,
+                      "condition":  "Page 3 Item 15 spouse date of issue is invalid or future when nonblank.",
+                      "fields":  [
+                                     "frm1700:txtPg3Pt5I15DateofIssueC2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Page 3 Item 15 Column 2:\\nPlease provide a valid date for Date of Issue (MM/DD/YYYY)",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11458-L11460"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-056-address-SubdivisionVillage",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  56,
+                      "condition":  "Address Changed is checked and Page 4 Table 1 subdivision/village is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T1SubdivisionVillage"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid Subdivision/Village on Page 4 Table 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11469-L11470"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-057-address-Barangay",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  57,
+                      "condition":  "Address Changed is checked and Page 4 Table 1 barangay is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T1Barangay"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid barangay on Page 4 Table 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11469-L11471"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-058-address-MunicipalityCity",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  58,
+                      "condition":  "Address Changed is checked and Page 4 Table 1 municipality/city is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T1MunicipalityCity"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid Municipality or City on Page 4 Table 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11469-L11472"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-059-address-Province",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  59,
+                      "condition":  "Address Changed is checked and Page 4 Table 1 province is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T1Province"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid province on Page 4 Table 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11469-L11473"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-060-address-ZipCde",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  60,
+                      "condition":  "Address Changed is checked and Page 4 Table 1 zip code is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T1ZipCde"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid zip code on Page 4 Table 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11469-L11474"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-061-dob-1",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  61,
+                      "condition":  "Dependent row 1 has a first or last name and its DOB is malformed, future, or blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2LastName1",
+                                     "frm1700:txtPg4T2FirstName1",
+                                     "frm1700:txtPg4T2DependentDOB1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid date on Page 4 Table 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11477-L11497,11856-L11868"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-061-dob-2",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  62,
+                      "condition":  "Dependent row 2 has a first or last name and its DOB is malformed, future, or blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2LastName2",
+                                     "frm1700:txtPg4T2FirstName2",
+                                     "frm1700:txtPg4T2DependentDOB2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid date on Page 4 Table 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11477-L11497,11856-L11868"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-061-dob-3",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  63,
+                      "condition":  "Dependent row 3 has a first or last name and its DOB is malformed, future, or blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2LastName3",
+                                     "frm1700:txtPg4T2FirstName3",
+                                     "frm1700:txtPg4T2DependentDOB3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid date on Page 4 Table 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11477-L11497,11856-L11868"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-061-dob-4",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  64,
+                      "condition":  "Dependent row 4 has a first or last name and its DOB is malformed, future, or blank.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2LastName4",
+                                     "frm1700:txtPg4T2FirstName4",
+                                     "frm1700:txtPg4T2DependentDOB4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "It is a mandatory field. Please enter a valid date on Page 4 Table 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11477-L11497,11856-L11868"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-065-age-1",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  65,
+                      "condition":  "Dependent row 1 DOB is present and AgeCheck rejects it.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2DependentDOB1",
+                                     "frm1700:rdoP4T2MarkIfIncapacitated1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Dependent should be 21 years old and below. If dependent is more than 21 years old and incapacitated, mark as incapacitated.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11499-L11509,12919-L12990"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "A dependent older than the filer returns false silently in Validate; age uses only tax-year minus birth-year.",
+                      "recommended_app_behavior":  "Use full dates, always provide an error, and allow over-21 only when incapacitated.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-065-age-2",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  66,
+                      "condition":  "Dependent row 2 DOB is present and AgeCheck rejects it.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2DependentDOB2",
+                                     "frm1700:rdoP4T2MarkIfIncapacitated2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Dependent should be 21 years old and below. If dependent is more than 21 years old and incapacitated, mark as incapacitated.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11499-L11509,12919-L12990"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "A dependent older than the filer returns false silently in Validate; age uses only tax-year minus birth-year.",
+                      "recommended_app_behavior":  "Use full dates, always provide an error, and allow over-21 only when incapacitated.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-065-age-3",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  67,
+                      "condition":  "Dependent row 3 DOB is present and AgeCheck rejects it.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2DependentDOB3",
+                                     "frm1700:rdoP4T2MarkIfIncapacitated3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Dependent should be 21 years old and below. If dependent is more than 21 years old and incapacitated, mark as incapacitated.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11499-L11509,12919-L12990"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "A dependent older than the filer returns false silently in Validate; age uses only tax-year minus birth-year.",
+                      "recommended_app_behavior":  "Use full dates, always provide an error, and allow over-21 only when incapacitated.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-065-age-4",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  68,
+                      "condition":  "Dependent row 4 DOB is present and AgeCheck rejects it.",
+                      "fields":  [
+                                     "frm1700:txtPg4T2DependentDOB4",
+                                     "frm1700:rdoP4T2MarkIfIncapacitated4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Dependent should be 21 years old and below. If dependent is more than 21 years old and incapacitated, mark as incapacitated.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L11499-L11509,12919-L12990"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "A dependent older than the filer returns false silently in Validate; age uses only tax-year minus birth-year.",
+                      "recommended_app_behavior":  "Use full dates, always provide an error, and allow over-21 only when incapacitated.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-validate-069",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "validate",
+                      "order":  69,
+                      "condition":  "All ordered validation branches pass.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops at this first failure.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields/validateAll:L7706-L7718"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The ordered branch stops validation.",
+                      "recommended_app_behavior":  "Retain with exact revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-input-001",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "A nonempty TIN segment has fewer than three characters.",
+                      "fields":  [
+                                     "TIN-segment-controls"
+                                 ],
+                      "accepted_behavior":  "Three characters or blank.",
+                      "rejected_behavior":  "An alert is shown but the helper still returns true.",
+                      "exact_message":  "Please provide a valid TIN (must have 3 numbers per box).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateTIN:L11589-L11617"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The line that sets isValid=false is commented out.",
+                      "recommended_app_behavior":  "Reject malformed segments before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-input-002",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "Taxpayer TIN passes nonblank checks but fails checksum.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I5TIN1",
+                                     "frm1700:txtPg1Pt1I5TIN2",
+                                     "frm1700:txtPg1Pt1I5TIN3"
+                                 ],
+                      "accepted_behavior":  "No checksum is evaluated.",
+                      "rejected_behavior":  "No local rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#mandatoryFields:L11322-L11413",
+                                          "official-hta-runtime#getTinChkCode-uses:L9899-L9901,L11362-L11363"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only spouse TIN invokes getTinChkCode.",
+                      "recommended_app_behavior":  "Apply shared checksum validation to both taxpayer and spouse TINs.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-input-003",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "blur/change",
+                      "order":  3,
+                      "condition":  "Email does not match the official regex.",
+                      "fields":  [
+                                     "frm1700:txtPg1Pt1I11EmailAddress",
+                                     "frm1700:txtPg1Pt1I20SpouseEmailAddress"
+                                 ],
+                      "accepted_behavior":  "Regex matches or value is blank.",
+                      "rejected_behavior":  "Alert is shown and value is cleared.",
+                      "exact_message":  "You have entered an invalid email address format!",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEmail:L13006-L13016"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-input-004",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "blur/change",
+                      "order":  4,
+                      "condition":  "Page 3 Item 1 AAFM is positive and final tax withheld is nonpositive.",
+                      "fields":  [
+                                     "frm1700:txtPg3Pt5I1AAFM",
+                                     "frm1700:txtPg3Pt5I1FinalTaxWithheld"
+                                 ],
+                      "accepted_behavior":  "Withheld is positive.",
+                      "rejected_behavior":  "Alert is shown and focus moves.",
+                      "exact_message":  "Final Tax Withheld on Page 3 Item 1 Should be greater than 0",
+                      "source_refs":  [
+                                          "official-hta-runtime#page3Item1ExemptValidation:L12123-L12136"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-input-005",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "blur/change",
+                      "order":  5,
+                      "condition":  "Part IV Item 22 exceeds 50% of Items 14A+14B.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I22",
+                                     "frm1700:txtPg2Pt4I14C1",
+                                     "frm1700:txtPg2Pt4I14C2"
+                                 ],
+                      "accepted_behavior":  "Amount is within cap.",
+                      "rejected_behavior":  "Alert is shown and Item 22 is cleared.",
+                      "exact_message":  "Part IV Item 22 should not more than 50% of the sum of Item 14A and 14B",
+                      "source_refs":  [
+                                          "official-hta-runtime#computeP2Pt4I22:L9281-L9295"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-input-006",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "blur/change",
+                      "order":  6,
+                      "condition":  "Part IV Item 22 exceeds Item 21.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I22",
+                                     "frm1700:txtPg2Pt4I21"
+                                 ],
+                      "accepted_behavior":  "Amount does not exceed Item 21.",
+                      "rejected_behavior":  "Alert is shown and Item 22 is cleared.",
+                      "exact_message":  "Part IV Item 22 should not be more than the Item 21",
+                      "source_refs":  [
+                                          "official-hta-runtime#computeP2Pt4I22:L9296-L9299"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-001",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  1,
+                      "condition":  "Page 2 Item 12 modal description is blank on Save.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I12Description_{N\u003e=1}C1"
+                                 ],
+                      "accepted_behavior":  "Description is nonblank.",
+                      "rejected_behavior":  "The row is silently deleted.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveRowColI12:L5983-L5989"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The intended alert is commented out.",
+                      "recommended_app_behavior":  "Explain the missing description instead of silently deleting data.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-002",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  2,
+                      "condition":  "Page 2 Item 12 description is nonblank and either enabled party amount equals string 0.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I12TaxFiler_{N\u003e=1}C2",
+                                     "frm1700:txtPg2Pt4I12Spouse_{N\u003e=1}C3"
+                                 ],
+                      "accepted_behavior":  "Every enabled amount is nonzero.",
+                      "rejected_behavior":  "Modal save is blocked.",
+                      "exact_message":  "Amount should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveRowColI12:L5990-L5999"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-003",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  3,
+                      "condition":  "Page 3 Item 6 modal Save is clicked.",
+                      "fields":  [
+                                     "frm1700:txtPg3Pt5I6Description_{N\u003e=1}C1",
+                                     "frm1700:txtPg3Pt5I6AAFM_{N\u003e=1}C2",
+                                     "frm1700:txtPg3Pt5I6FinalTaxWithheld_{N\u003e=1}C3"
+                                 ],
+                      "accepted_behavior":  "No branch executes.",
+                      "rejected_behavior":  "No validation, copy, counter update, or alert occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveRowColI6:L5900-L5963"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The entire function body is commented out.",
+                      "recommended_app_behavior":  "Implement explicit row validation and persistence; preserve compatibility evidence separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-004",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  4,
+                      "condition":  "A generic Page 3 A2/A3/A4/B1/B2 modal is saved with blank or zero data.",
+                      "fields":  [
+                                     "page-3-dynamic-families"
+                                 ],
+                      "accepted_behavior":  "Any values are accepted.",
+                      "rejected_behavior":  "No rejection occurs; repository HTML is replaced and Saved! is shown.",
+                      "exact_message":  "Saved!",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveRowCol:L5869-L5898"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "No row validation is performed.",
+                      "recommended_app_behavior":  "Validate only legally/applicably required cells and preserve incomplete drafts.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-005",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  5,
+                      "condition":  "An employer modal row has neither taxpayer nor spouse checked.",
+                      "fields":  [
+                                     "frm1700:rdoPg2Pt4I{N\u003e=4}TaxFiler",
+                                     "frm1700:rdoPg2Pt4I{N\u003e=4}Spouse"
+                                 ],
+                      "accepted_behavior":  "At least one party is checked.",
+                      "rejected_behavior":  "The row is silently deleted.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveChangesPg2Pt4:L12431-L12438"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-006",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  6,
+                      "condition":  "Employer modal row name is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I3NameOfEmployer{N\u003e=4}"
+                                 ],
+                      "accepted_behavior":  "Name is nonblank.",
+                      "rejected_behavior":  "Modal save is blocked.",
+                      "exact_message":  "Please enter Name of Employer.",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveChangesPg2Pt4:L12439-L12442"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-007",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  7,
+                      "condition":  "Employer name is nonblank and any TIN component is blank.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I3EMPTIN1{N\u003e=4}",
+                                     "frm1700:txtPg2Pt4I3EMPTIN2{N\u003e=4}",
+                                     "frm1700:txtPg2Pt4I3EMPTIN3{N\u003e=4}",
+                                     "frm1700:txtPg2Pt4I3EMPTINBranchCode{N\u003e=4}"
+                                 ],
+                      "accepted_behavior":  "All components are nonblank.",
+                      "rejected_behavior":  "Modal save is blocked.",
+                      "exact_message":  "Please enter Employer TIN.",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveChangesPg2Pt4:L12443-L12446"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1700-modal-008",
+                      "form_id":  "1700-v2013",
+                      "revision":  "2013-06-01",
+                      "phase":  "input",
+                      "order":  8,
+                      "condition":  "Employer name is nonblank and enabled compensation equals string 0.",
+                      "fields":  [
+                                     "frm1700:txtPg2Pt4I{N\u003e=4}ComIncomeC1"
+                                 ],
+                      "accepted_behavior":  "Compensation is nonzero.",
+                      "rejected_behavior":  "Modal save is blocked.",
+                      "exact_message":  "Compensation Income should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveChangesPg2Pt4:L12447-L12450"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns false.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

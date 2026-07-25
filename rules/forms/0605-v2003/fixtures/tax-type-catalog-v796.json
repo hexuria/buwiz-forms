@@ -1,0 +1,284 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0605-v2003",
+    "source_sha256":  "496fd8e64b8854f1012a314b3d8576518fafd081b4e4726f2ea2f05ea6e3a72b",
+    "declared_runtime_count":  37,
+    "physical_form_bound_count":  39,
+    "runtime_reachable_count":  37,
+    "unreachable_count":  2,
+    "entries":  [
+                    {
+                        "source_index":  1,
+                        "code":  "CG",
+                        "description":  "CAPITAL GAINS TAX-Real Property",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  2,
+                        "code":  "CS",
+                        "description":  "CAPITAL GAINS TAX-Stocks",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  3,
+                        "code":  "DN",
+                        "description":  "DONORS TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  4,
+                        "code":  "DO",
+                        "description":  "DOCUMENTARY STAMP TAX-ONE TIME",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  5,
+                        "code":  "DS",
+                        "description":  "DOCUMENTARY STAMP TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  6,
+                        "code":  "ES",
+                        "description":  "ESTATE TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  7,
+                        "code":  "ET",
+                        "description":  "ENERGY TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  8,
+                        "code":  "IE",
+                        "description":  "IMPROPERLY ACCUMULATED EARNINGS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  9,
+                        "code":  "IT",
+                        "description":  "INCOME TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  10,
+                        "code":  "MC",
+                        "description":  "MISCELLANEOUS TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  11,
+                        "code":  "PM",
+                        "description":  "PERCENTAGE TAX-MONTHLY",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  12,
+                        "code":  "PT",
+                        "description":  "PERCENTAGE TAX-QUARTERLY",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  13,
+                        "code":  "QP",
+                        "description":  "QUALIFYING FEES-PAGCOR",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  14,
+                        "code":  "RF",
+                        "description":  "REGISTRATION FEE",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  15,
+                        "code":  "SL",
+                        "description":  "PERCENTAGE TAX-SPECIAL LAWS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  16,
+                        "code":  "SO",
+                        "description":  "PERCENTAGE TAX-STOCKS(IPO)",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  17,
+                        "code":  "ST",
+                        "description":  "PERCENTAGE TAX-STOCKS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  18,
+                        "code":  "TR",
+                        "description":  "TRAVEL TAX-PTA",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  19,
+                        "code":  "VT",
+                        "description":  "VALUE ADDED TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  20,
+                        "code":  "WB",
+                        "description":  "WITHHOLDING TAX-BANKS AND OTHER FINANCIAL INSTITUTIONS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  21,
+                        "code":  "WC",
+                        "description":  "WITHHOLDING TAX-COMPENSATION",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  22,
+                        "code":  "WE",
+                        "description":  "WITHHOLDING TAX-EXPANDED",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  23,
+                        "code":  "WF",
+                        "description":  "WITHHOLDING TAX-FINAL",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  24,
+                        "code":  "WG",
+                        "description":  "WITHHOLDING TAX-VAT AND OTHER PERCENTAGE TAXES",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  25,
+                        "code":  "WO",
+                        "description":  "WITHHOLDING TAX-OTHERS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  26,
+                        "code":  "WR",
+                        "description":  "WITHHOLDING TAX-FRINGE BENEFITS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  27,
+                        "code":  "WW",
+                        "description":  "WITHHOLDING TAX-PERCENTAGE TAX ON WINNING AND PRIZES",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  28,
+                        "code":  "WV",
+                        "description":  "WITHHOLDING TAX-VALUE ADDED TAX (VAT)",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  29,
+                        "code":  "WP",
+                        "description":  "WITHHOLDING TAX-PERCENTAGE TAX",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  30,
+                        "code":  "XA",
+                        "description":  "EXCISE TAX-ALCOHOL",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  31,
+                        "code":  "XB",
+                        "description":  "EXCISE TAX-SWEETENED BEVERAGES",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  32,
+                        "code":  "XF",
+                        "description":  "EXCISE TAX-TOBACCO INSPECTION AND MONITORING FESS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  33,
+                        "code":  "XG",
+                        "description":  "EXCISE TAX-AUTOMOBILES AND NON-ESSENTIALS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  34,
+                        "code":  "XM",
+                        "description":  "EXCISE TAX-MINERALS",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  35,
+                        "code":  "XP",
+                        "description":  "EXCISE TAX-PETROLEUM",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  36,
+                        "code":  "XS",
+                        "description":  "EXCISE TAX-SPECIFIC",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  37,
+                        "code":  "XT",
+                        "description":  "EXCISE TAX-TOBACCO",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  true
+                    },
+                    {
+                        "source_index":  38,
+                        "code":  "XV",
+                        "description":  "EXCISE TAX-AD VALOREM",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  false
+                    },
+                    {
+                        "source_index":  39,
+                        "code":  "XC",
+                        "description":  "EXCISE TAX-PERFORMANCE OF SERVICES ON INVASIVE COSMETICS PROCEDURES",
+                        "form_binding":  "0605",
+                        "runtime_reachable":  false
+                    }
+                ]
+}

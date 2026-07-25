@@ -1,0 +1,35 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1707-v2021",
+    "cases":  [
+                  {
+                      "case_id":  "regular-fifteen-percent",
+                      "net_capital_gain":  1000,
+                      "calculation_id":  "1707-item13-tax-due",
+                      "rate":  15,
+                      "official_output":  150
+                  },
+                  {
+                      "case_id":  "negative-gain-floor",
+                      "net_capital_gain":  -100,
+                      "calculation_id":  "1707-item13-tax-due",
+                      "rate":  15,
+                      "official_output":  0
+                  },
+                  {
+                      "case_id":  "installment-tax",
+                      "rate":  15,
+                      "calculation_id":  "1707-installment-period-tax",
+                      "installment_amount":  1000,
+                      "official_output":  150
+                  },
+                  {
+                      "tax_payable":  -100,
+                      "recommended_output":  0,
+                      "calculation_id":  "1707-item18-payable",
+                      "case_id":  "negative-payable-defect",
+                      "official_output":  -100,
+                      "penalties":  0
+                  }
+              ]
+}

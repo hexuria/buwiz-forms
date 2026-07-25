@@ -1,0 +1,141 @@
+{
+  "$schema": "../../schema/workflow.schema.json",
+  "schema_version": "1.0.0",
+  "form_id": "1702q-v2018c",
+  "revision": "2018-01-01",
+  "phases": [
+    {
+      "phase": "edit",
+      "official_behavior": "The three-page return is editable subject to ATC, quarter, amended-return, and deduction-method dependencies. Validate is enabled; Print and Submit / Final Copy are disabled.",
+      "source_refs": ["official-hta-runtime#init:L4922-L4947", "official-hta-runtime#enableAllControl:L6391-L6615"],
+      "confidence": "high"
+    },
+    {
+      "phase": "saved-draft",
+      "official_behavior": "Save runs only initialValidateBeforeSave, serializes frmMain in DOM order, updates the synthetic profile, and leaves the return editable.",
+      "source_refs": ["official-hta-runtime#saveXML:L5408-L5707", "official-hta-runtime#initialValidateBeforeSave:L6731-L6751"],
+      "confidence": "high"
+    },
+    {
+      "phase": "validated",
+      "official_behavior": "After the ordered Validate body passes, controls are disabled and Edit, Print, and Submit / Final Copy are enabled.",
+      "source_refs": ["official-hta-runtime#validate:L6082-L6305", "official-hta-runtime#disableAllControl:L6307-L6389"],
+      "confidence": "high"
+    },
+    {
+      "phase": "final-copy-confirmation",
+      "official_behavior": "Submit / Final Copy checks existing versions/final state and asks for Internet/email submission confirmation.",
+      "source_refs": ["official-hta-runtime#openAlertEmail:L7467-L7538"],
+      "confidence": "high"
+    },
+    {
+      "phase": "offline-final-copy",
+      "official_behavior": "When the connection probe fails after confirmation, txtFinalFlag becomes 3 and saveEncryptedProfile writes/encrypts an IAF_RDO_Copy artifact.",
+      "source_refs": ["official-hta-runtime#openAlertEmail:L7529-L7535", "official-hta-runtime#saveEncryptedProfile:L5250-L5343"],
+      "confidence": "high"
+    },
+    {
+      "phase": "submission-pending",
+      "official_behavior": "Enrollment/credential state is collected, an encrypted copy is created, and RenameAndSendFile is invoked for 1702Qv2018C.",
+      "source_refs": ["official-hta-runtime#sendEmail:L7542-L7615"],
+      "confidence": "high"
+    },
+    {
+      "phase": "submitted",
+      "official_behavior": "Transport return code 0 sets txtFinalFlag to 1, updates the save, shows submission success, and opens payment options.",
+      "source_refs": ["official-hta-runtime#sendEmail:L7616-L7627"],
+      "confidence": "high"
+    },
+    {
+      "phase": "submission-retry",
+      "official_behavior": "A nonzero transport code or exception sets txtFinalFlag to 2, updates the save, and shows the generic transmission failure message.",
+      "source_refs": ["official-hta-runtime#sendEmail:L7628-L7641"],
+      "confidence": "high"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "edit",
+      "action": "Save",
+      "to": "saved-draft",
+      "guard": "A quarter is selected; TIN parts and branch are nonblank; RDO is nonblank; taxpayer name is nonblank.",
+      "side_effects": ["Writes plaintext save XML.", "Serializes both DOM elements sharing frm1702q:txtTelNum.", "Does not establish full validation."],
+      "source_refs": ["official-hta-runtime#initialValidateBeforeSave:L6731-L6751", "official-hta-runtime#saveXML:L5408-L5707"]
+    },
+    {
+      "from": "edit",
+      "action": "Validate",
+      "to": "validated",
+      "guard": "All reachable ordered Validate rules pass. With no quarter selected, Validate instead returns silently and remains in edit state.",
+      "side_effects": ["Locks form controls.", "Enables Edit, Print, and Submit / Final Copy."],
+      "source_refs": ["official-hta-runtime#validate:L6082-L6305", "official-hta-runtime#disableAllControl:L6307-L6389"]
+    },
+    {
+      "from": "validated",
+      "action": "Edit",
+      "to": "edit",
+      "guard": null,
+      "side_effects": ["Re-enables dependency-eligible controls.", "Disables Print and Submit / Final Copy until revalidation."],
+      "source_refs": ["official-hta-runtime#enableAllControl:L6391-L6615"]
+    },
+    {
+      "from": "validated",
+      "action": "Submit / Final Copy",
+      "to": "final-copy-confirmation",
+      "guard": "No conflicting finalized non-amended return/version and txtFinalFlag is not direct resend state 2.",
+      "side_effects": ["Shows explicit Internet/email confirmation."],
+      "source_refs": ["official-hta-runtime#openAlertEmail:L7467-L7538"]
+    },
+    {
+      "from": "final-copy-confirmation",
+      "action": "Confirm with failed connection probe",
+      "to": "offline-final-copy",
+      "guard": "checkNetConnection() returns false.",
+      "side_effects": ["Shows no-Internet alert.", "Sets txtFinalFlag to 3.", "Writes and encrypts IAF_RDO_Copy.", "Shows debug-like saveEncryptedProfile alerts containing the selected filename branch."],
+      "source_refs": ["official-hta-runtime#openAlertEmail:L7529-L7535", "official-hta-runtime#saveEncryptedProfile:L5250-L5343"]
+    },
+    {
+      "from": "final-copy-confirmation",
+      "action": "Confirm with connection",
+      "to": "submission-pending",
+      "guard": "checkNetConnection() returns true and enrollment/credential confirmation proceeds.",
+      "side_effects": ["Sets prior offline flag 3 to retry flag 2, otherwise resets to 0.", "Shows enrollment UI.", "Creates encrypted submission artifact."],
+      "source_refs": ["official-hta-runtime#openAlertEmail:L7523-L7528", "official-hta-runtime#sendEmail:L7542-L7615"]
+    },
+    {
+      "from": "submission-pending",
+      "action": "Transport succeeds",
+      "to": "submitted",
+      "guard": "RenameAndSendFile returns 0.",
+      "side_effects": ["Sets txtFinalFlag to 1.", "Updates save-file final flag.", "Shows success/payment options."],
+      "source_refs": ["official-hta-runtime#sendEmail:L7616-L7627"]
+    },
+    {
+      "from": "submission-pending",
+      "action": "Transport fails",
+      "to": "submission-retry",
+      "guard": "RenameAndSendFile returns nonzero or throws.",
+      "side_effects": ["Sets txtFinalFlag to 2.", "Updates save-file final flag.", "Shows generic transport failure."],
+      "source_refs": ["official-hta-runtime#sendEmail:L7628-L7641"]
+    }
+  ],
+  "prerequisites": [
+    "Only the first three quarters are fileable on 1702Q.",
+    "The official help requires filing with or without payment within 60 days after each of the first three taxable-year quarters.",
+    "Submit / Final Copy is enabled only after successful Validate, but final-copy serialization itself reuses the narrower Save preflight.",
+    "The UI stores a two-digit year and reconstructs it as 2000 plus that value."
+  ],
+  "required_attachments": [
+    {"attachment_id":"bir-2304","label":"Certificate of Income Payments not Subject to Withholding Tax (BIR Form No. 2304)","required_when":"If applicable.","official_ui_enforcement":"Not validated by this form UI.","source_refs":["official-help-runtime#L263-L268"],"confidence":"high"},
+    {"attachment_id":"bir-2307","label":"Certificate of Creditable Tax Withheld at Source (BIR Form No. 2307)","required_when":"If applicable.","official_ui_enforcement":"Not validated by this form UI.","source_refs":["official-help-runtime#L269-L271"],"confidence":"high"},
+    {"attachment_id":"tax-debit-memo","label":"Duly approved Tax Debit Memo","required_when":"If applicable.","official_ui_enforcement":"Not validated by this form UI.","source_refs":["official-help-runtime#L272-L274"],"confidence":"high"},
+    {"attachment_id":"tax-treaty-relief","label":"Certificate of Tax Treaty relief","required_when":"If any.","official_ui_enforcement":"Item 13A text is validated when Tax Relief Yes is selected, but the attachment itself is not.","source_refs":["official-help-runtime#L275-L277","official-hta-runtime#validate:L6282-L6288"],"confidence":"high"},
+    {"attachment_id":"sawt","label":"Summary Alphalist of Withholding Agents of Income Payments Subjected to Withholding Tax at Source (SAWT)","required_when":"If applicable.","official_ui_enforcement":"Not validated by this form UI.","source_refs":["official-help-runtime#L278-L281"],"confidence":"high"},
+    {"attachment_id":"other-payment-proof","label":"Proof of other payments","required_when":"If applicable.","official_ui_enforcement":"Not validated by this form UI.","source_refs":["official-help-runtime#L282-L284"],"confidence":"high"}
+  ],
+  "filing_deadlines": [
+    {"quarter":"Q1","due_date_rule":"Within 60 days following the close of the first quarter of the taxable year, subject to applicable electronic-filing issuances.","source_refs":["official-help-runtime#L152-L153","official-help-runtime#L182-L183"],"confidence":"high"},
+    {"quarter":"Q2","due_date_rule":"Within 60 days following the close of the second quarter of the taxable year, subject to applicable electronic-filing issuances.","source_refs":["official-help-runtime#L152-L153","official-help-runtime#L182-L183"],"confidence":"high"},
+    {"quarter":"Q3","due_date_rule":"Within 60 days following the close of the third quarter of the taxable year, subject to applicable electronic-filing issuances.","source_refs":["official-help-runtime#L152-L153","official-help-runtime#L182-L183"],"confidence":"high"}
+  ]
+}

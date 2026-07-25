@@ -1,0 +1,440 @@
+{
+    "$schema":  "./schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "knowledge_base":  "offline-ebirforms-validation-rules",
+    "updated":  "2026-07-25",
+    "forms":  [
+                  {
+                      "form_id":  "1701q-v2018",
+                      "form_code":  "1701Q",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  1,
+                      "status":  "complete",
+                      "path":  "forms/1701q-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1601eq-v2018",
+                      "form_code":  "1601EQ",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  2,
+                      "status":  "complete",
+                      "path":  "forms/1601eq-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1702q-v2018c",
+                      "form_code":  "1702Q",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  3,
+                      "status":  "complete",
+                      "path":  "forms/1702q-v2018c/manifest.json"
+                  },
+                  {
+                      "form_id":  "1601fq-v2018",
+                      "form_code":  "1601FQ",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  4,
+                      "status":  "complete",
+                      "path":  "forms/1601fq-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1603q-v2018",
+                      "form_code":  "1603Q",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  5,
+                      "status":  "complete",
+                      "path":  "forms/1603q-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1600vt-v2018",
+                      "form_code":  "1600VT",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  6,
+                      "status":  "complete",
+                      "path":  "forms/1600vt-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1600pt-v2018",
+                      "form_code":  "1600PT",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  7,
+                      "status":  "complete",
+                      "path":  "forms/1600pt-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2550m-v2007",
+                      "form_code":  "2550M",
+                      "revision":  "2007-02-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  8,
+                      "status":  "complete",
+                      "path":  "forms/2550m-v2007/manifest.json"
+                  },
+                  {
+                      "form_id":  "1701ms-v2024",
+                      "form_code":  "1701-MS",
+                      "revision":  "2024-08-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  9,
+                      "status":  "complete",
+                      "path":  "forms/1701ms-v2024/manifest.json"
+                  },
+                  {
+                      "form_id":  "1701-v2018",
+                      "form_code":  "1701",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  10,
+                      "status":  "complete",
+                      "path":  "forms/1701-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1701a-v2018",
+                      "form_code":  "1701A",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  11,
+                      "status":  "complete",
+                      "path":  "forms/1701a-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1700-v2013",
+                      "form_code":  "1700",
+                      "revision":  "2013-06-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  12,
+                      "status":  "complete",
+                      "path":  "forms/1700-v2013/manifest.json"
+                  },
+                  {
+                      "form_id":  "1702rt-v2018c",
+                      "form_code":  "1702RT",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  13,
+                      "status":  "complete",
+                      "path":  "forms/1702rt-v2018c/manifest.json"
+                  },
+                  {
+                      "form_id":  "1604c-v2018",
+                      "form_code":  "1604C",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  14,
+                      "status":  "complete",
+                      "path":  "forms/1604c-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1604e-v2018",
+                      "form_code":  "1604E",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  15,
+                      "status":  "complete",
+                      "path":  "forms/1604e-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1604f-v2018",
+                      "form_code":  "1604F",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  16,
+                      "status":  "complete",
+                      "path":  "forms/1604f-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1702mx-v2018c",
+                      "form_code":  "1702MX",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  17,
+                      "status":  "complete",
+                      "path":  "forms/1702mx-v2018c/manifest.json"
+                  },
+                  {
+                      "form_id":  "1706-v2018",
+                      "form_code":  "1706",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  18,
+                      "status":  "complete",
+                      "path":  "forms/1706-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1606-v2018",
+                      "form_code":  "1606",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  19,
+                      "status":  "complete",
+                      "path":  "forms/1606-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1800-v2018",
+                      "form_code":  "1800",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  20,
+                      "status":  "complete",
+                      "path":  "forms/1800-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1801-v2018",
+                      "form_code":  "1801",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  21,
+                      "status":  "complete",
+                      "path":  "forms/1801-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2000ot-v2018",
+                      "form_code":  "2000OT",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  22,
+                      "status":  "complete",
+                      "path":  "forms/2000ot-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2000-v2018",
+                      "form_code":  "2000",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  23,
+                      "status":  "complete",
+                      "path":  "forms/2000-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1602q-v2018",
+                      "form_code":  "1602Q",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  24,
+                      "status":  "complete",
+                      "path":  "forms/1602q-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1600wp-v2010",
+                      "form_code":  "1600WP",
+                      "revision":  "2010-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  25,
+                      "status":  "complete",
+                      "path":  "forms/1600wp-v2010/manifest.json"
+                  },
+                  {
+                      "form_id":  "1702ex-v2018c",
+                      "form_code":  "1702EX",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  26,
+                      "status":  "complete",
+                      "path":  "forms/1702ex-v2018c/manifest.json"
+                  },
+                  {
+                      "form_id":  "1707-v2021",
+                      "form_code":  "1707",
+                      "revision":  "2021-04-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  27,
+                      "status":  "complete",
+                      "path":  "forms/1707-v2021/manifest.json"
+                  },
+                  {
+                      "form_id":  "1707a-v2021",
+                      "form_code":  "1707A",
+                      "revision":  "2021-04-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  28,
+                      "status":  "complete",
+                      "path":  "forms/1707a-v2021/manifest.json"
+                  },
+                  {
+                      "form_id":  "2552-v2018",
+                      "form_code":  "2552",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  29,
+                      "status":  "complete",
+                      "path":  "forms/2552-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2553-v1999",
+                      "form_code":  "2553",
+                      "revision":  "1999-07-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  30,
+                      "status":  "complete",
+                      "path":  "forms/2553-v1999/manifest.json"
+                  },
+                  {
+                      "form_id":  "2200a-v2020",
+                      "form_code":  "2200A",
+                      "revision":  "2020-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  31,
+                      "status":  "complete",
+                      "path":  "forms/2200a-v2020/manifest.json"
+                  },
+                  {
+                      "form_id":  "2200an-v2018",
+                      "form_code":  "2200AN",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  32,
+                      "status":  "complete",
+                      "path":  "forms/2200an-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2200c-v2018",
+                      "form_code":  "2200C",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  33,
+                      "status":  "complete",
+                      "path":  "forms/2200c-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2200m-v2018",
+                      "form_code":  "2200M",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  34,
+                      "status":  "complete",
+                      "path":  "forms/2200m-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2200p-v2020",
+                      "form_code":  "2200P",
+                      "revision":  "2020-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  35,
+                      "status":  "complete",
+                      "path":  "forms/2200p-v2020/manifest.json"
+                  },
+                  {
+                      "form_id":  "2200s-v2018",
+                      "form_code":  "2200S",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  36,
+                      "status":  "complete",
+                      "path":  "forms/2200s-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2200t-v2020",
+                      "form_code":  "2200T",
+                      "revision":  "2020-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  37,
+                      "status":  "complete",
+                      "path":  "forms/2200t-v2020/manifest.json"
+                  },
+                  {
+                      "form_id":  "0605-v2003",
+                      "form_code":  "0605",
+                      "revision":  "2003-09-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  38,
+                      "status":  "complete",
+                      "path":  "forms/0605-v2003/manifest.json"
+                  },
+                  {
+                      "form_id":  "0619e-v2018",
+                      "form_code":  "0619E",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  39,
+                      "status":  "complete",
+                      "path":  "forms/0619e-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "0619f-v2018",
+                      "form_code":  "0619F",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  40,
+                      "status":  "complete",
+                      "path":  "forms/0619f-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "1601c-v2018",
+                      "form_code":  "1601C",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  41,
+                      "status":  "complete",
+                      "path":  "forms/1601c-v2018/manifest.json"
+                  },
+                  {
+                      "form_id":  "2550q-v2024",
+                      "form_code":  "2550Q",
+                      "revision":  "2024-04-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  42,
+                      "status":  "complete",
+                      "path":  "forms/2550q-v2024/manifest.json"
+                  },
+                  {
+                      "form_id":  "2551q-v2018",
+                      "form_code":  "2551Q",
+                      "revision":  "2018-01-01",
+                      "package_version":  "7.9.6.0",
+                      "priority":  43,
+                      "status":  "complete",
+                      "path":  "forms/2551q-v2018/manifest.json"
+                  }
+              ],
+    "priority_queue":  [
+                           "1701Q",
+                           "1601EQ",
+                           "1702Q",
+                           "1601FQ",
+                           "1603Q",
+                           "1600VT",
+                           "1600PT",
+                           "2550M",
+                           "1701-MS",
+                           "1701",
+                           "1701A",
+                           "1700",
+                           "1702RT",
+                           "1604C",
+                           "1604E",
+                           "1604F",
+                           "1702MX",
+                           "1706",
+                           "1606",
+                           "1800",
+                           "1801",
+                           "2000OT",
+                           "2000",
+                           "1602Q",
+                           "1600WP",
+                           "1702EX",
+                           "1707",
+                           "1707A",
+                           "2552",
+                           "2553",
+                           "2200A",
+                           "2200AN",
+                           "2200C",
+                           "2200M",
+                           "2200P",
+                           "2200S",
+                           "2200T",
+                           "0605",
+                           "0619E",
+                           "0619F",
+                           "1601C",
+                           "2550Q",
+                           "2551Q"
+                       ]
+}

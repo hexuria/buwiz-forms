@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/workflow.schema.json",
+  "title": "eBIRForms executable rules IR v2 workflow",
+  "$defs": {
+    "workflow_state": {
+      "type": "object",
+      "required": [
+        "state_id",
+        "terminal",
+        "source_refs"
+      ],
+      "properties": {
+        "state_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "terminal": {
+          "type": "boolean"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "transition_executable": {
+      "type": "object",
+      "required": [
+        "state",
+        "guard",
+        "effects",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "state": {
+          "const": "executable"
+        },
+        "guard": {
+          "$ref": "predicate.schema.json#/$defs/predicate"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "effect.schema.json#/$defs/effect"
+          }
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "transition_branch": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/transition_executable"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    },
+    "transition_profiles": {
+      "type": "object",
+      "required": [
+        "official",
+        "filing_safe"
+      ],
+      "properties": {
+        "official": {
+          "$ref": "#/$defs/transition_branch"
+        },
+        "filing_safe": {
+          "$ref": "#/$defs/transition_branch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workflow_transition": {
+      "type": "object",
+      "required": [
+        "transition_id",
+        "from_state",
+        "action",
+        "evaluation_phase",
+        "to_state",
+        "profiles",
+        "source_refs"
+      ],
+      "properties": {
+        "transition_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "from_state": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "action": {
+          "enum": [
+            "edit",
+            "save",
+            "validate",
+            "final-copy",
+            "submit",
+            "print-preview"
+          ]
+        },
+        "evaluation_phase": {
+          "$ref": "common.schema.json#/$defs/validation_phase"
+        },
+        "to_state": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "profiles": {
+          "$ref": "#/$defs/transition_profiles"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workflow": {
+      "type": "object",
+      "required": [
+        "initial_state",
+        "states",
+        "transitions"
+      ],
+      "properties": {
+        "initial_state": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workflow_state"
+          },
+          "uniqueItems": true
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workflow_transition"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/workflow"
+}

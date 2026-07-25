@@ -1,0 +1,951 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702ex-v2018c",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate and Save stop at the first invoked source-ordered failure; two defined validators are unreachable.",
+    "rules":  [
+                  {
+                      "rule_id":  "1702ex-validate-001-year",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Year End is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Year End on Page 1 Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4721-L4724"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-002-period",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Calendar/fiscal/short-period rules fail, including a year before 2018 or disallowed current/future period.",
+                      "fields":  [
+                                     "frm1702EX:rdoPg1I1Calendar",
+                                     "frm1702EX:rdoPg1I1Fiscal",
+                                     "frm1702EX:ddlPg1I2Date",
+                                     "frm1702EX:txtPg1I2YearEnd",
+                                     "frm1702EX:rdoPg1I4ShortPeriodYes",
+                                     "frm1702EX:rdoPg1I4ShortPeriodNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Period-specific message from checkFilingYear.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkFilingYear:L5294-L5438"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-003-atc",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Neither IC021 nor IC011 ATC is selected.",
+                      "fields":  [
+                                     "frm1702EX:rdoPg1I5ATCR1C1",
+                                     "frm1702EX:rdoPg1I5ATCR1C2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an ATC on Page 1 Item 5",
+                      "source_refs":  [
+                                          "official-hta-runtime#Check_rdoPg1I5ATC:L5460-L5477"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-004-rdo",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm1702EX:rdoPg1Pt1I7RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Page 1 Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4726-L4728"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-005-name",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I8RegisteredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid name on Page 1 Item 8",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4729"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-006-address",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I9RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Registered Address on Page 1 Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4730"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-007-zip",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Zip code is blank.",
+                      "fields":  [
+                                     "frm1702EX:txPg1I9ZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Zip Code on Page 1 Item 9A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4731"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-008-incorporation",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Date of incorporation is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I10DateofIncorporation"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Date of Incorporation on Page 1 Item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4732"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-009-incorporation-after-filing",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Date of incorporation is after the filing year/month.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I10DateofIncorporation",
+                                     "frm1702EX:ddlPg1I2Date",
+                                     "frm1702EX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "The date of incorporation should not be more than the Filing date ",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L4769-L4787"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-010-contact",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I11ContactNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Contact Number on Page 1 Item 11",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4734"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-011-email-required",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Email is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid e-mail address on page 1 item 12",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4735"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-012-email-format",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Email fails the source regex.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid e-mail address on page 1 item 12",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEmail:L5047-L5057"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-013-deduction",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Neither itemized nor optional standard deduction is selected.",
+                      "fields":  [
+                                     "frm1702EX:rdoPg1Pt1I13MethodOfDeducItemized",
+                                     "frm1702EX:rdoPg1Pt1I13MethodOfDeducOptional"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select a Method of Deduction in page 1 Item 13.",
+                      "source_refs":  [
+                                          "official-hta-runtime#check_MethodOfDeduction:L5479-L5487"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-014-relief-basis",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Legal basis is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I14LegalBasis"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a value Legal Bases of Tax Relief/Exemption on Page 1 Item 14",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4739"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-015-ipa",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "IPA/government agency is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I15Investment"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a value for Investment Promotion Agency (IPA) Government Agency on Page 1 Item 15",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4740"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-016-activity",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Registered activity/program is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I16RegisteredActivity"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a value for Registered Activity/Program (Reg. No.) on Page 1 Item 16",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4741"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-017-effectivity-from",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Effectivity From is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I17EffectivityFrom"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid date for Effectivity Date of Tax Relief/Exemption(FROM) on Page 1 Item 17",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4742"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-018-effectivity-to",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Effectivity To is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I17EffectivityTo"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid date for Effectivity Date of Tax Relief/Exemption(TO) on Page 1 Item 17",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4743"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-019-effectivity-order",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Effectivity From is after Effectivity To.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I17EffectivityFrom",
+                                     "frm1702EX:txtPg1Pt1I17EffectivityTo"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date range message from DateCompare_Page1_Item17.",
+                      "source_refs":  [
+                                          "official-hta-runtime#DateCompare_Page1_Item17:L4546-L4568"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-020-overpayment",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Item 20 is negative and no overpayment disposition is selected.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt2I20TotalOverpmt",
+                                     "frm1702EX:rdoPg1OverpaymentRefund",
+                                     "frm1702EX:rdoPg1OverpaymentTCC",
+                                     "frm1702EX:rdoPg1OverpaymentCarryOver"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an Overpayment option in Page 1 after Item 22.",
+                      "source_refs":  [
+                                          "official-hta-runtime#check_Overpayment:L5491-L5500"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-021-reconciliation",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Page 2 Item 39 string value differs from Page 3 Schedule 3 Item 10 string value.",
+                      "fields":  [
+                                     "frm1702EX:txtPg2Pt4I39NetTaxable",
+                                     "frm1702EX:txtPg3Pt6S3I10NetTaxableIncome"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Page 2 Part IV Item 39 should be equal to Page 3 Schedule 3 Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateNetTaxInc:L5503-L5510"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Direct formatted-string comparison can reject numerically equal representations.",
+                      "recommended_app_behavior":  "Compare normalized decimal values.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-022-description-pairs",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "An amount/description pair in Part IV/V or Page 3 has only one side populated.",
+                      "fields":  [
+                                     "schedule-description-and-amount-controls"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Dynamic pair-specific message.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAmountDescription:L5096-L5124",
+                                          "official-hta-runtime#validateAmountDescription_pt2:L5125-L5292"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-023-item53",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Item 36 is positive while Item 53 is blank or zero.",
+                      "fields":  [
+                                     "frm1702EX:txtPg2Pt4I36SpecialAllowable",
+                                     "frm1702EX:txtPg2Pt5I53SpecialAllowableItemizedDeduc"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Item 53.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4757-L4760"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-024-item52",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Item 39 is positive while Item 52 is zero.",
+                      "fields":  [
+                                     "frm1702EX:txtPg2Pt4I39NetTaxable",
+                                     "frm1702EX:txtPg2Pt5I52RegularIncomeOtherwiseDue"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Item 52.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4762-L4765"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-025-unused-schedule8",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Schedule 8 contains incomplete TIN/name/contribution/percent rows.",
+                      "fields":  [
+                                     "frm1702EX:txtPg6S8I{index}Col1Name",
+                                     "frm1702EX:txtPg6S8I{index}Col2TIN{segment}",
+                                     "frm1702EX:txtPg6S8I{index}Col3CapContri",
+                                     "frm1702EX:txtPg6S8I{index}Col4PTotal"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule8TIN:L4790-L4827",
+                                          "official-hta-runtime#validateAll:L4721-L4767"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "A detailed validator exists but validateAll never calls it.",
+                      "recommended_app_behavior":  "Invoke the row validator during Validate.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-026-unused-ctc-reg",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Neither CTC nor SEC registration is selected.",
+                      "fields":  [
+                                     "frm1702EX:rdoPg1CTC",
+                                     "frm1702EX:rdoPg1Reg"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select CTC or SEC Reg on Page 1 Item 23",
+                      "source_refs":  [
+                                          "official-hta-runtime#Check_CTCorReg:L5441-L5457",
+                                          "official-hta-runtime#validateAll:L4721-L4767"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The function is defined but never called.",
+                      "recommended_app_behavior":  "Invoke it during Validate if Item 23 remains required.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-validate-027-success",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "All invoked checks pass.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7784-L7806"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-save-001-rdo",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm1702EX:rdoPg1Pt1I7RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7818-L7822"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-save-002-name",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I8RegisteredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid name on Page 1 Item 8",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7822"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-save-003-address",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I9RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Registered Address on Page 1 Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7823"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-save-004-contact",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt1I11ContactNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Contact Number on Page 1 Item 11",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7824"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-save-005-sparse",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Any other Validate rule fails.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7818-L7828",
+                                          "official-hta-runtime#validateAll:L4721-L4767"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save ignores period, ATC, email, deduction, relief, reconciliation, and schedule failures.",
+                      "recommended_app_behavior":  "Use a shared validation graph with explicit phase exceptions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-date-future-return",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "A valid date is after today.",
+                      "fields":  [
+                                     "date-controls"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This date cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L4872-L4935"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The field clears but isValid remains true.",
+                      "recommended_app_behavior":  "Set false and return false after clearing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702ex-ctc-reg-message",
+                      "form_id":  "1702ex-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "SEC registration date is more than 50 years old.",
+                      "fields":  [
+                                     "frm1702EX:txtPg1Pt3I24DateofIssue"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "CTC year should not be less than {year} for Page 1 Item 24",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateCTCDate:L5060-L5093"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The SEC-registration branch still labels its message CTC year.",
+                      "recommended_app_behavior":  "Name the selected certificate type correctly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

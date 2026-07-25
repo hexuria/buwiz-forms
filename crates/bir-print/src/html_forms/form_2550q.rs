@@ -861,6 +861,11 @@ fn capacity_fixture() -> Result<Form2550QDraft, RenderProviderError> {
         "OR-2025-0002",
         750.0,
     );
+    draft.ensure_repeating_row_ids().map_err(|error| {
+        RenderProviderError::Fixture(format!(
+            "failed to restore stable 2550Q renderer row identities: {error}"
+        ))
+    })?;
     draft.recompute();
     Ok(draft)
 }
@@ -878,6 +883,7 @@ fn capital_good_row(
     balance: f64,
 ) -> Form2550QCapitalGoodRow {
     Form2550QCapitalGoodRow {
+        instance_id: None,
         purchase_or_import_date: Some(date),
         source_code: source.to_string(),
         description: description.to_string(),
@@ -898,6 +904,7 @@ fn creditable_row(
     tax_withheld: f64,
 ) -> Form2550QCreditableVatRow {
     Form2550QCreditableVatRow {
+        instance_id: None,
         period_from: Some(from),
         period_to: Some(to),
         withholding_agent_name: agent.to_string(),
@@ -915,6 +922,7 @@ fn advance_row(
     amount: f64,
 ) -> Form2550QAdvanceVatRow {
     Form2550QAdvanceVatRow {
+        instance_id: None,
         period_from: Some(from),
         period_to: Some(to),
         miller_name: miller.to_string(),

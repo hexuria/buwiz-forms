@@ -1,0 +1,503 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/expression.schema.json",
+  "title": "eBIRForms executable rules IR v2 typed expressions",
+  "$defs": {
+    "expression": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/literal"
+        },
+        {
+          "$ref": "#/$defs/field"
+        },
+        {
+          "$ref": "#/$defs/derived"
+        },
+        {
+          "$ref": "#/$defs/context"
+        },
+        {
+          "$ref": "#/$defs/unary"
+        },
+        {
+          "$ref": "#/$defs/binary"
+        },
+        {
+          "$ref": "#/$defs/nary"
+        },
+        {
+          "$ref": "#/$defs/conditional"
+        },
+        {
+          "$ref": "#/$defs/coerce"
+        },
+        {
+          "$ref": "#/$defs/split_component"
+        },
+        {
+          "$ref": "#/$defs/javascript_parse_int_radix10"
+        },
+        {
+          "$ref": "#/$defs/javascript_date_local_day"
+        },
+        {
+          "$ref": "#/$defs/canonical_local_date_day"
+        },
+        {
+          "$ref": "#/$defs/group_aggregate"
+        }
+      ]
+    },
+    "literal": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "literal"
+        },
+        "value": {
+          "$ref": "common.schema.json#/$defs/typed_value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "field"
+      ],
+      "properties": {
+        "kind": {
+          "const": "field"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "field": {
+          "$ref": "common.schema.json#/$defs/field_ref"
+        }
+      },
+      "additionalProperties": false
+    },
+    "derived": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "calculation_id",
+        "output_id",
+        "instance"
+      ],
+      "properties": {
+        "kind": {
+          "const": "derived"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "calculation_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "output_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "instance": {
+          "$ref": "common.schema.json#/$defs/derived_instance_selector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "context_value_id"
+      ],
+      "properties": {
+        "kind": {
+          "const": "context"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "context_value_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "additionalProperties": false
+    },
+    "unary": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "operator",
+        "operand"
+      ],
+      "properties": {
+        "kind": {
+          "const": "unary"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "operator": {
+          "enum": [
+            "negate",
+            "absolute",
+            "length"
+          ]
+        },
+        "operand": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "binary": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "operator",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "kind": {
+          "const": "binary"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "operator": {
+          "enum": [
+            "add",
+            "subtract",
+            "multiply",
+            "divide",
+            "remainder",
+            "concat"
+          ]
+        },
+        "left": {
+          "$ref": "#/$defs/expression"
+        },
+        "right": {
+          "$ref": "#/$defs/expression"
+        },
+        "division_policy": {
+          "$ref": "#/$defs/decimal_division_policy"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "const": "divide"
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "required": [
+              "division_policy"
+            ],
+            "properties": {
+              "result_type": {
+                "const": "decimal"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "division_policy": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "decimal_division_policy": {
+      "type": "object",
+      "required": [
+        "scale",
+        "rounding"
+      ],
+      "properties": {
+        "scale": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "rounding": {
+          "enum": [
+            "none",
+            "half-up",
+            "half-even",
+            "toward-zero",
+            "away-from-zero",
+            "floor",
+            "ceiling"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "nary": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "operator",
+        "operands"
+      ],
+      "properties": {
+        "kind": {
+          "const": "nary"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "operator": {
+          "enum": [
+            "sum",
+            "minimum",
+            "maximum",
+            "concat",
+            "coalesce"
+          ]
+        },
+        "operands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "conditional": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "condition",
+        "when_true",
+        "when_false"
+      ],
+      "properties": {
+        "kind": {
+          "const": "conditional"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "condition": {
+          "$ref": "predicate.schema.json#/$defs/predicate"
+        },
+        "when_true": {
+          "$ref": "#/$defs/expression"
+        },
+        "when_false": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "coerce": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "input",
+        "coercion"
+      ],
+      "properties": {
+        "kind": {
+          "const": "coerce"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "input": {
+          "$ref": "#/$defs/expression"
+        },
+        "coercion": {
+          "$ref": "coercion.schema.json#/$defs/coercion"
+        }
+      },
+      "additionalProperties": false
+    },
+    "split_component": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "input",
+        "delimiter",
+        "index"
+      ],
+      "properties": {
+        "kind": {
+          "const": "split-component"
+        },
+        "result_type": {
+          "const": "string"
+        },
+        "input": {
+          "$ref": "#/$defs/expression"
+        },
+        "delimiter": {
+          "const": "/"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "javascript_parse_int_radix10": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "input"
+      ],
+      "properties": {
+        "kind": {
+          "const": "javascript-parse-int-radix10"
+        },
+        "result_type": {
+          "const": "integer"
+        },
+        "input": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "javascript_date_local_day": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "year",
+        "month_index",
+        "day"
+      ],
+      "properties": {
+        "kind": {
+          "const": "javascript-date-local-day"
+        },
+        "result_type": {
+          "const": "integer"
+        },
+        "year": {
+          "$ref": "#/$defs/expression"
+        },
+        "month_index": {
+          "$ref": "#/$defs/expression"
+        },
+        "day": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "canonical_local_date_day": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "input"
+      ],
+      "properties": {
+        "kind": {
+          "const": "canonical-local-date-day"
+        },
+        "result_type": {
+          "const": "integer"
+        },
+        "input": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "group_aggregate": {
+      "type": "object",
+      "required": [
+        "kind",
+        "result_type",
+        "operator",
+        "group_id",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "group-aggregate"
+        },
+        "result_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "operator": {
+          "enum": [
+            "sum",
+            "minimum",
+            "maximum",
+            "count",
+            "count-present"
+          ]
+        },
+        "group_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "value": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  "count",
+                  "count-present"
+                ]
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result_type": {
+                "const": "integer"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/expression"
+}

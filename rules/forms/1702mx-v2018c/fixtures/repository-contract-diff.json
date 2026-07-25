@@ -1,0 +1,38 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "repository_model_path":  "\\\\mac\\goldcoders\\reverse-engineer-ebir-forms\\bir-print-parity\\crates\\bir-core\\src\\forms\\form_1702mx.rs",
+    "repository_xml_path":  "\\\\mac\\goldcoders\\reverse-engineer-ebir-forms\\bir-print-parity\\crates\\bir-core\\src\\forms\\form_1702mx_xml.rs",
+    "repository_xml_contract_scope":  "210-field editable-save contract",
+    "official_editable_subset_count":  210,
+    "official_final_copy_count":  588,
+    "uncovered_final_copy_key_count":  378,
+    "calculation_differences":  [
+                                    {
+                                        "official":  "Conditional branch; negative Item 16 with positive Item 20 yields Item 20 only.",
+                                        "id":  "part-ii-item-21",
+                                        "repository":  "Always Item 16 + Item 20."
+                                    },
+                                    {
+                                        "official":  "40% is applied to column C only.",
+                                        "id":  "schedule-2-item-12-osd",
+                                        "repository":  "40% is applied generically to all four columns."
+                                    },
+                                    {
+                                        "official":  "2% computation line is commented; Item 18C is not auto-computed by computePg2Sc2It18C.",
+                                        "id":  "schedule-2-item-18-mcit",
+                                        "repository":  "Computes 2% of Item 7 regular."
+                                    },
+                                    {
+                                        "official":  "Column-specific applicability; Item 33A is not computed.",
+                                        "id":  "schedule-3-item-32-33",
+                                        "repository":  "Generic four-column sums/differences."
+                                    },
+                                    {
+                                        "official":  "Column-specific applicability/copy behavior.",
+                                        "id":  "schedule-4-items-3-5",
+                                        "repository":  "Generic sum/subtract in all columns."
+                                    }
+                                ],
+    "renderer_or_model_modified":  false
+}

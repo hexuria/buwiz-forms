@@ -1,0 +1,755 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/rule-set.schema.json",
+  "title": "eBIRForms executable rules IR v2 rule-set snapshot",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema_version",
+    "identity",
+    "review_status",
+    "profile_status",
+    "evaluation_policy",
+    "sources",
+    "legacy_v1",
+    "context_values",
+    "field_groups",
+    "fields",
+    "evaluation_order",
+    "calculations",
+    "rules",
+    "workflow",
+    "serialization",
+    "fixtures"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "../../../schema/v2/rule-set.schema.json"
+    },
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "identity": {
+      "$ref": "#/$defs/identity"
+    },
+    "review_status": {
+      "$ref": "common.schema.json#/$defs/review_status"
+    },
+    "profile_status": {
+      "$ref": "common.schema.json#/$defs/profile_status"
+    },
+    "evaluation_policy": {
+      "$ref": "#/$defs/evaluation_policy"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/source"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "legacy_v1": {
+      "$ref": "#/$defs/legacy_v1"
+    },
+    "context_values": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/context_value"
+      },
+      "uniqueItems": true
+    },
+    "field_groups": {
+      "type": "array",
+      "items": {
+        "$ref": "field.schema.json#/$defs/field_group"
+      },
+      "uniqueItems": true
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "$ref": "field.schema.json#/$defs/field"
+      },
+      "uniqueItems": true
+    },
+    "evaluation_order": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/identifier"
+      },
+      "uniqueItems": true
+    },
+    "calculations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/calculation"
+      },
+      "uniqueItems": true
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      },
+      "uniqueItems": true
+    },
+    "workflow": {
+      "$ref": "#/$defs/workflow_snapshot"
+    },
+    "serialization": {
+      "$ref": "serialization.schema.json#/$defs/serialization_contract"
+    },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/rules_relative_path"
+      },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "review_status": {
+            "const": "candidate"
+          }
+        },
+        "required": [
+          "review_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "source_set_sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              }
+            },
+            "required": [
+              "source_set_sha256"
+            ]
+          },
+          "fixtures": {
+            "minItems": 1
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "profile_status": {
+                "properties": {
+                  "official": {
+                    "$ref": "common.schema.json#/$defs/profile_status_executable"
+                  }
+                },
+                "required": [
+                  "official"
+                ]
+              },
+              "evaluation_policy": {
+                "properties": {
+                  "official": {
+                    "$ref": "#/$defs/evaluation_policy_executable"
+                  }
+                },
+                "required": [
+                  "official"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "profile_status": {
+                "properties": {
+                  "filing_safe": {
+                    "$ref": "common.schema.json#/$defs/profile_status_executable"
+                  }
+                },
+                "required": [
+                  "filing_safe"
+                ]
+              },
+              "evaluation_policy": {
+                "properties": {
+                  "filing_safe": {
+                    "$ref": "#/$defs/evaluation_policy_executable"
+                  }
+                },
+                "required": [
+                  "filing_safe"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "review_status": {
+            "const": "reviewed"
+          }
+        },
+        "required": [
+          "review_status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "identity": {
+            "properties": {
+              "source_set_sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              }
+            },
+            "required": [
+              "source_set_sha256"
+            ]
+          },
+          "profile_status": {
+            "properties": {
+              "official": {
+                "$ref": "common.schema.json#/$defs/profile_status_executable"
+              },
+              "filing_safe": {
+                "$ref": "common.schema.json#/$defs/profile_status_executable"
+              }
+            }
+          },
+          "evaluation_policy": {
+            "properties": {
+              "official": {
+                "$ref": "#/$defs/evaluation_policy_executable"
+              },
+              "filing_safe": {
+                "$ref": "#/$defs/evaluation_policy_executable"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "required": [
+        "rule_set_id",
+        "form_code",
+        "form_revision",
+        "official_package_version",
+        "source_set_sha256"
+      ],
+      "properties": {
+        "rule_set_id": {
+          "$ref": "common.schema.json#/$defs/rule_set_id"
+        },
+        "form_code": {
+          "$ref": "common.schema.json#/$defs/form_code"
+        },
+        "form_revision": {
+          "$ref": "common.schema.json#/$defs/iso_date"
+        },
+        "official_package_version": {
+          "$ref": "common.schema.json#/$defs/package_version"
+        },
+        "source_set_sha256": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "legacy_mapping": {
+      "type": "object",
+      "required": [
+        "artifact",
+        "source_id",
+        "record_count",
+        "target_sections",
+        "state"
+      ],
+      "properties": {
+        "artifact": {
+          "enum": [
+            "manifest",
+            "fields",
+            "validations",
+            "calculations",
+            "workflow"
+          ]
+        },
+        "source_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "record_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_sections": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "identity",
+              "sources",
+              "field-groups",
+              "fields",
+              "calculations",
+              "rules",
+              "workflow"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "state": {
+          "$ref": "common.schema.json#/$defs/branch_state"
+        }
+      },
+      "additionalProperties": false
+    },
+    "legacy_counts": {
+      "type": "object",
+      "required": [
+        "typed_fields",
+        "concrete_union_fields",
+        "field_groups",
+        "validation_rules",
+        "calculations",
+        "workflow_states",
+        "workflow_transitions",
+        "negative_fixtures",
+        "confirmed_official_bugs",
+        "unverified_gaps"
+      ],
+      "properties": {
+        "typed_fields": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "concrete_union_fields": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "field_groups": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of legacy v1 unbounded-family descriptors represented by unique member fields in unbounded v2 field groups; this is not the number of logical field-group objects."
+        },
+        "validation_rules": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "calculations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workflow_states": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workflow_transitions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "negative_fixtures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confirmed_official_bugs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unverified_gaps": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "legacy_v1": {
+      "type": "object",
+      "required": [
+        "form_id",
+        "schema_version",
+        "mappings",
+        "declared_counts"
+      ],
+      "properties": {
+        "form_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/legacy_mapping"
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true
+        },
+        "declared_counts": {
+          "$ref": "#/$defs/legacy_counts"
+        }
+      },
+      "additionalProperties": false
+    },
+    "context_value": {
+      "type": "object",
+      "required": [
+        "context_value_id",
+        "value_type",
+        "required",
+        "source_refs"
+      ],
+      "properties": {
+        "context_value_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "value_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "effect_evaluation_mode": {
+      "enum": [
+        "apply-all",
+        "stop-effects-after-first-blocking-issue"
+      ]
+    },
+    "evaluation_policy_executable": {
+      "type": "object",
+      "required": [
+        "state",
+        "effect_mode",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "state": {
+          "const": "executable"
+        },
+        "effect_mode": {
+          "$ref": "#/$defs/effect_evaluation_mode"
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evaluation_policy_branch": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/evaluation_policy_executable"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    },
+    "evaluation_policy": {
+      "type": "object",
+      "required": [
+        "official",
+        "filing_safe"
+      ],
+      "properties": {
+        "official": {
+          "$ref": "#/$defs/evaluation_policy_branch"
+        },
+        "filing_safe": {
+          "$ref": "#/$defs/evaluation_policy_branch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "calculation_output": {
+      "type": "object",
+      "required": [
+        "output_id",
+        "value",
+        "rounding"
+      ],
+      "properties": {
+        "output_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "value": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        },
+        "rounding": {
+          "oneOf": [
+            {
+              "$ref": "rounding.schema.json#/$defs/rounding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "calculation_executable": {
+      "type": "object",
+      "required": [
+        "state",
+        "condition",
+        "outputs",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "state": {
+          "const": "executable"
+        },
+        "condition": {
+          "$ref": "predicate.schema.json#/$defs/predicate"
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/calculation_output"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "calculation_branch": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/calculation_executable"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    },
+    "calculation_profiles": {
+      "type": "object",
+      "required": [
+        "official",
+        "filing_safe"
+      ],
+      "properties": {
+        "official": {
+          "$ref": "#/$defs/calculation_branch"
+        },
+        "filing_safe": {
+          "$ref": "#/$defs/calculation_branch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "calculation": {
+      "type": "object",
+      "required": [
+        "calculation_id",
+        "scope",
+        "output_ids",
+        "depends_on",
+        "phases",
+        "profiles",
+        "source_refs"
+      ],
+      "properties": {
+        "calculation_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "scope": {
+          "$ref": "common.schema.json#/$defs/evaluation_scope"
+        },
+        "output_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "uniqueItems": true
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/validation_phase"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "profiles": {
+          "$ref": "#/$defs/calculation_profiles"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule_executable": {
+      "type": "object",
+      "required": [
+        "state",
+        "predicate",
+        "effects",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "state": {
+          "const": "executable"
+        },
+        "predicate": {
+          "$ref": "predicate.schema.json#/$defs/predicate"
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "effect.schema.json#/$defs/effect"
+          },
+          "minItems": 1
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule_branch": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/rule_executable"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    },
+    "rule_profiles": {
+      "type": "object",
+      "required": [
+        "official",
+        "filing_safe"
+      ],
+      "properties": {
+        "official": {
+          "$ref": "#/$defs/rule_branch"
+        },
+        "filing_safe": {
+          "$ref": "#/$defs/rule_branch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "scope",
+        "order",
+        "phases",
+        "field_ids",
+        "profiles",
+        "source_refs"
+      ],
+      "properties": {
+        "rule_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "scope": {
+          "$ref": "common.schema.json#/$defs/evaluation_scope"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/validation_phase"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "field_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "uniqueItems": true
+        },
+        "profiles": {
+          "$ref": "#/$defs/rule_profiles"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workflow_snapshot": {
+      "oneOf": [
+        {
+          "$ref": "workflow.schema.json#/$defs/workflow"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    }
+  }
+}

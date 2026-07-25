@@ -1,0 +1,107 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701ms-v2024",
+    "form_code":  "1701-MS",
+    "revision":  "2024-08-01",
+    "revision_label":  "August 2024",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "kind":  "official-package-executable"
+                            },
+                            {
+                                "sha256":  "5737ddbd86d467457b613cc1f016c51d1add7fa91b396f6af88d213bccc48202",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1701MS.hta",
+                                "kind":  "runtime-extracted-hta",
+                                "revision_binding":  "Application 1701MS version 4.7 and printed August 2024 header.",
+                                "asset_id":  "official-hta-runtime",
+                                "size":  1061606
+                            },
+                            {
+                                "sha256":  "802912a60607bdd437faf429105e0efbcbd862894825b0682ded188c8a1aa38c",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1701MSv2024\\1701-MS August 2024 Fillable_01.pdf",
+                                "kind":  "official-form-pdf",
+                                "revision_binding":  "Official August 2024 fillable form.",
+                                "asset_id":  "official-pdf-2024",
+                                "size":  585707
+                            },
+                            {
+                                "sha256":  "263c9087feedc4d50e39544117026fa20378b25982bfb953e063c5f99c5c461e",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1701MSv2024\\1701-MS Guide August 2024 ENCS_Final.pdf",
+                                "kind":  "official-guide-pdf",
+                                "revision_binding":  "Official August 2024 guide.",
+                                "asset_id":  "official-guide-2024",
+                                "size":  102380
+                            },
+                            {
+                                "sha256":  "ee1ed0aa2ced7bb1e9e7311f315869b3c4e5433e30c5dd4485ad160e24b3feb7",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-1701MS-122025.xml",
+                                "kind":  "dummy-profile-editable-save",
+                                "revision_binding":  "Dummy 201-key plaintext save; values excluded.",
+                                "asset_id":  "xml-editable-v1",
+                                "size":  15151
+                            },
+                            {
+                                "sha256":  "3706b188c688656a95c7b43bfdd81306e5e0e0f0a35ba9394be28e8b780612a7",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-1701MS-122025V1.xml",
+                                "kind":  "dummy-profile-editable-save",
+                                "revision_binding":  "Dummy version save with identical 201-key set.",
+                                "asset_id":  "xml-amended-v1",
+                                "size":  15175
+                            },
+                            {
+                                "asset_id":  "string-util",
+                                "path":  "runtime-extraction\\js\\string-util.js",
+                                "sha256":  "bc7f86f70bf993389a3a0135dcbd76c3e370c49d2eb95e2fc66ff318a2ebe43c",
+                                "size":  54582,
+                                "kind":  "runtime-javascript"
+                            },
+                            {
+                                "asset_id":  "string-util-2014",
+                                "path":  "runtime-extraction\\js\\string-util2014.js",
+                                "sha256":  "ca42592694e7416a15eca97fa25491c01da17e383038fc97dd9d6261e67bcf7d",
+                                "size":  15980,
+                                "kind":  "runtime-javascript"
+                            },
+                            {
+                                "asset_id":  "ebir-tools",
+                                "path":  "runtime-extraction\\js\\eBIRTools.vbs",
+                                "sha256":  "7d0ceb5aad2c0eb90aeca189d6104ff05163ecd1820379f456125634ff7460f7",
+                                "size":  7557,
+                                "kind":  "runtime-vbscript"
+                            }
+                        ],
+    "counts":  {
+                   "validation_rules":  56,
+                   "confirmed_official_bugs":  28,
+                   "calculations":  30,
+                   "unverified_gaps":  2,
+                   "typed_fields":  222,
+                   "atc_records_for_form":  7,
+                   "negative_fixtures":  34
+               },
+    "artifacts":  {
+                      "audit":  "audit.md",
+                      "validations":  "validations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "gaps":  "gaps.md",
+                      "atc_catalog_fixture":  "fixtures/atc-options-v47.json",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v47.json",
+                      "fields":  "fields.json",
+                      "calculations":  "calculations.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research artifacts only; no renderer, migration, release, or capability changes.",
+                        "No online submission or mutation of source saves/encrypted artifacts.",
+                        "222 inventory entries comprise 201 observed concrete keys and 21 unbounded indexed families.",
+                        "The missing copied 2200C.js reference is recorded as a defect, not treated as evidence."
+                    ]
+}

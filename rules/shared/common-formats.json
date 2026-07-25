@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "package_version": "7.9.6.0",
+  "formats": [
+    {
+      "id": "javascript-escape",
+      "official_behavior": "Selected text controls use legacy JavaScript escape() before editable serialization.",
+      "source_refs": [
+        "official-hta-runtime#saveXML"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "boolean-string",
+      "official_behavior": "Radio and checkbox checked state is serialized as literal true or false.",
+      "source_refs": [
+        "official-hta-runtime#L2891-L2893"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "money-two-decimal-ui",
+      "official_behavior": "Many amount controls call round(this,2) on blur, then serialize the resulting string.",
+      "source_refs": [
+        "string-util-runtime#function:round",
+        "official-hta-runtime#control:onblur"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "payment-date",
+      "official_behavior": "Payment date controls accept MM/DD/YYYY text and reject future dates on blur.",
+      "source_refs": [
+        "official-hta-runtime#L3235-L3299"
+      ],
+      "confidence": "high"
+    }
+  ]
+}

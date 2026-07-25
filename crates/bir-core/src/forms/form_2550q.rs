@@ -4,12 +4,14 @@
 //! guidelines, and the reviewed 160-field plain/encrypted editable-save pair.
 //! The payloads establish editable persistence, not electronic submission.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use bir_rules::{RawValue, StableInstanceId};
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::{FilingPeriod, FilingStatus, FormValidator, TypedBirForm};
+use super::{FilingStatus, FormValidator};
+use crate::form_rules::validate_form_2550q_raw_bindings;
 use crate::profile::{EoptTier, TaxpayerProfile};
 use crate::validation::{validate_email, validate_ph_phone, validate_zip};
 
@@ -29,6 +31,38 @@ pub const REVIEWED_ENCRYPTED_XML_SHA256: &str =
 
 const VAT_RATE: f64 = 0.12;
 const FIXED_SCHEDULE_ROW_COUNT: usize = 2;
+const FIRST_REPEATED_ROW_ORDINAL: u64 = 1;
+const LEGACY_FLAT_SHAPE_ANCHORS: [&str; 11] = [
+    "opt_short_prd1",
+    "opt_short_prd2",
+    "pg2tax_payer",
+    "rtn_period_from_no4",
+    "rtn_period_to_no4",
+    "calendar_no1",
+    "fiscal_no1",
+    "amended_return_no5",
+    "amended_return_yes_no5",
+    "txt_current_page",
+    "txt_max_page",
+];
+pub(super) const PRESERVED_UNMODELED_XML_KEYS: [&str; 4] = [
+    "resultOtherCreditsNo19",
+    "resultOtherCreditsNo42",
+    "resultOtherCreditsNo47",
+    "resultOtherCreditsNo56",
+];
+
+pub(super) fn is_preserved_unmodeled_xml_key(key: &str) -> bool {
+    PRESERVED_UNMODELED_XML_KEYS.contains(&key)
+}
+
+const fn default_next_repeated_row_ordinal() -> u64 {
+    FIRST_REPEATED_ROW_ORDINAL
+}
+
+const fn default_raw_editor_state_version() -> u8 {
+    1
+}
 
 const fn default_year_end_month() -> u8 {
     12
@@ -151,6 +185,7 @@ impl Form2550QXmlFinalFlag {
 
 /// A checked Gregorian date with the editable-save formatting used by 2550Q.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QDate {
     pub year: u16,
     pub month: u8,
@@ -247,9 +282,324 @@ where
     }
 }
 
+/// Persisted family identity for the seven logical 2550Q repeating groups.
+///
+/// This is editor/draft identity only. It deliberately does not select a v2
+/// rule-set group ID or authorize executable rule behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Form2550QRowFamily {
+    #[serde(rename = "schedule-1")]
+    Schedule1,
+    #[serde(rename = "schedule-3")]
+    Schedule3,
+    #[serde(rename = "schedule-4")]
+    Schedule4,
+    #[serde(rename = "item-19-additional")]
+    Item19Additional,
+    #[serde(rename = "item-42-additional")]
+    Item42Additional,
+    #[serde(rename = "item-47-additional")]
+    Item47Additional,
+    #[serde(rename = "item-56-additional")]
+    Item56Additional,
+}
+
+impl Form2550QRowFamily {
+    pub const ALL: [Self; 7] = [
+        Self::Schedule1,
+        Self::Schedule3,
+        Self::Schedule4,
+        Self::Item19Additional,
+        Self::Item42Additional,
+        Self::Item47Additional,
+        Self::Item56Additional,
+    ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Schedule1 => "Schedule 1",
+            Self::Schedule3 => "Schedule 3",
+            Self::Schedule4 => "Schedule 4",
+            Self::Item19Additional => "Item 19 additional rows",
+            Self::Item42Additional => "Item 42 additional rows",
+            Self::Item47Additional => "Item 47 additional rows",
+            Self::Item56Additional => "Item 56 additional rows",
+        }
+    }
+}
+
+/// Allocation cursor for stable repeated-row IDs.
+///
+/// IDs are fixed-width and monotonically increasing so lexical runtime order
+/// matches creation order. Assigned IDs are never inferred from a transient
+/// vector index after the one-time legacy seeding pass.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Form2550QRowIdentityState {
+    #[serde(default = "default_next_repeated_row_ordinal")]
+    next_ordinal: u64,
+}
+
+impl Default for Form2550QRowIdentityState {
+    fn default() -> Self {
+        Self {
+            next_ordinal: FIRST_REPEATED_ROW_ORDINAL,
+        }
+    }
+}
+
+impl Form2550QRowIdentityState {
+    pub const fn next_ordinal(&self) -> u64 {
+        self.next_ordinal
+    }
+}
+
+/// Raw editor buffers persisted independently from parsed/typed draft values.
+///
+/// Missing map entries mean the adapter has not captured that buffer. An
+/// explicit `RawValue::Absent` is a captured absence, while
+/// `RawValue::Text("")` is a materialized blank control. Malformed text is
+/// retained verbatim and its parse error is recorded separately so checked
+/// XML paths cannot use a stale typed value.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Form2550QRawEditorState {
+    #[serde(default = "default_raw_editor_state_version")]
+    version: u8,
+    #[serde(default)]
+    singleton_fields: BTreeMap<String, RawValue>,
+    #[serde(default)]
+    repeated_fields:
+        BTreeMap<Form2550QRowFamily, BTreeMap<StableInstanceId, BTreeMap<String, RawValue>>>,
+    #[serde(default)]
+    malformed_fields: BTreeMap<String, String>,
+}
+
+impl Default for Form2550QRawEditorState {
+    fn default() -> Self {
+        Self {
+            version: default_raw_editor_state_version(),
+            singleton_fields: BTreeMap::new(),
+            repeated_fields: Form2550QRowFamily::ALL
+                .into_iter()
+                .map(|family| (family, BTreeMap::new()))
+                .collect(),
+            malformed_fields: BTreeMap::new(),
+        }
+    }
+}
+
+impl Form2550QRawEditorState {
+    pub const fn version(&self) -> u8 {
+        self.version
+    }
+
+    pub fn singleton_fields(&self) -> &BTreeMap<String, RawValue> {
+        &self.singleton_fields
+    }
+
+    pub fn repeated_fields(
+        &self,
+    ) -> &BTreeMap<Form2550QRowFamily, BTreeMap<StableInstanceId, BTreeMap<String, RawValue>>> {
+        &self.repeated_fields
+    }
+
+    pub fn malformed_fields(&self) -> &BTreeMap<String, String> {
+        &self.malformed_fields
+    }
+
+    pub fn singleton_value(&self, field_key: &str) -> Option<&RawValue> {
+        self.singleton_fields.get(field_key)
+    }
+
+    pub fn repeated_value(
+        &self,
+        family: Form2550QRowFamily,
+        instance_id: &StableInstanceId,
+        field_key: &str,
+    ) -> Option<&RawValue> {
+        self.repeated_fields
+            .get(&family)?
+            .get(instance_id)?
+            .get(field_key)
+    }
+
+    pub fn set_singleton(&mut self, field_key: impl Into<String>, value: RawValue) {
+        self.singleton_fields.insert(field_key.into(), value);
+    }
+
+    pub fn set_repeated(
+        &mut self,
+        family: Form2550QRowFamily,
+        instance_id: StableInstanceId,
+        field_key: impl Into<String>,
+        value: RawValue,
+    ) {
+        self.repeated_fields
+            .entry(family)
+            .or_default()
+            .entry(instance_id)
+            .or_default()
+            .insert(field_key.into(), value);
+    }
+
+    pub(crate) fn mark_malformed(
+        &mut self,
+        stable_path: impl Into<String>,
+        message: impl Into<String>,
+    ) {
+        self.malformed_fields
+            .insert(stable_path.into(), message.into());
+    }
+
+    pub(crate) fn clear_malformed(&mut self, stable_path: &str) {
+        self.malformed_fields.remove(stable_path);
+    }
+
+    pub fn clear_all_malformed(&mut self) {
+        self.malformed_fields.clear();
+    }
+
+    pub fn has_malformed_fields(&self) -> bool {
+        !self.malformed_fields.is_empty()
+    }
+
+    pub fn validate_version(&self) -> Result<(), Form2550QRawEditorStateError> {
+        if self.version == default_raw_editor_state_version() {
+            Ok(())
+        } else {
+            Err(Form2550QRawEditorStateError::UnsupportedVersion {
+                actual: self.version,
+            })
+        }
+    }
+
+    fn ensure_group_slots(&mut self) {
+        for family in Form2550QRowFamily::ALL {
+            self.repeated_fields.entry(family).or_default();
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Form2550QRawEditorStateError {
+    UnsupportedVersion { actual: u8 },
+}
+
+impl fmt::Display for Form2550QRawEditorStateError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedVersion { actual } => write!(
+                formatter,
+                "unsupported 2550Q raw editor state version {actual}; only version 1 is understood"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for Form2550QRawEditorStateError {}
+
+/// Why persisted repeated-row identity could not be made safe.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Form2550QRowIdentityError {
+    Missing {
+        family: Form2550QRowFamily,
+    },
+    Duplicate {
+        family: Form2550QRowFamily,
+        instance_id: StableInstanceId,
+    },
+    UnsupportedFormat {
+        family: Form2550QRowFamily,
+        instance_id: StableInstanceId,
+    },
+    Exhausted,
+}
+
+impl fmt::Display for Form2550QRowIdentityError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Missing { family } => {
+                write!(
+                    formatter,
+                    "{} contains a row without stable identity",
+                    family.label()
+                )
+            }
+            Self::Duplicate {
+                family,
+                instance_id,
+            } => write!(
+                formatter,
+                "{} contains duplicate stable row ID {instance_id}",
+                family.label()
+            ),
+            Self::UnsupportedFormat {
+                family,
+                instance_id,
+            } => write!(
+                formatter,
+                "{} contains unsupported stable row ID {instance_id}; expected row- followed by exactly 20 digits with ordinal at least 1",
+                family.label()
+            ),
+            Self::Exhausted => formatter.write_str("2550Q stable row ID allocator is exhausted"),
+        }
+    }
+}
+
+impl std::error::Error for Form2550QRowIdentityError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Form2550QLegacyDraftMigrationError {
+    IncompleteLegacyShape { missing_fields: Vec<&'static str> },
+    AmbiguousHybridShape,
+    InvalidQuarter { raw_value: String },
+    RowIdentity(Form2550QRowIdentityError),
+}
+
+impl fmt::Display for Form2550QLegacyDraftMigrationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IncompleteLegacyShape { missing_fields } => write!(
+                formatter,
+                "flattened month is present without the complete scaffold-era 2550Q fingerprint; missing {}",
+                missing_fields.join(", ")
+            ),
+            Self::AmbiguousHybridShape => formatter.write_str(
+                "draft contains both scaffold-era flat fields and meaningful current 2550Q state",
+            ),
+            Self::InvalidQuarter { raw_value } => write!(
+                formatter,
+                "scaffold-era month must identify quarter 1 through 4, got {raw_value}"
+            ),
+            Self::RowIdentity(error) => write!(
+                formatter,
+                "scaffold-era repeated rows could not receive safe identities: {error}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for Form2550QLegacyDraftMigrationError {}
+
+impl From<Form2550QRowIdentityError> for Form2550QLegacyDraftMigrationError {
+    fn from(error: Form2550QRowIdentityError) -> Self {
+        Self::RowIdentity(error)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Form2550QDraftShape {
+    Current,
+    LegacyFlat,
+}
+
 /// One of the two fixed Schedule 1 source rows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QCapitalGoodRow {
+    #[serde(default)]
+    pub instance_id: Option<StableInstanceId>,
     pub purchase_or_import_date: Option<Form2550QDate>,
     /// Official source code: `D` for domestic purchase or `I` for importation.
     pub source_code: String,
@@ -283,6 +633,7 @@ impl Form2550QCapitalGoodRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QSchedule2 {
     pub input_tax_directly_attributable_to_exempt_sales: Option<f64>,
     pub vat_exempt_sales: Option<f64>,
@@ -293,7 +644,10 @@ pub struct Form2550QSchedule2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QCreditableVatRow {
+    #[serde(default)]
+    pub instance_id: Option<StableInstanceId>,
     pub period_from: Option<Form2550QDate>,
     pub period_to: Option<Form2550QDate>,
     pub withholding_agent_name: String,
@@ -312,7 +666,10 @@ impl Form2550QCreditableVatRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QAdvanceVatRow {
+    #[serde(default)]
+    pub instance_id: Option<StableInstanceId>,
     pub period_from: Option<Form2550QDate>,
     pub period_to: Option<Form2550QDate>,
     pub miller_name: String,
@@ -333,7 +690,49 @@ impl Form2550QAdvanceVatRow {
     }
 }
 
+/// Preservation-only row shape for the four unimplemented additional-item
+/// families observed in the v1 inventory.
+///
+/// These rows are persisted so future UI work has stable identity and raw
+/// storage. They are intentionally excluded from recomputation and from the
+/// reviewed 160-field editable XML projection.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Form2550QAdditionalItemRow {
+    #[serde(default)]
+    pub instance_id: Option<StableInstanceId>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub amount: Option<f64>,
+}
+
+trait Form2550QRepeatedRow {
+    fn instance_id(&self) -> Option<&StableInstanceId>;
+    fn instance_id_mut(&mut self) -> &mut Option<StableInstanceId>;
+}
+
+macro_rules! impl_repeated_row {
+    ($row:ty) => {
+        impl Form2550QRepeatedRow for $row {
+            fn instance_id(&self) -> Option<&StableInstanceId> {
+                self.instance_id.as_ref()
+            }
+
+            fn instance_id_mut(&mut self) -> &mut Option<StableInstanceId> {
+                &mut self.instance_id
+            }
+        }
+    };
+}
+
+impl_repeated_row!(Form2550QCapitalGoodRow);
+impl_repeated_row!(Form2550QCreditableVatRow);
+impl_repeated_row!(Form2550QAdvanceVatRow);
+impl_repeated_row!(Form2550QAdditionalItemRow);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QPartIV {
     pub item_31a_vatable_sales: Option<f64>,
     pub item_31b_output_tax: Option<f64>,
@@ -379,6 +778,7 @@ pub struct Form2550QPartIV {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QPartII {
     pub item_15_net_vat_payable_or_excess: Option<f64>,
     pub item_16_creditable_vat_withheld: Option<f64>,
@@ -398,6 +798,7 @@ pub struct Form2550QPartII {
 /// Page-one fields not present in either reviewed XML payload. They are local
 /// draft/HTML values and never expand the exact 160-field save contract.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct Form2550QLocalPrintFields {
     pub taxpayer_or_authorized_representative: String,
     pub representative_title: String,
@@ -469,6 +870,18 @@ pub struct Form2550QDraft {
     #[serde(default)]
     pub schedule_4: Vec<Form2550QAdvanceVatRow>,
     #[serde(default)]
+    pub item_19_additional_rows: Vec<Form2550QAdditionalItemRow>,
+    #[serde(default)]
+    pub item_42_additional_rows: Vec<Form2550QAdditionalItemRow>,
+    #[serde(default)]
+    pub item_47_additional_rows: Vec<Form2550QAdditionalItemRow>,
+    #[serde(default)]
+    pub item_56_additional_rows: Vec<Form2550QAdditionalItemRow>,
+    #[serde(default)]
+    pub row_identity_state: Form2550QRowIdentityState,
+    #[serde(default)]
+    pub raw_editor_state: Form2550QRawEditorState,
+    #[serde(default)]
     pub local_print_fields: Form2550QLocalPrintFields,
 
     // Editable-save metadata. Online credential fields are deliberately not
@@ -484,9 +897,10 @@ pub struct Form2550QDraft {
     #[serde(default)]
     pub migration_review_items: Vec<String>,
 
-    /// Unknown JSON properties are retained for forward compatibility. When
-    /// the old scaffold-only `month` marker is present, the editor performs a
-    /// one-way migration from those flat properties and then clears them.
+    /// Unknown top-level JSON properties are retained for forward
+    /// compatibility. A scaffold-era `month` is migrated only when the full
+    /// legacy fingerprint is present and the current nested model is empty;
+    /// all other flattened values remain preserved.
     #[serde(default, flatten, skip_serializing_if = "BTreeMap::is_empty")]
     pub legacy_flat_draft_fields: BTreeMap<String, serde_json::Value>,
 
@@ -580,6 +994,12 @@ impl Form2550QDraft {
             },
             schedule_3: vec![zero_creditable_vat_row(), zero_creditable_vat_row()],
             schedule_4: vec![zero_advance_vat_row(), zero_advance_vat_row()],
+            item_19_additional_rows: Vec::new(),
+            item_42_additional_rows: Vec::new(),
+            item_47_additional_rows: Vec::new(),
+            item_56_additional_rows: Vec::new(),
+            row_identity_state: Form2550QRowIdentityState::default(),
+            raw_editor_state: Form2550QRawEditorState::default(),
             local_print_fields: Form2550QLocalPrintFields::default(),
             xml_final_flag: Form2550QXmlFinalFlag::One,
             xml_contact_email: String::new(),
@@ -598,20 +1018,189 @@ impl Form2550QDraft {
             next_retry_at: None,
             last_error: None,
         };
+        draft
+            .ensure_repeating_row_ids()
+            .expect("new 2550Q row identity allocation");
         draft.recompute();
         draft
     }
 
-    /// Upgrade the old scaffold-only flat JSON shape into the reviewed
-    /// semantic model. The migration is intentionally one-way and reports
-    /// every legacy computed value that no longer agrees with the official
-    /// formula chain.
-    pub fn migrate_legacy_flat_draft(&mut self) -> bool {
+    /// Lazily assign stable identities to rows loaded from older JSON.
+    ///
+    /// Existing IDs are validated and retained. Missing IDs are assigned once
+    /// in the draft's current visible order using a persisted monotonic
+    /// allocator. The method never derives an ID from the vector index after
+    /// that initial migration.
+    pub fn ensure_repeating_row_ids(&mut self) -> Result<bool, Form2550QRowIdentityError> {
+        let mut next_ordinal = self
+            .row_identity_state
+            .next_ordinal
+            .max(FIRST_REPEATED_ROW_ORDINAL);
+
+        observe_row_ids(
+            Form2550QRowFamily::Schedule1,
+            &self.schedule_1,
+            &mut next_ordinal,
+        )?;
+        observe_row_ids(
+            Form2550QRowFamily::Schedule3,
+            &self.schedule_3,
+            &mut next_ordinal,
+        )?;
+        observe_row_ids(
+            Form2550QRowFamily::Schedule4,
+            &self.schedule_4,
+            &mut next_ordinal,
+        )?;
+        observe_row_ids(
+            Form2550QRowFamily::Item19Additional,
+            &self.item_19_additional_rows,
+            &mut next_ordinal,
+        )?;
+        observe_row_ids(
+            Form2550QRowFamily::Item42Additional,
+            &self.item_42_additional_rows,
+            &mut next_ordinal,
+        )?;
+        observe_row_ids(
+            Form2550QRowFamily::Item47Additional,
+            &self.item_47_additional_rows,
+            &mut next_ordinal,
+        )?;
+        observe_row_ids(
+            Form2550QRowFamily::Item56Additional,
+            &self.item_56_additional_rows,
+            &mut next_ordinal,
+        )?;
+
+        let mut changed = false;
+        changed |= assign_missing_row_ids(&mut self.schedule_1, &mut next_ordinal)?;
+        changed |= assign_missing_row_ids(&mut self.schedule_3, &mut next_ordinal)?;
+        changed |= assign_missing_row_ids(&mut self.schedule_4, &mut next_ordinal)?;
+        changed |= assign_missing_row_ids(&mut self.item_19_additional_rows, &mut next_ordinal)?;
+        changed |= assign_missing_row_ids(&mut self.item_42_additional_rows, &mut next_ordinal)?;
+        changed |= assign_missing_row_ids(&mut self.item_47_additional_rows, &mut next_ordinal)?;
+        changed |= assign_missing_row_ids(&mut self.item_56_additional_rows, &mut next_ordinal)?;
+
+        if self.row_identity_state.next_ordinal != next_ordinal {
+            self.row_identity_state.next_ordinal = next_ordinal;
+            changed = true;
+        }
+        self.raw_editor_state.ensure_group_slots();
+        Ok(changed)
+    }
+
+    /// Validate that every materialized row has a unique stable ID within its
+    /// family. Malformed IDs fail earlier during serde deserialization.
+    pub fn validate_repeating_row_ids(&self) -> Result<(), Form2550QRowIdentityError> {
+        validate_complete_row_ids(Form2550QRowFamily::Schedule1, &self.schedule_1)?;
+        validate_complete_row_ids(Form2550QRowFamily::Schedule3, &self.schedule_3)?;
+        validate_complete_row_ids(Form2550QRowFamily::Schedule4, &self.schedule_4)?;
+        validate_complete_row_ids(
+            Form2550QRowFamily::Item19Additional,
+            &self.item_19_additional_rows,
+        )?;
+        validate_complete_row_ids(
+            Form2550QRowFamily::Item42Additional,
+            &self.item_42_additional_rows,
+        )?;
+        validate_complete_row_ids(
+            Form2550QRowFamily::Item47Additional,
+            &self.item_47_additional_rows,
+        )?;
+        validate_complete_row_ids(
+            Form2550QRowFamily::Item56Additional,
+            &self.item_56_additional_rows,
+        )?;
+        Ok(())
+    }
+
+    fn legacy_flat_draft_shape(
+        &self,
+    ) -> Result<Form2550QDraftShape, Form2550QLegacyDraftMigrationError> {
         if !self.legacy_flat_draft_fields.contains_key("month") {
-            return false;
+            return Ok(Form2550QDraftShape::Current);
         }
 
-        let legacy = std::mem::take(&mut self.legacy_flat_draft_fields);
+        let missing_fields = LEGACY_FLAT_SHAPE_ANCHORS
+            .into_iter()
+            .filter(|field| !self.legacy_flat_draft_fields.contains_key(*field))
+            .collect::<Vec<_>>();
+        if !missing_fields.is_empty() {
+            return Err(Form2550QLegacyDraftMigrationError::IncompleteLegacyShape {
+                missing_fields,
+            });
+        }
+        if self.has_meaningful_current_shape_state() {
+            return Err(Form2550QLegacyDraftMigrationError::AmbiguousHybridShape);
+        }
+        Ok(Form2550QDraftShape::LegacyFlat)
+    }
+
+    fn has_meaningful_current_shape_state(&self) -> bool {
+        self.filing_basis != Form2550QFilingBasis::Calendar
+            || self.year_end_month != default_year_end_month()
+            || self.quarter != Form2550QQuarter::Unresolved(0)
+            || self.return_period_from.is_some()
+            || self.return_period_to.is_some()
+            || self.is_short_period_return
+            || self.taxpayer_classification.is_some()
+            || self.is_availing_tax_relief
+            || !self.tax_relief_details.is_empty()
+            || self.part_ii != Form2550QPartII::default()
+            || self.part_iv != Form2550QPartIV::default()
+            || !self.schedule_1.is_empty()
+            || self.schedule_2 != Form2550QSchedule2::default()
+            || !self.schedule_3.is_empty()
+            || !self.schedule_4.is_empty()
+            || !self.item_19_additional_rows.is_empty()
+            || !self.item_42_additional_rows.is_empty()
+            || !self.item_47_additional_rows.is_empty()
+            || !self.item_56_additional_rows.is_empty()
+            || self.row_identity_state != Form2550QRowIdentityState::default()
+            || self.raw_editor_state != Form2550QRawEditorState::default()
+            || self.local_print_fields != Form2550QLocalPrintFields::default()
+            || self.xml_final_flag != Form2550QXmlFinalFlag::One
+            || !self.xml_contact_email.is_empty()
+            || !self.preserved_unmodeled_xml_fields.is_empty()
+            || !self.migration_review_items.is_empty()
+    }
+
+    /// Upgrade the old scaffold-only flat JSON shape into the reviewed
+    /// semantic model. Migration is transactional: an incomplete fingerprint,
+    /// a hybrid carrying meaningful current state, an invalid quarter, or
+    /// unsafe row identity leaves the original draft byte-for-byte equivalent.
+    ///
+    /// Only the migrated `month` discriminator is removed. Other flattened
+    /// fields remain persisted so unmodeled scaffold data and future extension
+    /// data are never silently discarded.
+    pub fn migrate_legacy_flat_draft(
+        &mut self,
+    ) -> Result<bool, Form2550QLegacyDraftMigrationError> {
+        if self.legacy_flat_draft_shape()? == Form2550QDraftShape::Current {
+            return Ok(false);
+        }
+
+        let legacy = self.legacy_flat_draft_fields.clone();
+        let quarter = legacy_u8(&legacy, "month")
+            .filter(|quarter| (1..=4).contains(quarter))
+            .ok_or_else(|| Form2550QLegacyDraftMigrationError::InvalidQuarter {
+                raw_value: legacy
+                    .get("month")
+                    .map_or_else(|| "<missing>".to_string(), serde_json::Value::to_string),
+            })?;
+        let mut migrated = self.clone();
+        migrated.legacy_flat_draft_fields.remove("month");
+        migrated.apply_legacy_flat_draft(&legacy, quarter)?;
+        *self = migrated;
+        Ok(true)
+    }
+
+    fn apply_legacy_flat_draft(
+        &mut self,
+        legacy: &BTreeMap<String, serde_json::Value>,
+        quarter: u8,
+    ) -> Result<(), Form2550QLegacyDraftMigrationError> {
         self.migration_review_items.clear();
         self.filing_basis = if legacy_bool(&legacy, "fiscal_no1").unwrap_or(false) {
             Form2550QFilingBasis::Fiscal
@@ -619,7 +1208,7 @@ impl Form2550QDraft {
             Form2550QFilingBasis::Calendar
         };
         self.year_end_month = 12;
-        self.quarter = Form2550QQuarter::from_number(legacy_u8(&legacy, "month").unwrap_or(0));
+        self.quarter = Form2550QQuarter::from_number(quarter);
         let default_period = default_calendar_period(self.taxable_year, self.quarter);
         self.return_period_from = legacy_return_date(&legacy, "rtn_period_from_no4")
             .or_else(|| default_period.map(|(from, _)| from));
@@ -717,6 +1306,7 @@ impl Form2550QDraft {
             .map(|suffix| legacy_advance_vat_row(&legacy, suffix))
             .collect();
 
+        self.ensure_repeating_row_ids()?;
         self.recompute();
         let comparisons = [
             ("output_vat_sales", self.part_iv.item_31b_output_tax),
@@ -799,14 +1389,15 @@ impl Form2550QDraft {
                     .to_string(),
             );
         }
-        true
+        Ok(())
     }
 
     /// Recompute only formulas stated on the official April 2024 form or
     /// corroborated by the reviewed editable-save pair.
     pub fn recompute(&mut self) {
-        if self.migrate_legacy_flat_draft() {
-            return;
+        match self.migrate_legacy_flat_draft() {
+            Ok(false) => {}
+            Ok(true) | Err(_) => return,
         }
         let p4 = &mut self.part_iv;
         p4.item_31b_output_tax = p4
@@ -1035,6 +1626,64 @@ impl Form2550QDraft {
 impl FormValidator for Form2550QDraft {
     fn validate(&self) -> Vec<(String, String)> {
         let mut errors = Vec::new();
+        match self.legacy_flat_draft_shape() {
+            Ok(Form2550QDraftShape::Current) => {}
+            Ok(Form2550QDraftShape::LegacyFlat) => errors.push((
+                "legacy_flat_draft_fields".to_string(),
+                "Scaffold-era 2550Q fields require checked migration before use".to_string(),
+            )),
+            Err(error) => errors.push((
+                "legacy_flat_draft_fields".to_string(),
+                format!("Flattened 2550Q draft shape is unsafe: {error}"),
+            )),
+        }
+        if let Err(error) = self.validate_repeating_row_ids() {
+            errors.push((
+                "repeated_row_identity".to_string(),
+                format!("Repeated-row identity is invalid: {error}"),
+            ));
+        }
+        for key in self.preserved_unmodeled_xml_fields.keys() {
+            if !is_preserved_unmodeled_xml_key(key) {
+                errors.push((
+                    format!("preserved_unmodeled_xml_fields.{key}"),
+                    format!("Unreviewed 2550Q XML field {key} cannot be preserved"),
+                ));
+            }
+        }
+        if let Err(error) = self.raw_editor_state.validate_version() {
+            errors.push((
+                "raw_editor_state.version".to_string(),
+                format!("Raw editor state is invalid: {error}"),
+            ));
+        }
+        if let Err(error) = validate_form_2550q_raw_bindings(self) {
+            errors.push((
+                "raw_editor_state.bindings".to_string(),
+                format!("Raw editor bindings are invalid: {error}"),
+            ));
+        }
+        for (field, message) in self.raw_editor_state.malformed_fields() {
+            errors.push((
+                format!("raw_editor.{field}"),
+                format!("Visible editor text is malformed and has not been reconciled: {message}"),
+            ));
+        }
+        errors.extend(self.raw_editor_coherence_errors());
+        for (field, rows) in [
+            ("item_19_additional_rows", &self.item_19_additional_rows),
+            ("item_42_additional_rows", &self.item_42_additional_rows),
+            ("item_47_additional_rows", &self.item_47_additional_rows),
+            ("item_56_additional_rows", &self.item_56_additional_rows),
+        ] {
+            if !rows.is_empty() {
+                errors.push((
+                    field.to_string(),
+                    "Additional-item rows are preserved in the draft but have no reviewed 2550Q XML projection"
+                        .to_string(),
+                ));
+            }
+        }
         validate_identity(self, &mut errors);
         validate_period(self, &mut errors);
 
@@ -1151,26 +1800,76 @@ impl FormValidator for Form2550QDraft {
     }
 }
 
-impl TypedBirForm for Form2550QDraft {
-    fn form_code(&self) -> &'static str {
-        FORM_CODE
+fn observe_row_ids<T: Form2550QRepeatedRow>(
+    family: Form2550QRowFamily,
+    rows: &[T],
+    next_ordinal: &mut u64,
+) -> Result<(), Form2550QRowIdentityError> {
+    let mut seen = BTreeSet::new();
+    for row in rows {
+        let Some(instance_id) = row.instance_id() else {
+            continue;
+        };
+        if !seen.insert(instance_id.clone()) {
+            return Err(Form2550QRowIdentityError::Duplicate {
+                family,
+                instance_id: instance_id.clone(),
+            });
+        }
+        let Some(ordinal) = persisted_row_ordinal(instance_id) else {
+            return Err(Form2550QRowIdentityError::UnsupportedFormat {
+                family,
+                instance_id: instance_id.clone(),
+            });
+        };
+        let candidate = ordinal
+            .checked_add(1)
+            .ok_or(Form2550QRowIdentityError::Exhausted)?;
+        *next_ordinal = (*next_ordinal).max(candidate);
     }
+    Ok(())
+}
 
-    fn form_type_id(&self) -> &'static str {
-        FORM_TYPE_ID
+fn validate_complete_row_ids<T: Form2550QRepeatedRow>(
+    family: Form2550QRowFamily,
+    rows: &[T],
+) -> Result<(), Form2550QRowIdentityError> {
+    for row in rows {
+        if row.instance_id().is_none() {
+            return Err(Form2550QRowIdentityError::Missing { family });
+        }
     }
+    let mut ignored_next = FIRST_REPEATED_ROW_ORDINAL;
+    observe_row_ids(family, rows, &mut ignored_next)
+}
 
-    fn filing_period(&self) -> FilingPeriod {
-        FilingPeriod::Quarterly(self.quarter.number().unwrap_or(0))
+fn assign_missing_row_ids<T: Form2550QRepeatedRow>(
+    rows: &mut [T],
+    next_ordinal: &mut u64,
+) -> Result<bool, Form2550QRowIdentityError> {
+    let mut changed = false;
+    for row in rows {
+        if row.instance_id().is_some() {
+            continue;
+        }
+        let ordinal = *next_ordinal;
+        *next_ordinal = (*next_ordinal)
+            .checked_add(1)
+            .ok_or(Form2550QRowIdentityError::Exhausted)?;
+        let instance_id = StableInstanceId::parse(format!("row-{ordinal:020}"))
+            .expect("fixed-width row ID is valid");
+        *row.instance_id_mut() = Some(instance_id);
+        changed = true;
     }
+    Ok(changed)
+}
 
-    fn recompute(&mut self) {
-        Form2550QDraft::recompute(self);
+fn persisted_row_ordinal(instance_id: &StableInstanceId) -> Option<u64> {
+    let digits = instance_id.as_str().strip_prefix("row-")?;
+    if digits.len() != 20 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
     }
-
-    fn to_bir_field_map(&self) -> BTreeMap<String, String> {
-        Form2550QDraft::to_bir_field_map(self)
-    }
+    digits.parse().ok().filter(|ordinal| *ordinal >= 1)
 }
 
 fn zero_capital_good_row() -> Form2550QCapitalGoodRow {
@@ -1289,6 +1988,7 @@ fn legacy_capital_good_row(
     suffix: u8,
 ) -> Form2550QCapitalGoodRow {
     Form2550QCapitalGoodRow {
+        instance_id: None,
         purchase_or_import_date: legacy_return_date(fields, &format!("txt_date_purchase{suffix}")),
         source_code: legacy_text(fields, &format!("txt_source_code{suffix}")),
         description: legacy_text(fields, &format!("txt_description{suffix}")),
@@ -1310,6 +2010,7 @@ fn legacy_creditable_vat_row(
 ) -> Form2550QCreditableVatRow {
     let row_index = suffix.saturating_sub(30);
     Form2550QCreditableVatRow {
+        instance_id: None,
         period_from: legacy_return_date(fields, &format!("txt_date_covered{suffix}")),
         period_to: legacy_return_date(fields, &format!("txt_date_covered3to{row_index}")),
         withholding_agent_name: legacy_text(
@@ -1327,6 +2028,7 @@ fn legacy_advance_vat_row(
 ) -> Form2550QAdvanceVatRow {
     let row_index = suffix.saturating_sub(40);
     Form2550QAdvanceVatRow {
+        instance_id: None,
         period_from: legacy_return_date(fields, &format!("txt_date{suffix}")),
         period_to: legacy_return_date(fields, &format!("txt_date4to{row_index}")),
         miller_name: legacy_text(fields, &format!("txt_name_of_miller{suffix}")),
@@ -1797,6 +2499,11 @@ fn computed_money_fields(draft: &Form2550QDraft) -> Vec<(&'static str, Option<f6
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::form_rules::{
+        Form2550QCaptureError, Form2550QCaptureGap, Form2550QFieldValueSource,
+        form_2550q_group_bindings, form_2550q_local_print_raw_field_keys,
+        form_2550q_singleton_field_ids,
+    };
 
     fn profile() -> TaxpayerProfile {
         serde_json::from_value(serde_json::json!({
@@ -1836,6 +2543,26 @@ mod tests {
         .expect("valid test profile")
     }
 
+    fn add_legacy_flat_shape_fingerprint(json: &mut serde_json::Value, quarter: u8) {
+        let object = json.as_object_mut().expect("draft JSON is an object");
+        object.insert("month".to_string(), serde_json::json!(quarter));
+        for (key, value) in [
+            ("opt_short_prd1", serde_json::json!(false)),
+            ("opt_short_prd2", serde_json::json!(true)),
+            ("pg2tax_payer", serde_json::json!("JUAN DELA CRUZ")),
+            ("rtn_period_from_no4", serde_json::json!("1/01/2026")),
+            ("rtn_period_to_no4", serde_json::json!("3/31/2026")),
+            ("calendar_no1", serde_json::json!(true)),
+            ("fiscal_no1", serde_json::json!(false)),
+            ("amended_return_no5", serde_json::json!(true)),
+            ("amended_return_yes_no5", serde_json::json!(false)),
+            ("txt_current_page", serde_json::json!(2)),
+            ("txt_max_page", serde_json::json!(2)),
+        ] {
+            object.insert(key.to_string(), value);
+        }
+    }
+
     #[test]
     fn new_draft_uses_quarter_not_year_end_month() {
         let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 2);
@@ -1856,6 +2583,17 @@ mod tests {
             "taxable_year": 2026,
             "month": 2,
             "is_amended": false,
+            "opt_short_prd1": false,
+            "opt_short_prd2": true,
+            "pg2tax_payer": "JUAN DELA CRUZ",
+            "rtn_period_from_no4": "4/01/2026",
+            "rtn_period_to_no4": "6/30/2026",
+            "calendar_no1": true,
+            "fiscal_no1": false,
+            "amended_return_no5": true,
+            "amended_return_yes_no5": false,
+            "txt_current_page": 2,
+            "txt_max_page": 2,
             "rdo_code": "018",
             "taxpayer_name": "JUAN DELA CRUZ",
             "registered_address": "OLONGAPO",
@@ -1869,6 +2607,9 @@ mod tests {
             "less_output_vat": 0.0,
             "add_output_vat": 0.0,
             "tax_payer_classification1": true,
+            "future_flat_extension": {
+                "must_survive": true
+            },
             "status": "Draft",
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z"
@@ -1876,7 +2617,11 @@ mod tests {
         let mut draft: Form2550QDraft =
             serde_json::from_value(json).expect("legacy JSON must deserialize");
 
-        assert!(draft.migrate_legacy_flat_draft());
+        assert!(
+            draft
+                .migrate_legacy_flat_draft()
+                .expect("complete legacy shape migrates")
+        );
         assert_eq!(draft.quarter, Form2550QQuarter::Second);
         assert_eq!(draft.part_iv.item_31a_vatable_sales, Some(1_000.0));
         assert_eq!(draft.part_iv.item_31b_output_tax, Some(120.0));
@@ -1884,7 +2629,11 @@ mod tests {
             draft.taxpayer_classification,
             Some(Form2550QTaxpayerClassification::Micro)
         );
-        assert!(draft.legacy_flat_draft_fields.is_empty());
+        assert_eq!(
+            draft.legacy_flat_draft_fields.get("future_flat_extension"),
+            Some(&serde_json::json!({ "must_survive": true }))
+        );
+        assert!(!draft.legacy_flat_draft_fields.contains_key("month"));
         assert!(
             !serde_json::to_value(&draft)
                 .expect("current JSON serializes")
@@ -1892,6 +2641,113 @@ mod tests {
                 .expect("draft is an object")
                 .contains_key("month")
         );
+    }
+
+    #[test]
+    fn month_alone_and_current_legacy_hybrids_refuse_migration_without_mutation() {
+        let mut month_only_json =
+            serde_json::to_value(Form2550QDraft::new_from_profile(&profile(), 2026, 1))
+                .expect("current draft serializes");
+        month_only_json
+            .as_object_mut()
+            .expect("draft JSON is an object")
+            .insert("month".to_string(), serde_json::json!(2));
+        let mut month_only: Form2550QDraft =
+            serde_json::from_value(month_only_json).expect("flattened month is preserved");
+        let month_only_before = month_only.clone();
+        assert!(matches!(
+            month_only.migrate_legacy_flat_draft(),
+            Err(Form2550QLegacyDraftMigrationError::IncompleteLegacyShape { .. })
+        ));
+        assert_eq!(month_only, month_only_before);
+        month_only.recompute();
+        assert_eq!(
+            month_only, month_only_before,
+            "recompute must not mutate an ambiguous flattened draft"
+        );
+
+        let mut hybrid_json =
+            serde_json::to_value(Form2550QDraft::new_from_profile(&profile(), 2026, 1))
+                .expect("current draft serializes");
+        hybrid_json["part_iv"]["item_31a_vatable_sales"] = serde_json::json!(777.0);
+        add_legacy_flat_shape_fingerprint(&mut hybrid_json, 2);
+        hybrid_json
+            .as_object_mut()
+            .expect("draft JSON is an object")
+            .insert(
+                "future_flat_extension".to_string(),
+                serde_json::json!({ "must_survive": true }),
+            );
+        let mut hybrid: Form2550QDraft =
+            serde_json::from_value(hybrid_json).expect("known hybrid fields deserialize");
+        let hybrid_before = hybrid.clone();
+        assert!(matches!(
+            hybrid.migrate_legacy_flat_draft(),
+            Err(Form2550QLegacyDraftMigrationError::AmbiguousHybridShape)
+        ));
+        assert_eq!(hybrid, hybrid_before);
+        assert_eq!(hybrid.part_iv.item_31a_vatable_sales, Some(777.0));
+        assert_eq!(
+            hybrid.legacy_flat_draft_fields.get("future_flat_extension"),
+            Some(&serde_json::json!({ "must_survive": true }))
+        );
+    }
+
+    #[test]
+    fn nested_unknown_2550q_properties_fail_deserialization_visibly() {
+        let base = serde_json::to_value(Form2550QDraft::new_from_profile(&profile(), 2026, 1))
+            .expect("current draft serializes");
+        let mut cases = Vec::new();
+
+        let mut part_ii = base.clone();
+        part_ii["part_ii"]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("part_ii", part_ii));
+
+        let mut part_iv = base.clone();
+        part_iv["part_iv"]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("part_iv", part_iv));
+
+        let mut schedule_1 = base.clone();
+        schedule_1["schedule_1"][0]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("schedule_1 row", schedule_1));
+
+        let mut schedule_2 = base.clone();
+        schedule_2["schedule_2"]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("schedule_2", schedule_2));
+
+        let mut schedule_3 = base.clone();
+        schedule_3["schedule_3"][0]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("schedule_3 row", schedule_3));
+
+        let mut schedule_4 = base.clone();
+        schedule_4["schedule_4"][0]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("schedule_4 row", schedule_4));
+
+        let mut additional = base.clone();
+        additional["item_19_additional_rows"] = serde_json::json!([{
+            "instance_id": null,
+            "description": "",
+            "amount": null,
+            "future_field": "preserve-or-fail"
+        }]);
+        cases.push(("additional row", additional));
+
+        let mut local_print = base.clone();
+        local_print["local_print_fields"]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("local print", local_print));
+
+        let mut date = base;
+        date["return_period_from"]["future_field"] = serde_json::json!("preserve-or-fail");
+        cases.push(("date", date));
+
+        for (location, json) in cases {
+            let error = serde_json::from_value::<Form2550QDraft>(json)
+                .expect_err("unknown nested data must not be silently dropped");
+            assert!(
+                error.to_string().contains("unknown field"),
+                "{location} should report its unknown field, got {error}"
+            );
+        }
     }
 
     #[test]
@@ -1904,6 +2760,557 @@ mod tests {
 
         assert_eq!(restored.date_filed, draft.date_filed);
         assert!(restored.legacy_flat_draft_fields.is_empty());
+    }
+
+    #[test]
+    fn stable_row_ids_are_seeded_once_and_survive_json_round_trip() {
+        let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let expected = (1..=6)
+            .map(|ordinal| format!("row-{ordinal:020}"))
+            .collect::<Vec<_>>();
+        let actual = draft
+            .schedule_1
+            .iter()
+            .map(|row| row.instance_id.as_ref())
+            .chain(draft.schedule_3.iter().map(|row| row.instance_id.as_ref()))
+            .chain(draft.schedule_4.iter().map(|row| row.instance_id.as_ref()))
+            .map(|instance_id| instance_id.expect("new rows have IDs").to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual, expected);
+        assert_eq!(draft.row_identity_state.next_ordinal(), 7);
+
+        let restored: Form2550QDraft =
+            serde_json::from_value(serde_json::to_value(&draft).expect("current draft serializes"))
+                .expect("current draft deserializes");
+        assert_eq!(
+            restored
+                .schedule_1
+                .iter()
+                .map(|row| row.instance_id.as_ref())
+                .chain(
+                    restored
+                        .schedule_3
+                        .iter()
+                        .map(|row| row.instance_id.as_ref())
+                )
+                .chain(
+                    restored
+                        .schedule_4
+                        .iter()
+                        .map(|row| row.instance_id.as_ref())
+                )
+                .collect::<Vec<_>>(),
+            draft
+                .schedule_1
+                .iter()
+                .map(|row| row.instance_id.as_ref())
+                .chain(draft.schedule_3.iter().map(|row| row.instance_id.as_ref()))
+                .chain(draft.schedule_4.iter().map(|row| row.instance_id.as_ref()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn legacy_rows_without_ids_are_lazily_seeded_monotonically() {
+        let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let mut json = serde_json::to_value(&draft).expect("current draft serializes");
+        let object = json.as_object_mut().expect("draft JSON is an object");
+        object.remove("row_identity_state");
+        object.remove("raw_editor_state");
+        object.remove("item_19_additional_rows");
+        object.remove("item_42_additional_rows");
+        object.remove("item_47_additional_rows");
+        object.remove("item_56_additional_rows");
+        for family in ["schedule_1", "schedule_3", "schedule_4"] {
+            for row in object
+                .get_mut(family)
+                .and_then(serde_json::Value::as_array_mut)
+                .expect("schedule is an array")
+            {
+                row.as_object_mut()
+                    .expect("row is an object")
+                    .remove("instance_id");
+            }
+        }
+
+        let mut restored: Form2550QDraft =
+            serde_json::from_value(json).expect("legacy current-shape JSON deserializes");
+        assert!(restored.schedule_1[0].instance_id.is_none());
+        assert!(
+            restored
+                .ensure_repeating_row_ids()
+                .expect("legacy row IDs seed")
+        );
+        let first_ids = restored
+            .schedule_1
+            .iter()
+            .map(|row| row.instance_id.clone())
+            .chain(
+                restored
+                    .schedule_3
+                    .iter()
+                    .map(|row| row.instance_id.clone()),
+            )
+            .chain(
+                restored
+                    .schedule_4
+                    .iter()
+                    .map(|row| row.instance_id.clone()),
+            )
+            .collect::<Vec<_>>();
+        assert!(!restored.ensure_repeating_row_ids().expect("IDs revalidate"));
+        assert_eq!(
+            first_ids,
+            restored
+                .schedule_1
+                .iter()
+                .map(|row| row.instance_id.clone())
+                .chain(
+                    restored
+                        .schedule_3
+                        .iter()
+                        .map(|row| row.instance_id.clone())
+                )
+                .chain(
+                    restored
+                        .schedule_4
+                        .iter()
+                        .map(|row| row.instance_id.clone())
+                )
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn duplicate_or_unsupported_persisted_row_ids_fail_closed() {
+        let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let mut duplicate = draft.clone();
+        duplicate.schedule_1[1].instance_id = duplicate.schedule_1[0].instance_id.clone();
+        assert!(matches!(
+            duplicate.ensure_repeating_row_ids(),
+            Err(Form2550QRowIdentityError::Duplicate {
+                family: Form2550QRowFamily::Schedule1,
+                ..
+            })
+        ));
+
+        let mut json = serde_json::to_value(&draft).expect("current draft serializes");
+        json["schedule_1"][0]["instance_id"] = serde_json::json!("legacy-row-id");
+        let mut unsupported: Form2550QDraft =
+            serde_json::from_value(json).expect("syntactically stable ID deserializes");
+        assert!(matches!(
+            unsupported.ensure_repeating_row_ids(),
+            Err(Form2550QRowIdentityError::UnsupportedFormat {
+                family: Form2550QRowFamily::Schedule1,
+                ..
+            })
+        ));
+
+        let mut zero_ordinal_json =
+            serde_json::to_value(&draft).expect("current draft serializes for zero ordinal");
+        zero_ordinal_json["schedule_1"][0]["instance_id"] =
+            serde_json::json!("row-00000000000000000000");
+        let mut zero_ordinal: Form2550QDraft = serde_json::from_value(zero_ordinal_json)
+            .expect("zero ordinal is syntactically stable");
+        assert!(matches!(
+            zero_ordinal.ensure_repeating_row_ids(),
+            Err(Form2550QRowIdentityError::UnsupportedFormat {
+                family: Form2550QRowFamily::Schedule1,
+                ..
+            })
+        ));
+
+        let mut malformed_json =
+            serde_json::to_value(&draft).expect("current draft serializes again");
+        malformed_json["schedule_1"][0]["instance_id"] = serde_json::json!("not a stable id");
+        assert!(
+            serde_json::from_value::<Form2550QDraft>(malformed_json).is_err(),
+            "malformed StableInstanceId must fail during deserialization"
+        );
+    }
+
+    #[test]
+    fn raw_editor_json_preserves_absent_blank_malformed_and_family_wire_names() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft
+            .raw_editor_state
+            .set_singleton("frm2550qv2024:vatPaidReturn", RawValue::Absent);
+        draft
+            .raw_editor_state
+            .set_singleton("frm2550qv2024:surcharge", RawValue::Text(String::new()));
+        let schedule_id = draft.schedule_1[0]
+            .instance_id
+            .clone()
+            .expect("new row has identity");
+        draft.raw_editor_state.set_repeated(
+            Form2550QRowFamily::Schedule1,
+            schedule_id.clone(),
+            "txtInputTax1",
+            RawValue::Text("not-a-number".to_string()),
+        );
+        draft.raw_editor_state.mark_malformed(
+            format!("schedule-1/{schedule_id}/txtInputTax1"),
+            "not a number",
+        );
+
+        let json = serde_json::to_value(&draft).expect("raw draft serializes");
+        let repeated = json["raw_editor_state"]["repeated_fields"]
+            .as_object()
+            .expect("repeated fields are a JSON object");
+        assert_eq!(
+            repeated.keys().map(String::as_str).collect::<Vec<_>>(),
+            vec![
+                "item-19-additional",
+                "item-42-additional",
+                "item-47-additional",
+                "item-56-additional",
+                "schedule-1",
+                "schedule-3",
+                "schedule-4",
+            ]
+        );
+        assert_eq!(
+            json["raw_editor_state"]["singleton_fields"]["frm2550qv2024:vatPaidReturn"]["state"],
+            "absent"
+        );
+        assert_eq!(
+            json["raw_editor_state"]["singleton_fields"]["frm2550qv2024:surcharge"]["text"],
+            ""
+        );
+
+        let restored: Form2550QDraft =
+            serde_json::from_value(json).expect("raw draft deserializes");
+        assert_eq!(restored.raw_editor_state, draft.raw_editor_state);
+        assert!(restored.raw_editor_state.has_malformed_fields());
+    }
+
+    #[test]
+    fn versioned_row_and_raw_state_reject_unknown_json_properties() {
+        let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+
+        let mut unknown_raw = serde_json::to_value(&draft).expect("current draft serializes");
+        unknown_raw["raw_editor_state"]["future_state"] = serde_json::json!({
+            "must_not_be_silently_dropped": true
+        });
+        assert!(
+            serde_json::from_value::<Form2550QDraft>(unknown_raw).is_err(),
+            "unknown raw-state properties must fail closed"
+        );
+
+        let mut unknown_allocator =
+            serde_json::to_value(&draft).expect("current draft serializes again");
+        unknown_allocator["row_identity_state"]["future_allocator_metadata"] = serde_json::json!(1);
+        assert!(
+            serde_json::from_value::<Form2550QDraft>(unknown_allocator).is_err(),
+            "unknown row-identity properties must fail closed"
+        );
+    }
+
+    #[test]
+    fn unknown_raw_editor_version_and_additional_rows_block_validation() {
+        let draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let mut json = serde_json::to_value(&draft).expect("current draft serializes");
+        json["raw_editor_state"]["version"] = serde_json::json!(2);
+        let mut restored: Form2550QDraft =
+            serde_json::from_value(json).expect("unknown version remains inspectable");
+        restored
+            .item_19_additional_rows
+            .push(Form2550QAdditionalItemRow {
+                instance_id: None,
+                description: "PRESERVED ONLY".to_string(),
+                amount: Some(10.0),
+            });
+        restored
+            .ensure_repeating_row_ids()
+            .expect("additional row receives identity");
+
+        let errors = restored.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "raw_editor_state.version")
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|(field, _)| field == "item_19_additional_rows")
+        );
+    }
+
+    #[test]
+    fn inert_adapter_inventory_is_exactly_seven_groups_and_twenty_eight_members() {
+        let groups = form_2550q_group_bindings();
+        assert_eq!(groups.len(), 7);
+        assert_eq!(
+            groups
+                .iter()
+                .map(|binding| binding.group_id())
+                .collect::<Vec<_>>(),
+            vec![
+                "schedule-1-capital-good-row",
+                "schedule-3-creditable-vat-row",
+                "schedule-4-advance-vat-row",
+                "item-19-additional-row",
+                "item-42-additional-row",
+                "item-47-additional-row",
+                "item-56-additional-row",
+            ]
+        );
+        assert_eq!(
+            groups
+                .iter()
+                .map(|binding| binding.members().len())
+                .collect::<Vec<_>>(),
+            vec![9, 5, 6, 2, 2, 2, 2]
+        );
+        assert_eq!(
+            groups.iter().flat_map(|binding| binding.members()).count(),
+            28
+        );
+        assert_eq!(
+            groups
+                .iter()
+                .flat_map(|binding| binding.members())
+                .map(|member| member.field_id())
+                .collect::<Vec<_>>(),
+            vec![
+                "txtDatePurchase1",
+                "txtSourceCode1",
+                "txtDescription1",
+                "txtAmountPurchase1",
+                "txtInputTax1",
+                "txtEstimatedLife1",
+                "txtRecognizedLife1",
+                "txtAllowedInputTax1",
+                "txtBalanceInputTax1",
+                "txtDateCovered3",
+                "txtDateCovered3To",
+                "txtNameWithHoldingAgent3",
+                "txtIncomePayment3",
+                "txtTotalTaxWithHeld3",
+                "txtDate4",
+                "txtDate4To",
+                "txtNameOfMiller4",
+                "txtNameOfTaxpayer4",
+                "txtOfficialReceiptNumber4",
+                "txtAmountPaid4",
+                "frm2550qv2024:totalTaxPayableNo19Description",
+                "frm2550qv2024:totalTaxPayableNo19Amount",
+                "frm2550qv2024:totalTaxPayableNo42Description",
+                "frm2550qv2024:totalTaxPayableNo42Amount",
+                "frm2550qv2024:totalTaxPayableNo47Description",
+                "frm2550qv2024:totalTaxPayableNo47Amount",
+                "frm2550qv2024:totalTaxPayableNo56Description",
+                "frm2550qv2024:totalTaxPayableNo56Amount",
+            ]
+        );
+        assert_eq!(form_2550q_singleton_field_ids().len(), 66);
+        for field_id in [
+            "frm2550qv2024:txtTIN1",
+            "frm2550qv2024:txtTIN2",
+            "frm2550qv2024:txtTIN3",
+            "frm2550qv2024:branchCode",
+            "frm2550qv2024:txtRDOCode",
+            "frm2550qv2024:taxpayerName",
+            "frm2550qv2024:amendedReturnYesNo5",
+            "frm2550qv2024:amendedReturnNo5",
+            "frm2550qv2024:OptShortPrd1",
+            "frm2550qv2024:OptShortPrd2",
+        ] {
+            assert!(
+                form_2550q_singleton_field_ids().contains(&field_id),
+                "candidate identity field {field_id} must have a closed raw binding"
+            );
+        }
+        assert_eq!(form_2550q_local_print_raw_field_keys().len(), 20);
+        assert_eq!(
+            groups
+                .iter()
+                .filter(|binding| !binding.has_live_editor_controls())
+                .map(|binding| binding.family())
+                .collect::<Vec<_>>(),
+            vec![
+                Form2550QRowFamily::Item19Additional,
+                Form2550QRowFamily::Item42Additional,
+                Form2550QRowFamily::Item47Additional,
+                Form2550QRowFamily::Item56Additional,
+            ]
+        );
+    }
+
+    #[test]
+    fn inert_capture_omits_uncaptured_buffers_instead_of_formatting_typed_values() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft.part_iv.item_31a_vatable_sales = Some(123.45);
+        let source =
+            Form2550QFieldValueSource::try_capture(&mut draft).expect("empty raw state captures");
+
+        assert_eq!(source.snapshot().repeated_group_instances().len(), 6);
+        assert!(
+            source.snapshot().fields().is_empty(),
+            "typed 123.45 must not be formatted into a raw buffer"
+        );
+        assert_eq!(
+            source
+                .gaps()
+                .iter()
+                .filter(|gap| matches!(gap, Form2550QCaptureGap::MissingRawBuffer { .. }))
+                .count(),
+            106
+        );
+        assert_eq!(
+            source
+                .gaps()
+                .iter()
+                .filter(|gap| matches!(gap, Form2550QCaptureGap::NoLiveEditorControls { .. }))
+                .count(),
+            4
+        );
+        assert_eq!(source.excluded_local_print_buffer_count(), 0);
+    }
+
+    #[test]
+    fn inert_capture_preserves_raw_states_and_excludes_local_print_buffers() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        draft
+            .raw_editor_state
+            .set_singleton("frm2550qv2024:vatPaidReturn", RawValue::Absent);
+        draft
+            .raw_editor_state
+            .set_singleton("frm2550qv2024:surcharge", RawValue::Text(String::new()));
+        draft.raw_editor_state.set_singleton(
+            "signatory",
+            RawValue::Text("AUTHORIZED REPRESENTATIVE".to_string()),
+        );
+        let schedule_id = draft.schedule_1[0]
+            .instance_id
+            .clone()
+            .expect("new row has identity");
+        draft.raw_editor_state.set_repeated(
+            Form2550QRowFamily::Schedule1,
+            schedule_id.clone(),
+            "txtInputTax1",
+            RawValue::Text("not-a-number".to_string()),
+        );
+        draft.raw_editor_state.mark_malformed(
+            format!("schedule-1/{schedule_id}/txtInputTax1"),
+            "not a number",
+        );
+
+        let source =
+            Form2550QFieldValueSource::try_capture(&mut draft).expect("raw state captures");
+        assert_eq!(source.snapshot().fields().len(), 3);
+        assert_eq!(source.excluded_local_print_buffer_count(), 1);
+        assert_eq!(source.excluded_local_print_buffer_keys(), ["signatory"]);
+        assert!(source.gaps().iter().any(|gap| matches!(
+            gap,
+            Form2550QCaptureGap::ExcludedLocalPrintRawBuffer {
+                field_key: "signatory"
+            }
+        )));
+        assert!(
+            source
+                .snapshot()
+                .fields()
+                .iter()
+                .all(|raw| raw.field().field_id().as_str() != "signatory")
+        );
+        assert!(
+            source
+                .snapshot()
+                .fields()
+                .iter()
+                .any(|raw| raw.value() == &RawValue::Absent)
+        );
+        assert!(
+            source
+                .snapshot()
+                .fields()
+                .iter()
+                .any(|raw| raw.value() == &RawValue::Text(String::new()))
+        );
+        assert!(
+            source
+                .snapshot()
+                .fields()
+                .iter()
+                .any(|raw| raw.value() == &RawValue::Text("not-a-number".to_string()))
+        );
+
+        let restored: Form2550QDraft = serde_json::from_value(
+            serde_json::to_value(&draft).expect("draft with local print raw state serializes"),
+        )
+        .expect("draft with local print raw state deserializes");
+        assert_eq!(
+            restored.raw_editor_state.singleton_value("signatory"),
+            Some(&RawValue::Text("AUTHORIZED REPRESENTATIVE".to_string()))
+        );
+    }
+
+    #[test]
+    fn inert_capture_is_stable_when_vectors_are_reordered() {
+        let mut draft = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let schedule_id = draft.schedule_4[1]
+            .instance_id
+            .clone()
+            .expect("new row has identity");
+        draft.raw_editor_state.set_repeated(
+            Form2550QRowFamily::Schedule4,
+            schedule_id,
+            "txtOfficialReceiptNumber4",
+            RawValue::Text("OR-123".to_string()),
+        );
+        let first =
+            Form2550QFieldValueSource::try_capture(&mut draft).expect("first capture succeeds");
+
+        draft.schedule_1.reverse();
+        draft.schedule_3.reverse();
+        draft.schedule_4.reverse();
+        let reordered =
+            Form2550QFieldValueSource::try_capture(&mut draft).expect("reordered capture succeeds");
+
+        assert_eq!(first.snapshot(), reordered.snapshot());
+        assert_eq!(first.gaps(), reordered.gaps());
+    }
+
+    #[test]
+    fn inert_capture_rejects_unknown_raw_keys_versions_and_orphan_rows() {
+        let mut unknown = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        unknown
+            .raw_editor_state
+            .set_singleton("future_unreviewed_field", RawValue::Text("x".to_string()));
+        assert!(matches!(
+            Form2550QFieldValueSource::try_capture(&mut unknown),
+            Err(Form2550QCaptureError::UnexpectedSingletonField { .. })
+        ));
+
+        let versioned = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        let mut json = serde_json::to_value(versioned).expect("draft serializes");
+        json["raw_editor_state"]["version"] = serde_json::json!(2);
+        let mut versioned: Form2550QDraft =
+            serde_json::from_value(json).expect("unknown version stays inspectable");
+        assert!(matches!(
+            Form2550QFieldValueSource::try_capture(&mut versioned),
+            Err(Form2550QCaptureError::RawEditorState(
+                Form2550QRawEditorStateError::UnsupportedVersion { actual: 2 }
+            ))
+        ));
+
+        let mut orphan = Form2550QDraft::new_from_profile(&profile(), 2026, 1);
+        orphan.raw_editor_state.set_repeated(
+            Form2550QRowFamily::Schedule1,
+            StableInstanceId::parse("row-00000000000000000999").expect("valid row ID"),
+            "txtInputTax1",
+            RawValue::Text("10.00".to_string()),
+        );
+        assert!(matches!(
+            Form2550QFieldValueSource::try_capture(&mut orphan),
+            Err(Form2550QCaptureError::OrphanRepeatedInstance {
+                family: Form2550QRowFamily::Schedule1,
+                ..
+            })
+        ));
     }
 
     #[test]

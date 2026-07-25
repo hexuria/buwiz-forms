@@ -1,0 +1,228 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1700-v2013",
+    "revision":  "2013-06-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#frmMain",
+                                           "official-help#revision:L134"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Four-page June 2013 ENCS annual compensation-income return with employer, other-income, supplemental-information, address-change, and dependent modal tables."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L9558-L9590",
+                                           "official-hta-runtime#saveXML:L7009-L7368"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only taxpayer TIN segment nonblankness, taxpayer last name, address line 1, and contact number, then serializes flat frmMain state."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L7706-L7724",
+                                           "official-hta-runtime#mandatoryFields:L11322-L11413",
+                                           "official-hta-runtime#validateAll:L11415-L11466"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate calls mandatoryFields then validateAll; first error stops processing, and successful validation disables controls."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveEncryptedProfile:L6807",
+                                           "official-hta-runtime#saveXML:L7009-L7368"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final-copy path encrypts the same 311-key inventory and is coupled to profile/connectivity workflow."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#processSubmit:L8468-L8762",
+                                           "official-hta-runtime#submitOnline:L13762"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online submission transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML with 311 keys."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L9558-L9590"
+                                            ],
+                            "guard":  "Four narrow Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Shows success alert."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L7706-L7718"
+                                            ],
+                            "guard":  "All ordered mandatoryFields and validateAll rules pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L7896"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted companion with identical field inventory."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "encrypted-field-audit-v796"
+                                            ],
+                            "guard":  "Local final-copy/profile workflow permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#submitOnline:L13762"
+                                            ],
+                            "guard":  "Connectivity and credentials succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "June 2013 ENCS revision",
+                          "Two-digit tax year 13 or later and no later than previous calendar year",
+                          "Applicable spouse/employer/dependent/modal details"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "bir-2316",
+                                     "label":  "Certificate of Compensation Payment/Tax Withheld (BIR Form 2316)",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L637-L641"
+                                                     ],
+                                     "required_when":  "Always applicable to compensation reported.",
+                                     "official_ui_enforcement":  "Not locally verified.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "husband-waiver",
+                                     "label":  "Waiver of husband\u0027s right to claim additional exemption",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L642-L643"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "Not locally enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-debit-memo",
+                                     "label":  "Duly approved Tax Debit Memo",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L644"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "Not locally enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "foreign-tax-credit-proof",
+                                     "label":  "Proof of Foreign Tax Credits",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L645"
+                                                     ],
+                                     "required_when":  "Foreign tax credit is claimed.",
+                                     "official_ui_enforcement":  "Not locally enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "amended-return-proof",
+                                     "label":  "Proof of tax payment and return previously filed",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L646-L647"
+                                                     ],
+                                     "required_when":  "Amended return.",
+                                     "official_ui_enforcement":  "Not locally enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "other-credit-proof",
+                                     "label":  "Proof of other tax payment/credit",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L648"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "Not locally enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "authorization-letter",
+                                     "label":  "Authorization letter",
+                                     "source_refs":  [
+                                                         "official-help#required-attachments:L649-L650"
+                                                     ],
+                                     "required_when":  "Filed by an authorized representative.",
+                                     "official_ui_enforcement":  "Not locally enforced.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L246-L253"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return due on or before April 15 following the taxable year."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L246-L253"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L246-L253"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L246-L253"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             }
+                         ]
+}

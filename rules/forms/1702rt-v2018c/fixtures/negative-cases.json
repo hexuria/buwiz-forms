@@ -1,0 +1,407 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702rt-v2018c",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1702rt-save-001",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is literal 000."
+                                    },
+                      "expected_message":  "Please select an RDO Code (Part I Item 7).",
+                      "expected_behavior":  "Equality-only test permits blank or unknown non-000 values.",
+                      "rule_id":  "1702rt-save-001"
+                  },
+                  {
+                      "case_id":  "case-02-1702rt-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please provide a Registered Name (Part I Item 9).",
+                      "expected_behavior":  "Message says Item 9, but the field is printed Item 8.",
+                      "rule_id":  "1702rt-save-002"
+                  },
+                  {
+                      "case_id":  "case-03-1702rt-save-003",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address line 1 is blank."
+                                    },
+                      "expected_message":  "Please provide a Registered Address (Part I Item 10).",
+                      "expected_behavior":  "Message says Item 10, but the field is printed Item 9.",
+                      "rule_id":  "1702rt-save-003"
+                  },
+                  {
+                      "case_id":  "case-04-1702rt-save-004",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please provide a Contact Number (Part I Item 11).",
+                      "expected_behavior":  "The first active branch alerts and returns.",
+                      "rule_id":  "1702rt-save-004"
+                  },
+                  {
+                      "case_id":  "case-05-1702rt-save-005",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email is blank."
+                                    },
+                      "expected_message":  "Please provide an Email Address (Part I Item 12).",
+                      "expected_behavior":  "Save checks presence only.",
+                      "rule_id":  "1702rt-save-005"
+                  },
+                  {
+                      "case_id":  "case-06-1702rt-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Calendar nor Fiscal is selected."
+                                    },
+                      "expected_message":  "Please select if you are filing for Calendar or Fiscal year on Page 1 Item 1",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-001"
+                  },
+                  {
+                      "case_id":  "case-07-1702rt-validate-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return month or year is numerically zero."
+                                    },
+                      "expected_message":  "Please provide a valid Year Ended on Page 1 Item 2",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-002"
+                  },
+                  {
+                      "case_id":  "case-08-1702rt-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is numerically zero."
+                                    },
+                      "expected_message":  "Please select a RDO code on Page 1 Part 1 Item 7",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-003"
+                  },
+                  {
+                      "case_id":  "case-09-1702rt-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date of incorporation is blank."
+                                    },
+                      "expected_message":  "Please provide a valid Date of Incorporation/Organization on Page 1 Part I Item 10",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-004"
+                  },
+                  {
+                      "case_id":  "case-10-1702rt-validate-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please provide a Registered Name on Page 1 Part I Item 8",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-005"
+                  },
+                  {
+                      "case_id":  "case-11-1702rt-validate-006",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address line 1 is blank."
+                                    },
+                      "expected_message":  "Please provide a Registered Address on Page 1 Part I Item 9",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-006"
+                  },
+                  {
+                      "case_id":  "case-12-1702rt-validate-007",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please provide a valid Contact Number on Page 1 Part I Item 11",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-007"
+                  },
+                  {
+                      "case_id":  "case-13-1702rt-validate-008",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email is blank."
+                                    },
+                      "expected_message":  "Please provide a valid Email Address on Page 1 Part I Item 12",
+                      "expected_behavior":  "Validate checks presence only; format is a separate change handler.",
+                      "rule_id":  "1702rt-validate-008"
+                  },
+                  {
+                      "case_id":  "case-14-1702rt-validate-009",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 16 is negative and no overpayment disposition is selected."
+                                    },
+                      "expected_message":  "Please select an option for Overpayment Radio Button on Page 1 Part II ",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-009"
+                  },
+                  {
+                      "case_id":  "case-15-1702rt-validate-010",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 21 is negative and no overpayment disposition is selected."
+                                    },
+                      "expected_message":  "Please select an option for Overpayment Radio Button on Page 1 Part",
+                      "expected_behavior":  "This duplicates Item 16 logic with truncated wording.",
+                      "rule_id":  "1702rt-validate-010"
+                  },
+                  {
+                      "case_id":  "case-16-1702rt-validate-011",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 23 amount is nonzero and any linked payment detail is blank."
+                                    },
+                      "expected_message":  "Please provide data on Page 1 Part III Item 26.",
+                      "expected_behavior":  "The helper is given Item 26 for printed Item 23.",
+                      "rule_id":  "1702rt-validate-011"
+                  },
+                  {
+                      "case_id":  "case-17-1702rt-validate-012",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 24 amount is nonzero and any linked payment detail is blank."
+                                    },
+                      "expected_message":  "Please provide data on Page 1 Part III Item 27.",
+                      "expected_behavior":  "The helper is given Item 27 for printed Item 24.",
+                      "rule_id":  "1702rt-validate-012"
+                  },
+                  {
+                      "case_id":  "case-18-1702rt-validate-013",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 25 amount is nonzero and any linked payment detail is blank."
+                                    },
+                      "expected_message":  "Please provide data on Page 1 Part III Item 28.",
+                      "expected_behavior":  "The helper is given Item 28 for printed Item 25.",
+                      "rule_id":  "1702rt-validate-013"
+                  },
+                  {
+                      "case_id":  "case-19-1702rt-validate-014",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 26 amount is nonzero and any linked payment detail is blank."
+                                    },
+                      "expected_message":  "Please provide data on Page 1 Part III Item 29.",
+                      "expected_behavior":  "The helper is given Item 29 for printed Item 26.",
+                      "rule_id":  "1702rt-validate-014"
+                  },
+                  {
+                      "case_id":  "case-20-1702rt-validate-015",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Nonzero payment-detail sum differs from Total Amount Payable."
+                                    },
+                      "expected_message":  "Sum of Amount fields in Details of Payment (Page 1 Part III) Segment must be equal to TOTAL AMOUNT PAYABLE",
+                      "expected_behavior":  "The branch alerts, changes page, and returns.",
+                      "rule_id":  "1702rt-validate-015"
+                  },
+                  {
+                      "case_id":  "case-21-1702rt-validate-016",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 2 Part 4 Item 53)."
+                                    },
+                      "expected_message":  "Please provide data on Page 2 Part 4 Item 53.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-016"
+                  },
+                  {
+                      "case_id":  "case-22-1702rt-validate-017",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 2 Part 4 Item 54)."
+                                    },
+                      "expected_message":  "Please provide data on Page 2 Part 4 Item 54.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-017"
+                  },
+                  {
+                      "case_id":  "case-23-1702rt-validate-019",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17d)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 1 Item 17d.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-019"
+                  },
+                  {
+                      "case_id":  "case-24-1702rt-validate-020",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17e)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 1 Item 17e.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-020"
+                  },
+                  {
+                      "case_id":  "case-25-1702rt-validate-021",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17f)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 1 Item 17f.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-021"
+                  },
+                  {
+                      "case_id":  "case-26-1702rt-validate-022",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17g)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 1 Item 17g.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-022"
+                  },
+                  {
+                      "case_id":  "case-27-1702rt-validate-023",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17g)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 1 Item 17g.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-023"
+                  },
+                  {
+                      "case_id":  "case-28-1702rt-validate-024",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17i)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 1 Item 17i.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-024"
+                  },
+                  {
+                      "case_id":  "case-29-1702rt-validate-025",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 1)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 2 Item 1.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-025"
+                  },
+                  {
+                      "case_id":  "case-30-1702rt-validate-026",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 2)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 2 Item 2.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-026"
+                  },
+                  {
+                      "case_id":  "case-31-1702rt-validate-027",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 3)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 2 Item 3.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-027"
+                  },
+                  {
+                      "case_id":  "case-32-1702rt-validate-028",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 4)."
+                                    },
+                      "expected_message":  "Please provide data on Page 3 Schedule 2 Item 4.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-028"
+                  },
+                  {
+                      "case_id":  "case-33-1702rt-validate-030",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 4)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 3A Item 4.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-030"
+                  },
+                  {
+                      "case_id":  "case-34-1702rt-validate-031",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 5)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 3A Item 5.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-031"
+                  },
+                  {
+                      "case_id":  "case-35-1702rt-validate-032",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 6)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 3A Item 6.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-032"
+                  },
+                  {
+                      "case_id":  "case-36-1702rt-validate-033",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 7)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 3A Item 7.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-033"
+                  },
+                  {
+                      "case_id":  "case-37-1702rt-validate-034",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 2)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 5 Item 2.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-034"
+                  },
+                  {
+                      "case_id":  "case-38-1702rt-validate-035",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 3)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 5 Item 3.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-035"
+                  },
+                  {
+                      "case_id":  "case-39-1702rt-validate-036",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 5)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 5 Item 5.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-036"
+                  },
+                  {
+                      "case_id":  "case-40-1702rt-validate-037",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 6)."
+                                    },
+                      "expected_message":  "Please provide data on Page 4 Schedule 5 Item 6.",
+                      "expected_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "rule_id":  "1702rt-validate-037"
+                  }
+              ]
+}

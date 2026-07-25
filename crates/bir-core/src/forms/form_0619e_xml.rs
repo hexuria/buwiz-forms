@@ -1160,9 +1160,13 @@ mod tests {
             canonical_plain_fields.len(),
             EXACT_REVIEWED_ENCRYPTED_XML_FIELD_COUNT
         );
-        let replayed_plain =
-            Form0619EDraft::from_bir_xml_payload(&plain_draft.to_bir_xml_payload())
-                .expect("canonical plaintext replay must satisfy the typed contract");
+        let replayed_plain_fields = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            &plain_draft.to_bir_xml_payload(),
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .expect("canonical plaintext replay must decode as generated UTF-8 XML");
+        let replayed_plain = Form0619EDraft::from_bir_field_map(&replayed_plain_fields)
+            .expect("canonical plaintext replay must satisfy the typed contract");
         assert_eq!(replayed_plain.to_bir_field_map(), canonical_plain_fields);
 
         let encrypted = std::fs::read(
@@ -1223,9 +1227,13 @@ mod tests {
             encrypted_draft.item_18_total_amount_of_remittance,
             plain_draft.item_18_total_amount_of_remittance
         );
-        let replayed_encrypted =
-            Form0619EDraft::from_bir_xml_payload(&encrypted_draft.to_bir_xml_payload())
-                .expect("canonical encrypted-companion replay must satisfy the typed contract");
+        let replayed_encrypted_fields = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            &encrypted_draft.to_bir_xml_payload(),
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .expect("canonical encrypted-companion replay must decode as generated UTF-8 XML");
+        let replayed_encrypted = Form0619EDraft::from_bir_field_map(&replayed_encrypted_fields)
+            .expect("canonical encrypted-companion replay must satisfy the typed contract");
         assert_eq!(
             replayed_encrypted.to_bir_field_map(),
             encrypted_draft.to_bir_field_map()

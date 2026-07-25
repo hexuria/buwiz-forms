@@ -1775,10 +1775,11 @@ mod tests {
         let checked_output = draft
             .try_to_bir_xml_payload()
             .unwrap_or_else(|errors| panic!("{source_name} checked export failed: {errors:#?}"));
-        let output_fields =
-            crate::bir_xml::parse_bir_xml_checked(&checked_output).unwrap_or_else(|error| {
-                panic!("{source_name} generated output failed to parse: {error}")
-            });
+        let output_fields = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            &checked_output,
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .unwrap_or_else(|error| panic!("{source_name} generated output failed to parse: {error}"));
         let differences = source_fields
             .iter()
             .filter_map(|(key, source_value)| {

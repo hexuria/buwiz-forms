@@ -1,0 +1,185 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604e-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#frmMain",
+                                           "official-help#revision"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 two-page annual return with four quarterly 1601-EQ rows and twelve monthly 1606 rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L5464-L5522",
+                                           "xml-editable-v1"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only year, TIN components, RDO, and withholding-agent name, then writes a 134-key plaintext pseudo-XML save."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L4487-L4553"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate uses source-ordered background and schedule checks, then disables controls on success."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveEncryptedProfile:L2414-L2589"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Final-copy code exists, but a revision-matched encrypted artifact was not produced or accepted as evidence."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L6114-L6216"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L5464-L5522"
+                                            ],
+                            "guard":  "Four narrow checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Print, Edit, and Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L4487-L4553"
+                                            ],
+                            "guard":  "All active ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L5285-L5400"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Attempts encrypted output."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile:L2414-L2589"
+                                            ],
+                            "guard":  "Profile/connectivity-dependent official flow permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L6114-L6216"
+                                            ],
+                            "guard":  "Connectivity and send succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "January 2018 revision",
+                          "Taxable year 2018 or later",
+                          "Withholding-agent identity",
+                          "Applicable quarterly and monthly remittance information"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "alphalist-expanded",
+                                     "label":  "Alphalist of Payees Subjected to Expanded Withholding Tax with electronic-submission acknowledgement/validation proof.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L163-L176"
+                                                     ],
+                                     "required_when":  "Applicable to the annual return.",
+                                     "official_ui_enforcement":  "External attachment presence is not checked locally.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "alphalist-exempt",
+                                     "label":  "Alphalist of Other Payees Whose Income Payments Are Exempt from Withholding Tax but Subject to Income Tax with electronic-submission acknowledgement/validation proof.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L163-L176"
+                                                     ],
+                                     "required_when":  "Applicable to the annual return.",
+                                     "official_ui_enforcement":  "External attachment presence is not checked locally.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "authorization-letter",
+                                     "label":  "Authorization letter.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L163-L176"
+                                                     ],
+                                     "required_when":  "Filed by an authorized representative.",
+                                     "official_ui_enforcement":  "Not locally checked.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L98-L104"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Help text says the return shall be filed on or before March following the calendar year, but omits the day; exact deadline remains ambiguous in this revision artifact."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L98-L104"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Annual return; same malformed March deadline text applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L98-L104"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Annual return; same malformed March deadline text applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L98-L104"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Annual return; same malformed March deadline text applies."
+                             }
+                         ]
+}

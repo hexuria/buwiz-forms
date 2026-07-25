@@ -1,0 +1,195 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604f-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#frmMain",
+                                           "official-help#revision:L84"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 annual final-withholding return with three fixed four-quarter schedules for 1601-FQ, 1602Q, and 1603Q remittances."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L4711-L4727",
+                                           "xml-editable-v1"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only TIN components, RDO not 000, and withholding-agent name, then writes 105 flat keys."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L3789-L4300"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate alerts for invalid year without stopping, then runs source-ordered background, tax-relief, and three-schedule checks; success disables controls."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "encrypted-field-audit-v796"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The reviewed encrypted companion has the identical 105-key inventory as the plaintext save."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L5332-L5446"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L4711-L4727"
+                                            ],
+                            "guard":  "Three narrow checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables applicable controls.",
+                                                 "Enables Print, Edit, Upload, and Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm:L3789-L4300"
+                                            ],
+                            "guard":  "All blocking checks return no failure; year check itself is non-blocking."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm:L4568-L4590"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted artifact with the same 105-key inventory."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "encrypted-field-audit-v796"
+                                            ],
+                            "guard":  "Official profile/finalization flow permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L5332-L5446"
+                                            ],
+                            "guard":  "Connectivity and send succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "January 2018 revision",
+                          "Taxable year 2018 or later",
+                          "Withholding-agent identity",
+                          "Applicable quarterly remittance information"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "alphalist-final-withholding",
+                                     "label":  "Alphalist of Payees Subjected to Final Withholding Tax with electronic-submission acknowledgement/validation proof.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L174-L186"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "External attachment presence is not checked locally.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "alphalist-fringe-benefits",
+                                     "label":  "Alphalist of Employees Other than Rank \u0026 File Who Were Given Fringe Benefits During the year with electronic-submission acknowledgement/validation proof.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L174-L186"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "External attachment presence is not checked locally.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "alphalist-exempt",
+                                     "label":  "Alphalist of Other Payees Whose Income are Exempt from Withholding Tax but Subject to Income Tax with electronic-submission acknowledgement/validation proof.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L174-L186"
+                                                     ],
+                                     "required_when":  "Applicable.",
+                                     "official_ui_enforcement":  "External attachment presence is not checked locally.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "authorization-letter",
+                                     "label":  "Authorization letter.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L174-L186"
+                                                     ],
+                                     "required_when":  "Filed by an authorized representative.",
+                                     "official_ui_enforcement":  "Not locally checked.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L103-L105"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return due on or before January 31 of the year following the calendar year in which final-withholding income payments were paid or accrued."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L103-L105"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not quarterly; the annual January 31 deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L103-L105"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not quarterly; the annual January 31 deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L103-L105"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not quarterly; the annual January 31 deadline applies."
+                             }
+                         ]
+}

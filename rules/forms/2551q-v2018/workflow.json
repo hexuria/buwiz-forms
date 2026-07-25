@@ -1,0 +1,162 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#frmMain"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Two-page return with a six-row bounded ATC schedule and payment/reference details."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L4902-L4927",
+                                           "official-hta-runtime#saveXML:L3638-L3890"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save preflight checks month, quarter, nonblank TIN pieces, and taxpayer name, then serializes 99 eligible frmMain occurrences."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L4608-L4723"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Ordered validation runs and then locks editable controls."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML:L3638-L3890"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy uses the same deterministic element loop and encrypts the artifact externally."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L5584-L5696"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes local XML from frmMain eligible controls."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L3638-L3890"
+                                            ],
+                            "guard":  "Save preflight passes."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Locks editable controls."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm:L4608-L4723"
+                                            ],
+                            "guard":  "All active ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables conditionally editable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm:L4724-L4848"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts the generated local artifact."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L3638-L3890"
+                                            ],
+                            "guard":  "Official final-copy workflow proceeds."
+                        },
+                        {
+                            "action":  "Online transport",
+                            "side_effects":  [
+                                                 "No online submission was performed during research."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L5584-L5696"
+                                            ],
+                            "guard":  "Connectivity and transport proceed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Exact January 2018 ENCS revision",
+                          "Complete applicable background fields",
+                          "Select an effective ATC and complete the bounded Schedule 1 rows"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "applicable-percentage-tax-support",
+                                     "label":  "Applicable percentage-tax supporting documents",
+                                     "source_refs":  [
+                                                         "official-installed-help"
+                                                     ],
+                                     "required_when":  "Required by the taxpayer facts and official instructions.",
+                                     "official_ui_enforcement":  "Not comprehensively enforced by local Validate.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Within twenty-five days after the end of the taxable quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Within twenty-five days after the end of the taxable quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Within twenty-five days after the end of the taxable quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Within twenty-five days after the end of the taxable quarter."
+                             }
+                         ]
+}

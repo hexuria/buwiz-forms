@@ -1,0 +1,332 @@
+{
+    "source_sha256":  "e33af59157e1083432cdfc360f648e06602caab75167a27fbb89a08853cb9420",
+    "function_count":  14,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  2253,
+                          "end_line":  2339,
+                          "body_sha256":  "8eb2c1232ef6bc804ddb97c5e518b1ebc0f8d1132f7b1662219b86485420ac70",
+                          "alerts":  [
+                                         "\"File \u0027\"+xmlFileName+\"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "xmlFileName",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  2357,
+                          "end_line":  2369,
+                          "body_sha256":  "48ce23955c13384033ada8e950417e2ab18a5d53b7d3aecfa214d60e9aa04a54",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  2417,
+                          "end_line":  2723,
+                          "body_sha256":  "88a00138f1c802aa82eb6a902ce3875d02a7ae82562003c5635456a61b6921a1",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:AmendedReturn_1",
+                                              "frm1600WP:AmendedReturn_2",
+                                              "frm1600WP:txtAddress",
+                                              "frm1600WP:txtBranchCode",
+                                              "frm1600WP:txtRDOCode",
+                                              "frm1600WP:txtTax14",
+                                              "frm1600WP:txtTax15A",
+                                              "frm1600WP:txtTax15B",
+                                              "frm1600WP:txtTax15C",
+                                              "frm1600WP:txtTax15D",
+                                              "frm1600WP:txtTax16",
+                                              "frm1600WP:txtTaxpayerName",
+                                              "frm1600WP:txtTIN1",
+                                              "frm1600WP:txtTIN2",
+                                              "frm1600WP:txtTIN3",
+                                              "frm1600WP:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2724,
+                          "end_line":  2947,
+                          "body_sha256":  "491b3ff390e47893fd204dad5a826d93ba4f9b7138d2855290bba1c7098f7094",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:AmendedReturn_1",
+                                              "frm1600WP:AmendedReturn_2",
+                                              "frm1600WP:txtAddress",
+                                              "frm1600WP:txtBranchCode",
+                                              "frm1600WP:txtRDOCode",
+                                              "frm1600WP:txtTax14",
+                                              "frm1600WP:txtTax15A",
+                                              "frm1600WP:txtTax15B",
+                                              "frm1600WP:txtTax15C",
+                                              "frm1600WP:txtTax15D",
+                                              "frm1600WP:txtTax16",
+                                              "frm1600WP:txtTaxpayerName",
+                                              "frm1600WP:txtTIN1",
+                                              "frm1600WP:txtTIN2",
+                                              "frm1600WP:txtTIN3",
+                                              "frm1600WP:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "disableAllControl",
+                          "start_line":  3019,
+                          "end_line":  3064,
+                          "body_sha256":  "0fe9cfcaaab2e14f4677fd31f15a67ef3f511a1bd47104e6c116906ba2327efa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:AmendedReturn_1",
+                                              "frm1600WP:AmendedReturn_2",
+                                              "frm1600WP:AnyTaxHeld_1",
+                                              "frm1600WP:AnyTaxHeld_2",
+                                              "frm1600WP:btnFinalCopy",
+                                              "frm1600WP:CategoryAgent_G",
+                                              "frm1600WP:CategoryAgent_P",
+                                              "frm1600WP:cmdEdit",
+                                              "frm1600WP:cmdValidate",
+                                              "frm1600WP:DateWithholdingDay",
+                                              "frm1600WP:DateWithholdingMonth",
+                                              "frm1600WP:DateWithholdingYear",
+                                              "frm1600WP:dtSched:amount",
+                                              "frm1600WP:dtSched:btnATCcode",
+                                              "frm1600WP:dtSched:txtFullname",
+                                              "frm1600WP:dtSched:txtTin",
+                                              "frm1600WP:txtAddress",
+                                              "frm1600WP:txtBranchCode",
+                                              "frm1600WP:txtRDOCode",
+                                              "frm1600WP:txtSheets",
+                                              "frm1600WP:txtTax13",
+                                              "frm1600WP:txtTax15A",
+                                              "frm1600WP:txtTax15B",
+                                              "frm1600WP:txtTax15C",
+                                              "frm1600WP:txtTaxBase",
+                                              "frm1600WP:txtTaxpayerName",
+                                              "frm1600WP:txtTIN1",
+                                              "frm1600WP:txtTIN2",
+                                              "frm1600WP:txtTIN3",
+                                              "frm1600WP:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "enableAllControl",
+                          "start_line":  3065,
+                          "end_line":  3119,
+                          "body_sha256":  "752c7d23b3d722260e055902bfacaee999cd111aba5b9c4cdf0032b9923c3d49",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:AmendedReturn_1",
+                                              "frm1600WP:AmendedReturn_2",
+                                              "frm1600WP:AnyTaxHeld_1",
+                                              "frm1600WP:AnyTaxHeld_2",
+                                              "frm1600WP:btnFinalCopy",
+                                              "frm1600WP:CategoryAgent_G",
+                                              "frm1600WP:CategoryAgent_P",
+                                              "frm1600WP:cmdEdit",
+                                              "frm1600WP:cmdValidate",
+                                              "frm1600WP:DateWithholdingDay",
+                                              "frm1600WP:DateWithholdingMonth",
+                                              "frm1600WP:DateWithholdingYear",
+                                              "frm1600WP:dtSched:amount",
+                                              "frm1600WP:dtSched:btnATCcode",
+                                              "frm1600WP:dtSched:txtFullname",
+                                              "frm1600WP:dtSched:txtTin",
+                                              "frm1600WP:txtBranchCode",
+                                              "frm1600WP:txtTax13",
+                                              "frm1600WP:txtTax15A",
+                                              "frm1600WP:txtTax15B",
+                                              "frm1600WP:txtTax15C",
+                                              "frm1600WP:txtTaxBase",
+                                              "frm1600WP:txtTIN1",
+                                              "frm1600WP:txtTIN2",
+                                              "frm1600WP:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "disableallShedIIATC",
+                          "start_line":  3135,
+                          "end_line":  3148,
+                          "body_sha256":  "80375c0234e46704a4242258934f99b8ef893acf2535503c5ea88db7a0d2e3db",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:dtSched:amount",
+                                              "frm1600WP:dtSched:btnATCcode",
+                                              "frm1600WP:dtSched:drpAtcCode",
+                                              "frm1600WP:dtSched:naturePayment",
+                                              "frm1600WP:dtSched:taxWithheld",
+                                              "frm1600WP:dtSched:txtFullname",
+                                              "frm1600WP:dtSched:txtRatePercent",
+                                              "frm1600WP:dtSched:txtTin"
+                                          ]
+                      },
+                      {
+                          "name":  "enableallShedIIATC",
+                          "start_line":  3149,
+                          "end_line":  3156,
+                          "body_sha256":  "f8933e3f85bf399d364566242a6a724aab25af2cf9e7e29503442753ee8636da",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:dtSched:btnATCcode"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  3157,
+                          "end_line":  3369,
+                          "body_sha256":  "da78637ab5e79103cd8c998b389960ff9c980b44f56ef8c5822d937d26fa524d",
+                          "alerts":  [
+                                         "d.getElementById(\u0027frm1600WP:txtYear\u0027).value*1 + 1 + \" \" + dt.getFullYear()*1) if( d.getElementById(\u0027frm1600WP:DateWithholdingMonth\u0027).value == \"\") { alert(\"Please enter a valid month on Item 1.\") return; } if( m1.length == 1 ) { alert(\"Please enter a valid month on item 1. Format should be MM/DD/YYYY.\") return; } if( d.getElementById(\u0027frm1600WP:DateWithholdingDay\u0027).value == \"\") { alert(\"Please enter a valid day on Item 1.\"",
+                                         "\"Please enter a valid day on item 1. Format should be MM/DD/YYYY.\") return; } if( d.getElementById(\u0027frm1600WP:DateWithholdingYear\u0027).value == \"\") { alert(\"Please enter a valid year on Item 1.\") return; } if(d.getElementById(\u0027frm1600WP:DateWithholdingDay\u0027).value \u003c 1) { alert(\"Invalid date entry on item 1.\"",
+                                         "\"Filing year is not a leap year.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\") return; } if( d.getElementById(\u0027frm1600WP:DateWithholdingMonth\u0027).value == dt.getMonth() +1 \u0026\u0026 d.getElementById(\u0027frm1600WP:DateWithholdingDay\u0027).value \u003e dt.getDate() \u0026\u0026 d.getElementById(\u0027frm1600WP:DateWithholdingYear\u0027).value == dt.getFullYear()) { alert(\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\") return; } if( d.getElementById(\u0027frm1600WP:DateWithholdingYear\u0027).value*1 \u003e dt.getFullYear()*1 ) { alert(\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\") return; }*/ if( d.getElementById(\u0027frm1600WP:DateWithholdingYear\u0027).value*1 \u003c 1900 ) { alert(\"Invalid date entry on Item no.1. Entry should not be lower than 1900.\") return; } if(d.getElementById(\u0027frm1600WP:AmendedReturn_1\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm1600WP:AmendedReturn_2\u0027).checked == false ) { alert(\"Please choose amended return on item 2.\") return; } if(d.getElementById(\u0027frm1600WP:AnyTaxHeld_1\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm1600WP:AnyTaxHeld_2\u0027).checked == false ) { alert(\"Please select an option for Item 4.\") return; } if( (d.getElementById(\u0027frm1600WP:txtTIN1\u0027).value == \"\" || d.getElementById(\u0027frm1600WP:txtTIN2\u0027).value == \"\" || d.getElementById(\u0027frm1600WP:txtTIN3\u0027).value == \"\" || d.getElementById(\u0027frm1600WP:txtBranchCode\u0027).value == \"\") ) { alert(\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please select an option for Item 7.\") return; } if( (d.getElementById(\u0027frm1600WP:txtTaxpayerName\u0027).value == \"\") ) { alert(\"Please enter a valid Withholding Agent\u0027s Name on Item 8.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 9.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 10.\"",
+                                         "\"Please select an option for Item 7.\"",
+                                         "\"Please fill up Part II Computation of Tax if item 4 is set to Yes.\") return; } var indexwithheld = 1; for (indexwithheld = 1 ; indexwithheld \u003c ( d.getElementById(\u0027tblPartIIComputeTax\u0027).rows.length",
+                                         "\"with held tax \" + d.getElementById(\u0027frm1600:txtTaxBase\u0027+indexwithheld).value + \".\") if( d.getElementById(\u0027frm1600WP:txtTaxBase\u0027+ indexwithheld).value == \"\" ) { alert(\"Please enter a valid value for tax base for \" + d.getElementById(\u0027frm1600WP:txtAtcCode\u0027+indexwithheld).value + \".\" ) return; } if( d.getElementById(\u0027frm1600WP:txtTaxBase\u0027+ indexwithheld).value \u003c= 0 ) { alert(\"Please enter Tax Base for ATC \u003c\" + d.getElementById(\u0027frm1600WP:txtAtcCode\u0027+ indexwithheld).value + \"\u003e.\") return; } }else { alert(\"Please fill up Part II Computation of Tax if item 4 is set to Yes.\") return; } } for(i =1 ; i \u003c 11; i++) { if(d.getElementById(\u0027frm1600WP:dtSched:txtTin\u0027+ i).value != \u0027\u0027 || d.getElementById(\u0027frm1600WP:dtSched:txtFullname\u0027+ i).value != \u0027\u0027 || d.getElementById(\u0027frm1600WP:dtSched:drpAtcCode\u0027+ i).value != \u0027\u0027 || d.getElementById(\u0027frm1600WP:dtSched:naturePayment\u0027+ i).value != \u0027\u0027 || d.getElementById(\u0027frm1600WP:dtSched:naturePayment\u0027+ i).value != \u0027\u0027 || d.getElementById(\u0027frm1600WP:dtSched:amount\u0027+ i).value \u003e 0) { if(d.getElementById(\u0027frm1600WP:dtSched:txtTin\u0027+ i).value == \u0027\u0027 || d.getElementById(\u0027frm1600WP:dtSched:txtTin\u0027+ i).value.length \u003c 12 ) { alert(\"Please enter a valid TIN Number for Sequence \" + i + \".\"",
+                                         "\"Please enter a valid Name of Individual/Corporation for Sequence \" + i + \".\"",
+                                         "\"Please select an ATC from the list for Sequence \" + i + \".\"",
+                                         "\"Please enter Tax Base for ATC \" + d.getElementById(\u0027frm1600WP:dtSched:drpAtcCode\u0027+ i).value + \". Value must be greater than 0.\"",
+                                         "\"Please enter in Sched II Portion a valid TIN for \" + d.getElementById(\u0027frm1600WP:dtSched:drpAtcCode\u0027+i).value + \" in \"+ i + \" .\" ) return; } if(d.getElementById(\u0027frm1600WP:dtSched:txtFullname\u0027+i).value == \"\" ) { alert(\"Please enter in Sched II Portion fullname for \" + d.getElementById(\u0027frm1600WP:dtSched:drpAtcCode\u0027+i).value + \" in \"+ i + \" .\" ) return; } if(d.getElementById(\u0027frm1600WP:dtSched:amount\u0027+i).value == \"\" ) { alert(\"Please enter in Sched II Portion amount for \" + d.getElementById(\u0027frm1600WP:dtSched:drpAtcCode\u0027+i).value + \" in \"+ i + \" .\" ) return; } }*/ } } for(var i = 1 ; i \u003c= 10 ; i++ ) { if(d.getElementById(\u0027frm1600WP:dtSched:txtTin\u0027+ i).value != \u0027\u0027 \u0026\u0026 d.getElementById(\u0027frm1600WP:dtSched:txtTin\u0027+ i).value.length \u003c 12 ) { alert(\"Please enter a valid TIN Number for Sequence \" + i + \".\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:AmendedReturn_1",
+                                              "frm1600WP:AmendedReturn_2",
+                                              "frm1600WP:AnyTaxHeld_1",
+                                              "frm1600WP:AnyTaxHeld_2",
+                                              "frm1600WP:CategoryAgent_G",
+                                              "frm1600WP:CategoryAgent_P",
+                                              "frm1600WP:DateWithholdingDay",
+                                              "frm1600WP:DateWithholdingMonth",
+                                              "frm1600WP:DateWithholdingYear",
+                                              "frm1600WP:dtSched:amount",
+                                              "frm1600WP:dtSched:drpAtcCode",
+                                              "frm1600WP:dtSched:naturePayment",
+                                              "frm1600WP:dtSched:txtFullname",
+                                              "frm1600WP:dtSched:txtTin",
+                                              "frm1600WP:txtAddress",
+                                              "frm1600WP:txtAtcCode",
+                                              "frm1600WP:txtBranchCode",
+                                              "frm1600WP:txtRDOCode",
+                                              "frm1600WP:txtTaxBase",
+                                              "frm1600WP:txtTaxpayerName",
+                                              "frm1600WP:txtTIN1",
+                                              "frm1600WP:txtTIN2",
+                                              "frm1600WP:txtTIN3",
+                                              "frm1600WP:txtYear",
+                                              "frm1600WP:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "dateChanged",
+                          "start_line":  3469,
+                          "end_line":  3484,
+                          "body_sha256":  "f4d798a354f2eea6ca3ddcd6629db70a7a81b8590920d60f4dfcaa7ce707b0f3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtTax15A",
+                                              "frm1600WP:txtTax15B",
+                                              "frm1600WP:txtTax15C",
+                                              "frm1600WP:txtTax15D",
+                                              "frm1600WP:txtTax16"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  3751,
+                          "end_line":  3778,
+                          "body_sha256":  "d20500f31f4173ce4dbbd1753dd893125654eb277cfb9a3572ffd5e30f00b669",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Withholding Agent\u0027s Name on Item 8.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtBranchCode",
+                                              "frm1600WP:txtRDOCode",
+                                              "frm1600WP:txtTaxpayerName",
+                                              "frm1600WP:txtTIN1",
+                                              "frm1600WP:txtTIN2",
+                                              "frm1600WP:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  3866,
+                          "end_line":  3939,
+                          "body_sha256":  "0d065b04adbee5d49b8e983cf47937b3517d9ecd798647bca1ed3f3abcd0f934",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtAddress",
+                                              "frm1600WP:txtBranchCode",
+                                              "frm1600WP:txtRDOCode",
+                                              "frm1600WP:txtTaxpayerName",
+                                              "frm1600WP:txtTIN1",
+                                              "frm1600WP:txtTIN2",
+                                              "frm1600WP:txtTIN3",
+                                              "frm1600WP:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  4264,
+                          "end_line":  4277,
+                          "body_sha256":  "4e19b4441cbc13a2c23ea23d0b2a2764af0fa069e697bca3321f0a8aabcd28af",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  4463,
+                          "end_line":  4476,
+                          "body_sha256":  "b2de3d87b1305516855a2c21157d501b0ba75cb503b0603dff5bcce26578e3ac",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

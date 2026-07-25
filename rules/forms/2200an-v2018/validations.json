@@ -1,0 +1,1073 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200an-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate stops at the first active source-ordered branch; many schedule and date branches are commented out; Save uses a narrow graph.",
+    "rules":  [
+                  {
+                      "rule_id":  "2200an-validate-001-future-month",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Month is after current month and year is current or later.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtMonth",
+                                     "frm2200ANv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date should not be later than the current date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8948-L8952"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-002-future-day",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Day is after today within current month/year.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtMonth",
+                                     "frm2200ANv2018:txtDate",
+                                     "frm2200ANv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date should not be later than the current date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8953-L8955"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-003-future-year",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Year is after current year.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date should not be later than the current date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8956-L8958"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-004-production",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "The corresponding production location selector has selectedIndex 0.",
+                      "fields":  [
+                                     "frm2200ANv2018optRegion"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select the place of production in item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8963-L8968"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-005-production",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "The corresponding production location selector has selectedIndex 0.",
+                      "fields":  [
+                                     "frm2200ANv2018optProvince"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select the place of production in item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8969-L8974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-006-production",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "The corresponding production location selector has selectedIndex 0.",
+                      "fields":  [
+                                     "frm2200ANv2018optCity"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select the place of production in item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8975-L8980"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-007-removal",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "The corresponding removal location selector has selectedIndex 0.",
+                      "fields":  [
+                                     "frm2200ANv2018optRegion1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select the place of removal in item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8982-L8987"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-008-removal",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "The corresponding removal location selector has selectedIndex 0.",
+                      "fields":  [
+                                     "frm2200ANv2018optProvince1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select the place of removal in item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8988-L8993"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-009-removal",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "The corresponding removal location selector has selectedIndex 0.",
+                      "fields":  [
+                                     "frm2200ANv2018optCity1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select the place of removal in item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8994-L8999"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-010-amended",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Neither amended-return radio is selected.",
+                      "fields":  [
+                                     "frm2200ANv2018:AmendedRtn1",
+                                     "frm2200ANv2018:AmendedRtn2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item number 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9023-L9027"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-011-special-tax",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Neither special-tax/tax-relief radio is selected.",
+                      "fields":  [
+                                     "frm2200ANv2018:OptSpecialTax1",
+                                     "frm2200ANv2018:OptSpecialTax2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item number 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9029-L9034"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-012-relief-spec",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Tax relief Yes is selected and list value is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:OptSpecialTax1",
+                                     "frm2200ANv2018:lstSpecialTax"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please specify tax relief in item 12A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9036-L9041"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-013-payment",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "No Item 13-15 manner of payment is selected.",
+                      "fields":  [
+                                     "frm2200ANv2018:MannerOfPayment1",
+                                     "frm2200ANv2018:MannerOfPayment2",
+                                     "frm2200ANv2018:MannerOfPayment3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select from items 13, 14 and 15 the manner of payment.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9043-L9048"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-014-other-payment",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Other Similar Scheme is selected and specification is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:MannerOfPayment3",
+                                     "frm2200ANv2018:MannerOfPaymentOthers"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please specify the other similar schemes in item 15.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9050-L9054"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-015-tin",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtTIN1",
+                                     "frm2200ANv2018:txtTIN2",
+                                     "frm2200ANv2018:txtTIN3",
+                                     "frm2200ANv2018:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9056-L9059"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-016-rdo",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Runtime RDO selectedIndex is 0.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9060-L9064"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-017-name",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9069-L9072"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-018-phone",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Telephone number is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtTelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9073-L9076"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-019-address",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9077-L9080"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-020-zip",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9081-L9084"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-021-duplicate-special-tax",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Neither special-tax radio is selected, after the identical Item 12 check already passed.",
+                      "fields":  [
+                                     "frm2200ANv2018:OptSpecialTax1",
+                                     "frm2200ANv2018:OptSpecialTax2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item 13.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9094-L9098"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "This branch is unreachable because rule 011 checks the same condition first and reports Item 12.",
+                      "recommended_app_behavior":  "Keep one check using the printed item number.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-validate-022-special-tax-list",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Tax relief Yes is selected and list selectedIndex is 0.",
+                      "fields":  [
+                                     "frm2200ANv2018:OptSpecialTax1",
+                                     "frm2200ANv2018:lstSpecialTax"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item 13A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9100-L9107"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The message conflicts with the earlier Item 12A wording.",
+                      "recommended_app_behavior":  "Use the printed item number consistently.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-input-023-ipa",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "IPA code is not blank and not one of the 13 hard-coded codes.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtSched3IPA1",
+                                     "frm2200ANv2018:txtSched3IPA2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid IPA Code! Please refer to IPA Codes in Schedule 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateIPA:L8756-L8772"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-input-024-atc",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "ATC code is not blank and not one of the 13 hard-coded codes.",
+                      "fields":  [
+                                     "Schedule-ATC-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid ATC Code! Please refer to the ATC Codes in Schedule 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateATC:L8818-L8834"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-input-025-treaty-code",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  3,
+                      "condition":  "Treaty code is not blank and not one of the 40 hard-coded codes.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtSched2TreatyCode1",
+                                     "frm2200ANv2018:txtSched2TreatyCode2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid Treaty Code! Please refer to the treaty code in schedule 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateTreatyCode:L8836-L8853"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-input-026-check-date",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  4,
+                      "condition":  "A return-period component makes the date later than today.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtMonth",
+                                     "frm2200ANv2018:txtDate",
+                                     "frm2200ANv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date should not be later than the current date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDate:L9169-L9183"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The alert neither clears nor blocks the value; Validate repeats the check.",
+                      "recommended_app_behavior":  "Return a structured invalid result and block progression.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-027-date-required",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Month, day, or year is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtMonth",
+                                     "frm2200ANv2018:txtDate",
+                                     "frm2200ANv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8945-L8961",
+                                          "official-hta-runtime#validate:L9000-L9013"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The required/year-range block is commented out; blank components can pass comparisons.",
+                      "recommended_app_behavior":  "Require a complete return period.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-028-calendar-date",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Return period is an impossible calendar date such as February 31.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtMonth",
+                                     "frm2200ANv2018:txtDate",
+                                     "frm2200ANv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8945-L8961"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only component comparisons against today run; calendar validity is never checked.",
+                      "recommended_app_behavior":  "Validate the composed calendar date.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-029-line-business",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Line of business is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtLineBus"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Line of Business/Occupation on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9065-L9068"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The entire required branch is commented out.",
+                      "recommended_app_behavior":  "Enforce when legally required.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-030-schedule2",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Schedule 2 rows are incomplete.",
+                      "fields":  [
+                                     "Schedule-2-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Schedule 2 row {row} completely.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L8522-L8598",
+                                          "official-hta-runtime#validate:L9128-L9137"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Every Schedule 2 check and the call from Validate are commented out.",
+                      "recommended_app_behavior":  "Validate each populated row as a unit.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-031-schedule3",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Schedule 3 rows are incomplete.",
+                      "fields":  [
+                                     "Schedule-3-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Schedule 3 row {row} completely.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched3:L8600-L8639",
+                                          "official-hta-runtime#validate:L9128-L9137"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Every substantive Schedule 3 check and the call from Validate are commented out.",
+                      "recommended_app_behavior":  "Validate each populated row as a unit.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-032-overremittance",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Item 24 is negative and no over-remittance disposition is selected.",
+                      "fields":  [
+                                     "frm2200ANv2018:txt24",
+                                     "Over-remittance-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for over-remittance below item 28.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9117-L9127"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The entire branch is commented out and its message references stale Item 28.",
+                      "recommended_app_behavior":  "Use the current printed balance item and require disposition when applicable.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-033-tax-row-manual",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "A fixed Schedule 1 Tax Due is inconsistent with its taxable bases/rate.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtXG021Taxable1",
+                                     "frm2200ANv2018:txtXG021TaxDue",
+                                     "Schedule-1-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#control:L1611-L1629",
+                                          "official-hta-runtime#computeBasicExciseAuto:L9263-L9287"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Tax Due fields are editable; the source sums them but does not derive them from the row bases.",
+                      "recommended_app_behavior":  "Compute each row from the revision-pinned legal rate table.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-save-034-tin",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtTIN1",
+                                     "frm2200ANv2018:txtTIN2",
+                                     "frm2200ANv2018:txtTIN3",
+                                     "frm2200ANv2018:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9785-L9789"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-save-035-rdo",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9790-L9793"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-save-036-name",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Taxpayer/withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9794-L9797"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-037-save-sparse",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Any Validate-only required field is missing.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtAddress",
+                                     "frm2200ANv2018:txtZipCode",
+                                     "frm2200ANv2018:txtTelNum",
+                                     "frm2200ANv2018optCity",
+                                     "frm2200ANv2018optCity1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9785-L9799",
+                                          "official-hta-runtime#validate:L8945-L9150"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save checks only TIN, RDO, and name.",
+                      "recommended_app_behavior":  "Use a shared phase-aware validation graph.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200an-defect-038-validate-year",
+                      "form_id":  "2200an-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  5,
+                      "condition":  "validateYear is invoked.",
+                      "fields":  [
+                                     "frm2200ANv2018:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid year. Year should not be later than the current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L8931-L8942",
+                                          "official-hta-runtime#control:L315-L317"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The only call site is in commented markup; it also uses deprecated getYear, yielding years since 1900.",
+                      "recommended_app_behavior":  "Do not invoke; use full-year typed date validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

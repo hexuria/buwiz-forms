@@ -1,0 +1,249 @@
+{
+    "source_sha256":  "994818ea7b5691656d302d32025a39c6895a032d417871a6080803373436ecca",
+    "function_count":  11,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  1564,
+                          "end_line":  1650,
+                          "body_sha256":  "aa54422092e30448a2db285648d55d815130c8b7474e24632d691eb2ceef4c49",
+                          "alerts":  [
+                                         "\"File \u0027\"+xmlFileName+\"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  1668,
+                          "end_line":  1680,
+                          "body_sha256":  "ebad62c1b598629013ba753eced0c214b40358b86df3c3581c2b344af1c6971d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  1728,
+                          "end_line":  2009,
+                          "body_sha256":  "d847ef00451edd57a06e176c351e4e34eed21c94a39d86e82d34cc3c6dc6a29a",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:optAmend:N",
+                                              "frm0619F:optAmend:Y",
+                                              "frm0619F:txtAddress",
+                                              "frm0619F:txtAddress2",
+                                              "frm0619F:txtBranchCode",
+                                              "frm0619F:txtLineBus",
+                                              "frm0619F:txtRDOCode",
+                                              "frm0619F:txtTax17",
+                                              "frm0619F:txtTax18A",
+                                              "frm0619F:txtTax18B",
+                                              "frm0619F:txtTax18C",
+                                              "frm0619F:txtTax18D",
+                                              "frm0619F:txtTax19",
+                                              "frm0619F:txtTaxpayerName",
+                                              "frm0619F:txtTelNum",
+                                              "frm0619F:txtTIN1",
+                                              "frm0619F:txtTIN2",
+                                              "frm0619F:txtTIN3",
+                                              "frm0619F:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2010,
+                          "end_line":  2202,
+                          "body_sha256":  "40d07ac9489805c1ca19854d3eab492d3f73307a535587a05b59e77404a3a9f5",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:optAmend:N",
+                                              "frm0619F:optAmend:Y",
+                                              "frm0619F:txtAddress",
+                                              "frm0619F:txtAddress2",
+                                              "frm0619F:txtBranchCode",
+                                              "frm0619F:txtLineBus",
+                                              "frm0619F:txtRDOCode",
+                                              "frm0619F:txtTax16",
+                                              "frm0619F:txtTax17A",
+                                              "frm0619F:txtTax17B",
+                                              "frm0619F:txtTax17C",
+                                              "frm0619F:txtTax17D",
+                                              "frm0619F:txtTax18",
+                                              "frm0619F:txtTaxpayerName",
+                                              "frm0619F:txtTelNum",
+                                              "frm0619F:txtTIN1",
+                                              "frm0619F:txtTIN2",
+                                              "frm0619F:txtTIN3",
+                                              "frm0619F:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "checkiftaxwheldisYes",
+                          "start_line":  2259,
+                          "end_line":  2270,
+                          "body_sha256":  "e0b77fd79d6e8fcbf59d86c8978312ceaff251fa52ff596915f9a44d3a289f15",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:optcategory:G",
+                                              "frm0619F:optCategory:P",
+                                              "frm0619F:optWithheld:N",
+                                              "frm0619F:optWithheld:Y"
+                                          ]
+                      },
+                      {
+                          "name":  "computeDueDate",
+                          "start_line":  2326,
+                          "end_line":  2348,
+                          "body_sha256":  "fd171de49d06cf17c73804c80c8d4ed86efe7308a2a0ff1c422cd0a1e04823d9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtDueMonth",
+                                              "frm0619F:txtDueYear",
+                                              "frm0619F:txtMonth",
+                                              "frm0619F:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "validateForm",
+                          "start_line":  2349,
+                          "end_line":  2492,
+                          "body_sha256":  "1383af1ad96fb311820c851b0318d603ed4881498a8cab5dbddc067e276da608",
+                          "alerts":  [
+                                         "\"Please enter a valid month on Item 1.\"",
+                                         "\"Invalid month on Item 1. Month should not be a current Date\"",
+                                         "\"Invalid month on Item 1. Month should not be a future Date\"",
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Invalid year on Item 1. Year should not be a future Date.\"",
+                                         "\"Invalid entry on Item 1. Entry should not be a previous year from 2018.\") d.getElementById(\u0027frm0619F:txtYear\u0027).value = \"\"; d.getElementById(\u0027frm0619F:txtYear\u0027).focus(",
+                                         "\"Please enter a valid Date on Item 2\"",
+                                         "\"Please enter a valid Month on Item 2\"",
+                                         "\"Please enter a valid Day on Item 2\"",
+                                         "\"Year should not be a future Date. Please enter a valid Year on Item 2\"",
+                                         "\"Previous year from 2018 is not applicable for this Form. Please enter a valid Year on Item 2\"",
+                                         "\"Please enter a valid Day on Item 2\"",
+                                         "\"Please enter a valid Day on Item 2\"",
+                                         "\"Please enter a valid Day on Item 2\"",
+                                         "\"Please enter a valid Day on Item 2\"",
+                                         "\"Please enter a valid Day on Item 2\"",
+                                         "\"Please select an option for Item 4.\") return false; } if(d.getElementById(\u0027frm0619F:optCategory:P\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm0619F:optCategory:G\u0027).checked == false){ alert(\"Please select an option for Item 11.\"",
+                                         "\"Please enter a valid TIN number on Item 6.\"",
+                                         "\"Please enter a valid RDO Code on Item 7.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 8.\"",
+                                         "\"Please enter a valid Contact Number on Item 10.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 9.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 9A.\"",
+                                         "\"Please enter valid Email Address on Item 12.\"",
+                                         "\"Please fill up Part II - Tax Remittance if item 4 is set to Yes.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:cmdEdit",
+                                              "frm0619F:cmdValidate",
+                                              "frm0619F:optCategory:G",
+                                              "frm0619F:optCategory:P",
+                                              "frm0619F:optWithheld:N",
+                                              "frm0619F:optWithheld:Y",
+                                              "frm0619F:txtAddress",
+                                              "frm0619F:txtBranchCode",
+                                              "frm0619F:txtDueDay",
+                                              "frm0619F:txtDueMonth",
+                                              "frm0619F:txtDueYear",
+                                              "frm0619F:txtMonth",
+                                              "frm0619F:txtRDOCode",
+                                              "frm0619F:txtTax13",
+                                              "frm0619F:txtTax14",
+                                              "frm0619F:txtTaxpayerName",
+                                              "frm0619F:txtTelNum",
+                                              "frm0619F:txtTIN1",
+                                              "frm0619F:txtTIN2",
+                                              "frm0619F:txtTIN3",
+                                              "frm0619F:txtYear",
+                                              "frm0619F:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  2603,
+                          "end_line":  2629,
+                          "body_sha256":  "20a26f9b28bf73375664f626c5fd577173621aa4d8c4e1e7fdb9c339268c65a6",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 7.\"",
+                                         "\"Please enter a valid RDO Code on Item 8.\"",
+                                         "\"Please enter a valid Withholding Agent\u0027s Name on Item 9.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtBranchCode",
+                                              "frm0619F:txtRDOCode",
+                                              "frm0619F:txtTaxpayerName",
+                                              "frm0619F:txtTIN1",
+                                              "frm0619F:txtTIN2",
+                                              "frm0619F:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  2728,
+                          "end_line":  2820,
+                          "body_sha256":  "ec1debfcc8dd83cf3796abe58b771d42b27c8629ba76dafbd1cdda11cf08e8d5",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtAddress",
+                                              "frm0619F:txtAddress2",
+                                              "frm0619F:txtBranchCode",
+                                              "frm0619F:txtLineBus",
+                                              "frm0619F:txtRDOCode",
+                                              "frm0619F:txtTaxpayerName",
+                                              "frm0619F:txtTelNum",
+                                              "frm0619F:txtTIN1",
+                                              "frm0619F:txtTIN2",
+                                              "frm0619F:txtTIN3",
+                                              "frm0619F:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  3103,
+                          "end_line":  3116,
+                          "body_sha256":  "52ccee1d7987f14a7f3d603fffaae3ed9cd2a5d5d22aea407bdcea3d624593c7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  3293,
+                          "end_line":  3306,
+                          "body_sha256":  "e4586132d0719cd50eaf2b91d105bfd5bdb2f6531ef728a33aeabac8df94cc42",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

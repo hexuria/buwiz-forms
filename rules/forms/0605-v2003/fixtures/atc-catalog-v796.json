@@ -1,0 +1,1144 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0605-v2003",
+    "source_sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+    "count":  142,
+    "entries":  [
+                    {
+                        "source_index":  21,
+                        "code":  "FP010",
+                        "description":  "FINES AND PEN - ON TAX ON INCOME",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  22,
+                        "code":  "FP020",
+                        "description":  "FINES AND PEN - ON TAX ON TRANSFERS OF PROPERTY",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  23,
+                        "code":  "FP030",
+                        "description":  "FINES AND PEN - ON VALUE-ADDED TAX",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  24,
+                        "code":  "FP040",
+                        "description":  "FINES AND PEN - ON OTHER PERCENTAGE TAXES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  25,
+                        "code":  "FP042",
+                        "description":  "FINES AND PEN - ON STOCK TRANS (IPO)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  26,
+                        "code":  "FP050",
+                        "description":  "FINES AND PEN - ON EXCISE TAXES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  27,
+                        "code":  "FP051",
+                        "description":  "FINES AND PEN - ON EXCISE SPECIFIC",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  28,
+                        "code":  "FP060",
+                        "description":  "FINES AND PEN - ON DOCUMENTARY STAMP TAXES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  29,
+                        "code":  "FP070",
+                        "description":  "FINES AND PEN - ON MISCELLANEOUS TAXES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  30,
+                        "code":  "FP071",
+                        "description":  "FINES AND PEN - ON ENERGY TAX",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  31,
+                        "code":  "FP090",
+                        "description":  "OTHERS FINES AND PENALTIES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  32,
+                        "code":  "FP100",
+                        "description":  "FINES AND PEN - CAPITAL GAINS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  33,
+                        "code":  "FP110",
+                        "description":  "FINES AND PEN - ON COMPENSATION",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  34,
+                        "code":  "FP120",
+                        "description":  "FINES AND PEN - ON FINAL",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  35,
+                        "code":  "FP130",
+                        "description":  "FINES AND PEN - ON EXPANDED",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  36,
+                        "code":  "FP140",
+                        "description":  "FINES AND PEN - GOVERNMENT MONEY",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  37,
+                        "code":  "FP141",
+                        "description":  "FINES AND PEN - WINNING AND PRIZES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  38,
+                        "code":  "FP150",
+                        "description":  "FINES AND PEN - BANKS AND FINANCIAL INSTITUTION",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  39,
+                        "code":  "FP160",
+                        "description":  "FINES AND PEN - ESTATE TAX",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  40,
+                        "code":  "FP170",
+                        "description":  "FINES AND PEN - DONORS TAX",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  41,
+                        "code":  "FP180",
+                        "description":  "FINES AND PEN - W/T ON REAL PROP/M VEHICLES NOT SUBJ TO CG",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  42,
+                        "code":  "FP190",
+                        "description":  "FINES AND PEN - REGISTRATION FEE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  43,
+                        "code":  "FP930",
+                        "description":  "FINES AND PEN - INSPECTION FEES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  44,
+                        "code":  "II011",
+                        "description":  "PURE COMPENSATION",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  45,
+                        "code":  "II012",
+                        "description":  "PURE BUSINESS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  46,
+                        "code":  "II013",
+                        "description":  "MIXED INCOME",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  47,
+                        "code":  "MC010",
+                        "description":  "TAX AMNESTY ON INCOME (INDIVIDUAL)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  48,
+                        "code":  "MC020",
+                        "description":  "TAX AMNESTY ON INCOME (CORPORATE)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  49,
+                        "code":  "MC030",
+                        "description":  "COMP. PYMTS ON DELQNT. ACCOUNTS AND DISP. ASSESSMENTS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  50,
+                        "code":  "MC031",
+                        "description":  "DEFICIENCY TAX",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  51,
+                        "code":  "MC040",
+                        "description":  "INCOME FROM FORFEITED PROPERTIES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  52,
+                        "code":  "MC050",
+                        "description":  "PROCEEDS FROM RESALE OF ESTATE TAKEN FOR TAXES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  53,
+                        "code":  "MC060",
+                        "description":  "ENERGY TAX ON EXCESS ELECTRIC POWER CONSUMPTION",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  54,
+                        "code":  "MC090",
+                        "description":  "TIN CARD FEES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  55,
+                        "code":  "MC180",
+                        "description":  "REGISTRATION FEE FOR VAT/NON-VAT TAXPAYERS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  56,
+                        "code":  "MC190",
+                        "description":  "TRAVEL TAX",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  57,
+                        "code":  "MC200",
+                        "description":  "OTHER MISCELLANEOUS TAXES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  58,
+                        "code":  "MC210",
+                        "description":  "MISCELLANEOUS TAXES - OTHER TAX REVENUE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  59,
+                        "code":  "MC220",
+                        "description":  "ADVANCE PAYMENT OF VALUE ADDED TAX ON PRIVILEGE STORE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  60,
+                        "code":  "MC230",
+                        "description":  "ADVANCE PAYMENT OF INCOME TAX  ON PRIVILEGE STORE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  61,
+                        "code":  "MC240",
+                        "description":  "ADVANCE PAYMENT OF PERCENTAGE TAX ON PRIVILEGE STORE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  62,
+                        "code":  "VM160",
+                        "description":  "VAT ON MANUFACTURING - SUGAR",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  63,
+                        "code":  "XA010",
+                        "description":  "DIST SPIR PROD FR SAP OF NIPA, ETC UND SEC 138(a)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  64,
+                        "code":  "XA020",
+                        "description":  "DIST SPIRIT PROD IN A POT STILL",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  65,
+                        "code":  "XA031",
+                        "description":  "DIST SPRT O.T. SAP OF NIPA, ETC UND SEC. 141 (B)(1)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  66,
+                        "code":  "XA032",
+                        "description":  "DIST SPRT O.T. SAP OF NIPA, ETC UND SEC. 141 (B)(2)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  67,
+                        "code":  "XA033",
+                        "description":  "DIST SPRT O.T. SAP OF NIPA, ETC UND SEC. 141 (B)(3)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  68,
+                        "code":  "XA040",
+                        "description":  "MEDICINAL PREP FLAVORING EXTRACTS AND ALL OTHER PREP",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  69,
+                        "code":  "XA051",
+                        "description":  "BEER, LGR BEER, ALE, PRTR FERMIN LIQ, ETC UND SEC 143 (A)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  70,
+                        "code":  "XA052",
+                        "description":  "BEER, LGR BEER, ALE, PRTR FERMIN LIQ, ETC UND SEC 143 (B)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  71,
+                        "code":  "XA053",
+                        "description":  "BEER, LGR BEER, ALE, PRTR FERMIN LIQ, ETC UND SEC 143 (C)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  72,
+                        "code":  "XA061",
+                        "description":  "SPARKLING WINES/CHAMPAGNE, ETC UND SEC 142 (A)(1)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  73,
+                        "code":  "XA062",
+                        "description":  "SPARKLING WINES/CHAMPAGNE, ETC UND SEC 142 (A)(2)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  74,
+                        "code":  "XA070",
+                        "description":  "STILL WINES CONTAINING 14% ALCOHOL OR LESS ALCOHOL",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  75,
+                        "code":  "XA080",
+                        "description":  "STILL WINES CONTAINING OVER 14% ALCOHOL",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  76,
+                        "code":  "XA090",
+                        "description":  "FORTIFIED WINES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  77,
+                        "code":  "XB010",
+                        "description":  "SWEETENED JUICE DRINKS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  78,
+                        "code":  "XB020",
+                        "description":  "SWEETENED TEA",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  79,
+                        "code":  "XB030",
+                        "description":  "CARBONATED BEVERAGES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  80,
+                        "code":  "XB040",
+                        "description":  "FLAVORED WATER",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  81,
+                        "code":  "XB050",
+                        "description":  "ENERGY AND SPORTS DRINKS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  82,
+                        "code":  "XB060",
+                        "description":  "POWDERED DRINKS NOT CLASSIFIED AS MILK, JUICE, TEA AND COFFEE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  83,
+                        "code":  "XB070",
+                        "description":  "CEREAL AND GRAIN BEVERAGES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  84,
+                        "code":  "XB080",
+                        "description":  "OTHER NON-ALCOHOLIC BEVERAGES THAT CONTAIN ADDED SUGAR",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  85,
+                        "code":  "XB090",
+                        "description":  "USING PURELY HIGH FRUCTOSE CORN SYRUP",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  86,
+                        "code":  "XB100",
+                        "description":  "USING PURELY COCONUT SAP SUGAR AND PURELY STEVIOL GLYCOSIDES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  87,
+                        "code":  "XC010",
+                        "description":  "PERFORMANCE OF SERVICES ON INVASIVE COSMETIC PROCEDURES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  88,
+                        "code":  "XG020",
+                        "description":  "AUTOMOBILES (GASOLINE), ENGINE DISPL UP TO 1600CC",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  89,
+                        "code":  "XG030",
+                        "description":  "AUTOMOBILES (GASOLINE), ENGINE DISPL OF 1601 TO 2000CC",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  90,
+                        "code":  "XG040",
+                        "description":  "AUTOMOBILES (GASOLINE), ENGINE DISPL OF 2001 TO 2700CC",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  91,
+                        "code":  "XG050",
+                        "description":  "AUTOMOBILES (GASOLINE), ENG DISPL 2701 OR OVER",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  92,
+                        "code":  "XG060",
+                        "description":  "AUTOMOBILES (DIESEL), ENG DISPL UP TO 1800CC",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  93,
+                        "code":  "XG070",
+                        "description":  "AUTOMOBILES (DIESEL), ENG DISPL OF 1801 TO 2300CC",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  94,
+                        "code":  "XG080",
+                        "description":  "AUTOMOBILES (DIESEL), ENG DISPL OF 2301 TO 3000CC",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  95,
+                        "code":  "XG090",
+                        "description":  "AUTOMOBILES (DIESEL), ENG DISPL OF 3001CC OR OVER",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  96,
+                        "code":  "XG100",
+                        "description":  "JEWELRY",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  97,
+                        "code":  "XG110",
+                        "description":  "PERFUMES AND TOILET WATERS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  98,
+                        "code":  "XG120",
+                        "description":  "YACHTS AND OTHER VESSELS INTENDED FOR PLEASURE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  99,
+                        "code":  "XM010",
+                        "description":  "COAL AND COKE",
+                        "rate":  "\u003c!--10.00/null--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  100,
+                        "code":  "XM020",
+                        "description":  "NON-METALLIC MINERALS AND QUARRY RESOURCES",
+                        "rate":  "2.0",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  101,
+                        "code":  "XM030",
+                        "description":  "GOLD AND CHROMITE",
+                        "rate":  "2.0",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  102,
+                        "code":  "XM040",
+                        "description":  "COPPER AND OTHER METALLIC MINERALS",
+                        "rate":  "2.0",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  103,
+                        "code":  "XM050",
+                        "description":  "INDIGENOUS PETROLEUM",
+                        "rate":  "3.0",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  104,
+                        "code":  "XM051",
+                        "description":  "LOCALLY EXTRACTED NATURAL GAS AND LIQUIFIED NATURAL GAS",
+                        "rate":  "2.0",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  105,
+                        "code":  "XP010",
+                        "description":  "LUBRICATING OIL",
+                        "rate":  "\u003c!--P4.50/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  106,
+                        "code":  "XP020",
+                        "description":  "GREASE",
+                        "rate":  "\u003c!--P4.50/Kilo--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  107,
+                        "code":  "XP030",
+                        "description":  "PROCESSED GAS",
+                        "rate":  "\u003c!--P0.05/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  108,
+                        "code":  "XP040",
+                        "description":  "WAXES AND PETROLATUM",
+                        "rate":  "\u003c!--P3.50/Kilo--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  109,
+                        "code":  "XP060",
+                        "description":  "PREMIUM GASOLINE - UNLEADED",
+                        "rate":  "\u003c!--P4.35/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  110,
+                        "code":  "XP070",
+                        "description":  "PREMIUM GASOLINE - LEADED",
+                        "rate":  "\u003c!--P5.35/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  111,
+                        "code":  "XP080",
+                        "description":  "REGULAR GASOLINE",
+                        "rate":  "\u003c!--P4.35/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  112,
+                        "code":  "XP090",
+                        "description":  "NAPTHA",
+                        "rate":  "\u003c!--P4.35/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  113,
+                        "code":  "XP100",
+                        "description":  "NAPTHA TO USED FOR PETRO-CHEMICAL",
+                        "rate":  "\u003c!--P0.0/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  114,
+                        "code":  "XP110",
+                        "description":  "AVIATION GASOLINE",
+                        "rate":  "\u003c!--P5.35/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  115,
+                        "code":  "XP120",
+                        "description":  "AVIATION TURBO JET FUEL",
+                        "rate":  "\u003c!--P3.67/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  116,
+                        "code":  "XP130",
+                        "description":  "KEROSENE",
+                        "rate":  "\u003c!--P0.0/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  117,
+                        "code":  "XP131",
+                        "description":  "KEROSENE USED AS AVIATION FUEL",
+                        "rate":  "\u003c!--P3.67/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  118,
+                        "code":  "XP140",
+                        "description":  "DIESEL FUEL AND SIMILAR FUEL OILS",
+                        "rate":  "\u003c!--P0.0/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  119,
+                        "code":  "XP150",
+                        "description":  "LPG USED FOR MOTIVE POWER",
+                        "rate":  "\u003c!--P0.0/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  120,
+                        "code":  "XP160",
+                        "description":  "LPG",
+                        "rate":  "\u003c!--P0.0/Kilo--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  121,
+                        "code":  "XP170",
+                        "description":  "ASPHALTS",
+                        "rate":  "\u003c!--P0.56/Kilo--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  122,
+                        "code":  "XP180",
+                        "description":  "BUNKER/REFINERY FUEL/FEEDSTOCK",
+                        "rate":  "\u003c!--P0.0/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  123,
+                        "code":  "XP190",
+                        "description":  "BASESTOCKS FOR LUBRICATING OIL SAND GREASES, HVD, ETC.",
+                        "rate":  "\u003c!--P4.5/Liter--\u003e",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  124,
+                        "code":  "XT010",
+                        "description":  "SMOKING TOBACCO AND OTHER PARTIALLY MANUF TOBACCO",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  125,
+                        "code":  "XT020",
+                        "description":  "CHEWING TOBACCO",
+                        "rate":  "0.94",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  126,
+                        "code":  "XT030",
+                        "description":  "CIGARS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  127,
+                        "code":  "XT040",
+                        "description":  "CIGARETTES PACKED BY HAND",
+                        "rate":  "2.72",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  128,
+                        "code":  "XT050",
+                        "description":  "CIGARETTES PACKED BY MACHINE, SEC 145 (C)(1)",
+                        "rate":  "28.30",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  129,
+                        "code":  "XT060",
+                        "description":  "CIGARETTES PACKED BY MACHINE, SEC 145 (C)(2)",
+                        "rate":  "12.0",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  130,
+                        "code":  "XT070",
+                        "description":  "CIGARETTES PACKED BY MACHINE, SEC 145 (C)(3)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  131,
+                        "code":  "XT080",
+                        "description":  "TOBACCO INSPECT FEES FOR EACH THOUSAND CIGARS",
+                        "rate":  "0.50",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  132,
+                        "code":  "XT090",
+                        "description":  "TOBACCO INSPECT FEES FOR EACH THOUSAND CIGARETTES",
+                        "rate":  "0.10",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  133,
+                        "code":  "XT100",
+                        "description":  "TOBACCO INSPECT FEE PER KG OF LEAF TOBACCO AND OTHER",
+                        "rate":  "0.02",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  134,
+                        "code":  "XT110",
+                        "description":  "PER KG OF SCRAPS AND OTHER MANUF TOBACCO PROD",
+                        "rate":  "0.03",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  135,
+                        "code":  "XT120",
+                        "description":  "ADDL IMPT BLENDING TOBACCO INSPECT AND MONITOR FEE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  136,
+                        "code":  "XT130",
+                        "description":  "CIGARETTES PACKED BY MACHINE, SEC. 145 (C)(4)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1035,
+                        "code":  "DS010",
+                        "description":  "DOCUMENTARY STAMP TAX IN GENERAL",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1036,
+                        "code":  "IC080",
+                        "description":  "INCOME TAX ON INTERNATIONAL CARRIERS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1042,
+                        "code":  "PT010",
+                        "description":  "PERSONS EXEMPT FROM VAT UNDER SEC. 109(BB) (SEC. 116)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1043,
+                        "code":  "PT040",
+                        "description":  "DOMESTIC CARRIERS AND KEEPERS OF GARAGES (SEC. 117)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1044,
+                        "code":  "PT041",
+                        "description":  "PERCENTAGE TAX ON INTERNATIONAL CARRIERS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1045,
+                        "code":  "PT060",
+                        "description":  "FRANCHISES ON GAS AND WATER UTILITIES (SEC. 119)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1046,
+                        "code":  "PT070",
+                        "description":  "FRANCHISES ON RADIO/TV BROADCASTING COMPANIES WHOSE ANNUAL GROSS RECEIPTS DO NOT EXCEED P10 M (SEC. 119)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1047,
+                        "code":  "PT090",
+                        "description":  "OVERSEAS DISPATCH, MESSAGE OR CONVERSATION ORIGINATING FROM THE PHILIPPINES (SEC. 120)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1048,
+                        "code":  "PT140",
+                        "description":  "COCKPITS (SEC. 125)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1049,
+                        "code":  "PT150",
+                        "description":  "TAX ON AMUSEMENT PLACES, SUCH AS CABARETS, NIGHT AND DAY CLUBS, VIDEOKE BARS, KARAOKE BARS, KARAOKE TELEVISION, KARAOKE BOXES, MUSIC LOUNGES AND OTHER SIMILAR ESTABLISHMENTS (SEC. 125)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1050,
+                        "code":  "PT160",
+                        "description":  "BOXING EXHIBITION (SEC. 125)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1051,
+                        "code":  "PT170",
+                        "description":  "PROFESSIONAL BASKETBALL GAMES (SEC. 125)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1052,
+                        "code":  "PT180",
+                        "description":  "JAI-ALAI AND RACE TRACKS (SEC. 125)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1053,
+                        "code":  "PT105",
+                        "description":  "ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF REMAINING MATURITIES OF INSTRUMENTS FROM WHICH SUCH RECEIPTS ARE DERIVED. MATURITY PERIOD IS FIVE (5) YEARS OR LESS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1054,
+                        "code":  "PT101",
+                        "description":  "ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF REMAINING MATURITIES OF INSTRUMENTS FROM WHICH SUCH RECEIPTS ARE DERIVED. MATURITY PERIOD IS MORE THAN FIVE (5) YEARS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1055,
+                        "code":  "PT102",
+                        "description":  "ON DIVIDENDS AND EQUITY SHARES AND NET INCOME OF SUBSIDIARIES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1056,
+                        "code":  "PT103",
+                        "description":  "ON ROYALTIES, RENTALS OF PROPERTY, REAL OR PERSONAL, PROFITS FROM EXCHANGE AND ALL OTHER GROSS INCOME",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1057,
+                        "code":  "PT104",
+                        "description":  "ON NET TRADING GAINS WITHIN THE TAXABLE YEAR ON FOREIGN CURRENCY, DEBT SECURITIES, DERIVATIVES AND OTHER FINANCIAL INSTRUMENTS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1058,
+                        "code":  "PT113",
+                        "description":  "ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF REMAINING MATURITIES OF INSTRUMENTS FROM WHICH SUCH RECEIPTS ARE DERIVED. MATURITY PERIOD IS FIVE (5) YEARS OR LESS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1059,
+                        "code":  "PT114",
+                        "description":  "ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF REMAINING MATURITIES OF INSTRUMENTS FROM WHICH SUCH RECEIPTS ARE DERIVED. MATURITY PERIOD IS MORE THAN FIVE (5) YEARS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1060,
+                        "code":  "PT115",
+                        "description":  "FROM ALL OTHER ITEMS TREATED AS GROSS INCOME UNDER THE CODE",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1061,
+                        "code":  "PT120",
+                        "description":  "LIFE INSURANCE PREMIUMS (SEC. 123)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1062,
+                        "code":  "PT130",
+                        "description":  "INSURANCE AGENTS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1063,
+                        "code":  "PT132",
+                        "description":  "OWNERS OF PROPERTY OBTAINING INSURANCE DIRECTLY WITH FOREIGN INSURANCE COMPANIES",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1071,
+                        "code":  "EXB10",
+                        "description":  "EXCISE TAX ON EXPORT OF SWEETENED JUICE DRINKS",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    },
+                    {
+                        "source_index":  1075,
+                        "code":  "WV110",
+                        "description":  "VAT ON LOCAL SALES OF REGISTERED BUSINESS ENTERPRISES (RBEs)",
+                        "rate":  "",
+                        "category":  "",
+                        "form_binding":  "0605"
+                    }
+                ]
+}

@@ -1,0 +1,12 @@
+{"schema_version":"1.0.0","form_id":"1601fq-v2018","cases":[
+{"case_id":"row-basic","calculation_id":"1601fq-row-withheld","inputs":{"base":"100.00","rate":"5.0"},"official_output":"5.00"},
+{"case_id":"row-half-centavo","calculation_id":"1601fq-row-withheld","inputs":{"base":"0.10","rate":"5.0"},"official_output":"0.01"},
+{"case_id":"item20","calculation_id":"1601fq-part2-item20","inputs":{"rows":[1,2,3]},"official_output":"6.00"},
+{"case_id":"item22","calculation_id":"1601fq-part2-item22","inputs":{"item20":6,"item21":4},"official_output":"10.00"},
+{"case_id":"item26","calculation_id":"1601fq-part2-item26","inputs":{"item23":1,"item24":2,"item25":3},"official_output":"6.00"},
+{"case_id":"item27-negative","calculation_id":"1601fq-part2-item27","inputs":{"item22":5,"item26":10},"official_output":"-5.00"},
+{"case_id":"item31","calculation_id":"1601fq-part2-item31","inputs":{"item28":1,"item29":2,"item30":3},"official_output":"6.00"},
+{"case_id":"item32","calculation_id":"1601fq-part2-item32","inputs":{"item27":-5,"item31":6},"official_output":"1.00"},
+{"case_id":"schedule-row","calculation_id":"1601fq-sched1-row-withheld","inputs":{"income":100,"rate":15},"official_output":"15.00"},
+{"case_id":"additional-total","calculation_id":"1601fq-additional-atc-total","inputs":{"rows7plus":[1,2]},"official_output":"3.00"}
+]}

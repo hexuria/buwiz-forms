@@ -1,0 +1,416 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1600pt-v2018",
+    "package_version":  "7.9.6.0",
+    "source_sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+    "selection_semantics":  "AtcCodeN is the Nth entry after filtering by Item 10 category; PG records appear in both ordered lists, so slot meanings differ between P and G.",
+    "private_slot_count":  6,
+    "government_slot_count":  31,
+    "unreachable_record_count":  0,
+    "entry_count":  31,
+    "entries":  [
+                    {
+                        "source_index":  994,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  1
+                                         },
+                        "code":  "WB030",
+                        "description":  "TAX ON CARRIERS AND KEEPERS OF GARAGES",
+                        "catalog_rate":  "3.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  995,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  2
+                                         },
+                        "code":  "WB040",
+                        "description":  "FRANCHISE TAX ON GAS AND UTILITIES",
+                        "catalog_rate":  "2.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  996,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  3
+                                         },
+                        "code":  "WB050",
+                        "description":  "FRANCHISE TAX ON RADIO \u0026 RADIO \u0026 TV BROADCASTING COMPANIES WHOSE ANNUAL GROSS RECEIPTS DO NOT EXCEED P10M \u0026 WHO ARE NOT VAT-REGISTERED TAXPAYERS",
+                        "catalog_rate":  "3.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  997,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  4
+                                         },
+                        "code":  "WB070",
+                        "description":  "TAX ON LIFE INSURANCE PREMIUMS",
+                        "catalog_rate":  "2.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  998,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  1,
+                                             "government":  5
+                                         },
+                        "code":  "WB080",
+                        "description":  "PERSONS EXEMPT FROM VAT UNDER SEC. 109BB (CREDITABLE)-GOVERNMENT WITHHOLDING AGENT",
+                        "catalog_rate":  "3.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  999,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  2,
+                                             "government":  6
+                                         },
+                        "code":  "WB080",
+                        "description":  "PERSONS EXEMPT FROM VAT UNDER SEC. 109BB (CREDITABLE)-GOVERNMENT WITHHOLDING AGENT",
+                        "catalog_rate":  "1.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1000,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  3,
+                                             "government":  7
+                                         },
+                        "code":  "WB082",
+                        "description":  "PERSONS EXEMPT FROM VAT UNDER SEC. 109BB (CREDITABLE)-PRIVATE WITHHOLDING AGENT",
+                        "catalog_rate":  "3.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1001,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  4,
+                                             "government":  8
+                                         },
+                        "code":  "WB082",
+                        "description":  "PERSONS EXEMPT FROM VAT UNDER SEC. 109BB (CREDITABLE)-PRIVATE WITHHOLDING AGENT",
+                        "catalog_rate":  "1.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1002,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  5,
+                                             "government":  9
+                                         },
+                        "code":  "WB084",
+                        "description":  "PERSONS EXEMPT FROM VAT UNDER SECTION 109BB (FINAL) (SECTION 116 APPLIES)",
+                        "catalog_rate":  "3.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1003,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  6,
+                                             "government":  10
+                                         },
+                        "code":  "WB084",
+                        "description":  "PERSONS EXEMPT FROM VAT UNDER SECTION 109BB (FINAL) (SECTION 116 APPLIES)",
+                        "catalog_rate":  "1.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1004,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  11
+                                         },
+                        "code":  "WB090",
+                        "description":  "TAX ON OVERSEAS DISPATCH, MESSAGE OR CONVERSATION FROM THE PHILIPPINES",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1005,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  12
+                                         },
+                        "code":  "WB120",
+                        "description":  "BUSINESS TAX ON AGENTS OF FOREIGN INSURANCE COMPANIES – INSURANCE AGENTS",
+                        "catalog_rate":  "4.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1006,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  13
+                                         },
+                        "code":  "WB121",
+                        "description":  "BUSINESS TAX ON AGENTS OF FOREIGN INSURANCE COMPANIES – OWNER OF THE PROPERTY",
+                        "catalog_rate":  "5.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1007,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  14
+                                         },
+                        "code":  "WB130",
+                        "description":  "TAX ON INTERNATIONAL CARRIERS",
+                        "catalog_rate":  "3.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1008,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  15
+                                         },
+                        "code":  "WB140",
+                        "description":  "TAX ON COCKPITS",
+                        "catalog_rate":  "18.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1009,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  16
+                                         },
+                        "code":  "WB150",
+                        "description":  "TAX ON AMUSEMENT PLACES, SUCH AS CABARETS, NIGHT AND DAY CLUBS, VIDEOKE BARS, KARAOKE BARS, KARAOKE TELEVISION, KARAOKE BOXES, MUSIC LOUNGES AND OTHER SIMILAR ESTABLISHMENTS",
+                        "catalog_rate":  "18.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1010,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  17
+                                         },
+                        "code":  "WB160",
+                        "description":  "TAX ON BOXING EXHIBITIONS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1011,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  18
+                                         },
+                        "code":  "WB170",
+                        "description":  "TAX ON PROFESSIONAL BASKETBALL GAMES",
+                        "catalog_rate":  "15.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1012,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  19
+                                         },
+                        "code":  "WB180",
+                        "description":  "TAX ON JAI-ALAI AND RACE TRACKS",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1013,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  20
+                                         },
+                        "code":  "WB200",
+                        "description":  "TAX ON SALE, BARTER OR EXCHANGE OF STOCKS LISTED AND TRADED THROUGH LOCAL STOCK EXCHANGE",
+                        "catalog_rate":  "0.6",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1014,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  21
+                                         },
+                        "code":  "WB201",
+                        "description":  "TAX ON SHARES OF STOCK SOLD OR EXCHANGED THROUGH INITIAL AND SECONDARY PUBLIC OFFERING: NOT OVER 25%",
+                        "catalog_rate":  "4.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1015,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  22
+                                         },
+                        "code":  "WB202",
+                        "description":  "TAX ON SHARES OF STOCK SOLD OR EXCHANGED THROUGH INITIAL AND SECONDARY PUBLIC OFFERING: OVER 25% BUT NOT EXCEEDING 33 1/3%",
+                        "catalog_rate":  "2.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1016,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  23
+                                         },
+                        "code":  "WB203",
+                        "description":  "TAX ON SHARES OF STOCK SOLD OR EXCHANGED THROUGH INITIAL AND SECONDARY PUBLIC OFFERING: OVER 33 1/3%",
+                        "catalog_rate":  "1.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1017,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  24
+                                         },
+                        "code":  "WB301",
+                        "description":  "TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI BANKING FUNCTIONS (ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF THE REMAINING MATURITIES OF INSTRUMENT FROM WHICH SUCH RECEIPTS ARE DERIVED: MATURITY PERIOD IS FIVE YEARS OR LESS)",
+                        "catalog_rate":  "5.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1018,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  25
+                                         },
+                        "code":  "WB303",
+                        "description":  "TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI BANKING FUNCTIONS (ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF THE REMAINING MATURITIES OF INSTRUMENT FROM WHICH SUCH RECEIPTS ARE DERIVED: MATURITY PERIOD IS MORE THAN FIVE YEARS)",
+                        "catalog_rate":  "1.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1019,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  26
+                                         },
+                        "code":  "WB102",
+                        "description":  "TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI BANKING FUNCTIONS (ON DIVIDENDS AND EQUITY SHARES AND NET INCOME OF SUBSIDIARIES)",
+                        "catalog_rate":  "0.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1020,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  27
+                                         },
+                        "code":  "WB103",
+                        "description":  "TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI BANKING FUNCTIONS (ON ROYALTIES, RENTALS OF PROPERTY, REAL OR PERSONAL, PROFITS FROM EXCHANGE AND ALL OTHER ITEMS TREATED AS GROSS INCOME UNDER THE CODE)",
+                        "catalog_rate":  "7.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1021,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  28
+                                         },
+                        "code":  "WB104",
+                        "description":  "TAX ON BANKS AND NON-BANK FINANCIAL INTERMEDIARIES PERFORMING QUASI BANKING FUNCTIONS (ON NET TRADING GAINS WITHIN THE TAXABLE YEAR ON FOREIGN CURRENCY, DEBT SECURITIES, DERIVATIVES AND OTHER SIMILAR FINANCIAL INSTRUMENTS)",
+                        "catalog_rate":  "7.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1022,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  29
+                                         },
+                        "code":  "WB108",
+                        "description":  "TAX ON OTHER NON-BANKS FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF THE REMAINING MATURITIES OF INSTRUMENT FROM WHICH SUCH RECEIPTS ARE DERIVED: MATURITY PERIOD IS FIVE YEARS OR LESS)",
+                        "catalog_rate":  "5.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1023,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  30
+                                         },
+                        "code":  "WB109",
+                        "description":  "TAX ON OTHER NON-BANKS FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (ON INTEREST, COMMISSIONS AND DISCOUNTS FROM LENDING ACTIVITIES AS WELL AS INCOME FROM FINANCIAL LEASING, ON THE BASIS OF THE REMAINING MATURITIES OF INSTRUMENT FROM WHICH SUCH RECEIPTS ARE DERIVED: MATURITY PERIOD IS MORE THAN FIVE YEARS)",
+                        "catalog_rate":  "1.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1024,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  31
+                                         },
+                        "code":  "WB110",
+                        "description":  "TAX ON OTHER NON-BANKS FINANCIAL INTERMEDIARIES NOT PERFORMING QUASI-BANKING FUNCTIONS (ON ALL OTHER ITEMS TREATED AS GROSS INCOME UNDER THE CODE)",
+                        "catalog_rate":  "5.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    }
+                ]
+}

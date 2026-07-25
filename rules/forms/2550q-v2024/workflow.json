@@ -1,0 +1,179 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "revision":  "2024-04-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#controls-and-modals"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Two-page quarterly VAT return with four additional-item tables and three unbounded schedules."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L9065-L9080",
+                                           "official-hta-runtime#saveXML:L5160-L5320"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only nonblank TIN pieces, RDO not equal to 000, and taxpayer name, then writes 160 plaintext keys including generated dateFiled."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L8407-L8620"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Ordered main validation runs, then disables controls and announces success."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "xml-final-copy-v1",
+                                           "official-hta-runtime#openAlertEmail:L9679-L9758",
+                                           "official-hta-runtime#saveEncryptedProfile:L5194-L5267",
+                                           "official-string-util-runtime#checkNetConnection:L910-L933",
+                                           "candidate-final-copy-submit-workflow-review#exact-pinned-call-graph"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The button combines Final Copy and Submit. In the pinned runtime checkNetConnection always returns true, so the ordinary confirmed path opens online enrollment; later Submit writes an editable save and encrypted-copy staging artifact before transport. The encrypted artifact has 159 pseudo-div keys plus standalone dateFiled metadata."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L9878-L10002",
+                                           "official-ebir-tools-runtime#RenameAndSendFile",
+                                           "candidate-final-copy-submit-workflow-review#exact-pinned-call-graph"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists in source and is intertwined with Final Copy artifact creation, but was intentionally not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes a plaintext local save with generated dateFiled."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L9065-L9080"
+                                            ],
+                            "guard":  "Save preflight passes."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L8407-L8620"
+                                            ],
+                            "guard":  "All ordered main and applicable schedule checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L8622-L9064"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy / open enrollment",
+                            "side_effects":  [
+                                                 "On the pinned reachable branch, hides the form and opens enrollment/credential UI; it does not yet write the encrypted artifact.",
+                                                 "A source-present no-connection branch would write a local encrypted artifact, but checkNetConnection returns true before that branch."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#openAlertEmail:L9679-L9758",
+                                                "official-string-util-runtime#checkNetConnection:L910-L933",
+                                                "candidate-final-copy-submit-workflow-review#documented-only-transition-decision"
+                                            ],
+                            "guard":  "txtFinalFlag is not the broken retry value 2; save-file/amended/version checks pass; the user confirms; the pinned connection helper returns true."
+                        },
+                        {
+                            "action":  "Submit after enrollment",
+                            "side_effects":  [
+                                                 "Reruns Save preflight, writes the editable save, writes and externally encrypts the Final Copy staging artifact, then invokes external transport.",
+                                                 "No online submission was performed during research."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L9878-L10002",
+                                                "official-hta-runtime#saveEncryptedProfile:L5194-L5267",
+                                                "official-hta-runtime#saveXML:L5357-L5646",
+                                                "official-ebir-tools-runtime#EncryptFile:L96-L109",
+                                                "candidate-final-copy-submit-workflow-review#documented-only-transition-decision"
+                                            ],
+                            "guard":  "Credential/enrollment checks pass, fresh Save preflight and filesystem/version guards pass, serialization and external encryption complete, and external transport returns success."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Exact April 2024 ENCS revision",
+                          "Complete applicable background fields and schedules"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "applicable-vat-support",
+                                     "label":  "Applicable VAT schedules and supporting documents",
+                                     "source_refs":  [
+                                                         "official-guidelines-pdf"
+                                                     ],
+                                     "required_when":  "Required by the return facts and official guidelines.",
+                                     "official_ui_enforcement":  "Local Validate does not comprehensively enforce attachments.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help",
+                                                     "official-guidelines-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Within twenty-five days following the close of the taxable quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help",
+                                                     "official-guidelines-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Within twenty-five days following the close of the taxable quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help",
+                                                     "official-guidelines-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Within twenty-five days following the close of the taxable quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-installed-help",
+                                                     "official-guidelines-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Within twenty-five days following the close of the taxable quarter."
+                             }
+                         ]
+}

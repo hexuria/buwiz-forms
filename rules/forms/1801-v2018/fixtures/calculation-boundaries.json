@@ -1,0 +1,55 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1801-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "six-percent",
+                      "inputs":  {
+                                     "rate_percent":  6,
+                                     "taxable_estate":  1000000
+                                 },
+                      "calculation_id":  "1801-estate-tax-due",
+                      "official_output":  60000
+                  },
+                  {
+                      "case_id":  "nonpositive-estate",
+                      "inputs":  {
+                                     "rate_percent":  6,
+                                     "taxable_estate":  -1
+                                 },
+                      "calculation_id":  "1801-estate-tax-due",
+                      "official_output":  0
+                  },
+                  {
+                      "case_id":  "resident-deduction-cap",
+                      "accepted":  true,
+                      "rule_id":  "1801-validate-017-standard-ded-resident",
+                      "input":  5000000
+                  },
+                  {
+                      "case_id":  "nonresident-deduction-cap",
+                      "accepted":  true,
+                      "rule_id":  "1801-validate-016-standard-ded-nonresident",
+                      "input":  500000
+                  },
+                  {
+                      "case_id":  "negative-balance-no-penalty",
+                      "inputs":  {
+                                     "penalties":  0,
+                                     "balance":  -100
+                                 },
+                      "recommended_output":  0,
+                      "calculation_id":  "1801-total-payable",
+                      "official_output":  -100
+                  },
+                  {
+                      "case_id":  "negative-balance-with-penalty",
+                      "inputs":  {
+                                     "penalties":  25,
+                                     "balance":  -100
+                                 },
+                      "calculation_id":  "1801-total-payable",
+                      "official_output":  25
+                  }
+              ]
+}

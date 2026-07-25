@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/workflow-transition-result.schema.json",
+  "title": "eBIRForms executable workflow transition result",
+  "$defs": {
+    "workflow_action": {
+      "enum": [
+        "edit",
+        "save",
+        "validate",
+        "final-copy",
+        "submit",
+        "print-preview"
+      ]
+    },
+    "workflow_notification": {
+      "type": "object",
+      "required": [
+        "channel",
+        "message",
+        "official_message"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "alert"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "official_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "workflow_transition_invocation": {
+      "type": "object",
+      "required": [
+        "current_state",
+        "action",
+        "expected"
+      ],
+      "properties": {
+        "current_state": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "action": {
+          "$ref": "#/$defs/workflow_action"
+        },
+        "expected": {
+          "$ref": "#/$defs/workflow_transition_result"
+        }
+      },
+      "additionalProperties": false
+    },
+    "workflow_transition_result": {
+      "type": "object",
+      "required": [
+        "rule_set",
+        "context",
+        "input_revision",
+        "context_fingerprint",
+        "transition_id",
+        "from_state",
+        "action",
+        "to_state",
+        "notifications"
+      ],
+      "properties": {
+        "rule_set": {
+          "$ref": "common.schema.json#/$defs/form_revision_key"
+        },
+        "context": {
+          "$ref": "common.schema.json#/$defs/validation_context"
+        },
+        "input_revision": {
+          "$ref": "common.schema.json#/$defs/input_revision"
+        },
+        "context_fingerprint": {
+          "$ref": "common.schema.json#/$defs/context_fingerprint"
+        },
+        "transition_id": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "from_state": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "action": {
+          "$ref": "#/$defs/workflow_action"
+        },
+        "to_state": {
+          "$ref": "common.schema.json#/$defs/runtime_stable_id"
+        },
+        "notifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/workflow_notification"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/workflow_transition_result"
+}

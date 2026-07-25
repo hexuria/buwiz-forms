@@ -1,0 +1,43 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1601c-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "non-taxable-total",
+                      "inputs":  [
+                                     100,
+                                     200,
+                                     300,
+                                     400,
+                                     500,
+                                     600
+                                 ],
+                      "calculation_id":  "1601c-item21-nontaxable-total",
+                      "official_output":  2100
+                  },
+                  {
+                      "case_id":  "schedule-adjustment-overpayment",
+                      "calculation_id":  "1601c-schedule-row-adjustment",
+                      "official_output":  -25,
+                      "tax_paid":  125,
+                      "should_tax_due":  100
+                  },
+                  {
+                      "case_id":  "three-row-schedule-total",
+                      "adjustments":  [
+                                          10,
+                                          -5,
+                                          20
+                                      ],
+                      "calculation_id":  "1601c-schedule-total",
+                      "official_output":  25
+                  },
+                  {
+                      "case_id":  "total-still-due",
+                      "official_output":  1060,
+                      "calculation_id":  "1601c-item36-total-still-due",
+                      "item35":  60,
+                      "item31":  1000
+                  }
+              ]
+}

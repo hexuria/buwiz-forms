@@ -7,31 +7,239 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use bir_rules::{RawValue, StableInstanceId};
+
+use crate::form_rules::{
+    form_2550q_group_bindings, form_2550q_singleton_field_ids,
+    seed_raw_editor_state_from_reviewed_fields,
+};
+
 use super::FormValidator;
 use super::form_2550q::{
     Form2550QAdvanceVatRow, Form2550QCapitalGoodRow, Form2550QCreditableVatRow, Form2550QDate,
     Form2550QDraft, Form2550QFilingBasis, Form2550QLocalPrintFields, Form2550QPartII,
-    Form2550QPartIV, Form2550QQuarter, Form2550QSchedule2, Form2550QTaxpayerClassification,
-    Form2550QXmlFinalFlag,
+    Form2550QPartIV, Form2550QQuarter, Form2550QRowFamily, Form2550QSchedule2,
+    Form2550QTaxpayerClassification, Form2550QXmlFinalFlag, PRESERVED_UNMODELED_XML_KEYS,
+    is_preserved_unmodeled_xml_key,
 };
 
 const EXACT_SOURCE_FIELD_COUNT: usize = 160;
 const SCHEDULE_ROW_SUFFIXES: [u8; 2] = [10, 11];
 const SCHEDULE_3_SUFFIXES: [u8; 2] = [0, 1];
 const SCHEDULE_4_SUFFIXES: [u8; 2] = [0, 1];
+const REQUIRED_RAW_AUTHORITY_KEYS: [&str; 26] = [
+    "frm2550qv2024:txtYearNo2",
+    "frm2550qv2024:calendarNo1",
+    "frm2550qv2024:fiscalNo1",
+    "frm2550qv2024:OptQuarter1",
+    "frm2550qv2024:OptQuarter2",
+    "frm2550qv2024:OptQuarter3",
+    "frm2550qv2024:OptQuarter4",
+    "frm2550qv2024:taxpayerAddress",
+    "frm2550qv2024:taxpayerZip",
+    "frm2550qv2024:taxpayerContactNumber",
+    "frm2550qv2024:taxpayerEmailAddress",
+    "frm2550qv2024:taxPayerClassification1",
+    "frm2550qv2024:taxPayerClassification2",
+    "frm2550qv2024:taxPayerClassification3",
+    "frm2550qv2024:taxPayerClassification4",
+    "frm2550qv2024:internationalTreatyYn",
+    "frm2550qv2024:specialRateYn",
+    "frm2550qv2024:specifyInternationalTreaty",
+    "frm2550qv2024:addSpecifyNo19",
+    "frm2550qv2024:otherCreditsNo19",
+    "frm2550qv2024:addSpecifyNo42",
+    "frm2550qv2024:otherSpecify42",
+    "frm2550qv2024:addSpecifyNo47",
+    "frm2550qv2024:otherSpecify47",
+    "frm2550qv2024:addSpecifyNo56",
+    "frm2550qv2024:otherSpecify56",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReviewedRawValueKind {
+    Boolean,
+    Text,
+    Money,
+    Date,
+    RequiredU8,
+    RequiredU16,
+    OptionalU16,
+    ReceiptIdentifier,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ReviewedRawLocation {
+    Singleton(&'static str),
+    Repeated {
+        family: Form2550QRowFamily,
+        instance_id: StableInstanceId,
+        member_key: &'static str,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReviewedRawBindingTarget {
+    stable_path: String,
+    xml_key: String,
+    kind: ReviewedRawValueKind,
+    location: ReviewedRawLocation,
+}
+
+impl ReviewedRawBindingTarget {
+    fn raw_value<'draft>(&self, draft: &'draft Form2550QDraft) -> Option<&'draft RawValue> {
+        match &self.location {
+            ReviewedRawLocation::Singleton(field_key) => {
+                draft.raw_editor_state.singleton_value(field_key)
+            }
+            ReviewedRawLocation::Repeated {
+                family,
+                instance_id,
+                member_key,
+            } => draft
+                .raw_editor_state
+                .repeated_value(*family, instance_id, member_key),
+        }
+    }
+}
 
 impl Form2550QDraft {
+    pub(super) fn raw_editor_coherence_errors(&self) -> Vec<(String, String)> {
+        let typed_fields = self.to_reviewed_field_map();
+        let mut errors = Vec::new();
+        for target in self.reviewed_raw_binding_targets() {
+            let Some(raw_value) = target.raw_value(self) else {
+                if REQUIRED_RAW_AUTHORITY_KEYS.contains(&target.xml_key.as_str()) {
+                    errors.push((
+                        format!("raw_editor.{}", target.stable_path),
+                        "Required raw value is missing; checked XML refuses to synthesize \
+                         it from the typed draft"
+                            .to_string(),
+                    ));
+                }
+                continue;
+            };
+            if self
+                .raw_editor_state
+                .malformed_fields()
+                .contains_key(&target.stable_path)
+            {
+                continue;
+            }
+            let expected = typed_fields
+                .get(&target.xml_key)
+                .expect("reviewed raw binding targets only exact 2550Q XML keys");
+            match raw_matches_reviewed_value(raw_value, expected, target.kind) {
+                Ok(true) => {}
+                Ok(false) => errors.push((
+                    format!("raw_editor.{}", target.stable_path),
+                    "Captured raw editor text disagrees with the typed draft value; checked XML \
+                     refuses the typed projection and leaves the raw text unchanged"
+                        .to_string(),
+                )),
+                Err(()) => errors.push((
+                    format!("raw_editor.{}", target.stable_path),
+                    "Captured raw editor text is malformed even though no malformed marker was \
+                     persisted; checked XML refuses the typed projection and leaves the raw text \
+                     unchanged"
+                        .to_string(),
+                )),
+            }
+        }
+        errors
+    }
+
+    fn reviewed_raw_binding_targets(&self) -> Vec<ReviewedRawBindingTarget> {
+        let mut targets = form_2550q_singleton_field_ids()
+            .iter()
+            .copied()
+            .map(|field_key| ReviewedRawBindingTarget {
+                stable_path: field_key.to_string(),
+                xml_key: field_key.to_string(),
+                kind: singleton_raw_value_kind(field_key),
+                location: ReviewedRawLocation::Singleton(field_key),
+            })
+            .collect::<Vec<_>>();
+
+        for binding in form_2550q_group_bindings() {
+            let (instance_ids, suffixes): (Vec<Option<StableInstanceId>>, &[u8]) =
+                match binding.family() {
+                    Form2550QRowFamily::Schedule1 => (
+                        self.schedule_1
+                            .iter()
+                            .map(|row| row.instance_id.clone())
+                            .collect(),
+                        &SCHEDULE_ROW_SUFFIXES,
+                    ),
+                    Form2550QRowFamily::Schedule3 => (
+                        self.schedule_3
+                            .iter()
+                            .map(|row| row.instance_id.clone())
+                            .collect(),
+                        &SCHEDULE_3_SUFFIXES,
+                    ),
+                    Form2550QRowFamily::Schedule4 => (
+                        self.schedule_4
+                            .iter()
+                            .map(|row| row.instance_id.clone())
+                            .collect(),
+                        &SCHEDULE_4_SUFFIXES,
+                    ),
+                    Form2550QRowFamily::Item19Additional
+                    | Form2550QRowFamily::Item42Additional
+                    | Form2550QRowFamily::Item47Additional
+                    | Form2550QRowFamily::Item56Additional => continue,
+                };
+            for (instance_id, suffix) in instance_ids.into_iter().zip(suffixes.iter().copied()) {
+                let Some(instance_id) = instance_id else {
+                    continue;
+                };
+                for member in binding.members() {
+                    let Some(xml_prefix) = member.reviewed_xml_prefix() else {
+                        continue;
+                    };
+                    let member_key = member.field_id();
+                    targets.push(ReviewedRawBindingTarget {
+                        stable_path: format!(
+                            "{}/{instance_id}/{member_key}",
+                            raw_family_path(binding.family())
+                        ),
+                        xml_key: format!("{xml_prefix}{suffix}"),
+                        kind: repeated_raw_value_kind(binding.family(), member_key),
+                        location: ReviewedRawLocation::Repeated {
+                            family: binding.family(),
+                            instance_id: instance_id.clone(),
+                            member_key,
+                        },
+                    });
+                }
+            }
+        }
+        targets
+    }
+
     /// Serialize the exact reviewed editable-save key set. A clone is
     /// recomputed first so stale JSON-derived totals never enter the payload.
-    pub fn to_bir_field_map(&self) -> BTreeMap<String, String> {
+    /// Test-only unchecked projection for exact import/contract calibration.
+    /// Production callers must use [`Self::try_to_bir_xml_payload`], which
+    /// validates captured raw buffers against the typed projection before
+    /// emitting bytes.
+    #[cfg(test)]
+    fn to_bir_field_map(&self) -> BTreeMap<String, String> {
         let mut normalized = self.clone();
         normalized.recompute();
         normalized.to_reviewed_field_map()
     }
 
     fn to_reviewed_field_map(&self) -> BTreeMap<String, String> {
-        debug_assert_eq!(expected_xml_keys().len(), EXACT_SOURCE_FIELD_COUNT);
-        let mut fields = self.preserved_unmodeled_xml_fields.clone();
+        let expected = expected_xml_keys();
+        assert_eq!(expected.len(), EXACT_SOURCE_FIELD_COUNT);
+        let mut fields = BTreeMap::new();
+        for key in PRESERVED_UNMODELED_XML_KEYS {
+            if let Some(value) = self.preserved_unmodeled_xml_fields.get(key) {
+                fields.insert(key.to_string(), value.clone());
+            }
+        }
         let (tin1, tin2, tin3, branch) = split_tin(&self.tin);
 
         insert_bool_pair(
@@ -531,10 +739,21 @@ impl Form2550QDraft {
                 .map(Form2550QDate::to_filed_date)
                 .unwrap_or_default(),
         );
+        assert_eq!(
+            fields.len(),
+            EXACT_SOURCE_FIELD_COUNT,
+            "2550Q reviewed field map must contain exactly 160 fields"
+        );
+        assert_eq!(
+            fields.keys().cloned().collect::<BTreeSet<_>>(),
+            expected,
+            "2550Q reviewed field map must match the exact reviewed key set"
+        );
         fields
     }
 
-    pub fn to_bir_xml_payload(&self) -> String {
+    #[cfg(test)]
+    pub(crate) fn to_bir_xml_payload(&self) -> String {
         crate::bir_xml::generate_bir_xml(&self.to_bir_field_map())
     }
 
@@ -573,6 +792,14 @@ impl Form2550QDraft {
     ) -> Result<Self, Vec<(String, String)>> {
         let mut errors = Vec::new();
         let expected = expected_xml_keys();
+        for key in fields.keys() {
+            if !expected.contains(key) {
+                errors.push((
+                    key.clone(),
+                    format!("Unreviewed 2550Q source field {key} is not allowed"),
+                ));
+            }
+        }
         for key in &expected {
             if !fields.contains_key(key) {
                 errors.push((
@@ -904,13 +1131,19 @@ impl Form2550QDraft {
             },
             schedule_3,
             schedule_4,
+            item_19_additional_rows: Vec::new(),
+            item_42_additional_rows: Vec::new(),
+            item_47_additional_rows: Vec::new(),
+            item_56_additional_rows: Vec::new(),
+            row_identity_state: Default::default(),
+            raw_editor_state: Default::default(),
             local_print_fields: Form2550QLocalPrintFields::default(),
             xml_final_flag,
             xml_contact_email: semantic_text(fields, "txtEmail"),
             date_filed: parse_optional_date(fields, "dateFiled", DateFormat::Filed, &mut errors),
             preserved_unmodeled_xml_fields: fields
                 .iter()
-                .filter(|(key, _)| is_preserved_unmodeled_key(key, &expected))
+                .filter(|(key, _)| is_preserved_unmodeled_xml_key(key))
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect(),
             migration_review_items: Vec::new(),
@@ -929,6 +1162,13 @@ impl Form2550QDraft {
 
         if !errors.is_empty() {
             return Err(errors);
+        }
+
+        if let Err(error) = seed_raw_editor_state_from_reviewed_fields(&mut draft, fields) {
+            errors.push((
+                "raw_editor_state".to_string(),
+                format!("Unable to preserve reviewed 2550Q raw source fields: {error}"),
+            ));
         }
 
         let source_computed = computed_source_values(fields, &mut errors);
@@ -987,6 +1227,195 @@ impl Form2550QDraft {
             Err(errors)
         }
     }
+}
+
+fn singleton_raw_value_kind(field_key: &str) -> ReviewedRawValueKind {
+    match field_key {
+        "frm2550qv2024:calendarNo1"
+        | "frm2550qv2024:fiscalNo1"
+        | "frm2550qv2024:OptQuarter1"
+        | "frm2550qv2024:OptQuarter2"
+        | "frm2550qv2024:OptQuarter3"
+        | "frm2550qv2024:OptQuarter4"
+        | "frm2550qv2024:amendedReturnYesNo5"
+        | "frm2550qv2024:amendedReturnNo5"
+        | "frm2550qv2024:OptShortPrd1"
+        | "frm2550qv2024:OptShortPrd2"
+        | "frm2550qv2024:taxPayerClassification1"
+        | "frm2550qv2024:taxPayerClassification2"
+        | "frm2550qv2024:taxPayerClassification3"
+        | "frm2550qv2024:taxPayerClassification4"
+        | "frm2550qv2024:internationalTreatyYn"
+        | "frm2550qv2024:specialRateYn" => ReviewedRawValueKind::Boolean,
+        "frm2550qv2024:selectedMonthNo2" => ReviewedRawValueKind::RequiredU8,
+        "frm2550qv2024:txtYearNo2" => ReviewedRawValueKind::RequiredU16,
+        "frm2550qv2024:RtnPeriodFromNo4" | "frm2550qv2024:RtnPeriodToNo4" => {
+            ReviewedRawValueKind::Date
+        }
+        "frm2550qv2024:specifyInternationalTreaty"
+        | "frm2550qv2024:txtTIN1"
+        | "frm2550qv2024:txtTIN2"
+        | "frm2550qv2024:txtTIN3"
+        | "frm2550qv2024:branchCode"
+        | "frm2550qv2024:txtRDOCode"
+        | "frm2550qv2024:taxpayerName"
+        | "frm2550qv2024:taxpayerAddress"
+        | "frm2550qv2024:taxpayerZip"
+        | "frm2550qv2024:taxpayerContactNumber"
+        | "frm2550qv2024:taxpayerEmailAddress"
+        | "frm2550qv2024:addSpecifyNo19"
+        | "frm2550qv2024:addSpecifyNo42"
+        | "frm2550qv2024:addSpecifyNo47"
+        | "frm2550qv2024:addSpecifyNo56" => ReviewedRawValueKind::Text,
+        _ => ReviewedRawValueKind::Money,
+    }
+}
+
+fn repeated_raw_value_kind(family: Form2550QRowFamily, member_key: &str) -> ReviewedRawValueKind {
+    match (family, member_key) {
+        (Form2550QRowFamily::Schedule1, "txtDatePurchase1")
+        | (Form2550QRowFamily::Schedule3, "txtDateCovered3")
+        | (Form2550QRowFamily::Schedule3, "txtDateCovered3To")
+        | (Form2550QRowFamily::Schedule4, "txtDate4")
+        | (Form2550QRowFamily::Schedule4, "txtDate4To") => ReviewedRawValueKind::Date,
+        (Form2550QRowFamily::Schedule1, "txtEstimatedLife1")
+        | (Form2550QRowFamily::Schedule1, "txtRecognizedLife1") => {
+            ReviewedRawValueKind::OptionalU16
+        }
+        (Form2550QRowFamily::Schedule1, "txtSourceCode1")
+        | (Form2550QRowFamily::Schedule1, "txtDescription1")
+        | (Form2550QRowFamily::Schedule3, "txtNameWithHoldingAgent3")
+        | (Form2550QRowFamily::Schedule4, "txtNameOfMiller4")
+        | (Form2550QRowFamily::Schedule4, "txtNameOfTaxpayer4") => ReviewedRawValueKind::Text,
+        (Form2550QRowFamily::Schedule4, "txtOfficialReceiptNumber4") => {
+            ReviewedRawValueKind::ReceiptIdentifier
+        }
+        (Form2550QRowFamily::Schedule1, "txtAmountPurchase1")
+        | (Form2550QRowFamily::Schedule1, "txtInputTax1")
+        | (Form2550QRowFamily::Schedule1, "txtAllowedInputTax1")
+        | (Form2550QRowFamily::Schedule1, "txtBalanceInputTax1")
+        | (Form2550QRowFamily::Schedule3, "txtIncomePayment3")
+        | (Form2550QRowFamily::Schedule3, "txtTotalTaxWithHeld3")
+        | (Form2550QRowFamily::Schedule4, "txtAmountPaid4") => ReviewedRawValueKind::Money,
+        _ => panic!(
+            "reviewed 2550Q raw binding inventory has no semantic kind for {} member {member_key}",
+            family.label()
+        ),
+    }
+}
+
+fn raw_family_path(family: Form2550QRowFamily) -> &'static str {
+    match family {
+        Form2550QRowFamily::Schedule1 => "schedule-1",
+        Form2550QRowFamily::Schedule3 => "schedule-3",
+        Form2550QRowFamily::Schedule4 => "schedule-4",
+        Form2550QRowFamily::Item19Additional => "item-19-additional",
+        Form2550QRowFamily::Item42Additional => "item-42-additional",
+        Form2550QRowFamily::Item47Additional => "item-47-additional",
+        Form2550QRowFamily::Item56Additional => "item-56-additional",
+    }
+}
+
+fn raw_matches_reviewed_value(
+    raw: &RawValue,
+    expected: &str,
+    kind: ReviewedRawValueKind,
+) -> Result<bool, ()> {
+    let raw_text = raw.as_text();
+    match kind {
+        ReviewedRawValueKind::Boolean => {
+            Ok(parse_boolean_buffer(raw_text)? == parse_boolean_buffer(Some(expected))?)
+        }
+        ReviewedRawValueKind::Text => {
+            Ok(normalize_optional_text(raw_text) == normalize_optional_text(Some(expected)))
+        }
+        ReviewedRawValueKind::Money => {
+            Ok(parse_optional_money_buffer(raw_text)?
+                == parse_optional_money_buffer(Some(expected))?)
+        }
+        ReviewedRawValueKind::Date => Ok(
+            parse_optional_date_buffer(raw_text)? == parse_optional_date_buffer(Some(expected))?
+        ),
+        ReviewedRawValueKind::RequiredU8 => {
+            Ok(parse_required_u8_buffer(raw_text)? == parse_required_u8_buffer(Some(expected))?)
+        }
+        ReviewedRawValueKind::RequiredU16 => {
+            Ok(parse_required_u16_buffer(raw_text)? == parse_required_u16_buffer(Some(expected))?)
+        }
+        ReviewedRawValueKind::OptionalU16 => {
+            Ok(parse_optional_u16_buffer(raw_text)? == parse_optional_u16_buffer(Some(expected))?)
+        }
+        ReviewedRawValueKind::ReceiptIdentifier => {
+            Ok(normalize_receipt_identifier(raw_text)
+                == normalize_receipt_identifier(Some(expected)))
+        }
+    }
+}
+
+fn parse_boolean_buffer(value: Option<&str>) -> Result<bool, ()> {
+    match value.ok_or(())? {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(()),
+    }
+}
+
+fn normalize_optional_text(value: Option<&str>) -> Option<&str> {
+    value.and_then(|text| (!text.is_empty()).then_some(text))
+}
+
+fn parse_optional_money_buffer(value: Option<&str>) -> Result<Option<f64>, ()> {
+    let Some(text) = value else {
+        return Ok(None);
+    };
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let value = trimmed.replace(',', "").parse::<f64>().map_err(|_| ())?;
+    value.is_finite().then_some(Some(value)).ok_or(())
+}
+
+fn parse_optional_date_buffer(value: Option<&str>) -> Result<Option<Form2550QDate>, ()> {
+    let Some(text) = value else {
+        return Ok(None);
+    };
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    Form2550QDate::parse_return_period(text)
+        .map(Some)
+        .map_err(|_| ())
+}
+
+fn parse_required_u8_buffer(value: Option<&str>) -> Result<u8, ()> {
+    value.ok_or(())?.trim().parse::<u8>().map_err(|_| ())
+}
+
+fn parse_required_u16_buffer(value: Option<&str>) -> Result<u16, ()> {
+    value.ok_or(())?.trim().parse::<u16>().map_err(|_| ())
+}
+
+fn parse_optional_u16_buffer(value: Option<&str>) -> Result<Option<u16>, ()> {
+    let Some(text) = value else {
+        return Ok(None);
+    };
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let value = trimmed.replace(',', "").parse::<f64>().map_err(|_| ())?;
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 || value > f64::from(u16::MAX) {
+        return Err(());
+    }
+    Ok(Some(value as u16))
+}
+
+fn normalize_receipt_identifier(value: Option<&str>) -> Option<&str> {
+    value.and_then(|text| {
+        let trimmed = text.trim();
+        (!trimmed.is_empty() && trimmed != "0.00").then_some(text)
+    })
 }
 
 fn computed_source_values(
@@ -1130,6 +1559,7 @@ fn parse_capital_good_row(
     errors: &mut Vec<(String, String)>,
 ) -> Form2550QCapitalGoodRow {
     Form2550QCapitalGoodRow {
+        instance_id: None,
         purchase_or_import_date: parse_optional_date(
             fields,
             &format!("txtDatePurchase{suffix}"),
@@ -1161,6 +1591,7 @@ fn parse_creditable_vat_row(
     errors: &mut Vec<(String, String)>,
 ) -> Form2550QCreditableVatRow {
     Form2550QCreditableVatRow {
+        instance_id: None,
         period_from: parse_optional_date(
             fields,
             &format!("txtDateCovered3{suffix}"),
@@ -1185,6 +1616,7 @@ fn parse_advance_vat_row(
     errors: &mut Vec<(String, String)>,
 ) -> Form2550QAdvanceVatRow {
     Form2550QAdvanceVatRow {
+        instance_id: None,
         period_from: parse_optional_date(
             fields,
             &format!("txtDate4{suffix}"),
@@ -1372,17 +1804,6 @@ fn expected_xml_keys() -> BTreeSet<String> {
         }
     }
     keys
-}
-
-fn is_preserved_unmodeled_key(key: &str, expected: &BTreeSet<String>) -> bool {
-    !expected.contains(key)
-        || matches!(
-            key,
-            "resultOtherCreditsNo19"
-                | "resultOtherCreditsNo42"
-                | "resultOtherCreditsNo47"
-                | "resultOtherCreditsNo56"
-        )
 }
 
 fn standalone_element(xml: &str, name: &str) -> Option<String> {
@@ -1719,7 +2140,9 @@ fn format_money(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::form_rules::{Form2550QCaptureGap, Form2550QFieldValueSource};
     use crate::profile::TaxpayerProfile;
+    use bir_rules::RawValue;
     use sha2::{Digest, Sha256};
 
     fn profile() -> TaxpayerProfile {
@@ -1795,6 +2218,41 @@ mod tests {
         draft.part_ii.item_22_surcharge = Some(1_000.0);
         draft.part_ii.item_23_interest = Some(100.0);
         draft.part_ii.item_24_compromise = Some(200.0);
+        for (field_key, raw) in [
+            ("frm2550qv2024:txtYearNo2", "2025"),
+            ("frm2550qv2024:calendarNo1", "true"),
+            ("frm2550qv2024:fiscalNo1", "false"),
+            ("frm2550qv2024:OptQuarter1", "true"),
+            ("frm2550qv2024:OptQuarter2", "false"),
+            ("frm2550qv2024:OptQuarter3", "false"),
+            ("frm2550qv2024:OptQuarter4", "false"),
+            ("frm2550qv2024:taxpayerAddress", "OLONGAPO"),
+            ("frm2550qv2024:taxpayerZip", "2200"),
+            ("frm2550qv2024:taxpayerContactNumber", "09123456789"),
+            (
+                "frm2550qv2024:taxpayerEmailAddress",
+                "CODEITLIKEMILEY@GMAIL.COM",
+            ),
+            ("frm2550qv2024:taxPayerClassification1", "false"),
+            ("frm2550qv2024:taxPayerClassification2", "false"),
+            ("frm2550qv2024:taxPayerClassification3", "true"),
+            ("frm2550qv2024:taxPayerClassification4", "false"),
+            ("frm2550qv2024:internationalTreatyYn", "false"),
+            ("frm2550qv2024:specialRateYn", "true"),
+            ("frm2550qv2024:specifyInternationalTreaty", ""),
+            ("frm2550qv2024:addSpecifyNo19", "RXAMPLE"),
+            ("frm2550qv2024:otherCreditsNo19", "1000"),
+            ("frm2550qv2024:addSpecifyNo42", "EXAMPLE2"),
+            ("frm2550qv2024:otherSpecify42", "10000"),
+            ("frm2550qv2024:addSpecifyNo47", "EXAMPLE 3"),
+            ("frm2550qv2024:otherSpecify47", "1000"),
+            ("frm2550qv2024:addSpecifyNo56", "EXAMPLE 4"),
+            ("frm2550qv2024:otherSpecify56", "1000"),
+        ] {
+            draft
+                .raw_editor_state
+                .set_singleton(field_key, RawValue::Text(raw.to_string()));
+        }
         draft.recompute();
         draft
     }
@@ -1811,6 +2269,45 @@ mod tests {
     }
 
     #[test]
+    fn checked_xml_rejects_every_unreviewed_or_missing_identity_field() {
+        let mut source = reviewed_sample_draft().to_bir_field_map();
+        source.insert(
+            "frm2550qv2024:unreviewedFutureField".to_string(),
+            "must-not-survive".to_string(),
+        );
+        let import_errors =
+            Form2550QDraft::from_bir_field_map(&source).expect_err("extra source key fails closed");
+        assert!(
+            import_errors
+                .iter()
+                .any(|(field, _)| { field == "frm2550qv2024:unreviewedFutureField" })
+        );
+
+        let mut draft = reviewed_sample_draft();
+        draft.preserved_unmodeled_xml_fields.insert(
+            "frm2550qv2024:unreviewedFutureField".to_string(),
+            "must-not-survive".to_string(),
+        );
+        let export_errors = draft
+            .try_to_bir_xml_payload()
+            .expect_err("unknown persisted XML key fails checked export");
+        assert!(export_errors.iter().any(|(field, _)| {
+            field == "preserved_unmodeled_xml_fields.frm2550qv2024:unreviewedFutureField"
+        }));
+
+        let mut missing_identity = reviewed_sample_draft();
+        missing_identity.schedule_1[0].instance_id = None;
+        let identity_errors = missing_identity
+            .try_to_bir_xml_payload()
+            .expect_err("checked export requires every stable row ID");
+        assert!(
+            identity_errors
+                .iter()
+                .any(|(field, _)| field == "repeated_row_identity")
+        );
+    }
+
+    #[test]
     fn reviewed_field_map_round_trips_without_losing_zero_or_negative_values() {
         let source = reviewed_sample_draft().to_bir_field_map();
         let imported = Form2550QDraft::from_bir_field_map(&source).expect("source imports");
@@ -1820,6 +2317,437 @@ mod tests {
             Some(&"-1,440.00".to_string())
         );
         assert_eq!(output, source);
+    }
+
+    #[test]
+    fn raw_state_and_stable_ids_do_not_change_reviewed_xml_keys_or_order() {
+        let mut draft = reviewed_sample_draft();
+        let baseline_map = draft.to_bir_field_map();
+        let baseline_xml = draft.to_bir_xml_payload();
+        draft.raw_editor_state.set_singleton(
+            "frm2550qv2024:vatPaidReturn",
+            RawValue::Text("lexical-buffer-only".to_string()),
+        );
+        draft
+            .raw_editor_state
+            .set_singleton("signatory", RawValue::Text("LOCAL PRINT ONLY".to_string()));
+        draft.schedule_1[0].instance_id = Some(
+            bir_rules::StableInstanceId::parse("row-00000000000000000999")
+                .expect("valid strict row ID"),
+        );
+
+        assert_eq!(draft.to_bir_field_map(), baseline_map);
+        assert_eq!(draft.to_bir_xml_payload(), baseline_xml);
+        assert_eq!(
+            draft.to_bir_field_map().keys().collect::<Vec<_>>(),
+            baseline_map.keys().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn checked_xml_blocks_malformed_buffers_and_unprojected_additional_rows() {
+        let mut malformed = reviewed_sample_draft();
+        malformed.raw_editor_state.set_singleton(
+            "frm2550qv2024:vatPaidReturn",
+            RawValue::Text("not-money".to_string()),
+        );
+        malformed
+            .raw_editor_state
+            .mark_malformed("frm2550qv2024:vatPaidReturn", "not money");
+        let malformed_errors = malformed
+            .try_to_bir_xml_payload()
+            .expect_err("malformed visible text blocks checked XML");
+        assert!(
+            malformed_errors
+                .iter()
+                .any(|(field, _)| field == "raw_editor.frm2550qv2024:vatPaidReturn")
+        );
+
+        let mut additional = reviewed_sample_draft();
+        additional.item_42_additional_rows.push(
+            super::super::form_2550q::Form2550QAdditionalItemRow {
+                instance_id: None,
+                description: "PRESERVE ME".to_string(),
+                amount: Some(10.0),
+            },
+        );
+        additional
+            .ensure_repeating_row_ids()
+            .expect("additional row receives identity");
+        let additional_errors = additional
+            .try_to_bir_xml_payload()
+            .expect_err("unprojected group blocks checked XML");
+        assert!(
+            additional_errors
+                .iter()
+                .any(|(field, _)| field == "item_42_additional_rows")
+        );
+    }
+
+    #[test]
+    fn checked_xml_proves_captured_raw_typed_coherence_without_trusting_markers() {
+        let mut malformed_without_marker = reviewed_sample_draft();
+        malformed_without_marker.raw_editor_state.set_singleton(
+            "frm2550qv2024:vatPaidReturn",
+            RawValue::Text("not-money".to_string()),
+        );
+        let preserved_malformed = malformed_without_marker.raw_editor_state.clone();
+        let malformed_errors = malformed_without_marker
+            .try_to_bir_xml_payload()
+            .expect_err("an omitted malformed marker must not bypass checked XML");
+        assert!(malformed_errors.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:vatPaidReturn"
+                && message.contains("malformed even though no malformed marker")
+        }));
+        assert_eq!(
+            malformed_without_marker.raw_editor_state, preserved_malformed,
+            "checked export must be read-only and retain the exact malformed buffer"
+        );
+
+        let mut valid_but_conflicting = reviewed_sample_draft();
+        valid_but_conflicting.raw_editor_state.set_singleton(
+            "frm2550qv2024:vatPaidReturn",
+            RawValue::Text("123.45".to_string()),
+        );
+        let preserved_conflict = valid_but_conflicting.raw_editor_state.clone();
+        let conflict_errors = valid_but_conflicting
+            .try_to_bir_xml_payload()
+            .expect_err("a valid raw value that conflicts with typed state must fail closed");
+        assert!(conflict_errors.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:vatPaidReturn"
+                && message.contains("disagrees with the typed draft value")
+        }));
+        assert_eq!(
+            valid_but_conflicting.raw_editor_state, preserved_conflict,
+            "checked export must not reconcile or discard conflicting raw text"
+        );
+
+        let mut semantically_equivalent = reviewed_sample_draft();
+        semantically_equivalent.raw_editor_state.set_singleton(
+            "frm2550qv2024:vatableSales",
+            RawValue::Text("  1000.0  ".to_string()),
+        );
+        semantically_equivalent
+            .try_to_bir_xml_payload()
+            .expect("alternate valid money spelling remains coherent with typed value");
+        assert_eq!(
+            semantically_equivalent
+                .raw_editor_state
+                .singleton_value("frm2550qv2024:vatableSales"),
+            Some(&RawValue::Text("  1000.0  ".to_string()))
+        );
+    }
+
+    #[test]
+    fn candidate_boolean_raw_buffers_use_strict_true_false_coherence() {
+        let mut coherent = reviewed_sample_draft();
+        for (field_key, raw) in [
+            ("frm2550qv2024:calendarNo1", "true"),
+            ("frm2550qv2024:fiscalNo1", "false"),
+            ("frm2550qv2024:OptQuarter1", "true"),
+            ("frm2550qv2024:OptQuarter2", "false"),
+            ("frm2550qv2024:OptQuarter3", "false"),
+            ("frm2550qv2024:OptQuarter4", "false"),
+        ] {
+            coherent
+                .raw_editor_state
+                .set_singleton(field_key, RawValue::Text(raw.to_string()));
+        }
+        coherent
+            .try_to_bir_xml_payload()
+            .expect("exact candidate booleans remain coherent with typed choices");
+
+        coherent.raw_editor_state.set_singleton(
+            "frm2550qv2024:calendarNo1",
+            RawValue::Text("false".to_string()),
+        );
+        let conflict = coherent
+            .try_to_bir_xml_payload()
+            .expect_err("valid but contradictory raw boolean must fail closed");
+        assert!(conflict.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:calendarNo1"
+                && message.contains("disagrees with the typed draft value")
+        }));
+
+        coherent.raw_editor_state.set_singleton(
+            "frm2550qv2024:calendarNo1",
+            RawValue::Text("TRUE".to_string()),
+        );
+        let malformed = coherent
+            .try_to_bir_xml_payload()
+            .expect_err("noncanonical boolean spelling must fail closed");
+        assert!(malformed.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:calendarNo1"
+                && message.contains("malformed even though no malformed marker")
+        }));
+
+        coherent.raw_editor_state.set_singleton(
+            "frm2550qv2024:calendarNo1",
+            RawValue::Text(" true ".to_string()),
+        );
+        let whitespace = coherent
+            .try_to_bir_xml_payload()
+            .expect_err("whitespace-padded boolean spelling must fail closed");
+        assert!(whitespace.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:calendarNo1"
+                && message.contains("malformed even though no malformed marker")
+        }));
+    }
+
+    #[test]
+    fn candidate_taxable_year_raw_buffer_is_required_and_typed_coherent() {
+        let mut coherent = reviewed_sample_draft();
+        coherent.raw_editor_state.set_singleton(
+            "frm2550qv2024:txtYearNo2",
+            RawValue::Text(" 2025 ".to_string()),
+        );
+        coherent
+            .try_to_bir_xml_payload()
+            .expect("a lexical variant of the captured year may match the typed value");
+
+        coherent.raw_editor_state.set_singleton(
+            "frm2550qv2024:txtYearNo2",
+            RawValue::Text("2024".to_string()),
+        );
+        let conflict = coherent
+            .try_to_bir_xml_payload()
+            .expect_err("captured year cannot silently rewrite or be replaced by typed state");
+        assert!(conflict.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:txtYearNo2"
+                && message.contains("disagrees with the typed draft value")
+        }));
+
+        coherent.raw_editor_state.set_singleton(
+            "frm2550qv2024:txtYearNo2",
+            RawValue::Text("20x5".to_string()),
+        );
+        let malformed = coherent
+            .try_to_bir_xml_payload()
+            .expect_err("malformed captured year must fail closed");
+        assert!(malformed.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:txtYearNo2"
+                && message.contains("malformed even though no malformed marker")
+        }));
+    }
+
+    #[test]
+    fn candidate_profile_raw_buffers_are_required_exact_and_read_only() {
+        let expected = [
+            ("frm2550qv2024:taxpayerAddress", "OLONGAPO"),
+            ("frm2550qv2024:taxpayerZip", "2200"),
+            ("frm2550qv2024:taxpayerContactNumber", "09123456789"),
+            (
+                "frm2550qv2024:taxpayerEmailAddress",
+                "CODEITLIKEMILEY@GMAIL.COM",
+            ),
+        ];
+        let coherent = reviewed_sample_draft();
+        for (field_key, raw) in expected {
+            assert_eq!(
+                coherent.raw_editor_state.singleton_value(field_key),
+                Some(&RawValue::Text(raw.to_string()))
+            );
+        }
+        coherent
+            .try_to_bir_xml_payload()
+            .expect("exact candidate profile buffers remain typed-coherent");
+
+        let mut conflicting = reviewed_sample_draft();
+        let typed_before = (
+            conflicting.registered_address.clone(),
+            conflicting.zip_code.clone(),
+            conflicting.contact_number.clone(),
+            conflicting.email.clone(),
+        );
+        conflicting.raw_editor_state.set_singleton(
+            "frm2550qv2024:taxpayerAddress",
+            RawValue::Text("OLONGAPO ".to_string()),
+        );
+        let raw_before = conflicting.raw_editor_state.clone();
+        let errors = conflicting
+            .try_to_bir_xml_payload()
+            .expect_err("raw profile text must not be normalized or replaced by typed state");
+        assert!(errors.iter().any(|(field, message)| {
+            field == "raw_editor.frm2550qv2024:taxpayerAddress"
+                && message.contains("disagrees with the typed draft value")
+        }));
+        assert_eq!(
+            (
+                conflicting.registered_address,
+                conflicting.zip_code,
+                conflicting.contact_number,
+                conflicting.email,
+            ),
+            typed_before,
+            "checked XML must not reconcile raw profile text into typed fields"
+        );
+        assert_eq!(
+            conflicting.raw_editor_state, raw_before,
+            "checked XML must retain conflicting raw profile text unchanged"
+        );
+    }
+
+    #[test]
+    fn checked_xml_never_synthesizes_missing_candidate_raw_values() {
+        let missing = Form2550QDraft::new_from_profile(&profile(), 2025, 1);
+        let errors = missing
+            .try_to_bir_xml_payload()
+            .expect_err("missing candidate raw authority must block checked XML");
+        for field_key in REQUIRED_RAW_AUTHORITY_KEYS {
+            assert!(errors.iter().any(|(field, message)| {
+                field == &format!("raw_editor.{field_key}")
+                    && message.contains("refuses to synthesize it from the typed draft")
+            }));
+        }
+
+        let mut partial = Form2550QDraft::new_from_profile(&profile(), 2025, 1);
+        partial.raw_editor_state.set_singleton(
+            "frm2550qv2024:calendarNo1",
+            RawValue::Text("true".to_string()),
+        );
+        let partial_errors = partial
+            .try_to_bir_xml_payload()
+            .expect_err("a partial radio group must not be completed from typed state");
+        assert!(
+            partial_errors
+                .iter()
+                .any(|(field, _)| field == "raw_editor.frm2550qv2024:fiscalNo1")
+        );
+    }
+
+    #[test]
+    fn checked_xml_rejects_unknown_and_orphan_raw_bindings_read_only() {
+        let mut unknown_singleton = reviewed_sample_draft();
+        unknown_singleton.raw_editor_state.set_singleton(
+            "future_unreviewed_singleton",
+            RawValue::Text("x".to_string()),
+        );
+        let singleton_errors = unknown_singleton
+            .try_to_bir_xml_payload()
+            .expect_err("unknown singleton raw key blocks checked XML");
+        assert!(singleton_errors.iter().any(|(field, message)| {
+            field == "raw_editor_state.bindings"
+                && message.contains("unbound singleton field future_unreviewed_singleton")
+        }));
+
+        let mut unknown_repeated = reviewed_sample_draft();
+        let existing_id = unknown_repeated.schedule_3[0]
+            .instance_id
+            .clone()
+            .expect("reviewed draft row has identity");
+        unknown_repeated.raw_editor_state.set_repeated(
+            super::super::form_2550q::Form2550QRowFamily::Schedule3,
+            existing_id,
+            "future_unreviewed_member",
+            RawValue::Text("x".to_string()),
+        );
+        let repeated_errors = unknown_repeated
+            .try_to_bir_xml_payload()
+            .expect_err("unknown repeated raw key blocks checked XML");
+        assert!(repeated_errors.iter().any(|(field, message)| {
+            field == "raw_editor_state.bindings"
+                && message.contains("unbound Schedule 3 field future_unreviewed_member")
+        }));
+
+        let mut orphan = reviewed_sample_draft();
+        let original_ids = orphan
+            .schedule_1
+            .iter()
+            .map(|row| row.instance_id.clone())
+            .collect::<Vec<_>>();
+        let original_next_ordinal = orphan.row_identity_state.next_ordinal();
+        orphan.raw_editor_state.set_repeated(
+            super::super::form_2550q::Form2550QRowFamily::Schedule1,
+            bir_rules::StableInstanceId::parse("row-00000000000000000999")
+                .expect("strict orphan row ID"),
+            "txtInputTax1",
+            RawValue::Text("10.00".to_string()),
+        );
+        let orphan_errors = orphan
+            .try_to_bir_xml_payload()
+            .expect_err("orphan repeated raw row blocks checked XML");
+        assert!(orphan_errors.iter().any(|(field, message)| {
+            field == "raw_editor_state.bindings"
+                && message.contains("orphan Schedule 1 row row-00000000000000000999")
+        }));
+        assert_eq!(
+            orphan
+                .schedule_1
+                .iter()
+                .map(|row| row.instance_id.clone())
+                .collect::<Vec<_>>(),
+            original_ids
+        );
+        assert_eq!(
+            orphan.row_identity_state.next_ordinal(),
+            original_next_ordinal
+        );
+    }
+
+    #[test]
+    fn reviewed_import_seeds_all_one_hundred_six_live_v1_raw_buffers() {
+        let fields = reviewed_sample_draft().to_bir_field_map();
+        let mut imported =
+            Form2550QDraft::from_bir_field_map(&fields).expect("reviewed map imports");
+        let targets = imported.reviewed_raw_binding_targets();
+        assert_eq!(targets.len(), 106);
+        let expected = targets
+            .into_iter()
+            .map(|target| {
+                (
+                    target.stable_path,
+                    RawValue::Text(
+                        fields
+                            .get(&target.xml_key)
+                            .unwrap_or_else(|| {
+                                panic!("reviewed source is missing {}", target.xml_key)
+                            })
+                            .clone(),
+                    ),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let actual_singletons = imported
+            .raw_editor_state
+            .singleton_fields()
+            .iter()
+            .map(|(field_key, value)| (field_key.clone(), value.clone()));
+        let actual_repeated =
+            imported
+                .raw_editor_state
+                .repeated_fields()
+                .iter()
+                .flat_map(|(family, instances)| {
+                    instances.iter().flat_map(move |(instance_id, values)| {
+                        values.iter().map(move |(member_key, value)| {
+                            (
+                                format!("{}/{instance_id}/{member_key}", raw_family_path(*family)),
+                                value.clone(),
+                            )
+                        })
+                    })
+                });
+        let actual = actual_singletons
+            .chain(actual_repeated)
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            actual, expected,
+            "all 106 reviewed XML source buffers must map exactly once to their stable raw path"
+        );
+
+        let source = Form2550QFieldValueSource::try_capture(&mut imported)
+            .expect("imported raw state captures");
+        assert_eq!(source.snapshot().fields().len(), 106);
+        assert_eq!(source.snapshot().repeated_group_instances().len(), 6);
+        assert_eq!(
+            source
+                .gaps()
+                .iter()
+                .filter(|gap| matches!(gap, Form2550QCaptureGap::MissingRawBuffer { .. }))
+                .count(),
+            0
+        );
+        assert_eq!(source.excluded_local_print_buffer_count(), 0);
     }
 
     #[test]
@@ -1894,8 +2822,13 @@ mod tests {
         let plain_draft = Form2550QDraft::from_bir_field_map(&plain_fields)
             .expect("plain source must satisfy the semantic contract");
         assert_eq!(plain_draft.to_bir_field_map(), plain_fields);
-        let plain_replay = Form2550QDraft::from_bir_xml_payload(&plain_draft.to_bir_xml_payload())
-            .expect("generated editable payload must replay through the checked parser");
+        let plain_replay_fields = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            &plain_draft.to_bir_xml_payload(),
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .expect("generated editable payload must decode as checked UTF-8 XML");
+        let plain_replay = Form2550QDraft::from_bir_field_map(&plain_replay_fields)
+            .expect("generated editable payload must replay through the typed parser");
         assert_eq!(plain_replay.to_bir_field_map(), plain_fields);
 
         let encrypted_path = std::path::Path::new(&source_dir)
@@ -1930,9 +2863,13 @@ mod tests {
         assert_eq!(encrypted_fields.len(), EXACT_SOURCE_FIELD_COUNT);
         assert_eq!(encrypted_fields["txtFinalFlag"], "0");
         assert_eq!(encrypted_fields, decrypted_fields);
-        let encrypted_replay =
-            Form2550QDraft::from_bir_xml_payload(&encrypted_draft.to_bir_xml_payload())
-                .expect("generated companion semantics must replay through the checked parser");
+        let encrypted_replay_fields = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            &encrypted_draft.to_bir_xml_payload(),
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .expect("generated companion semantics must decode as checked UTF-8 XML");
+        let encrypted_replay = Form2550QDraft::from_bir_field_map(&encrypted_replay_fields)
+            .expect("generated companion semantics must replay through the typed parser");
         assert_eq!(encrypted_replay.to_bir_field_map(), decrypted_fields);
 
         for (filename, expected_hash) in [

@@ -1,0 +1,327 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702ex-v2018c",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1702ex-validate-001-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year End is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Year End on Page 1 Item 2",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-001-year"
+                  },
+                  {
+                      "case_id":  "case-02-1702ex-validate-002-period",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Calendar/fiscal/short-period rules fail, including a year before 2018 or disallowed current/future period."
+                                    },
+                      "expected_message":  "Period-specific message from checkFilingYear.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-002-period"
+                  },
+                  {
+                      "case_id":  "case-03-1702ex-validate-003-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither IC021 nor IC011 ATC is selected."
+                                    },
+                      "expected_message":  "Please select an ATC on Page 1 Item 5",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-003-atc"
+                  },
+                  {
+                      "case_id":  "case-04-1702ex-validate-004-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Page 1 Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-004-rdo"
+                  },
+                  {
+                      "case_id":  "case-05-1702ex-validate-005-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid name on Page 1 Item 8",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-005-name"
+                  },
+                  {
+                      "case_id":  "case-06-1702ex-validate-006-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Registered Address on Page 1 Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-006-address"
+                  },
+                  {
+                      "case_id":  "case-07-1702ex-validate-007-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Zip code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Zip Code on Page 1 Item 9A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-007-zip"
+                  },
+                  {
+                      "case_id":  "case-08-1702ex-validate-008-incorporation",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date of incorporation is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Date of Incorporation on Page 1 Item 10",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-008-incorporation"
+                  },
+                  {
+                      "case_id":  "case-09-1702ex-validate-009-incorporation-after-filing",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date of incorporation is after the filing year/month."
+                                    },
+                      "expected_message":  "The date of incorporation should not be more than the Filing date ",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-009-incorporation-after-filing"
+                  },
+                  {
+                      "case_id":  "case-10-1702ex-validate-010-contact",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Page 1 Item 11",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-010-contact"
+                  },
+                  {
+                      "case_id":  "case-11-1702ex-validate-011-email-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email is blank."
+                                    },
+                      "expected_message":  "Please enter a valid e-mail address on page 1 item 12",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-011-email-required"
+                  },
+                  {
+                      "case_id":  "case-12-1702ex-validate-012-email-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email fails the source regex."
+                                    },
+                      "expected_message":  "Please enter a valid e-mail address on page 1 item 12",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-012-email-format"
+                  },
+                  {
+                      "case_id":  "case-13-1702ex-validate-013-deduction",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither itemized nor optional standard deduction is selected."
+                                    },
+                      "expected_message":  "Please select a Method of Deduction in page 1 Item 13.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-013-deduction"
+                  },
+                  {
+                      "case_id":  "case-14-1702ex-validate-014-relief-basis",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Legal basis is blank."
+                                    },
+                      "expected_message":  "Please enter a value Legal Bases of Tax Relief/Exemption on Page 1 Item 14",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-014-relief-basis"
+                  },
+                  {
+                      "case_id":  "case-15-1702ex-validate-015-ipa",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "IPA/government agency is blank."
+                                    },
+                      "expected_message":  "Please enter a value for Investment Promotion Agency (IPA) Government Agency on Page 1 Item 15",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-015-ipa"
+                  },
+                  {
+                      "case_id":  "case-16-1702ex-validate-016-activity",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered activity/program is blank."
+                                    },
+                      "expected_message":  "Please enter a value for Registered Activity/Program (Reg. No.) on Page 1 Item 16",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-016-activity"
+                  },
+                  {
+                      "case_id":  "case-17-1702ex-validate-017-effectivity-from",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Effectivity From is blank."
+                                    },
+                      "expected_message":  "Please enter a valid date for Effectivity Date of Tax Relief/Exemption(FROM) on Page 1 Item 17",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-017-effectivity-from"
+                  },
+                  {
+                      "case_id":  "case-18-1702ex-validate-018-effectivity-to",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Effectivity To is blank."
+                                    },
+                      "expected_message":  "Please enter a valid date for Effectivity Date of Tax Relief/Exemption(TO) on Page 1 Item 17",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-018-effectivity-to"
+                  },
+                  {
+                      "case_id":  "case-19-1702ex-validate-019-effectivity-order",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Effectivity From is after Effectivity To."
+                                    },
+                      "expected_message":  "Date range message from DateCompare_Page1_Item17.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-019-effectivity-order"
+                  },
+                  {
+                      "case_id":  "case-20-1702ex-validate-020-overpayment",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 20 is negative and no overpayment disposition is selected."
+                                    },
+                      "expected_message":  "Please select an Overpayment option in Page 1 after Item 22.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-020-overpayment"
+                  },
+                  {
+                      "case_id":  "case-21-1702ex-validate-021-reconciliation",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Page 2 Item 39 string value differs from Page 3 Schedule 3 Item 10 string value."
+                                    },
+                      "expected_message":  "Page 2 Part IV Item 39 should be equal to Page 3 Schedule 3 Item 10.",
+                      "expected_behavior":  "Direct formatted-string comparison can reject numerically equal representations.",
+                      "rule_id":  "1702ex-validate-021-reconciliation"
+                  },
+                  {
+                      "case_id":  "case-22-1702ex-validate-022-description-pairs",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "An amount/description pair in Part IV/V or Page 3 has only one side populated."
+                                    },
+                      "expected_message":  "Dynamic pair-specific message.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-022-description-pairs"
+                  },
+                  {
+                      "case_id":  "case-23-1702ex-validate-023-item53",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 36 is positive while Item 53 is blank or zero."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Item 53.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-023-item53"
+                  },
+                  {
+                      "case_id":  "case-24-1702ex-validate-024-item52",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 39 is positive while Item 52 is zero."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Item 52.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-024-item52"
+                  },
+                  {
+                      "case_id":  "case-25-1702ex-validate-026-unused-ctc-reg",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither CTC nor SEC registration is selected."
+                                    },
+                      "expected_message":  "Please select CTC or SEC Reg on Page 1 Item 23",
+                      "expected_behavior":  "The function is defined but never called.",
+                      "rule_id":  "1702ex-validate-026-unused-ctc-reg"
+                  },
+                  {
+                      "case_id":  "case-26-1702ex-validate-027-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All invoked checks pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-validate-027-success"
+                  },
+                  {
+                      "case_id":  "case-27-1702ex-save-001-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-save-001-rdo"
+                  },
+                  {
+                      "case_id":  "case-28-1702ex-save-002-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid name on Page 1 Item 8",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-save-002-name"
+                  },
+                  {
+                      "case_id":  "case-29-1702ex-save-003-address",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Registered Address on Page 1 Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-save-003-address"
+                  },
+                  {
+                      "case_id":  "case-30-1702ex-save-004-contact",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Page 1 Item 11",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702ex-save-004-contact"
+                  },
+                  {
+                      "case_id":  "case-31-1702ex-date-future-return",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A valid date is after today."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The field clears but isValid remains true.",
+                      "rule_id":  "1702ex-date-future-return"
+                  },
+                  {
+                      "case_id":  "case-32-1702ex-ctc-reg-message",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "SEC registration date is more than 50 years old."
+                                    },
+                      "expected_message":  "CTC year should not be less than {year} for Page 1 Item 24",
+                      "expected_behavior":  "The SEC-registration branch still labels its message CTC year.",
+                      "rule_id":  "1702ex-ctc-reg-message"
+                  }
+              ]
+}

@@ -1,0 +1,179 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1600wp-v2010",
+    "revision":  "2010-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "official-help-runtime"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2010 race-track-operator return with dynamic Part II ATC rows and ten fixed Schedule II payee rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3751-L3767",
+                                           "official-hta-runtime#saveXML:L2417-L2723"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only TIN blankness, RDO 000, and name blankness, then serializes every current form control including transient ATC selectors and generated Part II rows."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L3157-L3368"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate checks the return date, identity/classification, selected Part II ATCs, and used Schedule II rows in source order."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "revision-matched-encrypted-sample",
+                                           "encrypted-field-audit"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The revision-matched encrypted dummy copy proves 115 concrete keys with no selected Part II rows."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Serializes generated ATC selectors and Part II rows currently in the form."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L2417-L2723"
+                                            ],
+                            "guard":  "Three narrow Save checks and file-version guards pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Stores the Part II row count.",
+                                                 "Disables editable controls."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L3157-L3368"
+                                            ],
+                            "guard":  "All source-ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls and applicable ATC selection actions."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L3065-L3118"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Writes and encrypts/compresses the final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L2417-L2723"
+                                            ],
+                            "guard":  "Finalization/version flow succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Online submission attempt; deliberately untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return date",
+                          "Amended-return and tax-withheld choices",
+                          "Withholding-agent identity/RDO/category",
+                          "Part II ATC and tax base when tax was withheld",
+                          "Complete used Schedule II payee rows"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "alphabetical-payee-list",
+                                     "label":  "Alphabetical list of payees with tax period, TIN, name, ATC, nature, amount, rate, and tax withheld when the return cannot accommodate all entries.",
+                                     "source_refs":  [
+                                                         "official-help-runtime#L182-L196"
+                                                     ],
+                                     "required_when":  "The payee list cannot be accommodated in the return.",
+                                     "official_ui_enforcement":  "Ten rows are validated locally; overflow attachment presence is not checked.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "deposit-slip",
+                                     "label":  "BIR-prescribed deposit slip when filing with an Authorized Agent Bank.",
+                                     "source_refs":  [
+                                                         "official-help-runtime#L97-L108"
+                                                     ],
+                                     "required_when":  "Payment is made through an AAB.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L97-L116"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "This is not a quarterly return; the reviewed runtime help omits the actual ordinary filing deadline after repeating its heading."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L97-L116"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "This is not a quarterly return; the reviewed runtime help omits the actual ordinary filing deadline after repeating its heading."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L97-L116"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "This is not a quarterly return; the reviewed runtime help omits the actual ordinary filing deadline after repeating its heading."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L97-L116"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "This is not a quarterly return; the reviewed runtime help omits the actual ordinary filing deadline after repeating its heading."
+                             }
+                         ]
+}

@@ -1,0 +1,1011 @@
+{
+    "source_sha256":  "c85f8f1e13e4752549cb2886bc598a0be4cf8b67a709d9a913d09d22f087de1b",
+    "function_count":  45,
+    "functions":  [
+                      {
+                          "name":  "disableLinkIfEmpty",
+                          "start_line":  2721,
+                          "end_line":  2825,
+                          "body_sha256":  "6366b818e8ad734b32df7fd58bd8a85f833bdf046feb77c87f53530d35ac1107",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:txtEnabledLinks"
+                                          ]
+                      },
+                      {
+                          "name":  "clearCheck",
+                          "start_line":  3343,
+                          "end_line":  3352,
+                          "body_sha256":  "d5b334d1a99e2a4528744f1616e38eff5e6f577900771dd9c6fe212f87529486",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processAmend",
+                          "start_line":  3353,
+                          "end_line":  3369,
+                          "body_sha256":  "5eaa954b7141cbc9b1f37f7c84835955d6133a96b8e0795ffe132aa40c99214a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optAmendedReturn_1",
+                                              "frm1701A:txt61A",
+                                              "frm1701A:txt61B",
+                                              "frm1701A:txtSpouseName"
+                                          ]
+                      },
+                      {
+                          "name":  "processShortPeriod",
+                          "start_line":  3370,
+                          "end_line":  3381,
+                          "body_sha256":  "2d6012c480cc92031b719a2b74f54e616049662468960740c5d9823828f37ff1",
+                          "alerts":  [
+                                         "\"Choosing \u0027YES\u0027 means you are filing for a short period return. You are required to change the Month field to correspond with your Last Return Period.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optShortPeriod_1",
+                                              "frm1701A:txtMonth"
+                                          ]
+                      },
+                      {
+                          "name":  "processTaxpayerType",
+                          "start_line":  3382,
+                          "end_line":  3427,
+                          "body_sha256":  "ae878cc616ea09f81106c133408d98e604a379a2762f0323fe08f818ca1488c3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optATC_1",
+                                              "frm1701A:optATC_2",
+                                              "frm1701A:optATC_3",
+                                              "frm1701A:optATC_4",
+                                              "frm1701A:optSpouseATC_1",
+                                              "frm1701A:optSpouseATC_2",
+                                              "frm1701A:optSpouseATC_3",
+                                              "frm1701A:optSpouseATC_4",
+                                              "frm1701A:optSpouseTaxType_1",
+                                              "frm1701A:optSpouseTaxType_2",
+                                              "frm1701A:optTaxType_1",
+                                              "frm1701A:optTaxType_2"
+                                          ]
+                      },
+                      {
+                          "name":  "processFTC",
+                          "start_line":  3428,
+                          "end_line":  3451,
+                          "body_sha256":  "66a2e1a501cd4fece9cea6c2304a126831ac235d86abb449319b54baed3f732f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optForeignTaxCredits_1",
+                                              "frm1701A:optSpouseFTC_1",
+                                              "frm1701A:txt62A",
+                                              "frm1701A:txt62B",
+                                              "frm1701A:txtForeignTaxNumber",
+                                              "frm1701A:txtSpouseFTN"
+                                          ]
+                      },
+                      {
+                          "name":  "processCivilStatus",
+                          "start_line":  3452,
+                          "end_line":  3471,
+                          "body_sha256":  "495ec16042d8aab4f52284a51ea6dfd0a8c2fc57e5b1c957bfbd3557df6b51fa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optCivilStatus_2",
+                                              "frm1701A:optFilingStatus_1",
+                                              "frm1701A:optFilingStatus_2",
+                                              "frm1701A:optSpouseIncome_1",
+                                              "frm1701A:optSpouseIncome_2"
+                                          ]
+                      },
+                      {
+                          "name":  "processSpouseIncome",
+                          "start_line":  3472,
+                          "end_line":  3485,
+                          "body_sha256":  "5acef07e8e9d88ee4211fa7d8cd38f42f166dfe23cb78bd6875e4383fe6aa03f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optFilingStatus_1",
+                                              "frm1701A:optFilingStatus_2",
+                                              "frm1701A:optSpouseIncome_1",
+                                              "frm1701A:optSpouseIncome_2"
+                                          ]
+                      },
+                      {
+                          "name":  "processFilingStatus",
+                          "start_line":  3486,
+                          "end_line":  3493,
+                          "body_sha256":  "9d13e227972edd51f1583b20299bd07cd965acddc96a0077076ddfd6e8fd2158",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optFilingStatus_1"
+                                          ]
+                      },
+                      {
+                          "name":  "processATC",
+                          "start_line":  3494,
+                          "end_line":  3535,
+                          "body_sha256":  "466c8766f795cc6f47d0baa3de42f737edbf401de0a6ce5f2ae6f4aee3d8e3ac",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optATC_1",
+                                              "frm1701A:optATC_2",
+                                              "frm1701A:optATC_3",
+                                              "frm1701A:optATC_4",
+                                              "frm1701A:optSpouseATC_1",
+                                              "frm1701A:optSpouseATC_2",
+                                              "frm1701A:optSpouseATC_3",
+                                              "frm1701A:optSpouseATC_4",
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optSpouseTaxRate_2",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:optTaxRate_2"
+                                          ]
+                      },
+                      {
+                          "name":  "processOverpayment",
+                          "start_line":  3536,
+                          "end_line":  3550,
+                          "body_sha256":  "77036242dab205177a8bbbd1d28c9c3703cbad85d224960ce2b9aff22ab33132",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optRefund_1",
+                                              "frm1701A:optRefund_2",
+                                              "frm1701A:optRefund_3",
+                                              "frm1701A:txt30"
+                                          ]
+                      },
+                      {
+                          "name":  "check_Overpayment",
+                          "start_line":  3551,
+                          "end_line":  3562,
+                          "body_sha256":  "fec632d96c82be178370fc89e9927de1b694ddf48b5b080cdb7fac61bb851fd3",
+                          "alerts":  [
+                                         "\"Please select an Overpayment option in Page 1 after Item 30.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optRefund_1",
+                                              "frm1701A:optRefund_2",
+                                              "frm1701A:optRefund_3"
+                                          ]
+                      },
+                      {
+                          "name":  "storeDisabledinputIDs",
+                          "start_line":  3563,
+                          "end_line":  3575,
+                          "body_sha256":  "bbb4a9bbb3f5f5aac8b33cc3153ce4348c0be5a802f9ebf4c1c01a2c46cc5c02",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtDisabledInputs"
+                                          ]
+                      },
+                      {
+                          "name":  "storeEnabledlinkIDs",
+                          "start_line":  3576,
+                          "end_line":  3600,
+                          "body_sha256":  "1d87738ff3a25df80519c02945557b9772159e172d72d1bea326648af7389003",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtEnabledLinks"
+                                          ]
+                      },
+                      {
+                          "name":  "validateModal",
+                          "start_line":  3882,
+                          "end_line":  3941,
+                          "body_sha256":  "6ba760e607c440d44eda7a466a0c976e540050a1bb64b19a4716b02112caca74",
+                          "alerts":  [
+                                         "modalTable + \"=\" + pageNumber + \"=\" + scheduleNumber",
+                                         "\"Please enter a valid Description\"",
+                                         "\"Please enter a valid Description on Page \" + pageNumber + \" Schedule \" + scheduleNumber.trim() + \" Item \" + rowItem",
+                                         "\"Please enter a valid Legal Basis on Page \" + pageNumber + \" Schedule \" + scheduleNumber.trim() + \" Item \" + rowItem",
+                                         "\"Amount should not be zero.\"",
+                                         "\"Page \" + pageNumber + \" Schedule \" + scheduleNumber.trim() + \" Item \" + rowItem + \" Amount should not be zero.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:optTaxRate_2",
+                                              "frm1701A:txtIsTaxFilerDisabled"
+                                          ]
+                      },
+                      {
+                          "name":  "saveChanges",
+                          "start_line":  3942,
+                          "end_line":  4097,
+                          "body_sha256":  "6cde33ab6bb924c84fe5d46e8ee21806b9d14bbde24ba322fdca5ea37f53db89",
+                          "alerts":  [
+                                         "\"[error] invalid baseNumber, span is :\" + lastRowSpan.innerHTML",
+                                         "\"Saved!\"",
+                                         "\"Dev Note : see TYPE\"",
+                                         "\"Disregard changes.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtCtr"
+                                          ]
+                      },
+                      {
+                          "name":  "enableParentInput",
+                          "start_line":  4139,
+                          "end_line":  4197,
+                          "body_sha256":  "91ee8a0250a72f51fef3db4d0c70d23ad4489bb35d456343be472a0ac557cdbb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optSpouseTaxRate_2",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:optTaxRate_2"
+                                          ]
+                      },
+                      {
+                          "name":  "disableParentInput",
+                          "start_line":  4198,
+                          "end_line":  4231,
+                          "body_sha256":  "ea8d333298e9db1b983474e4cea3024214e280fe3985627d387454fc0dc69968",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "update_enabledInputsOnValidation",
+                          "start_line":  4232,
+                          "end_line":  4281,
+                          "body_sha256":  "e86567efaa5bed76fe218eaaa6067f80f67d6a6b2af97a2eb7585a6140c0f2df",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtEnabledInputsOnValidation"
+                                          ]
+                      },
+                      {
+                          "name":  "validateModalState",
+                          "start_line":  4459,
+                          "end_line":  4511,
+                          "body_sha256":  "a46b84a4c7eceeab02ed96bf1ea4de0d279bfa662f03f93f0e73d7ed50600da4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtDisabledInputs",
+                                              "frm1701A:txtEnabledLinks"
+                                          ]
+                      },
+                      {
+                          "name":  "disableEnableFieldsOnReload",
+                          "start_line":  4519,
+                          "end_line":  4554,
+                          "body_sha256":  "76fb810b6b5679593d7043798fbbeb108136526ab112eb77b1927a0584412389",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtDisabledOnSave",
+                                              "frm1701A:txtEnabledLinks",
+                                              "frm1701A:txtEnabledOnSave"
+                                          ]
+                      },
+                      {
+                          "name":  "enabledlinkIDs_Add",
+                          "start_line":  4555,
+                          "end_line":  4586,
+                          "body_sha256":  "d3ac3e604a30e3712575a129f45c21291af6650b59cea4a002e5dd4eeef8239c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtEnabledLinks"
+                                          ]
+                      },
+                      {
+                          "name":  "enableSpouse",
+                          "start_line":  4587,
+                          "end_line":  4620,
+                          "body_sha256":  "fc24fa9059a6d18d6a8cdcc98363741cc7bf52d8f794ab484ccecf5cc8775cd9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optSpouseATC_1",
+                                              "frm1701A:optSpouseATC_2",
+                                              "frm1701A:optSpouseATC_3",
+                                              "frm1701A:optSpouseATC_4",
+                                              "frm1701A:optSpouseFTC_1",
+                                              "frm1701A:optSpouseFTC_2",
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optSpouseTaxRate_2",
+                                              "frm1701A:optSpouseTaxType_1",
+                                              "frm1701A:optSpouseTaxType_2",
+                                              "frm1701A:txt23B",
+                                              "frm1701A:txt25B",
+                                              "frm1701A:txt26B",
+                                              "frm1701A:txt27B",
+                                              "frm1701A:txt57B",
+                                              "frm1701A:txt58B",
+                                              "frm1701A:txt59B",
+                                              "frm1701A:txt60B",
+                                              "frm1701A:txt63B",
+                                              "frm1701A:txtSpouseBranchCode",
+                                              "frm1701A:txtSpouseCitizenship",
+                                              "frm1701A:txtSpouseFTN",
+                                              "frm1701A:txtSpouseName",
+                                              "frm1701A:txtSpouseRDOCode",
+                                              "frm1701A:txtSpouseTelNum",
+                                              "frm1701A:txtSpouseTIN1",
+                                              "frm1701A:txtSpouseTIN2",
+                                              "frm1701A:txtSpouseTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "disableSpouse",
+                          "start_line":  4621,
+                          "end_line":  4685,
+                          "body_sha256":  "52e349adc70b4eb2e334a81a88396e15e66fe650a0069857f19aad0f8108f1b4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optSpouseATC_1",
+                                              "frm1701A:optSpouseATC_2",
+                                              "frm1701A:optSpouseATC_3",
+                                              "frm1701A:optSpouseATC_4",
+                                              "frm1701A:optSpouseFTC_1",
+                                              "frm1701A:optSpouseFTC_2",
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optSpouseTaxRate_2",
+                                              "frm1701A:optSpouseTaxType_1",
+                                              "frm1701A:optSpouseTaxType_2",
+                                              "frm1701A:txt23B",
+                                              "frm1701A:txt25B",
+                                              "frm1701A:txt26B",
+                                              "frm1701A:txt27B",
+                                              "frm1701A:txt57B",
+                                              "frm1701A:txt58B",
+                                              "frm1701A:txt59B",
+                                              "frm1701A:txt60B",
+                                              "frm1701A:txt63B",
+                                              "frm1701A:txtSpouseBranchCode",
+                                              "frm1701A:txtSpouseCitizenship",
+                                              "frm1701A:txtSpouseFTN",
+                                              "frm1701A:txtSpouseName",
+                                              "frm1701A:txtSpouseRDOCode",
+                                              "frm1701A:txtSpouseTelNum",
+                                              "frm1701A:txtSpouseTIN1",
+                                              "frm1701A:txtSpouseTIN2",
+                                              "frm1701A:txtSpouseTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "enablePartIVA",
+                          "start_line":  4686,
+                          "end_line":  4715,
+                          "body_sha256":  "6d6eeacc6796a662922418853841ec33419f2796a6a117481d55aec05bd4b5c9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt36A",
+                                              "frm1701A:txt36B",
+                                              "frm1701A:txt37A",
+                                              "frm1701A:txt37B",
+                                              "frm1701A:txt41A",
+                                              "frm1701A:txt41B",
+                                              "frm1701A:txt41Desc",
+                                              "frm1701A:txt42A",
+                                              "frm1701A:txt42B",
+                                              "frm1701A:txt42Desc",
+                                              "frm1701A:txt43A",
+                                              "frm1701A:txt43B"
+                                          ]
+                      },
+                      {
+                          "name":  "disablePartIVA",
+                          "start_line":  4716,
+                          "end_line":  4758,
+                          "body_sha256":  "37e20fcc764c2bd4523d19cde7ed01bd1cf57145f9078c6c42992ead5da40502",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:lnkPartIVAMore",
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:txt",
+                                              "frm1701A:txt41Desc",
+                                              "frm1701A:txt42Desc"
+                                          ]
+                      },
+                      {
+                          "name":  "enablePartIVB",
+                          "start_line":  4759,
+                          "end_line":  4789,
+                          "body_sha256":  "5ed7aaf2cb50c17256ca41b1ef6158d43b049d11f1b48ea44f7998a4b850091d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt47A",
+                                              "frm1701A:txt47B",
+                                              "frm1701A:txt48A",
+                                              "frm1701A:txt48B",
+                                              "frm1701A:txt50A",
+                                              "frm1701A:txt50B",
+                                              "frm1701A:txt50Desc",
+                                              "frm1701A:txt51A",
+                                              "frm1701A:txt51B",
+                                              "frm1701A:txt51Desc",
+                                              "frm1701A:txt54A",
+                                              "frm1701A:txt54B"
+                                          ]
+                      },
+                      {
+                          "name":  "disablePartIVB",
+                          "start_line":  4790,
+                          "end_line":  4836,
+                          "body_sha256":  "eaf53f4865493a60ced0229dcf69b30ccb850b952c98a39817d005d94f2f1739",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:lnkPartIVBMore",
+                                              "frm1701A:optSpouseTaxRate_2",
+                                              "frm1701A:optTaxRate_2",
+                                              "frm1701A:txt",
+                                              "frm1701A:txt50Desc",
+                                              "frm1701A:txt51Desc"
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  4854,
+                          "end_line":  4866,
+                          "body_sha256":  "5ac3a6b6fec536f9227fcc75ed1e6e4e1e5ffbed8e1fdbf3e34a67735f80b1bc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  4988,
+                          "end_line":  5026,
+                          "body_sha256":  "ed16297464e21751b29dcb921fc9b161a90752574ad29902cd3b0c9615932edf",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtAddress",
+                                              "frm1701A:txtAddress2",
+                                              "frm1701A:txtBranchCode",
+                                              "frm1701A:txtLineBus",
+                                              "frm1701A:txtRDOCode",
+                                              "frm1701A:txtTaxpayerName",
+                                              "frm1701A:txtTelNum",
+                                              "frm1701A:txtTIN1",
+                                              "frm1701A:txtTIN2",
+                                              "frm1701A:txtTIN3",
+                                              "frm1701A:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  5027,
+                          "end_line":  5368,
+                          "body_sha256":  "d5e9957e58662e150685233f3fbfb57d2fb569cb29393a24807a622bcfbaaceb",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027or\u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:cmdValidate",
+                                              "frm1701A:txt22A",
+                                              "frm1701A:txt25A",
+                                              "frm1701A:txt26A",
+                                              "frm1701A:txt27A",
+                                              "frm1701A:txt28A",
+                                              "frm1701A:txt29A",
+                                              "frm1701A:txtAddress",
+                                              "frm1701A:txtAddress2",
+                                              "frm1701A:txtBranchCode",
+                                              "frm1701A:txtCurrentPage",
+                                              "frm1701A:txtDisabledOnSave",
+                                              "frm1701A:txtEnabledOnSave",
+                                              "frm1701A:txtLineBus",
+                                              "frm1701A:txtLOB",
+                                              "frm1701A:txtRDOCode",
+                                              "frm1701A:txtTaxPayername",
+                                              "frm1701A:txtTelNum",
+                                              "frm1701A:txtTIN1",
+                                              "frm1701A:txtTIN2",
+                                              "frm1701A:txtTIN3",
+                                              "frm1701A:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  5369,
+                          "end_line":  5598,
+                          "body_sha256":  "144b0ad5a778e8c5ad25f646ebe9241c2cbc5f68f81d528b0be108d6ccf27e04",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt11Address",
+                                              "frm1701A:txt22A",
+                                              "frm1701A:txt25A",
+                                              "frm1701A:txt26A",
+                                              "frm1701A:txt27A",
+                                              "frm1701A:txt28A",
+                                              "frm1701A:txt29A",
+                                              "frm1701A:txtAddress",
+                                              "frm1701A:txtAddress2",
+                                              "frm1701A:txtBranchCode",
+                                              "frm1701A:txtCurrentPage",
+                                              "frm1701A:txtLineBus",
+                                              "frm1701A:txtLOB",
+                                              "frm1701A:txtRDOCode",
+                                              "frm1701A:txtTaxPayername",
+                                              "frm1701A:txtTelno",
+                                              "frm1701A:txtTIN1",
+                                              "frm1701A:txtTIN2",
+                                              "frm1701A:txtTIN3",
+                                              "frm1701A:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  5599,
+                          "end_line":  5614,
+                          "body_sha256":  "7de306ff0a2a44033bd0e9bd6d7b3bd63433efb50a7d0f7510de46466fbcddf1",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 8.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtBranchCode",
+                                              "frm1701A:txtRDOCode",
+                                              "frm1701A:txtTaxpayerName",
+                                              "frm1701A:txtTIN1",
+                                              "frm1701A:txtTIN2",
+                                              "frm1701A:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "item53Validate",
+                          "start_line":  5615,
+                          "end_line":  5641,
+                          "body_sha256":  "e69a2e41784ebec143419b0cc9dcf40b90ef4f7cf7d2613958ad19b80a8952f4",
+                          "alerts":  [
+                                         "\"Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose ATC and fill in Schedule IV.A if method of Deduction is OSD. Otherwise, use BIR Form 1701.\"",
+                                         "\"Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose ATC and fill in Schedule IV.A if method of Deduction is OSD. Otherwise, use BIR Form 1701.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optATC_3",
+                                              "frm1701A:optATC_4",
+                                              "frm1701A:optSpouseATC_3",
+                                              "frm1701A:optSpouseATC_4",
+                                              "frm1701A:txt53A",
+                                              "frm1701A:txt53B"
+                                          ]
+                      },
+                      {
+                          "name":  "item54Validate",
+                          "start_line":  5642,
+                          "end_line":  5656,
+                          "body_sha256":  "40c39f11d2d20a69b3561c1e19e015ff0ab7e4faade6bc7f87dff555eb000652",
+                          "alerts":  [
+                                         "\"Item 54A cannot be more than P250,000.\"",
+                                         "\"Item 54B cannot be more than P250,000.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt54A",
+                                              "frm1701A:txt54B"
+                                          ]
+                      },
+                      {
+                          "name":  "checkBirthDate",
+                          "start_line":  5657,
+                          "end_line":  5699,
+                          "body_sha256":  "b92f62f101eadac4f941e2f4cb41d97da60d2dc8db4f9e15008c4d334c92ad62",
+                          "alerts":  [
+                                         "\"Invalid birthdate.Format should be MM/DD/YYYY\"",
+                                         "\"Please enter a valid date in Item 10.\"",
+                                         "\"Please enter a valid date in Item 10.\"",
+                                         "\"Please enter a valid date in Item 10.\"",
+                                         "\"Please enter a valid date in Item 10.\"",
+                                         "\"Please enter a valid date in Item 10.\"",
+                                         "\"Please enter a valid date in Item 10.\"",
+                                         "\"Please enter a valid date in Item 10.\"",
+                                         "\"Please enter a valid date in Item 10.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtBirthDate"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  5700,
+                          "end_line":  5826,
+                          "body_sha256":  "39136db7484d356ee96a04bb8caa1f5ee95b6df85b59173d56ae1f7bb36b1d82",
+                          "alerts":  [
+                                         "\"Please enter a valid year in Item 1.\"",
+                                         "\"Invalid date entry on Item #1. Since Short Return Period is Yes, valid year entry is only until current year.\") return; } } else if (d.getElementById(\u0027frm1701A:txtYear\u0027).value*1 \u003e validYr) { alert(\"Invalid date entry on Item #1. Year entry cannot be greater than to the current year.\") return; } if (d.getElementById(\u0027frm1701A:txtYear\u0027).value * 1 \u003c 2018) { alert(\"Please file using the old version of the form.\") return; } // if (d.getElementById(\u0027frm1701A:txtYear\u0027).value * 1 \u003c 1900) { // alert(\"Invalid date entry on Item no.1. Entry should not be lower than 1900.\") // return; // } //--- dgarfin : Added \u0027Background Information\u0027 field validation for Phase 2 if ((d.getElementById(\u0027frm1701A:txtTIN1\u0027).value == \"\" || d.getElementById(\u0027frm1701A:txtTIN2\u0027).value == \"\" || d.getElementById(\u0027frm1701A:txtTIN3\u0027).value == \"\" || d.getElementById(\u0027frm1701A:txtBranchCode\u0027).value == \"\")) { alert(\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 8.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 9.\"",
+                                         "\"Please indicate Birth Date of Taxpayer on item 10.\"",
+                                         "\"Please enter Zip Code on Item 9A.\"",
+                                         "\"Please enter a valid TIN number on Item 66.\"",
+                                         "\"Please enter a valid TIN number on Item 66.\"",
+                                         "getChkTinErrDesc(tinChkCode) + \" on Item 66.\"",
+                                         "\"Please enter a valid RDO Code on Item 67.\"",
+                                         "\"Please enter Spouse Name on Item 70.\"",
+                                         "\"Please select an option for Item 69.\"",
+                                         "\"Please select an option for Item 6.\"",
+                                         "\"Please select an option for Item 7.\"",
+                                         "\"Please select an option for Item 19.\"",
+                                         "\"Please select an option for Item 68.\"",
+                                         "\"Please select an option for Item 69.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optATC_1",
+                                              "frm1701A:optATC_2",
+                                              "frm1701A:optATC_3",
+                                              "frm1701A:optATC_4",
+                                              "frm1701A:optFilingStatus_1",
+                                              "frm1701A:optShortPeriod_1",
+                                              "frm1701A:optSpouseATC_1",
+                                              "frm1701A:optSpouseATC_2",
+                                              "frm1701A:optSpouseATC_3",
+                                              "frm1701A:optSpouseATC_4",
+                                              "frm1701A:optSpouseTaxType_1",
+                                              "frm1701A:optSpouseTaxType_2",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:optTaxRate_2",
+                                              "frm1701A:optTaxType_1",
+                                              "frm1701A:optTaxType_2",
+                                              "frm1701A:txt30",
+                                              "frm1701A:txtAddress",
+                                              "frm1701A:txtBirthDate",
+                                              "frm1701A:txtBranchCode",
+                                              "frm1701A:txtRDOCode",
+                                              "frm1701A:txtSpouseBranchCode",
+                                              "frm1701A:txtSpouseName",
+                                              "frm1701A:txtSpouseRDOCode",
+                                              "frm1701A:txtSpouseTIN1",
+                                              "frm1701A:txtSpouseTIN2",
+                                              "frm1701A:txtSpouseTIN3",
+                                              "frm1701A:txtTaxpayerName",
+                                              "frm1701A:txtTIN1",
+                                              "frm1701A:txtTIN2",
+                                              "frm1701A:txtTIN3",
+                                              "frm1701A:txtYear",
+                                              "frm1701A:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "disableAllControl",
+                          "start_line":  5827,
+                          "end_line":  5946,
+                          "body_sha256":  "0e0afbf3275e6f35b45d5f222fd3055602929f89a6a4ff07e4d76042f8abe8c9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:btnFinalCopy",
+                                              "frm1701A:cmdEdit",
+                                              "frm1701A:cmdValidate",
+                                              "frm1701A:optAmendedReturn_1",
+                                              "frm1701A:optAmendedReturn_2",
+                                              "frm1701A:optATC_1",
+                                              "frm1701A:optATC_2",
+                                              "frm1701A:optATC_3",
+                                              "frm1701A:optATC_4",
+                                              "frm1701A:optCivilStatus_1",
+                                              "frm1701A:optCivilStatus_2",
+                                              "frm1701A:optCivilStatus_3",
+                                              "frm1701A:optCivilStatus_4",
+                                              "frm1701A:optFilingStatus_1",
+                                              "frm1701A:optFilingStatus_2",
+                                              "frm1701A:optForeignTaxCredits_1",
+                                              "frm1701A:optForeignTaxCredits_2",
+                                              "frm1701A:optRefund_1",
+                                              "frm1701A:optRefund_2",
+                                              "frm1701A:optRefund_3",
+                                              "frm1701A:optShortPeriod_1",
+                                              "frm1701A:optShortPeriod_2",
+                                              "frm1701A:optSpouseATC_1",
+                                              "frm1701A:optSpouseATC_2",
+                                              "frm1701A:optSpouseATC_3",
+                                              "frm1701A:optSpouseATC_4",
+                                              "frm1701A:optSpouseFTC_1",
+                                              "frm1701A:optSpouseFTC_2",
+                                              "frm1701A:optSpouseIncome_1",
+                                              "frm1701A:optSpouseIncome_2",
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optSpouseTaxRate_2",
+                                              "frm1701A:optSpouseTaxType_1",
+                                              "frm1701A:optSpouseTaxType_2",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:optTaxRate_2",
+                                              "frm1701A:optTaxType_1",
+                                              "frm1701A:optTaxType_2",
+                                              "frm1701A:txt23A",
+                                              "frm1701A:txt23B",
+                                              "frm1701A:txt25A",
+                                              "frm1701A:txt25B",
+                                              "frm1701A:txt26A",
+                                              "frm1701A:txt26B",
+                                              "frm1701A:txt27A",
+                                              "frm1701A:txt27B",
+                                              "frm1701A:txt36A",
+                                              "frm1701A:txt36B",
+                                              "frm1701A:txt37A",
+                                              "frm1701A:txt37B",
+                                              "frm1701A:txt41A",
+                                              "frm1701A:txt41B",
+                                              "frm1701A:txt41Desc",
+                                              "frm1701A:txt42A",
+                                              "frm1701A:txt42B",
+                                              "frm1701A:txt42Desc",
+                                              "frm1701A:txt43A",
+                                              "frm1701A:txt43B",
+                                              "frm1701A:txt47A",
+                                              "frm1701A:txt47B",
+                                              "frm1701A:txt48A",
+                                              "frm1701A:txt48B",
+                                              "frm1701A:txt50A",
+                                              "frm1701A:txt50B",
+                                              "frm1701A:txt50Desc",
+                                              "frm1701A:txt51A",
+                                              "frm1701A:txt51B",
+                                              "frm1701A:txt51Desc",
+                                              "frm1701A:txt54A",
+                                              "frm1701A:txt54B",
+                                              "frm1701A:txt57A",
+                                              "frm1701A:txt57B",
+                                              "frm1701A:txt58A",
+                                              "frm1701A:txt58B",
+                                              "frm1701A:txt59A",
+                                              "frm1701A:txt59B",
+                                              "frm1701A:txt60A",
+                                              "frm1701A:txt60B",
+                                              "frm1701A:txt61A",
+                                              "frm1701A:txt61B",
+                                              "frm1701A:txt62A",
+                                              "frm1701A:txt62B",
+                                              "frm1701A:txt63A",
+                                              "frm1701A:txt63B",
+                                              "frm1701A:txt63Desc",
+                                              "frm1701A:txtBirthDate",
+                                              "frm1701A:txtCitizenship",
+                                              "frm1701A:txtCurrentPage",
+                                              "frm1701A:txtForeignTaxNumber",
+                                              "frm1701A:txtMonth",
+                                              "frm1701A:txtNumberAttachments",
+                                              "frm1701A:txtSpouseBranchCode",
+                                              "frm1701A:txtSpouseCitizenship",
+                                              "frm1701A:txtSpouseFTN",
+                                              "frm1701A:txtSpouseName",
+                                              "frm1701A:txtSpouseRDOCode",
+                                              "frm1701A:txtSpouseTIN1",
+                                              "frm1701A:txtSpouseTIN2",
+                                              "frm1701A:txtSpouseTIN3",
+                                              "frm1701A:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "enableAllControl",
+                          "start_line":  5947,
+                          "end_line":  6090,
+                          "body_sha256":  "2b2632c29f21cb2d5b421366a84cb01f26cbf4cf397d8852db68cc8829633e51",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:btnFinalCopy",
+                                              "frm1701A:cmdEdit",
+                                              "frm1701A:cmdValidate",
+                                              "frm1701A:optAmendedReturn_1",
+                                              "frm1701A:optAmendedReturn_2",
+                                              "frm1701A:optATC_1",
+                                              "frm1701A:optATC_2",
+                                              "frm1701A:optATC_3",
+                                              "frm1701A:optATC_4",
+                                              "frm1701A:optCivilStatus_1",
+                                              "frm1701A:optCivilStatus_2",
+                                              "frm1701A:optCivilStatus_3",
+                                              "frm1701A:optCivilStatus_4",
+                                              "frm1701A:optFilingStatus_1",
+                                              "frm1701A:optFilingStatus_2",
+                                              "frm1701A:optForeignTaxCredits_1",
+                                              "frm1701A:optForeignTaxCredits_2",
+                                              "frm1701A:optRefund_1",
+                                              "frm1701A:optRefund_2",
+                                              "frm1701A:optRefund_3",
+                                              "frm1701A:optShortPeriod_1",
+                                              "frm1701A:optShortPeriod_2",
+                                              "frm1701A:optSpouseFTC_1",
+                                              "frm1701A:optSpouseIncome_1",
+                                              "frm1701A:optSpouseIncome_2",
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optSpouseTaxRate_2",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:optTaxRate_2",
+                                              "frm1701A:optTaxType_1",
+                                              "frm1701A:optTaxType_2",
+                                              "frm1701A:txt23A",
+                                              "frm1701A:txt23B",
+                                              "frm1701A:txt25A",
+                                              "frm1701A:txt25B",
+                                              "frm1701A:txt26A",
+                                              "frm1701A:txt26B",
+                                              "frm1701A:txt27A",
+                                              "frm1701A:txt27B",
+                                              "frm1701A:txt30",
+                                              "frm1701A:txt36A",
+                                              "frm1701A:txt36B",
+                                              "frm1701A:txt37A",
+                                              "frm1701A:txt37B",
+                                              "frm1701A:txt41A",
+                                              "frm1701A:txt41B",
+                                              "frm1701A:txt41Desc",
+                                              "frm1701A:txt42A",
+                                              "frm1701A:txt42B",
+                                              "frm1701A:txt42Desc",
+                                              "frm1701A:txt43A",
+                                              "frm1701A:txt43B",
+                                              "frm1701A:txt47A",
+                                              "frm1701A:txt47B",
+                                              "frm1701A:txt48A",
+                                              "frm1701A:txt48B",
+                                              "frm1701A:txt50A",
+                                              "frm1701A:txt50B",
+                                              "frm1701A:txt50Desc",
+                                              "frm1701A:txt51A",
+                                              "frm1701A:txt51B",
+                                              "frm1701A:txt51Desc",
+                                              "frm1701A:txt54A",
+                                              "frm1701A:txt54B",
+                                              "frm1701A:txt57A",
+                                              "frm1701A:txt57B",
+                                              "frm1701A:txt58A",
+                                              "frm1701A:txt58B",
+                                              "frm1701A:txt59A",
+                                              "frm1701A:txt59B",
+                                              "frm1701A:txt60A",
+                                              "frm1701A:txt60B",
+                                              "frm1701A:txt61A",
+                                              "frm1701A:txt61B",
+                                              "frm1701A:txt62A",
+                                              "frm1701A:txt62B",
+                                              "frm1701A:txt63A",
+                                              "frm1701A:txt63B",
+                                              "frm1701A:txt63Desc",
+                                              "frm1701A:txtBirthDate",
+                                              "frm1701A:txtCitizenship",
+                                              "frm1701A:txtCurrentPage",
+                                              "frm1701A:txtForeignTaxNumber",
+                                              "frm1701A:txtMonth",
+                                              "frm1701A:txtNumberAttachments",
+                                              "frm1701A:txtSpouseFTN",
+                                              "frm1701A:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "checkYear",
+                          "start_line":  6091,
+                          "end_line":  6172,
+                          "body_sha256":  "dae42c5658c58ab104c3c1f7bdea4edc9551a98342bcd858e80580f70885b740",
+                          "alerts":  [
+                                         "\"Invalid year input. Year should not be later to the Current Year.\"",
+                                         "\"Invalid year input. Year should not be lower than 2018.\") //d.getElementById(\u0027frm1701A:txtYear\u0027).value = dt.getFullYear() - 1; } break; } } /*-----End of Validation-----*/ $(document).ready(function(){ $(\"ul.subnav\").parent().append(\"\u003cspan\u003e\u003c/span\u003e\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "processPrev",
+                          "start_line":  6352,
+                          "end_line":  6362,
+                          "body_sha256":  "d928c8466c5eeb651215ae6dc65efdea242b7837b41f160abae04d3126652b6e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "processNext",
+                          "start_line":  6363,
+                          "end_line":  6381,
+                          "body_sha256":  "506d18d26cd4f2f14175619e058fc68a9f1c30ef4c5660a92e596334fd25f7df",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  6524,
+                          "end_line":  6675,
+                          "body_sha256":  "c8dd34339671de1748221f32f1801cdd1d19655c56ddf2ebba3ef41c96de3159",
+                          "alerts":  [
+                                         "\"File \u0027\" + xmlFileName + \"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:btnNextPage",
+                                              "frm1701A:btnPrevPage",
+                                              "frm1701A:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  6788,
+                          "end_line":  6802,
+                          "body_sha256":  "dccd1434489afc6caba0ac88387c0cd7df3f2d219912a306e82715a22f70b306",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  6830,
+                          "end_line":  6843,
+                          "body_sha256":  "0884d3f591f34b3ef3ce1403f8d34b0e24c663baafc72cb042a4b0d400ca4130",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

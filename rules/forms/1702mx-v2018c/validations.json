@@ -1,0 +1,2997 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate order is basis-of-tax-relief, commented no-op tax-relief helper, five profile/save prerequisites, mandatory attachments, income-tax computation, filing basis, period, year-end, ATC, incorporation, overpayment, Schedule 2/10 cross-check, 29 source-ordered row-completeness checks, and deduction method. Most branches return on first failure; validateAttachments can display multiple dialogs before returning false. Save collects five failures and displays only the first.",
+    "rules":  [
+                  {
+                      "rule_id":  "1702mx-save-001-rdo",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "RDO code equals literal 000.",
+                      "fields":  [
+                                     "frm1702MX:drpPg1Pt1I7RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an RDO Code (Part I Item 7).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21427-L21433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-save-002-name",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I9RegisteredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a Registered Name (Part I Item 9).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21434-L21437"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-save-003-address",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I10RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a Registered Address (Part I Item 10).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21438-L21441"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-save-004-contact",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I11ContactNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a Contact Number (Part I Item 11).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21442-L21446"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-save-005-email",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Email address is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide an Email Address (Part I Item 12).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21447-L21451"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-save-006-first-error",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  6,
+                      "condition":  "Two or more save prerequisites fail.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21427-L21470"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "All failures are accumulated, but only errorList[0] is alerted; source order controls the first message.",
+                      "recommended_app_behavior":  "Return every draft-completeness issue while preserving the official first-error order for compatibility.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-save-007-omissions",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  7,
+                      "condition":  "TIN, filing basis/year, ATC, incorporation date, deduction method, schedules, or formats are incomplete.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21427-L21470"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save ignores these fields and permits the draft when the five narrow checks pass.",
+                      "recommended_app_behavior":  "Permit lossless drafts, but distinguish draft persistence from validation/finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-save-008-commented-profile",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  8,
+                      "condition":  "Main line of business or PSIC is blank/short.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I13MainLine",
+                                     "frm1702MX:txtPg1Pt1I14PSICCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid PSIC code (Part I Item 14).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L21452-L21460"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Both checks are inside one block comment.",
+                      "recommended_app_behavior":  "Do not expose them as active official Save checks.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-A1",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 1A is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I31CA",
+                                     "Schedule 2 column A"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 1A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-A2",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 2A is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I32CA",
+                                     "Schedule 2 column A"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 2A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-A3",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 3A is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I33CA",
+                                     "Schedule 2 column A"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 3A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-A5",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 5A is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I35CA",
+                                     "Schedule 2 column A"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 5A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-A6",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 6A is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I36CA",
+                                     "Schedule 2 column A"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 6A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-B1",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 1B is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I31CB",
+                                     "Schedule 2 column B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 1B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-B2",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 2B is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I32CB",
+                                     "Schedule 2 column B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 2B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-B3",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 3B is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I33CB",
+                                     "Schedule 2 column B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 3B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-B4",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and the special tax rate is \u003c= 0.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I34SpecialTaxRate",
+                                     "Schedule 2 column B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 4B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-B5",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 5B is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I35CB",
+                                     "Schedule 2 column B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 5B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-B6",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 6B is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I36CB",
+                                     "Schedule 2 column B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 6B.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-C1",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 1C is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I31CC",
+                                     "Schedule 2 column C"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 1C.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-C2",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 2C is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I32CC",
+                                     "Schedule 2 column C"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 2C.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-C3",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 3C is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I33CC",
+                                     "Schedule 2 column C"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 3C.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-C5",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 5C is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I35CC",
+                                     "Schedule 2 column C"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 5C.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-C6",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 6C is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Pt4I36CC",
+                                     "Schedule 2 column C"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 2 Schedule 1 Item 6C.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20899-L21031"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-basis-else-if-skip",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Two or more Schedule 2 regime columns have data, the first populated column has complete basis data, and a later populated column does not.",
+                      "fields":  [
+                                     "Schedule 2 columns A/B/C",
+                                     "Schedule 1 basis fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateBasistTaxtRelief:L20902-L21027"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The outer A / else-if B / else-if C chain checks only the first populated regime, so incomplete later regimes pass.",
+                      "recommended_app_behavior":  "Validate every populated regime independently.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-tax-relief-helper-commented",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Any condition formerly tested by validateTaxtRelief is present.",
+                      "fields":  [
+                                     "Schedule 2",
+                                     "Schedule 4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateTaxtRelief:L21033-L21074"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Every substantive branch is commented; the helper always returns true.",
+                      "recommended_app_behavior":  "Do not treat the commented messages as active January 2018C rules.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-income-tax-1a",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Schedule 2 Item 13A is positive and Schedule 4 Item 1A is \u003c= 0.",
+                      "fields":  [
+                                     "frm1702MX:txtPg3Sc4Itm1A"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 3 Schedule 4 Item 1A",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateComputationIncomeTax:L21076-L21101"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-income-tax-1b",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Schedule 2 Item 13B is positive and Schedule 4 Item 1B is \u003c= 0.",
+                      "fields":  [
+                                     "frm1702MX:txtPg3Sc4Itm1B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 3 Schedule 4 Item 1B",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateComputationIncomeTax:L21076-L21101"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-income-tax-2a",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Schedule 2 Item 9A is positive and Schedule 4 Item 2A is \u003c= 0.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Sc4Itm2A"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 3 Schedule 4 Item 2A",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateComputationIncomeTax:L21076-L21101"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-income-tax-2b",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Schedule 2 Item 9B is positive and Schedule 4 Item 2B is \u003c= 0.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Sc4Itm2B"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 3 Schedule 4 Item 2B",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateComputationIncomeTax:L21076-L21101"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-income-tax-2c",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Schedule 2 Item 9C is positive and Schedule 4 Item 2C is \u003c= 0.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Sc4Itm2C"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Page 3 Schedule 4 Item 2C",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateComputationIncomeTax:L21076-L21101"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-profile-prerequisites",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Any of the five Save prerequisites fails.",
+                      "fields":  [
+                                     "frm1702MX:drpPg1Pt1I7RDO",
+                                     "frm1702MX:txtPg1Pt1I9RegisteredName",
+                                     "frm1702MX:txtPg1Pt1I10RegisteredAddress",
+                                     "frm1702MX:txtPg1Pt1I11ContactNumber",
+                                     "frm1702MX:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21116-L21119",
+                                          "official-hta-runtime#initialValidateBeforeSave:L21427-L21470"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The same source-ordered first message used by Save is shown, then Validate returns.",
+                      "recommended_app_behavior":  "Reuse the five structured rules without duplicating messages.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachments",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "validateAttachments returns false.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21121-L21124",
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Attachment checks run before filing basis/year, ATC, and incorporation checks.",
+                      "recommended_app_behavior":  "Keep deterministic ordering but present the affected attachment and row.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-filing-basis",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Neither Calendar nor Fiscal is selected.",
+                      "fields":  [
+                                     "frm1702MX:rdoPg1I1Calendar",
+                                     "frm1702MX:rdoPg1I1Fiscal"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select if filing for Calendar or Fiscal Year (Page 1 Item 1).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21133-L21138"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-period-required",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Month or two-digit year ended is blank.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select Month and Year for Year Ended (Page 1 Item 2).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21139-L21144"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-fiscal-future",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Fiscal period is later than the current month.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date (Page 1 Item 2) cannot be greater than current date when filing for Fiscal Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-fiscal-december",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Fiscal month is December.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date (Page 1 Item 2) Month cannot be equal to December.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-before-effectivity",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Period is earlier than September 2013.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date (Page 1 Item 2) should not be earlier than September 2013.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-calendar-current",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "Calendar, not short-period, and year is current or future.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Year (Page 1 Item 2) cannot be greater than or equal to current year when filing for Calendar Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-short-future",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Calendar short-period year is later than current year.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Year (Page 1 Item 2) cannot be greater than the current year when filing for Calendar Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-short-month-future",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Calendar short-period month is later than current month in the current year.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Month (Page 1 Item 2) cannot be greater than  current month date when filing for Calendar Year  and  Short Period Return.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-short-december",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "Calendar short-period month is December in the current year.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Month (Page 1 Item 2) cannot be equal to december  when filing for Calendar Year and  Short Period Return.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-short-month-invalid",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "Calendar short-period month coerces below zero.",
+                      "fields":  [
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "(Page 1 Item 2) Month is invalid.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18352-L18433"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-year-empty-helper",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  36,
+                      "condition":  "validateYearEnd is called directly with blank year.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This field cannot be empty.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L18423-L18426"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The helper alerts but fails to set isValid=false; normal Validate never reaches this branch because its preceding required check returns.",
+                      "recommended_app_behavior":  "Return false and use the specific Item 2 required message.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-atc",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  37,
+                      "condition":  "Neither IC055 nor alternate ATC is checked.",
+                      "fields":  [
+                                     "frm1702MX:chkPg1I5ATCR1",
+                                     "frm1702MX:chkPg1I5ATCR2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please tick at least one ATC option (Page 1 Item 5).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21149-L21154"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-incorporation-required",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  38,
+                      "condition":  "Date of incorporation / organization is blank.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide Date of Incorporation / Organization (Part I Item 10).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21157-L21162"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message says Item 10, while the control ID and printed placement are Part I Item 8.",
+                      "recommended_app_behavior":  "Report the actual printed item and preserve the official text as compatibility evidence.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-incorporation-after-period",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  39,
+                      "condition":  "Incorporation month/year is after the filing month/year.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I8",
+                                     "frm1702MX:ddlPg1I2Date",
+                                     "frm1702MX:txtPg1I2YearEnd"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Date of Incorporation cannot be greater than Page 1 Item 2 Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L18504-L18531"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-incorporation-four-years-exact",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  40,
+                      "condition":  "Filing year minus incorporation year equals exactly four and IC055 is unchecked.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I8",
+                                     "frm1702MX:chkPg1I5ATCR1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "The Year of Incorporation is \u003cyear\u003e, ATC - IC 055 of Page 1 Item will be marked.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L18532-L18547"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The message interpolates the incorporation year and automatically marks IC055.",
+                      "recommended_app_behavior":  "Represent the automatic ATC transition explicitly and let the taxpayer review it.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-incorporation-under-four",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  41,
+                      "condition":  "Filing year minus incorporation year is below four while IC055 is checked.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I8",
+                                     "frm1702MX:chkPg1I5ATCR1",
+                                     "frm1702MX:chkPg1I5ATCR2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Less than 4 years has passed since Date of Incorporation and the Filing Year, the mark in ATC - IC 055 of Page 1 Item 5 will be removed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L18548-L18565"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "It unchecks/disables IC055, checks the alternate ATC, and returns false even after mutating the form.",
+                      "recommended_app_behavior":  "Apply the derived eligibility change transparently, then validate the selected alternate code.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-incorporation-four-plus",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  42,
+                      "condition":  "Elapsed time is at least four years and IC055 is unchecked.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I8",
+                                     "frm1702MX:chkPg1I5ATCR1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "It has been 4 years or more since the Date of Incorporation and the Filing Year, ATC - IC 055 of Page 1 Item will be marked.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L18566-L18577"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "It marks IC055 but does not return false.",
+                      "recommended_app_behavior":  "Expose the derived ATC change and validate consistently.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-incorporation-year-only-bug",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  43,
+                      "condition":  "The calendar-year difference is four although fewer than four full years have elapsed.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I8",
+                                     "filing-period"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L18515-L18522",
+                                          "official-hta-runtime#checkDateOfIncorporation:L18532-L18577"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The exact-four branch uses filingYear-incorpYear and ignores months/days; the later elapsedTime branch is bypassed.",
+                      "recommended_app_behavior":  "Calculate the statutory elapsed period using full dates.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-overpayment-option",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  44,
+                      "condition":  "Part II Item 16 or Item 21 is negative and no overpayment disposition is checked.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt2I16NetTaxPayable",
+                                     "frm1702MX:txtPg1Pt2I21TotalAmount",
+                                     "frm1702MX:rdoPg1Pt2I21Refund",
+                                     "frm1702MX:rdoPg1Pt2I21IssueTCC",
+                                     "frm1702MX:rdoPg1Pt2I21CarriedOver"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an Overpayment option (Page 1 Part II Item 21).",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkOverPayment:L18333-L18350"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-schedule2-schedule10-crosscheck",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  45,
+                      "condition":  "Any Schedule 2 Item 13 A-D value differs (loose inequality after removeCommaParenthesis) from Schedule 10 Item 10 A-D.",
+                      "fields":  [
+                                     "frm1702MX:txtPg2Sc2It13A",
+                                     "frm1702MX:txtPg2Sc2It13B",
+                                     "frm1702MX:txtPg2Sc2It13C",
+                                     "frm1702MX:txtPg2Sc2It13D",
+                                     "frm1702MX:txtPg2Sc2Itm10A",
+                                     "frm1702MX:txtPg2Sc2Itm10B",
+                                     "frm1702MX:txtPg2Sc2Itm10C",
+                                     "frm1702MX:txtPg2Sc2Itm10D"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Page 2 Schedule 2 Item 13 Columns A, B, C \u0026 D must be equal to Page 4 Schedule 10 Item 10 Columns A, B, C \u0026 D.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21174-L21180"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "The second key family is named Schedule 2 Item 10 even though the message calls it Schedule 10 Item 10; the calculation functions write Schedule 10 results into those keys.",
+                      "recommended_app_behavior":  "Bind by printed schedule semantics and retain exact serialized aliases.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-01",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  46,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17d are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 5 Item 17d"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 5 Item 17d.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-02",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  47,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17e are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 5 Item 17e"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 5 Item 17e.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-03",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  48,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17f are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 5 Item 17f"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 5 Item 17f.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-04",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  49,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17g are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 5 Item 17g"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 5 Item 17g.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-05",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  50,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17h are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 5 Item 17h"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 5 Item 17h.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-06",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  51,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17i are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 5 Item 17i"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 5 Item 17i.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-07",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  52,
+                      "condition":  "The description/year side and positive-amount side of Page 2 Schedule 3 Item 30 are not both populated.",
+                      "fields":  [
+                                     "Page 2 Schedule 3 Item 30"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 2 Schedule 3 Item 30.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-08",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  53,
+                      "condition":  "The description/year side and positive-amount side of Page 2 Schedule 3 Item 31 are not both populated.",
+                      "fields":  [
+                                     "Page 2 Schedule 3 Item 31"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 2 Schedule 3 Item 31.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-09",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  54,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 6 Item 1 are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 6 Item 1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 6 Item 1.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-10",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  55,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 6 Item 2 are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 6 Item 2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 6 Item 2.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-11",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  56,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 6 Item 3 are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 6 Item 3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 6 Item 3.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-12",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  57,
+                      "condition":  "The description/year side and positive-amount side of Page 3 Schedule 6 Item 4 are not both populated.",
+                      "fields":  [
+                                     "Page 3 Schedule 6 Item 4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 3 Schedule 6 Item 4.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-13",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  58,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 7 Item 4 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 7 Item 4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 7 Item 4.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-14",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  59,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 7 Item 5 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 7 Item 5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 7 Item 5.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-15",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  60,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 7 Item 6 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 7 Item 6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 7 Item 6.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-16",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  61,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 7 Item 7 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 7 Item 7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 7 Item 7.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-17",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  62,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 8.1 Item 4 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 8.1 Item 4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 8.1 Item 4.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-18",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  63,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 8.1 Item 5 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 8.1 Item 5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 8.1 Item 5.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-19",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  64,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 8.1 Item 6 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 8.1 Item 6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 8.1 Item 6.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-20",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  65,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 8.1 Item 7 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 8.1 Item 7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 8.1 Item 7.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-21",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  66,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 9 Item 1 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 9 Item 1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 9 Item 1.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-22",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  67,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 9 Item 2 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 9 Item 2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 9 Item 2.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-23",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  68,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 9 Item 3 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 9 Item 3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 9 Item 3.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-24",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  69,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 10 Item 2 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 10 Item 2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 10 Item 2.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-25",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  70,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 10 Item 3 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 10 Item 3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 10 Item 3.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-26",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  71,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 10 Item 5 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 10 Item 5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 10 Item 5.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-27",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  72,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 10 Item 6 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 10 Item 6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 10 Item 6.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-28",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  73,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 10 Item 7 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 10 Item 7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 10 Item 7.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-29",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  74,
+                      "condition":  "The description/year side and positive-amount side of Page 4 Schedule 10 Item 8 are not both populated.",
+                      "fields":  [
+                                     "Page 4 Schedule 10 Item 8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on Page 4 Schedule 10 Item 8.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21182-L21338",
+                                          "official-hta-runtime#validate_nullDescription:L19116-L19151",
+                                          "official-hta-runtime#validate_nullDescription2:L19193-L19233"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-row-positive-only",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  75,
+                      "condition":  "A row amount is negative, or exactly zero, while its description is nonblank.",
+                      "fields":  [
+                                     "description/amount rows"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate_nullDescription:L19123-L19147"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only amounts \u003e 0 increment the counter. Negative amounts are treated as absent and therefore rejected when a description is present, while zero-like strings are treated inconsistently by validate_nullDescription2.",
+                      "recommended_app_behavior":  "Use explicit signed-domain rules per printed line and consistent numeric parsing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-method-of-deduction",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  76,
+                      "condition":  "Neither Itemized nor Optional Standard Deduction is checked.",
+                      "fields":  [
+                                     "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized",
+                                     "frm1702MX:rdoPg1Pt1I13MethodOfDeducOptional"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select a Method of Deduction in page 1 Item 13.",
+                      "source_refs":  [
+                                          "official-hta-runtime#check_MethodOfDeduction:L15564-L15574",
+                                          "official-hta-runtime#validate:L21342"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-exempt-1",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  77,
+                      "condition":  "Exempt attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 1 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Exempt Attachment Page 1 Schedule A Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-exempt-2",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  78,
+                      "condition":  "Exempt attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 2 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Exempt Attachment Page 1 Schedule A Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-exempt-3",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  79,
+                      "condition":  "Exempt attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 3 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Exempt Attachment Page 1 Schedule A Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-exempt-5",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  80,
+                      "condition":  "Exempt attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 5 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Exempt Attachment Page 1 Schedule A Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-exempt-6",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  81,
+                      "condition":  "Exempt attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 6 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Exempt Attachment Page 1 Schedule A Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-special-1",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  82,
+                      "condition":  "Special-rate attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 1 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Special Rate Attachment Page 1 Schedule A Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-special-2",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  83,
+                      "condition":  "Special-rate attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 2 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Special Rate Attachment Page 1 Schedule A Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-special-3",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  84,
+                      "condition":  "Special-rate attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 3 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Special Rate Attachment Page 1 Schedule A Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-special-4",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  85,
+                      "condition":  "Special-rate attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 4 is literal \"0\".",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Special Rate Attachment Page 1 Schedule A Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-special-5",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  86,
+                      "condition":  "Special-rate attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 5 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Special Rate Attachment Page 1 Schedule A Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-special-6",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  87,
+                      "condition":  "Special-rate attachment Schedule B Item 57 is not literal \"0\" and Schedule A Item 6 is blank.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide value on Special Rate Attachment Page 1 Schedule A Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18881-L19065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-exempt-wins",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  88,
+                      "condition":  "Both exempt and special-rate attachment arrays contain rows.",
+                      "fields":  [
+                                     "totalEXArray",
+                                     "totalSPArray"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18885-L19063"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The special-rate loop is an else-if, so it is skipped whenever any exempt attachment exists.",
+                      "recommended_app_behavior":  "Validate both attachment collections independently.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-multiple-alerts",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  89,
+                      "condition":  "A mandatory attachment has several missing Schedule A fields.",
+                      "fields":  [
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAttachments:L18889-L19000"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The helper sets isValid=false but does not break or return after each alert; later rows/checks can produce multiple dialogs in one Validate action.",
+                      "recommended_app_behavior":  "Collect all attachment errors and present them once.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-attachment-nolco-uninvoked",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  90,
+                      "condition":  "NOLCO attachment year/amount rows are incomplete.",
+                      "fields":  [
+                                     "mandatory-attachment-NOLCO-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide complete data on \u003cattachment row\u003e.`n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateNOLCOAttachments:L19068-L19115",
+                                          "official-hta-runtime#validate:L21103-L21425"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "validateNOLCOAttachments is defined but never called.",
+                      "recommended_app_behavior":  "Validate the same row completeness in the active attachment workflow.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-description1-uninvoked",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  91,
+                      "condition":  "validate_nullDescription1 conditions fail.",
+                      "fields":  [
+                                     "description/amount rows"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate_nullDescription1:L19153-L19189"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The helper is defined but never called.",
+                      "recommended_app_behavior":  "Exclude from active compatibility rules.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-email-format-blur",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  92,
+                      "condition":  "A nonblank email does not match the official regular expression.",
+                      "fields":  [
+                                     "frm1702MX:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "You have entered an invalid email address format!",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEmail:L18094-L18104",
+                                          "official-hta-runtime#control:L688-L689"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The disabled profile-prefilled email control has onblur validation; invalid input is cleared when the handler runs.",
+                      "recommended_app_behavior":  "Validate nonblank email without destructive clearing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-success",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  93,
+                      "condition":  "All active checks pass.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21402-L21417"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns from Validate.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-success-unreachable-duplicate",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  94,
+                      "condition":  "Execution continues past the success else block.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21402-L21423"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The success else block returns at line 21416, so the duplicate alert at line 21423 is unreachable.",
+                      "recommended_app_behavior":  "Emit one success event.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-validate-commented-payment-and-accreditation",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  95,
+                      "condition":  "Details of payment, CTC/SEC, accreditation, or former Page 5 description checks fail.",
+                      "fields":  [
+                                     "payment/accreditation/former-schedule-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L21346-L21400"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "All these branches are commented out.",
+                      "recommended_app_behavior":  "Do not present them as active local Validate prerequisites.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-final-001",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested after successful validation.",
+                      "fields":  [
+                                     "txtFinalFlag",
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#final-copy-and-encryption",
+                                          "encrypted-field-audit-v796"
+                                      ],
+                      "evidence_type":  [
+                                            "source",
+                                            "xml"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The reviewed encrypted artifact decrypts to 588 unique keys: all 210 editable keys plus 378 additional final-copy keys.",
+                      "recommended_app_behavior":  "Preserve all 588 concrete keys losslessly and keep finalization distinct from transport.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-final-002-model-gap",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  2,
+                      "condition":  "The current repository serializer is used for this revision.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "repository-xml-contract#editable-210-field:L1-L20",
+                                          "encrypted-field-audit-v796"
+                                      ],
+                      "evidence_type":  [
+                                            "repository-code",
+                                            "xml"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The repository contract explicitly covers the 210-field editable save, not the complete 588-field final-copy inventory.",
+                      "recommended_app_behavior":  "Fail closed for final-copy/export until all 588 concrete keys and active indexed families have lossless coverage.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702mx-submit-001",
+                      "form_id":  "1702mx-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Online transport is invoked.",
+                      "fields":  [
+                                     "return-body",
+                                     "mandatory-attachment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveXMLsubmit-and-sendEmail",
+                                          "repository-model#transition_to_queued:L728-L732"
+                                      ],
+                      "evidence_type":  [
+                                            "source",
+                                            "repository-code"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Transport and mandatory-attachment upload were not exercised; the repository model intentionally fails closed.",
+                      "recommended_app_behavior":  "Keep local validation/finalization independently testable; never infer successful transport.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

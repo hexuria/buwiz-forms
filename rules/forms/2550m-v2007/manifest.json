@@ -1,0 +1,118 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550m-v2007",
+    "form_code":  "2550M",
+    "revision":  "2007-02-01",
+    "revision_label":  "February 2007 ENCS",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "kind":  "official-package-executable"
+                            },
+                            {
+                                "sha256":  "72f1422dab2f8523d140aa51fe5f54f7d9025acc2cf877b37c8d92b60c7668b5",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2550M.hta",
+                                "kind":  "runtime-extracted-hta",
+                                "revision_binding":  "Printed header and application identifiers bind February 2007 ENCS Form 2550M.",
+                                "asset_id":  "official-hta-runtime",
+                                "size":  439121
+                            },
+                            {
+                                "sha256":  "9c4102f6377023e4dd302538f2d365c868db7a2a8f2d54ae6b4de45350f2fdcc",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2550M.hta",
+                                "kind":  "runtime-help",
+                                "revision_binding":  "Installed legacy 2550M help; later circulars are recorded separately.",
+                                "asset_id":  "official-installed-help",
+                                "size":  19070
+                            },
+                            {
+                                "sha256":  "9fb4101ace8c781436dac85df138a8fb9790775291affe2dada030c490d0d2b6",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2550M\\bir2550m.pdf",
+                                "kind":  "official-form-pdf",
+                                "revision_binding":  "February 2007 ENCS printed form.",
+                                "asset_id":  "official-pdf-2007",
+                                "size":  147791
+                            },
+                            {
+                                "sha256":  "ed563de9e6ffbf2226d87c54e09205ccb04221b9b333a307bf52e2a86b9c61c5",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-2550M-072026.xml",
+                                "kind":  "dummy-profile-editable-save",
+                                "revision_binding":  "Dummy 2550M serialization; values excluded from artifacts.",
+                                "asset_id":  "xml-editable-v1",
+                                "size":  9477
+                            },
+                            {
+                                "sha256":  "679710010803f73781340e0708367d66ea4f05203528c8f681a7534cd7b4a116",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-2550M-072026V1.xml",
+                                "kind":  "dummy-profile-editable-save",
+                                "revision_binding":  "Dummy amended/version save with the same 142-key set.",
+                                "asset_id":  "xml-amended-v1",
+                                "size":  9485
+                            },
+                            {
+                                "sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
+                                "kind":  "official-package-xml",
+                                "revision_binding":  "Catalog loaded by the exact HTA.",
+                                "asset_id":  "atc-catalog-runtime",
+                                "size":  153753
+                            },
+                            {
+                                "sha256":  "644d9f85a0d978154ed0ac7ca70b43457cb34c19fe90568df4715200df4625a6",
+                                "path":  "C:\\Users\\uriah\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-36-2021.pdf",
+                                "kind":  "official-circular-pdf",
+                                "revision_binding":  "Later legal change: deactivate Item 20B/Schedule 4 from January 2021 and use Item 23C/Schedule 8.",
+                                "asset_id":  "official-rmc-36-2021",
+                                "size":  120740
+                            },
+                            {
+                                "sha256":  "0f154fd3ade2c592254353fa84b0959787235ac00946a8dc6cdf778c8f1a5581",
+                                "path":  "C:\\Users\\uriah\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-5-2023.pdf",
+                                "kind":  "official-circular-pdf",
+                                "revision_binding":  "Later filing change beginning January 2023.",
+                                "asset_id":  "official-rmc-5-2023",
+                                "size":  12323
+                            },
+                            {
+                                "sha256":  "7199bc39cdc3a9f0d37d5140b1257c66c2af8f863a8bfd4db46764c5b2a50398",
+                                "path":  "C:\\Users\\uriah\\.codex\\visualizations\\2026\\07\\22\\019f8b9e-3f1f-72c2-bf81-4294cc208f76\\RMC-52-2023.pdf",
+                                "kind":  "official-circular-pdf",
+                                "revision_binding":  "Clarifies optional monthly filing has no prescribed deadline.",
+                                "asset_id":  "official-rmc-52-2023",
+                                "size":  5904
+                            }
+                        ],
+    "counts":  {
+                   "validation_rules":  61,
+                   "confirmed_official_bugs":  29,
+                   "calculations":  29,
+                   "unverified_gaps":  2,
+                   "typed_fields":  292,
+                   "atc_records_for_form":  36,
+                   "negative_fixtures":  28
+               },
+    "artifacts":  {
+                      "audit":  "audit.md",
+                      "validations":  "validations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "gaps":  "gaps.md",
+                      "atc_catalog_fixture":  "fixtures/atc-catalog-v796.json",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "fields":  "fields.json",
+                      "calculations":  "calculations.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research artifacts only; no renderer, migration, release, or capability changes.",
+                        "Representative XML values and email address are not copied.",
+                        "No online submission or mutation of official save/encrypted artifacts was performed.",
+                        "The runtime field universe is unbounded; 292 entries comprise 250 bounded concrete keys and 42 explicit unbounded family descriptors."
+                    ]
+}

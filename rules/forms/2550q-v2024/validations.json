@@ -1,0 +1,1070 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "revision":  "2024-04-01",
+    "first_error_behavior":  "Main Validate and each modal validator alert on the first failing branch and return.",
+    "rules":  [
+                  {
+                      "rule_id":  "2550q-validate-year-type",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Neither Calendar nor Fiscal year is selected.",
+                      "fields":  [
+                                     "frm2550qv2024:calendarNo1",
+                                     "frm2550qv2024:fiscalNo1"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please choose a year type on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-quarter",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "No quarter is selected.",
+                      "fields":  [
+                                     "frm2550qv2024:OptQuarter1",
+                                     "frm2550qv2024:OptQuarter2",
+                                     "frm2550qv2024:OptQuarter3",
+                                     "frm2550qv2024:OptQuarter4"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Item 3 is a required field.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-future-period",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Return-period date is later than the system date outside the hard-coded exception.",
+                      "fields":  [
+                                     "frm2550qv2024:RtnPeriodToNo4",
+                                     "frm2550qv2024:txtYearNo2"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Should not accept advance filing.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Future dates are rejected except a stale hard-coded year-ended-2025 exception for November/December 2024 and January 2025.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-tin",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:txtTIN1",
+                                     "frm2550qv2024:txtTIN2",
+                                     "frm2550qv2024:txtTIN3",
+                                     "frm2550qv2024:branchCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid TIN number on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblank segments are checked; no digit shape or TIN checksum is enforced.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-rdo",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "RDO code is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-name",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:taxpayerName"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-address",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:taxpayerAddress"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid Taxpayer\u0027s Registered Address on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-zip",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:taxpayerZip"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid Taxpayer\u0027s ZIP Code on Item 10A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-contact",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:taxpayerContactNumber"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid Taxpayer\u0027s Contact Number on Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-email",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Email address is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:taxpayerEmailAddress"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid Taxpayer\u0027s Email Address on Item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblank content is checked; syntax is not validated.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-classification",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "No taxpayer classification is selected.",
+                      "fields":  [
+                                     "frm2550qv2024:taxPayerClassification1",
+                                     "frm2550qv2024:taxPayerClassification2",
+                                     "frm2550qv2024:taxPayerClassification3",
+                                     "frm2550qv2024:taxPayerClassification4"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please choose taxpayer classification on Item 13.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-treaty",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Treaty Yes is selected and Item 14A is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:internationalTreatyYn",
+                                     "frm2550qv2024:specifyInternationalTreaty"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Specify cannot be empty field on item 14A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-19-nan",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Item 19 amount parses as NaN.",
+                      "fields":  [
+                                     "frm2550qv2024:otherCreditsNo19"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Other Credits (Item 19) is a required field",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-19-description",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Item 19 amount is positive and description is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo19",
+                                     "frm2550qv2024:otherCreditsNo19"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Item 19 specify is a required field.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-19-value",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Item 19 description is nonblank and amount is zero.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo19",
+                                     "frm2550qv2024:otherCreditsNo19"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Item 19 value is required when specify is provided.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-42-nan",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Item 42 amount parses as NaN.",
+                      "fields":  [
+                                     "frm2550qv2024:otherSpecify42"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  " (Item 42) is a required field",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-42-description",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Item 42 amount is positive and description is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo42",
+                                     "frm2550qv2024:otherSpecify42"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Specify field (Item 42) is required ",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-42-value",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Item 42 description is nonblank and amount is zero.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo42",
+                                     "frm2550qv2024:otherSpecify42"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  " (Item 42) value is required when Specify field is provided.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-47-nan",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Item 47 amount parses as NaN.",
+                      "fields":  [
+                                     "frm2550qv2024:otherSpecify47"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  " (Item 47) is a required field.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-47-description",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Item 47 amount is positive and description is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo47",
+                                     "frm2550qv2024:otherSpecify47"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Specify field (Item 47) is required field.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-47-value",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Item 47 description is nonblank and amount is zero.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo47",
+                                     "frm2550qv2024:otherSpecify47"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  " (Item 47) value is required when Specify field is provided.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-56-nan",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Nonblank Item 56 amount parses as NaN.",
+                      "fields":  [
+                                     "frm2550qv2024:otherSpecify56"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  " (Item 56) must be a valid number.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-56-description",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Item 56 amount is positive and description is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo56",
+                                     "frm2550qv2024:otherSpecify56"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Specify field (Item 56) is required field.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-56-value",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Item 56 description is nonblank and amount is blank or zero.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo56",
+                                     "frm2550qv2024:otherSpecify56"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "(Item 56) value is required when Specify field is provided.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8407-L8620"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-validate-19-unreachable",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Item 19 description is blank and amount exceeds 1000.",
+                      "fields":  [
+                                     "frm2550qv2024:addSpecifyNo19",
+                                     "frm2550qv2024:otherCreditsNo19"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8503-L8506"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The branch is unreachable because the earlier blank-description/positive-amount branch already returns; it also has no alert.",
+                      "recommended_app_behavior":  "Remove the dead branch and enforce one explicit pair rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-save-tin",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:txtTIN1",
+                                     "frm2550qv2024:txtTIN2",
+                                     "frm2550qv2024:txtTIN3",
+                                     "frm2550qv2024:branchCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid TIN number on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9065-L9069"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save checks only nonblank TIN pieces.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-save-rdo",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "RDO code equals 000.",
+                      "fields":  [
+                                     "frm2550qv2024:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9070-L9073"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-save-name",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2550qv2024:taxpayerName"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L9074-L9077"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The VAT-return save alert incorrectly labels the taxpayer a withholding agent.",
+                      "recommended_app_behavior":  "Use Taxpayer Name while preserving the actual guard.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s1-empty",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "Any materialized Schedule 1 row field is blank.",
+                      "fields":  [
+                                     "txtDatePurchase1{N\u003e=0}",
+                                     "txtSourceCode1{N\u003e=0}",
+                                     "txtDescription1{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Empty fields are not allowed ",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule1-validation:L5830-L6357"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s1-date-empty",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Schedule 1 purchase date is blank.",
+                      "fields":  [
+                                     "txtDatePurchase1{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Date Purchase cannot be an empty field.",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule1-date-validation:L5830-L6357"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s1-date-cutoff",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Schedule 1 purchase date is after December 31, 2021.",
+                      "fields":  [
+                                     "txtDatePurchase1{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Only dates on or before December 31, 2021 are allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule1-date-validation:L5830-L6357"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s1-source",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Schedule 1 source code is neither I nor D.",
+                      "fields":  [
+                                     "txtSourceCode1{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Invalid input\nAccept only I and D ",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSourceCode:L6132-L6145"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s1-life",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Schedule 1 estimated life exceeds 60.",
+                      "fields":  [
+                                     "txtEstimatedLife1{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Invalid Input it should be 1 to 60",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEstimatedLife:L6122-L6130"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message says 1 to 60 but the source does not explicitly reject zero.",
+                      "recommended_app_behavior":  "Enforce the stated inclusive 1..60 range.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s3-empty",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "Any materialized Schedule 3 row field is blank.",
+                      "fields":  [
+                                     "txtDateCovered3{N\u003e=0}",
+                                     "txtDateCovered3To{N\u003e=0}",
+                                     "txtNameWithHoldingAgent3{N\u003e=0}",
+                                     "txtIncomePayment3{N\u003e=0}",
+                                     "txtTotalTaxWithHeld3{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Empty fields are not allowed ",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule3-validation:L6358-L6597"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s3-year",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Return-period year is 2000 or earlier.",
+                      "fields":  [
+                                     "frm2550qv2024:txtYearNo2"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Only values 2000 and beyond are allowed.",
+                      "source_refs":  [
+                                          "official-hta-runtime#showNewSched3:L6390-L6425"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The condition year \u003c= 2000 \u0026\u0026 year \u003c= 2020 reduces to year \u003c= 2000, contradicting the message at the boundary.",
+                      "recommended_app_behavior":  "Use one explicit inclusive minimum-year rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-s4-empty",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "Any materialized Schedule 4 row field is blank.",
+                      "fields":  [
+                                     "txtDate4{N\u003e=0}",
+                                     "txtDate4To{N\u003e=0}",
+                                     "txtNameOfMiller4{N\u003e=0}",
+                                     "txtNameOfTaxpayer4{N\u003e=0}",
+                                     "txtOfficialReceiptNumber4{N\u003e=0}",
+                                     "txtAmountPaid4{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Empty fields are not allowed ",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule4-validation:L6598-L6760"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-other-row-add",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "page navigation",
+                      "order":  1,
+                      "condition":  "An Item 19/42/47/56 additional row has a blank description or nonpositive amount.",
+                      "fields":  [
+                                     "dynamic-other-row-families"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#additional-row-validation:L6761-L7131"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2550q-other-row-close",
+                      "form_id":  "2550q-v2024",
+                      "revision":  "2024-04-01",
+                      "phase":  "page navigation",
+                      "order":  2,
+                      "condition":  "Save-and-close finds an incomplete Item 19/42/47/56 additional row.",
+                      "fields":  [
+                                     "dynamic-other-row-families"
+                                 ],
+                      "accepted_behavior":  "Processing continues when the condition is false.",
+                      "rejected_behavior":  "Processing stops at this branch.",
+                      "exact_message":  "Please fill up all required fields and ensure amounts are greater than zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#additional-row-validation:L6761-L7131"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Mirror the ordered official check unless the rule is classified as defective.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

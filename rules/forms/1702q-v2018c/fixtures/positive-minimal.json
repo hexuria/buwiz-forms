@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "form_id": "1702q-v2018c",
+  "fixture_id": "minimal-calendar-year-mcit",
+  "purpose": "Source-derived synthetic data expected to pass the local Validate path for a first-quarter calendar-year MCIT return.",
+  "synthetic_only": true,
+  "fields": {
+    "frm1702q:rbForClndrFscl_1": "true",
+    "frm1702q:rbForClndrFscl_2": "false",
+    "frm1702q:rbYrEndMonth": "12",
+    "frm1702q:txtYrEndYear": "25",
+    "frm1702q:rbQuarter_1": "true",
+    "frm1702q:rbQuarter_2": "false",
+    "frm1702q:rbQuarter_3": "false",
+    "frm1702q:rbATC_1": "true",
+    "frm1702q:rbATC_2": "false",
+    "frm1702q:txtTIN1": "000",
+    "frm1702q:txtTIN2": "000",
+    "frm1702q:txtTIN3": "000",
+    "frm1702q:txtBranchCode": "00000",
+    "frm1702q:txtRDOCode": "018",
+    "frm1702q:txtTaxpayerName1": "SYNTHETIC TEST CORPORATION",
+    "frm1702q:txtAddress": "SYNTHETIC ADDRESS",
+    "frm1702q:txtZipCode": "1000",
+    "frm1702q:txtTelNum#occurrence-1": "0000000",
+    "frm1702q:rbMthdOfDdctns_1": "false",
+    "frm1702q:rbMthdOfDdctns_2": "true",
+    "frm1702q:rbTxRlf_1": "false",
+    "frm1702q:rbTxRlf_2": "true"
+  },
+  "expected": {
+    "validate": "success",
+    "save_performed": false,
+    "submission_performed": false
+  },
+  "source_refs": ["official-hta-runtime#validate:L6082-L6305"]
+}

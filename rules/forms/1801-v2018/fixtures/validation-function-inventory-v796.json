@@ -1,0 +1,366 @@
+{
+    "source_sha256":  "d19c4ebe40ed109094ef43687ed5486a003bd11a67a251bdd5545a41c2f46d8d",
+    "function_count":  14,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  2493,
+                          "end_line":  2576,
+                          "body_sha256":  "63f93f00b4e5a2152bec4d9fe551f13098187f8a47e2497f741fd4d4fc311bfe",
+                          "alerts":  [
+                                         "\"File \u0027\"+xmlFileName+\"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  2590,
+                          "end_line":  2598,
+                          "body_sha256":  "3e3c2554133009873c0c607af72693cda2abb21c26292c37d80b692b9bb17e6a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  2647,
+                          "end_line":  2909,
+                          "body_sha256":  "aeab5ce4040c3db19fb0618e1707c4b0001575f1b8330619c0f0ce2b66e19d07",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:amendedRtn_1",
+                                              "frm1801v2018:amendedRtn_2",
+                                              "frm1801v2018:branchCode",
+                                              "frm1801v2018:registeredAddress",
+                                              "frm1801v2018:registeredName",
+                                              "frm1801v2018:telephoneNumber",
+                                              "frm1801v2018:tinA",
+                                              "frm1801v2018:tinB",
+                                              "frm1801v2018:tinC",
+                                              "frm1801v2018:txtDateDay",
+                                              "frm1801v2018:txtDateMonth",
+                                              "frm1801v2018:txtDateYear",
+                                              "frm1801v2018:txtRDOCode",
+                                              "frm1801v2018:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2910,
+                          "end_line":  3090,
+                          "body_sha256":  "3f2dde8c5e9f34fa91cbf282045ee0566ab81f09aacffdb98fc3935abe85773f",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:amendedRtn_1",
+                                              "frm1801v2018:amendedRtn_2",
+                                              "frm1801v2018:branchCode",
+                                              "frm1801v2018:registeredAddress",
+                                              "frm1801v2018:registeredName",
+                                              "frm1801v2018:telephoneNumber",
+                                              "frm1801v2018:tinA",
+                                              "frm1801v2018:tinB",
+                                              "frm1801v2018:tinC",
+                                              "frm1801v2018:txtDateDay",
+                                              "frm1801v2018:txtDateMonth",
+                                              "frm1801v2018:txtDateYear",
+                                              "frm1801v2018:txtRDOCode",
+                                              "frm1801v2018:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validateForm",
+                          "start_line":  3281,
+                          "end_line":  3623,
+                          "body_sha256":  "0f44d79898d936caf5013b134d9de1e6068ad624e3f329ceab0c4a1dd2f8f3cf",
+                          "alerts":  [
+                                         "\"Please enter a valid Return Date\"",
+                                         "\"Filing year is not a leap year.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid month entry on Item no.1. Please enter a valid month.\") // return; // } // if( (document.getElementById(\u0027frm1801v2018:txtDateMonth\u0027).value == \"\") ) // { // alert(\"Please enter a valid month on Item 1.\"",
+                                         "\"Please enter a valid day/month on item 1. Format should be MM/DD/YYYY.\") // return; // } // if( (document.getElementById(\u0027frm1801v2018:txtDateDay\u0027).value == \"\") ) // { // alert(\"Please enter a valid day on Item 1.\"",
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Please enter a valid day in Item 1.\"",
+                                         "\"Invalid date entry on Item no.1.\"",
+                                         "\"Invalid date entry on Item no.1.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be lower than 1904.\") // return; // } var month = parseInt(d.getElementById(\"frm1801v2018:txtDateMonth\").value, 10",
+                                         "\"Please enter a valid month on Item 1.\"",
+                                         "\"Please enter a valid date on Item 1. Filing year is not a leap year.\"",
+                                         "\"Please enter a valid day on Item 1.\"",
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Invalid date entry on Item 1. Entry should not be lower than 1904.\"",
+                                         "\"Invalid date entry on Item 1. Date cannot be after the current date.\"",
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Taxpayer\u0027s Name on Item 7.\"",
+                                         "\"Please enter Taxpayer\u0027s Resident of Decedent on Item 8.\"",
+                                         "\"Please select an option for Item 9.\"",
+                                         "\"Please enter a valid Telephone Number on Item 12.\"",
+                                         "\"Please select a frequency of payment on Item 15D.\"",
+                                         "\"Please specify a frequency of payment on Item 15D - Others.\"",
+                                         "\u0027If Yes is selected on Item 9, value should not exceed Php500 Thousand on Item 37A.\u0027",
+                                         "\u0027If No is selected on Item 9, value should not exceed Php5 Million on Item 37A.\u0027",
+                                         "\"Value should not exceed Php10 Million on Item 37B.\"",
+                                         "\"Incomplete values on Schedule 1, Row \" + (x+1) + \".\"",
+                                         "\"Incomplete values on Schedule 1 (Continuation), Row \" + (x+1) + \".\"",
+                                         "\"Incomplete values on Schedule 1A, Row \" + (x+1) + \".\"",
+                                         "\"Incomplete values on Schedule 2, Row \" + (x+1) + \".\"",
+                                         "\"Incomplete values on Schedule 2A, Row \" + (x+1) + \".\"",
+                                         "\"Incomplete values on Schedule 3, Row \" + (x+1) + \".\"",
+                                         "\"Incomplete values on Schedule 4, Row \" + (x+1) + \".\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:branchCode_1",
+                                              "frm1801v2018:categoryNonResident_1",
+                                              "frm1801v2018:categoryNonResident_2",
+                                              "frm1801v2018:cmdEdit",
+                                              "frm1801v2018:cmdValidate",
+                                              "frm1801v2018:freq_Mon",
+                                              "frm1801v2018:freq_Other",
+                                              "frm1801v2018:freq_Qtr",
+                                              "frm1801v2018:freq_Semi",
+                                              "frm1801v2018:freqOtherInput",
+                                              "frm1801v2018:instGranted_1",
+                                              "frm1801v2018:registeredAddress_1",
+                                              "frm1801v2018:registeredName_1",
+                                              "frm1801v2018:telephoneNumber",
+                                              "frm1801v2018:tinA_1",
+                                              "frm1801v2018:tinB_1",
+                                              "frm1801v2018:tinC_1",
+                                              "frm1801v2018:txtDateDay",
+                                              "frm1801v2018:txtDateMonth",
+                                              "frm1801v2018:txtDateYear",
+                                              "frm1801v2018:txtFamDed_C",
+                                              "frm1801v2018:txtRDOCode_1",
+                                              "frm1801v2018:txtStandardDed_C"
+                                          ]
+                      },
+                      {
+                          "name":  "enabledDisabledControls",
+                          "start_line":  3644,
+                          "end_line":  3785,
+                          "body_sha256":  "0672684fbfaf194ab3f25d5b18dff89bbd1c1b1c3b0d02b59876b934dd888eef",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:adminName",
+                                              "frm1801v2018:amendedRtn_1",
+                                              "frm1801v2018:amendedRtn_2",
+                                              "frm1801v2018:branchCode_1",
+                                              "frm1801v2018:btnFinalCopy",
+                                              "frm1801v2018:categoryNonResident_1",
+                                              "frm1801v2018:categoryNonResident_2",
+                                              "frm1801v2018:extGranted_1",
+                                              "frm1801v2018:extGranted_2",
+                                              "frm1801v2018:fileGranted_1",
+                                              "frm1801v2018:fileGranted_2",
+                                              "frm1801v2018:freq_Mon",
+                                              "frm1801v2018:freq_Other",
+                                              "frm1801v2018:freq_Qtr",
+                                              "frm1801v2018:freq_Semi",
+                                              "frm1801v2018:freqOtherInput",
+                                              "frm1801v2018:instGranted_1",
+                                              "frm1801v2018:instGranted_2",
+                                              "frm1801v2018:optTreaty_1",
+                                              "frm1801v2018:optTreaty_2",
+                                              "frm1801v2018:registeredAddress_1",
+                                              "frm1801v2018:registeredName_1",
+                                              "frm1801v2018:sched1AConj_Total",
+                                              "frm1801v2018:sched1AExc_Total",
+                                              "frm1801v2018:sched1Conj_Total",
+                                              "frm1801v2018:sched1Exc_Total",
+                                              "frm1801v2018:sched2AConj_Total",
+                                              "frm1801v2018:sched2AExc_Total",
+                                              "frm1801v2018:sched2Conj_Total",
+                                              "frm1801v2018:sched2Exc_Total",
+                                              "frm1801v2018:sched3Conj_Total",
+                                              "frm1801v2018:sched3Exc_Total",
+                                              "frm1801v2018:sched4Conj_Total",
+                                              "frm1801v2018:sched4Exc_Total",
+                                              "frm1801v2018:sched5Conj_Total",
+                                              "frm1801v2018:sched5Exc_Total",
+                                              "frm1801v2018:settled_1",
+                                              "frm1801v2018:settled_2",
+                                              "frm1801v2018:tinA_1",
+                                              "frm1801v2018:tinB_1",
+                                              "frm1801v2018:tinC_1",
+                                              "frm1801v2018:treatyY",
+                                              "frm1801v2018:txtBranchCodeE",
+                                              "frm1801v2018:txtCredits_ForeignEst",
+                                              "frm1801v2018:txtCredits_TaxPrev",
+                                              "frm1801v2018:txtDateDay",
+                                              "frm1801v2018:txtDateMonth",
+                                              "frm1801v2018:txtDateYear",
+                                              "frm1801v2018:txtFamDed_C",
+                                              "frm1801v2018:txtInstallment",
+                                              "frm1801v2018:txtInstallmentYear",
+                                              "frm1801v2018:txtOtherDed_C",
+                                              "frm1801v2018:txtOtherDed_Specify",
+                                              "frm1801v2018:txtPen_Compromise",
+                                              "frm1801v2018:txtPen_Interest",
+                                              "frm1801v2018:txtPen_Surcharge",
+                                              "frm1801v2018:txtRDOCode_1",
+                                              "frm1801v2018:txtSheets",
+                                              "frm1801v2018:txtStandardDed_C",
+                                              "frm1801v2018:txtTINE1",
+                                              "frm1801v2018:txtTINE2",
+                                              "frm1801v2018:txtTINE3"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  3800,
+                          "end_line":  3821,
+                          "body_sha256":  "5a15c586066f479d7d1fc702cd6c739c161a23579682bdd284678b864f4f01da",
+                          "alerts":  [
+                                         "\"Please enter a valid Return Date\"",
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 7.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:branchCode_1",
+                                              "frm1801v2018:registeredName_1",
+                                              "frm1801v2018:tinA_1",
+                                              "frm1801v2018:tinB_1",
+                                              "frm1801v2018:tinC_1",
+                                              "frm1801v2018:txtDateDay",
+                                              "frm1801v2018:txtDateMonth",
+                                              "frm1801v2018:txtDateYear",
+                                              "frm1801v2018:txtRDOCode_1"
+                                          ]
+                      },
+                      {
+                          "name":  "enableSaveButton",
+                          "start_line":  3822,
+                          "end_line":  3871,
+                          "body_sha256":  "d06395b1323b694005120011db3ed8dd2914796d8b3bd303e0b71ef5dbab0ffa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:branchCode_1",
+                                              "frm1801v2018:tinA_1",
+                                              "frm1801v2018:tinB_1",
+                                              "frm1801v2018:tinC_1",
+                                              "frm1801v2018:txtDateDay",
+                                              "frm1801v2018:txtDateMonth",
+                                              "frm1801v2018:txtDateYear"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  3965,
+                          "end_line":  4003,
+                          "body_sha256":  "11148027f4eb635432f9c287caf97f1b776a9705f015782e17dc73130fdf160b",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:branchCode",
+                                              "frm1801v2018:registeredAddress",
+                                              "frm1801v2018:registeredName",
+                                              "frm1801v2018:telephoneNumber",
+                                              "frm1801v2018:tinA",
+                                              "frm1801v2018:tinB",
+                                              "frm1801v2018:tinC",
+                                              "frm1801v2018:txtEmail",
+                                              "frm1801v2018:txtLineBus",
+                                              "frm1801v2018:txtRDOCode",
+                                              "frm1801v2018:zipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  4338,
+                          "end_line":  4352,
+                          "body_sha256":  "a760361c65590d389906f387d2c64a612df645cf4f493e2175d0125854c1b629",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  4565,
+                          "end_line":  4578,
+                          "body_sha256":  "e4586132d0719cd50eaf2b91d105bfd5bdb2f6531ef728a33aeabac8df94cc42",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  4811,
+                          "end_line":  4899,
+                          "body_sha256":  "2921d6475bc0d0698cfa1dc56c0d012e6cac3cf646b34eb9e42623fa9aff8b32",
+                          "alerts":  [
+                                         "\"in\"",
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027",
+                                         "\u0027This date cannot be prior to 2018.\u0027",
+                                         "d.getElementById(\"frm1801v2018:txtTaxRate\").value"
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:txtTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "setInfoP2",
+                          "start_line":  4900,
+                          "end_line":  4907,
+                          "body_sha256":  "94851f47db998af9cef659930ff758d65c8bb78bfee3a852aea0b2562ee12656",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:branchCode_1",
+                                              "frm1801v2018:branchCode_2",
+                                              "frm1801v2018:registeredName_1",
+                                              "frm1801v2018:registeredName_2",
+                                              "frm1801v2018:tinA_1",
+                                              "frm1801v2018:tinA_2",
+                                              "frm1801v2018:tinB_1",
+                                              "frm1801v2018:tinB_2",
+                                              "frm1801v2018:tinC_1",
+                                              "frm1801v2018:tinC_2"
+                                          ]
+                      },
+                      {
+                          "name":  "freqOtherChecked",
+                          "start_line":  4942,
+                          "end_line":  4945,
+                          "body_sha256":  "e757f10c1317001efcbe264604857d11054a94e15982d0df63d403a403cf12dc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:freq_Other",
+                                              "frm1801v2018:freqOtherInput",
+                                              "frm1801v2018:instGranted_1"
+                                          ]
+                      }
+                  ]
+}

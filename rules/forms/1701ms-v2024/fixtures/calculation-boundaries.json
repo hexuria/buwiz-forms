@@ -1,0 +1,296 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701ms-v2024",
+    "cases":  [
+                  {
+                      "case_id":  "1701ms-regular-tax-table-formula",
+                      "calculation_id":  "1701ms-regular-tax-table",
+                      "inputs":  {
+                                     "source_formula":  "0 through 250,000: 0; \u003c=400,000: 15% of excess over 250,000; \u003c=800,000: 22,500 + 20% over 400,000; \u003c=2,000,000: 102,500 + 25% over 800,000; \u003c=8,000,000: 402,500 + 30% over 2,000,000; above 8,000,000: 2,202,500 + 35% over 8,000,000."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part4a-item3-formula",
+                      "calculation_id":  "1701ms-part4a-item3",
+                      "inputs":  {
+                                     "source_formula":  "Item 3 = gross compensation - non-taxable compensation."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part4a-item4-formula",
+                      "calculation_id":  "1701ms-part4a-item4",
+                      "inputs":  {
+                                     "source_formula":  "Item 4 = round(regular tax table(Item 3))."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item7-formula",
+                      "calculation_id":  "1701ms-b1-item7",
+                      "inputs":  {
+                                     "source_formula":  "7 = sales/revenue/fees - returns/allowances/discounts."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item9-formula",
+                      "calculation_id":  "1701ms-b1-item9",
+                      "inputs":  {
+                                     "source_formula":  "9 = 7 - 8."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item10d-formula",
+                      "calculation_id":  "1701ms-b1-item10d",
+                      "inputs":  {
+                                     "source_formula":  "10D = 10A + 10B + 10C."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item11-osd-formula",
+                      "calculation_id":  "1701ms-b1-item11-osd",
+                      "inputs":  {
+                                     "source_formula":  "If OSD selected, 11 = round(7 * 40%)."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item12-formula",
+                      "calculation_id":  "1701ms-b1-item12",
+                      "inputs":  {
+                                     "source_formula":  "Itemized: 12 = 9 - 10D; OSD: 12 = 9 - 11."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item14-formula",
+                      "calculation_id":  "1701ms-b1-item14",
+                      "inputs":  {
+                                     "source_formula":  "14 = 12 + 13."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item15-formula",
+                      "calculation_id":  "1701ms-b1-item15",
+                      "inputs":  {
+                                     "source_formula":  "Generally sum positive Item 3 and positive Item 14; spouse compensation-only uses Item 14 alone; 8% branches do not compute."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item17-formula",
+                      "calculation_id":  "1701ms-b1-item17",
+                      "inputs":  {
+                                     "source_formula":  "Exempt branch: round(Item14 * rate/100); special/preferential branch: round(max(0,Item9) * rate/100)."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item18a-formula",
+                      "calculation_id":  "1701ms-b1-item18a",
+                      "inputs":  {
+                                     "source_formula":  "For applicable exempt/special paths, 18A is generally Item17 + compensation tax Item4; mixed special copies Item17 directly to Part II Item19."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b1-item18b-formula",
+                      "calculation_id":  "1701ms-b1-item18b",
+                      "inputs":  {
+                                     "source_formula":  "If graduated rates, 18B = round(regular tax table(max-valid Item15)); negative/non-finite becomes 0."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b2-item21-formula",
+                      "calculation_id":  "1701ms-b2-item21",
+                      "inputs":  {
+                                     "source_formula":  "21 = 19 + 20."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b2-item23-formula",
+                      "calculation_id":  "1701ms-b2-item23",
+                      "inputs":  {
+                                     "source_formula":  "23 = 21 - 22."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b2-item24-formula",
+                      "calculation_id":  "1701ms-b2-item24",
+                      "inputs":  {
+                                     "source_formula":  "If Item23 \u003e= 1, 24 = round(Item23 * 8%); otherwise 0."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-b2-item25-formula",
+                      "calculation_id":  "1701ms-b2-item25",
+                      "inputs":  {
+                                     "source_formula":  "If 8% selected, 25 = compensation tax Item4 + business tax Item24, and Part II Item22 receives the same value; otherwise 0."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item19-formula",
+                      "calculation_id":  "1701ms-part2-item19",
+                      "inputs":  {
+                                     "source_formula":  "Special copies Item17; exempt writes 0; otherwise copies Item18A."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item21-formula",
+                      "calculation_id":  "1701ms-part2-item21",
+                      "inputs":  {
+                                     "source_formula":  "21 = 19 - share of other agency Item20."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item22-formula",
+                      "calculation_id":  "1701ms-part2-item22",
+                      "inputs":  {
+                                     "source_formula":  "Conditional copy from the regular-tax source appropriate to exempt/special, graduated, compensation-only, or 8% branches."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item23-formula",
+                      "calculation_id":  "1701ms-part2-item23",
+                      "inputs":  {
+                                     "source_formula":  "23 = 21 + 22."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part5-item10-formula",
+                      "calculation_id":  "1701ms-part5-item10",
+                      "inputs":  {
+                                     "source_formula":  "10 = sum Items 1 through 9, treating parse failures as 0."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item24-formula",
+                      "calculation_id":  "1701ms-part2-item24",
+                      "inputs":  {
+                                     "source_formula":  "Part II 24 copies Part V Item10."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item25-formula",
+                      "calculation_id":  "1701ms-part2-item25",
+                      "inputs":  {
+                                     "source_formula":  "25 = 23 - 24."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item27-formula",
+                      "calculation_id":  "1701ms-part2-item27",
+                      "inputs":  {
+                                     "source_formula":  "27 = 25 - 26."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item28-formula",
+                      "calculation_id":  "1701ms-part2-item28",
+                      "inputs":  {
+                                     "source_formula":  "28D = surcharge + interest + compromise."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item29-formula",
+                      "calculation_id":  "1701ms-part2-item29",
+                      "inputs":  {
+                                     "source_formula":  "If Item27 \u003c 0 and penalties \u003e 0, Item29 = penalties only; otherwise Item29 = Item27 + penalties."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part2-item30-formula",
+                      "calculation_id":  "1701ms-part2-item30",
+                      "inputs":  {
+                                     "source_formula":  "If one Item29 is negative and the other positive, discard the negative and use the positive; if both negative or both nonnegative, add them."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-part6-relief-formula",
+                      "calculation_id":  "1701ms-part6-relief",
+                      "inputs":  {
+                                     "source_formula":  "max(0, regularTax(item10B + item14) - item17 + special tax credits), rounded."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "1701ms-indexed-schedule-totals-formula",
+                      "calculation_id":  "1701ms-indexed-schedule-totals",
+                      "inputs":  {
+                                     "source_formula":  "Each modal sums its materialized Amount column(s), rounds with Math.round in several schedules, and copies the total into the corresponding fixed return field."
+                                 },
+                      "official_output":  "Source-derived formula fixture; numeric boundary vectors are included for the tax table only."
+                  },
+                  {
+                      "case_id":  "tax-table-250000",
+                      "inputs":  {
+                                     "taxable_income":  250000
+                                 },
+                      "calculation_id":  "1701ms-regular-tax-table",
+                      "official_output":  "0"
+                  },
+                  {
+                      "case_id":  "tax-table-400000",
+                      "inputs":  {
+                                     "taxable_income":  400000
+                                 },
+                      "calculation_id":  "1701ms-regular-tax-table",
+                      "official_output":  "22500"
+                  },
+                  {
+                      "case_id":  "tax-table-800000",
+                      "inputs":  {
+                                     "taxable_income":  800000
+                                 },
+                      "calculation_id":  "1701ms-regular-tax-table",
+                      "official_output":  "102500"
+                  },
+                  {
+                      "case_id":  "tax-table-2000000",
+                      "inputs":  {
+                                     "taxable_income":  2000000
+                                 },
+                      "calculation_id":  "1701ms-regular-tax-table",
+                      "official_output":  "402500"
+                  },
+                  {
+                      "case_id":  "tax-table-8000000",
+                      "inputs":  {
+                                     "taxable_income":  8000000
+                                 },
+                      "calculation_id":  "1701ms-regular-tax-table",
+                      "official_output":  "2202500"
+                  },
+                  {
+                      "case_id":  "aggregate-discard-negative",
+                      "inputs":  {
+                                     "item29b":  200,
+                                     "item29a":  -100
+                                 },
+                      "recommended_output":  "100",
+                      "calculation_id":  "1701ms-part2-item30",
+                      "official_output":  "200"
+                  }
+              ]
+}

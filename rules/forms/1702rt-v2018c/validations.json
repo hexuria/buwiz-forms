@@ -1,0 +1,2300 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702rt-v2018c",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Save accumulates five narrow errors but alerts only errorList[0]. Validate executes in source order and returns on the first active failure. Blur/change/modal handlers can alert and mutate state before either phase.",
+    "rules":  [
+                  {
+                      "rule_id":  "1702rt-save-001",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "RDO value is literal 000.",
+                      "fields":  [
+                                     "frm1702RT:drpPg1Pt1I7RDOCode"
+                                 ],
+                      "accepted_behavior":  "Any other string passes.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please select an RDO Code (Part I Item 7).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L10969-L10980"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Equality-only test permits blank or unknown non-000 values.",
+                      "recommended_app_behavior":  "Require a catalog RDO before finalization while permitting lossless drafts.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-save-002",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I8Name1"
+                                 ],
+                      "accepted_behavior":  "Nonblank passes.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please provide a Registered Name (Part I Item 9).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L10981-L10984"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Message says Item 9, but the field is printed Item 8.",
+                      "recommended_app_behavior":  "Report the correct Item 8.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-save-003",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Registered address line 1 is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I9Address1"
+                                 ],
+                      "accepted_behavior":  "Nonblank passes.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please provide a Registered Address (Part I Item 10).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L10985-L10988"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Message says Item 10, but the field is printed Item 9.",
+                      "recommended_app_behavior":  "Report the correct Item 9.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-save-004",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I11Contact"
+                                 ],
+                      "accepted_behavior":  "Nonblank passes.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please provide a Contact Number (Part I Item 11).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L10989-L10992"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-save-005",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Email is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Nonblank passes without format checking here.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please provide an Email Address (Part I Item 12).",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L10993-L10996"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save checks presence only.",
+                      "recommended_app_behavior":  "Validate format before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-save-006",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  6,
+                      "condition":  "Any other field is incomplete or invalid.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Save proceeds after five narrow checks.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L10969-L11012"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "PSIC validation is commented out and taxpayer TIN is not checked by Save.",
+                      "recommended_app_behavior":  "Preserve drafts losslessly and show completeness separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-001",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Neither Calendar nor Fiscal is selected.",
+                      "fields":  [
+                                     "frm1702RT:rdoPg1I1Calendar",
+                                     "frm1702RT:rdoPg1I1Fiscal"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select if you are filing for Calendar or Fiscal year on Page 1 Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10659-L10665"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-002",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Return month or year is numerically zero.",
+                      "fields":  [
+                                     "frm1702RT:ddlPg1I2Month",
+                                     "frm1702RT:txtPg1I2Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide a valid Year Ended on Page 1 Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10666-L10672"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-003",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "RDO value is numerically zero.",
+                      "fields":  [
+                                     "frm1702RT:drpPg1Pt1I7RDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select a RDO code on Page 1 Part 1 Item 7",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10673-L10679"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-004",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Date of incorporation is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I10"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide a valid Date of Incorporation/Organization on Page 1 Part I Item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10680-L10686"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-005",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I8Name1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide a Registered Name on Page 1 Part I Item 8",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10687-L10693"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-006",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Registered address line 1 is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I9Address1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide a Registered Address on Page 1 Part I Item 9",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10694-L10700"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-007",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I11Contact"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide a valid Contact Number on Page 1 Part I Item 11",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10701-L10707"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-008",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Email is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide a valid Email Address on Page 1 Part I Item 12",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10708-L10714"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Validate checks presence only; format is a separate change handler.",
+                      "recommended_app_behavior":  "Run the same email-format rule during final validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-009",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Item 16 is negative and no overpayment disposition is selected.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt2I16NetTax",
+                                     "frm1702RT:rdoPg1Pt2I21OverpaymentRefunded",
+                                     "frm1702RT:rdoPg1Pt2I21OverpaymentIssued",
+                                     "frm1702RT:rdoPg1Pt2I21OverpaymentCarried"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Overpayment Radio Button on Page 1 Part II ",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10717-L10725"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-010",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Item 21 is negative and no overpayment disposition is selected.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt2I21TotalAmount",
+                                     "frm1702RT:rdoPg1Pt2I21OverpaymentRefunded",
+                                     "frm1702RT:rdoPg1Pt2I21OverpaymentIssued",
+                                     "frm1702RT:rdoPg1Pt2I21OverpaymentCarried"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Overpayment Radio Button on Page 1 Part",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10726-L10734"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "This duplicates Item 16 logic with truncated wording.",
+                      "recommended_app_behavior":  "Evaluate disposition once against the authoritative overpayment amount.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-011",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Item 23 amount is nonzero and any linked payment detail is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt3I23DebitMemoC1",
+                                     "frm1702RT:txtPg1Pt3I23DebitMemoC2",
+                                     "frm1702RT:txtPg1Pt3I23DebitMemoC3Date",
+                                     "frm1702RT:txtPg1Pt3I23DebitMemoC4Amount"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 1 Part III Item 26.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10737-L10743"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The helper is given Item 26 for printed Item 23.",
+                      "recommended_app_behavior":  "Report Item 23.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-012",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Item 24 amount is nonzero and any linked payment detail is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt3I24CheckC1",
+                                     "frm1702RT:txtPg1Pt3I24CheckC2",
+                                     "frm1702RT:txtPg1Pt3I24CheckC3Date",
+                                     "frm1702RT:txtPg1Pt3I24CheckC4Amount"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 1 Part III Item 27.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10744-L10750"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The helper is given Item 27 for printed Item 24.",
+                      "recommended_app_behavior":  "Report Item 24.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-013",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Item 25 amount is nonzero and any linked payment detail is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt3I25TaxDebitC2",
+                                     "frm1702RT:txtPg1Pt3I25TaxDebitDate",
+                                     "frm1702RT:txtPg1Pt3I25TaxDebitC4Amount"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 1 Part III Item 28.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10751-L10757"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The helper is given Item 28 for printed Item 25.",
+                      "recommended_app_behavior":  "Report Item 25.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-014",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Item 26 amount is nonzero and any linked payment detail is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt3I26Others",
+                                     "frm1702RT:txtPg1Pt3I26OthersC1",
+                                     "frm1702RT:txtPg1Pt3I26OthersC2",
+                                     "frm1702RT:txtPg1Pt3I26OthersC3Date",
+                                     "frm1702RT:txtPg1Pt3I26OthersC4Amount"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 1 Part III Item 29.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10758-L10764"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The helper is given Item 29 for printed Item 26.",
+                      "recommended_app_behavior":  "Report Item 26.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-015",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Nonzero payment-detail sum differs from Total Amount Payable.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt3I23DebitMemoC4Amount",
+                                     "frm1702RT:txtPg1Pt3I24CheckC4Amount",
+                                     "frm1702RT:txtPg1Pt3I25TaxDebitC4Amount",
+                                     "frm1702RT:txtPg1Pt3I26OthersC4Amount",
+                                     "frm1702RT:txtPg1Pt2I21TotalAmount"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Sum of Amount fields in Details of Payment (Page 1 Part III) Segment must be equal to TOTAL AMOUNT PAYABLE",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10765-L10773"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-016",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 2 Part 4 Item 53).",
+                      "fields":  [
+                                     "txtPg2Pt4I53C2",
+                                     "txtPg2Pt4I53C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 2 Part 4 Item 53.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10776-L10782"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-017",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 2 Part 4 Item 54).",
+                      "fields":  [
+                                     "txtPg2Pt4I54C2",
+                                     "txtPg2Pt4I54C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 2 Part 4 Item 54.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10783-L10789"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-019",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17d).",
+                      "fields":  [
+                                     "txtPg3Sc1I17dC2",
+                                     "txtPg3Sc1I17dC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 1 Item 17d.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10798-L10804"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-020",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17e).",
+                      "fields":  [
+                                     "txtPg3Sc1I17eC2",
+                                     "txtPg3Sc1I17eC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 1 Item 17e.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10805-L10811"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-021",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17f).",
+                      "fields":  [
+                                     "txtPg3Sc1I17fC2",
+                                     "txtPg3Sc1I17fC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 1 Item 17f.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10812-L10818"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-022",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17g).",
+                      "fields":  [
+                                     "txtPg3Sc1I17gC2",
+                                     "txtPg3Sc1I17gC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 1 Item 17g.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10819-L10825"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-023",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17g).",
+                      "fields":  [
+                                     "txtPg3Sc1I17hC2",
+                                     "txtPg3Sc1I17hC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 1 Item 17g.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10826-L10832"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Report Schedule 1 Item 17h, not 17g.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-024",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 1 Item 17i).",
+                      "fields":  [
+                                     "txtPg3Sc1I17iC2",
+                                     "txtPg3Sc1I17iC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 1 Item 17i.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10833-L10839"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-025",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 1).",
+                      "fields":  [
+                                     "txtPg3Sc2I1C3",
+                                     "txtPg3Sc2I1C1",
+                                     "txtPg3Sc2I1C2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 2 Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10840-L10846"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-026",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 2).",
+                      "fields":  [
+                                     "txtPg3Sc2I2C3",
+                                     "txtPg3Sc2I2C1",
+                                     "txtPg3Sc2I2C2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 2 Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10847-L10853"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-027",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 3).",
+                      "fields":  [
+                                     "txtPg3Sc2I3C3",
+                                     "txtPg3Sc2I3C1",
+                                     "txtPg3Sc2I3C2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 2 Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10854-L10860"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-028",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 3 Schedule 2 Item 4).",
+                      "fields":  [
+                                     "txtPg3Sc2I4C3",
+                                     "txtPg3Sc2I4C1",
+                                     "txtPg3Sc2I4C2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 3 Schedule 2 Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10861-L10867"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-030",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 4).",
+                      "fields":  [
+                                     "txtPg4Sc3AI4C2",
+                                     "txtPg4Sc3AI4C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 3A Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10876-L10882"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-031",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 5).",
+                      "fields":  [
+                                     "txtPg4Sc3AI5C2",
+                                     "txtPg4Sc3AI5C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 3A Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10883-L10889"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-032",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 6).",
+                      "fields":  [
+                                     "txtPg4Sc3AI6C2",
+                                     "txtPg4Sc3AI6C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 3A Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10890-L10896"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-033",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 3A Item 7).",
+                      "fields":  [
+                                     "txtPg4Sc3AI7C2",
+                                     "txtPg4Sc3AI7C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 3A Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10897-L10903"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-034",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 2).",
+                      "fields":  [
+                                     "txtPg4Sc5I2C2",
+                                     "txtPg4Sc5I2C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 5 Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10904-L10910"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-035",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 3).",
+                      "fields":  [
+                                     "txtPg4Sc5I3C2",
+                                     "txtPg4Sc5I3C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 5 Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10911-L10917"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-036",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 5).",
+                      "fields":  [
+                                     "txtPg4Sc5I5C2",
+                                     "txtPg4Sc5I5C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 5 Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10918-L10924"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-037",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 6).",
+                      "fields":  [
+                                     "txtPg4Sc5I6C2",
+                                     "txtPg4Sc5I6C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 5 Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10925-L10931"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-038",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  36,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 7).",
+                      "fields":  [
+                                     "txtPg4Sc5I7C2",
+                                     "txtPg4Sc5I7C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 5 Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10932-L10938"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-039",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  37,
+                      "condition":  "Amount is nonzero and one or more linked description fields are blank (Page 4 Schedule 5 Item 8).",
+                      "fields":  [
+                                     "txtPg4Sc5I8C2",
+                                     "txtPg4Sc5I8C1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide data on Page 4 Schedule 5 Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10939-L10945"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "validate_nullDescription emits the message and returns false.",
+                      "recommended_app_behavior":  "Require linked description/legal-basis cells when amount is nonzero.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-018",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  38,
+                      "condition":  "Item 35 is positive, Part V Item 57 is zero, and itemized deduction is selected.",
+                      "fields":  [
+                                     "frm1702RT:txtPg2Pt4I35SpecialAllowable",
+                                     "frm1702RT:txtPg2Pt5I57SpecialAllowable",
+                                     "frm1702RT:rdoPg1Pt1I13ItemizedDeduction"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please provide a value for this field (Part V Item 57)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10790-L10797"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-029",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  39,
+                      "condition":  "Schedule 3 gross income is greater than ordinary allowable deductions.",
+                      "fields":  [
+                                     "frm1702RT:txtPg4Sc3I1GrossIncome",
+                                     "frm1702RT:txtPg4Sc3I2TotalDeductions"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "In Page 4 Schedule 3 Computation for NOLCO, Gross Income should not be greater than Ordinary Allowable Deductions.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10868-L10875"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The wording describes the opposite relationship from the usual net-operating-loss condition even though the branch checks gross \u003e deductions.",
+                      "recommended_app_behavior":  "Re-derive the NOLCO eligibility condition from the governing revision.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-040",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  40,
+                      "condition":  "Page 2 Item 39 and Page 4 Schedule V Item 10 strings are not exactly equal.",
+                      "fields":  [
+                                     "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                     "frm1702RT:txtPg4Sc5I10NetTaxableIncome"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Item Page 4 Schedule V Item 10 must be equal Item 39 on Page 2 Part IV",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10946-L10953"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The code compares formatted strings rather than parsed numeric values.",
+                      "recommended_app_behavior":  "Compare normalized decimal values.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-041",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  41,
+                      "condition":  "Schedule IV row 1 computed balance is negative.",
+                      "fields":  [
+                                     "frm1702RT:txtPg4Sc4I1C4",
+                                     "frm1702RT:txtPg4Sc4I1C5",
+                                     "frm1702RT:txtPg4Sc4I1C6",
+                                     "frm1702RT:txtPg4Sc4I1C7",
+                                     "frm1702RT:txtPg4Sc4I1C8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10953-L10963"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-042",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  42,
+                      "condition":  "Schedule IV row 2 computed balance is negative.",
+                      "fields":  [
+                                     "frm1702RT:txtPg4Sc4I2C4",
+                                     "frm1702RT:txtPg4Sc4I2C5",
+                                     "frm1702RT:txtPg4Sc4I2C6",
+                                     "frm1702RT:txtPg4Sc4I2C7",
+                                     "frm1702RT:txtPg4Sc4I2C8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L109514-L10974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-043",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  43,
+                      "condition":  "Schedule IV row 3 computed balance is negative.",
+                      "fields":  [
+                                     "frm1702RT:txtPg4Sc4I3C4",
+                                     "frm1702RT:txtPg4Sc4I3C5",
+                                     "frm1702RT:txtPg4Sc4I3C6",
+                                     "frm1702RT:txtPg4Sc4I3C7",
+                                     "frm1702RT:txtPg4Sc4I3C8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L109525-L10985"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, changes page, and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-success",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  44,
+                      "condition":  "All prior ordered checks pass.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Controls are disabled; Edit, upload, Final Copy and Add-more buttons are enabled.",
+                      "rejected_behavior":  "No rejection.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10986-L10967"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-email",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Email helper regex rejects the value.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I12Email"
+                                 ],
+                      "accepted_behavior":  "Value passes the regex.",
+                      "rejected_behavior":  "Alert is shown and the field is cleared.",
+                      "exact_message":  "You have entered an invalid email address format!",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEmail:L6852-L6862"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-date-format",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Date fails the official parser or round-trip check.",
+                      "fields":  [
+                                     "date-fields"
+                                 ],
+                      "accepted_behavior":  "MM/DD/YYYY value round-trips.",
+                      "rejected_behavior":  "Alert is shown and value is cleared.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6994-L7060"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-date-future",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Parsed date is after current system date.",
+                      "fields":  [
+                                     "date-fields"
+                                 ],
+                      "accepted_behavior":  "Date is not in the future.",
+                      "rejected_behavior":  "Alert is shown and value is cleared.",
+                      "exact_message":  "This date cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6994-L7060"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-tin-short",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A nonblank TIN segment contains fewer than three characters and checkFull is false.",
+                      "fields":  [
+                                     "tin-segment-fields"
+                                 ],
+                      "accepted_behavior":  "Three-character segment passes.",
+                      "rejected_behavior":  "Alert is shown and the segment is selected, but the helper still returns true.",
+                      "exact_message":  "Please provide a valid TIN (must have 3 numbers per box).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateTIN:L7191-L7223"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The assignment isValid=false is commented out.",
+                      "recommended_app_behavior":  "Reject malformed segments and validate the complete taxpayer TIN checksum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-validate-tin-omitted",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Validate is invoked with any taxpayer TIN shape or checksum.",
+                      "fields":  [
+                                     "taxpayer-tin-fields"
+                                 ],
+                      "accepted_behavior":  "Validate does not inspect taxpayer TIN.",
+                      "rejected_behavior":  "No TIN-specific rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L10657-L10968",
+                                          "official-hta-runtime#validateTIN:L7191-L7223"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "No validateTIN call exists in the ordered Validate function.",
+                      "recommended_app_behavior":  "Require exact segment/branch shape and checksum before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-ctc-year",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "The stale CTC helper would reject an Item 23 year different from current system year.",
+                      "fields":  [
+                                     "nonexistent-ctc-fields"
+                                 ],
+                      "accepted_behavior":  "No active call site or matching control exists.",
+                      "rejected_behavior":  "Unreachable.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDateOfIssue:L7313-L7385",
+                                          "official-hta-runtime#no-call-site"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The helper references fields absent from the 258-key inventory and is never called.",
+                      "recommended_app_behavior":  "Do not implement this stale branch for 1702RTv2018C.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-year-minimum",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Two-digit filing year resolves below 2018.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1I2Year"
+                                 ],
+                      "accepted_behavior":  "2018 or later continues.",
+                      "rejected_behavior":  "Alert and clear.",
+                      "exact_message":  "Invalid Year. Year should not be earlier than 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L7517-L7619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-fiscal-future",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Fiscal return end is after the current month/year.",
+                      "fields":  [
+                                     "frm1702RT:rdoPg1I1Fiscal",
+                                     "frm1702RT:ddlPg1I2Month",
+                                     "frm1702RT:txtPg1I2Year"
+                                 ],
+                      "accepted_behavior":  "Not future.",
+                      "rejected_behavior":  "Alert and clear.",
+                      "exact_message":  "Date (Page 1 Item 2) cannot be greater than current date when filing for Fiscal Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L7517-L7619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-fiscal-december",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Fiscal return month is December.",
+                      "fields":  [
+                                     "frm1702RT:rdoPg1I1Fiscal",
+                                     "frm1702RT:ddlPg1I2Month"
+                                 ],
+                      "accepted_behavior":  "January through November.",
+                      "rejected_behavior":  "Alert and clear.",
+                      "exact_message":  "Date (Page 1 Item 2) Month cannot be equal to December.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L7517-L7619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-calendar-regular-current",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Calendar, not short period, and year is current or later.",
+                      "fields":  [
+                                     "frm1702RT:rdoPg1I1Calendar",
+                                     "frm1702RT:rdoPg1I4ShortPeriodNo",
+                                     "frm1702RT:txtPg1I2Year"
+                                 ],
+                      "accepted_behavior":  "Year is before current.",
+                      "rejected_behavior":  "Alert and clear.",
+                      "exact_message":  "Year (Page 1 Item 2) cannot be greater than or equal to current year when filing for Calendar Year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L7517-L7619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-calendar-short-future",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Calendar short-period end is later than current month/year.",
+                      "fields":  [
+                                     "frm1702RT:rdoPg1I1Calendar",
+                                     "frm1702RT:rdoPg1I4ShortPeriodYes",
+                                     "frm1702RT:ddlPg1I2Month",
+                                     "frm1702RT:txtPg1I2Year"
+                                 ],
+                      "accepted_behavior":  "Not future.",
+                      "rejected_behavior":  "Alert and clear.",
+                      "exact_message":  "Month (Page 1 Item 2) cannot be greater than current month date when filing for Calendar Year and Short Period Return.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L7517-L7619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-calendar-short-december",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Calendar short-period month is December.",
+                      "fields":  [
+                                     "frm1702RT:rdoPg1I1Calendar",
+                                     "frm1702RT:rdoPg1I4ShortPeriodYes",
+                                     "frm1702RT:ddlPg1I2Month"
+                                 ],
+                      "accepted_behavior":  "January through November.",
+                      "rejected_behavior":  "Alert and clear.",
+                      "exact_message":  "Month (Page 1 Item 2) cannot be equal to december when filing for Calendar Year and Short Period Return.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L7517-L7619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-year-tax-rate-state",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Resolved taxable year crosses 2020.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1I2Year",
+                                     "frm1702RT:Pg2Pt4I40IncomeTaxRate",
+                                     "frm1702RT:txtPg2Pt4I41IncomeTaxDue",
+                                     "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+                                     "frm1702RT:txtPg2Pt5I57SpecialAllowable"
+                                 ],
+                      "accepted_behavior":  "For 2020+, four rate/tax fields are enabled; before 2020 they are disabled.",
+                      "rejected_behavior":  "No alert.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#global-taxableYear:L7502-L7516",
+                                          "official-hta-runtime#validateYearEnd:L7517-L7619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Global taxableYear starts as current two-digit year minus one; load declares a different block-scoped local variable, so state depends on later handlers.",
+                      "recommended_app_behavior":  "Derive tax treatment solely from normalized return period, not system-time globals.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-incorp-after-filing",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Date of incorporation month/year is after filing period.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I10",
+                                     "frm1702RT:ddlPg1I2Month",
+                                     "frm1702RT:txtPg1I2Year"
+                                 ],
+                      "accepted_behavior":  "Incorporation is not after filing period.",
+                      "rejected_behavior":  "Alert, clear, focus.",
+                      "exact_message":  "Date of Incorporation cannot be greater than Page 1 Item 2 Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L7736-L7810"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-incorp-fourth-year",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Filing year minus incorporation year equals four and IC 055 is unchecked.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I10",
+                                     "frm1702RT:rdoPg1I5Atc"
+                                 ],
+                      "accepted_behavior":  "IC 055 is checked.",
+                      "rejected_behavior":  "Alert and automatic check.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L7736-L7810"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Dynamic message says the ATC will be marked; elapsed time ignores month in this branch.",
+                      "recommended_app_behavior":  "Use the legally defined MCIT applicability date.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-incorp-less-four",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Filing year minus incorporation year is below four.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I10",
+                                     "frm1702RT:rdoPg1I5Atc"
+                                 ],
+                      "accepted_behavior":  "IC 055 remains disabled and unchecked.",
+                      "rejected_behavior":  "Alert and false return.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L7736-L7810"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The branch condition additionally requires IC 055 already false, and wording says a mark will be removed.",
+                      "recommended_app_behavior":  "Use a deterministic applicability calculation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-input-incorp-four-plus",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Elapsed time is at least four years and IC 055 is unchecked.",
+                      "fields":  [
+                                     "frm1702RT:txtPg1Pt1I10",
+                                     "frm1702RT:rdoPg1I5Atc"
+                                 ],
+                      "accepted_behavior":  "IC 055 is checked.",
+                      "rejected_behavior":  "Alert and automatic check.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDateOfIncorporation:L7736-L7810"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Dynamic message says IC 055 will be marked.",
+                      "recommended_app_behavior":  "Use a deterministic applicability calculation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-two-description",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "A two-column modal row description is blank.",
+                      "fields":  [
+                                     "two-column-modal-C1-families"
+                                 ],
+                      "accepted_behavior":  "Description is nonblank.",
+                      "rejected_behavior":  "Add/Save is blocked.",
+                      "exact_message":  "Page {current page} Item {item}.{row} Description should not be blank.",
+                      "source_refs":  [
+                                          "official-hta-runtime#addRowModalTable:L5329-L5443",
+                                          "official-hta-runtime#saveModalTable:L5444-L5688"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-two-amount",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "A two-column modal row amount is zero.",
+                      "fields":  [
+                                     "two-column-modal-C2-families"
+                                 ],
+                      "accepted_behavior":  "Amount is nonzero.",
+                      "rejected_behavior":  "Add/Save is blocked.",
+                      "exact_message":  "Page {current page} Item {item}.{row} Amount should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#addRowModalTable:L5329-L5443",
+                                          "official-hta-runtime#saveModalTable:L5444-L5688"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-three-description",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "Schedule 2 Item 4 modal description is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg3Sc2I4.{N\u003e=1}C1"
+                                 ],
+                      "accepted_behavior":  "Description is nonblank.",
+                      "rejected_behavior":  "Add/Save is blocked.",
+                      "exact_message":  "Page {current page} Item {item}.{row} Description should not be blank.",
+                      "source_refs":  [
+                                          "official-hta-runtime#addRowModalTable:L5329-L5443",
+                                          "official-hta-runtime#saveModalTable:L5444-L5688"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-three-basis",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "Schedule 2 Item 4 legal basis is blank.",
+                      "fields":  [
+                                     "frm1702RT:txtPg3Sc2I4.{N\u003e=1}C2"
+                                 ],
+                      "accepted_behavior":  "Legal basis is nonblank.",
+                      "rejected_behavior":  "Add/Save is blocked.",
+                      "exact_message":  "Page {current page} Item {item}.{row} Legal Basis should not be blank.",
+                      "source_refs":  [
+                                          "official-hta-runtime#addRowModalTable:L5329-L5443",
+                                          "official-hta-runtime#saveModalTable:L5444-L5688"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-three-amount",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "Schedule 2 Item 4 amount is zero.",
+                      "fields":  [
+                                     "frm1702RT:txtPg3Sc2I4.{N\u003e=1}C3"
+                                 ],
+                      "accepted_behavior":  "Amount is nonzero.",
+                      "rejected_behavior":  "Add/Save is blocked.",
+                      "exact_message":  "Page {current page} Item {item}.{row} Amount should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#addRowModalTable:L5329-L5443",
+                                          "official-hta-runtime#saveModalTable:L5444-L5688"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-six-add",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "NOLCO six-column Add Row sees blank C1.",
+                      "fields":  [
+                                     "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C1"
+                                 ],
+                      "accepted_behavior":  "C1 is nonblank.",
+                      "rejected_behavior":  "Add is blocked.",
+                      "exact_message":  "Please fill-up all fields before you can add more.",
+                      "source_refs":  [
+                                          "official-hta-runtime#addRowModalTable:L5329-L5443"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Despite the wording, only C1 is checked.",
+                      "recommended_app_behavior":  "Validate each required column explicitly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-six-save",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "NOLCO six-column Save sees C1 nonblank but C2-C5 blank/invalid.",
+                      "fields":  [
+                                     "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C1",
+                                     "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C2",
+                                     "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C3",
+                                     "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C4",
+                                     "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C5"
+                                 ],
+                      "accepted_behavior":  "Row is retained based on C1.",
+                      "rejected_behavior":  "No validation rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveModalTable:L5444-L5688"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save does not validate C2-C5 before computing C6.",
+                      "recommended_app_behavior":  "Validate all NOLCO row inputs and computed balance.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-modal-success",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "Modal Save completes.",
+                      "fields":  [
+                                     "modal-row-families"
+                                 ],
+                      "accepted_behavior":  "Repository arrays and subtotals update.",
+                      "rejected_behavior":  "No rejection.",
+                      "exact_message":  "Data has been saved successfully!",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveModalTable:L5444-L5688"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-obsolete-page8-modal",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "Dead Page 8 Schedule 12/13 branches are inspected.",
+                      "fields":  [
+                                     "nonexistent-page8-fields"
+                                 ],
+                      "accepted_behavior":  "No matching controls or active call sites exist in this four-page HTA.",
+                      "rejected_behavior":  "Unreachable.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#AddrowChecking_ModalColumnRT:L6069-L6292",
+                                          "official-hta-runtime#four-page-form"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Stale validation code is retained from another form/revision.",
+                      "recommended_app_behavior":  "Do not create fields or validations for unreachable controls.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-resource-gserializer",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "HTA requests ../js/gserializer.js.",
+                      "fields":  [
+                                     "runtime-package"
+                                 ],
+                      "accepted_behavior":  "Resource would load if present.",
+                      "rejected_behavior":  "File is absent in the extracted package.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#script-src:gserializer.js",
+                                          "runtime-package#missing:js/gserializer.js"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Package continues using other serializer code.",
+                      "recommended_app_behavior":  "Do not depend on the missing resource.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-resource-jxboxprinting",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "HTA requests ../js/jxboxprinting.js.",
+                      "fields":  [
+                                     "runtime-package"
+                                 ],
+                      "accepted_behavior":  "Resource would load if present.",
+                      "rejected_behavior":  "File is absent in the extracted package.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#script-src:jxboxprinting.js",
+                                          "runtime-package#missing:js/jxboxprinting.js"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Package continues using other print code.",
+                      "recommended_app_behavior":  "Record the missing dependency and avoid relying on it.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-resource-testjs",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "HTA requests ../js/lib/test.js.",
+                      "fields":  [
+                                     "runtime-package"
+                                 ],
+                      "accepted_behavior":  "Resource would load if present.",
+                      "rejected_behavior":  "File is absent in the extracted package.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#script-src:lib/test.js",
+                                          "runtime-package#missing:js/lib/test.js"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "A test resource is linked by the production HTA but absent.",
+                      "recommended_app_behavior":  "Do not reproduce the dependency.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-final-001",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested after successful validation.",
+                      "fields":  [
+                                     "return-body",
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Encryption/profile flow proceeds.",
+                      "rejected_behavior":  "Confirmation, profile, or connectivity can stop it.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveEncryptedProfile",
+                                          "official-hta-runtime#btnFinalCopy"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Final copy is coupled to profile/connectivity behavior.",
+                      "recommended_app_behavior":  "Separate deterministic offline finalization from transport.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1702rt-submit-001",
+                      "form_id":  "1702rt-v2018c",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Online send is invoked.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Encrypted payload is prepared.",
+                      "rejected_behavior":  "Online submission was not exercised.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#submit-functions",
+                                          "shared-1702rt-js"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Source-derived only; no online submission was attempted.",
+                      "recommended_app_behavior":  "Keep local validation independently testable.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

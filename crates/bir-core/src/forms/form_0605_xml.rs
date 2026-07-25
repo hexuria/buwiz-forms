@@ -1018,10 +1018,19 @@ mod tests {
         let source = reviewed_sample_fields(ReviewedSample::December2025);
         let xml = crate::bir_xml::generate_bir_xml(&source);
         assert!(xml.contains("SOFTWARE%20DEVELOPMENT"));
-        let draft = Form0605Draft::from_bir_xml_payload(&xml).unwrap();
+        let decoded = crate::bir_xml::parse_bir_xml_with_codec_checked(
+            &xml,
+            bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+        )
+        .unwrap();
+        let draft = Form0605Draft::from_bir_field_map(&decoded).unwrap();
         assert_eq!(draft.line_of_business, "SOFTWARE DEVELOPMENT");
         assert_eq!(
-            crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload()).unwrap(),
+            crate::bir_xml::parse_bir_xml_with_codec_checked(
+                &draft.to_bir_xml_payload(),
+                bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+            )
+            .unwrap(),
             source
         );
     }
@@ -1133,7 +1142,11 @@ mod tests {
                 .expect("reviewed editable source must satisfy the semantic contract");
             assert_eq!(plain_draft.to_bir_field_map(), plain_fields);
             assert_eq!(
-                crate::bir_xml::parse_bir_xml_checked(&plain_draft.to_bir_xml_payload()).unwrap(),
+                crate::bir_xml::parse_bir_xml_with_codec_checked(
+                    &plain_draft.to_bir_xml_payload(),
+                    bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+                )
+                .unwrap(),
                 plain_fields
             );
 
@@ -1179,9 +1192,13 @@ mod tests {
                 plain_draft.item_21_total_amount_payable
             );
             assert_eq!(encrypted_draft.to_bir_field_map(), encrypted_fields);
-            let encrypted_reimport =
-                Form0605Draft::from_bir_xml_payload(&encrypted_draft.to_bir_xml_payload())
-                    .expect("canonical encrypted-companion replay must re-import");
+            let encrypted_reimport_fields = crate::bir_xml::parse_bir_xml_with_codec_checked(
+                &encrypted_draft.to_bir_xml_payload(),
+                bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+            )
+            .expect("canonical encrypted-companion replay must decode as generated UTF-8 XML");
+            let encrypted_reimport = Form0605Draft::from_bir_field_map(&encrypted_reimport_fields)
+                .expect("canonical encrypted-companion replay must re-import");
             assert_eq!(encrypted_reimport.to_bir_field_map(), encrypted_fields);
         }
 

@@ -1,0 +1,579 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701a-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1701a-tax-table-2018-2022",
+                             "1701a-tax-table-2023-plus",
+                             "1701a-tax-table-pre-2018",
+                             "1701a-item20",
+                             "1701a-item24",
+                             "1701a-item28",
+                             "1701a-item29",
+                             "1701a-item30",
+                             "1701a-item38",
+                             "1701a-item39",
+                             "1701a-item40",
+                             "1701a-item42-modal",
+                             "1701a-item44",
+                             "1701a-item45",
+                             "1701a-item49",
+                             "1701a-item51-modal",
+                             "1701a-item52",
+                             "1701a-item53",
+                             "1701a-item55",
+                             "1701a-item56",
+                             "1701a-item64",
+                             "1701a-item65"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1701a-tax-table-2018-2022",
+                             "outputs":  [
+                                             "frm1701A:txt46A",
+                                             "frm1701A:txt46B"
+                                         ],
+                             "inputs":  [
+                                            "frm1701A:txt45A",
+                                            "frm1701A:txt45B",
+                                            "frm1701A:txtYear"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "2018-2022: \u003c=250k 0; \u003c=400k 20% over 250k; \u003c=800k 30k + 25% over 400k; \u003c=2m 130k + 30% over 800k; \u003c=8m 490k + 32% over 2m; above 8m 2.41m + 35% over 8m.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt46",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt46:L2931-L2974"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-tax-table-2023-plus",
+                             "outputs":  [
+                                             "frm1701A:txt46A",
+                                             "frm1701A:txt46B"
+                                         ],
+                             "inputs":  [
+                                            "frm1701A:txt45A",
+                                            "frm1701A:txt45B",
+                                            "frm1701A:txtYear"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "After 2022: \u003c=250k 0; \u003c=400k 15% over 250k; \u003c=800k 22.5k + 20% over 400k; \u003c=2m 102.5k + 25% over 800k; \u003c=8m 402.5k + 30% over 2m; above 8m 2.2025m + 35% over 8m.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt46",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt46:L2975-L3017"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-tax-table-pre-2018",
+                             "outputs":  [
+                                             "frm1701A:txt46A",
+                                             "frm1701A:txt46B"
+                                         ],
+                             "inputs":  [
+                                            "frm1701A:txt45A",
+                                            "frm1701A:txt45B",
+                                            "frm1701A:txtYear"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Legacy seven-bracket table for years below 2018.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt46",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt46:L3018-L3063"
+                                             ],
+                             "assessment":  "obsolete",
+                             "recommended_app_behavior":  "Do not use with this revision; Validate rejects years below 2018.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item20",
+                             "outputs":  [
+                                             "frm1701A:txt20A",
+                                             "frm1701A:txt20B"
+                                         ],
+                             "inputs":  [
+                                            "item46",
+                                            "item56",
+                                            "tax-rate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Graduated rate copies Item 46; 8% rate copies Item 56.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt20",
+                             "depends_on":  [
+                                                "1701a-tax-table-2018-2022",
+                                                "1701a-tax-table-2023-plus",
+                                                "1701a-item56"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt20:L2826-L2843"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item24",
+                             "outputs":  [
+                                             "frm1701A:txt24A",
+                                             "frm1701A:txt24B"
+                                         ],
+                             "inputs":  [
+                                            "item22",
+                                            "item23"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 22 - 23.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt24",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt24:L2845-L2852"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item28",
+                             "outputs":  [
+                                             "frm1701A:txt28A",
+                                             "frm1701A:txt28B"
+                                         ],
+                             "inputs":  [
+                                            "item25",
+                                            "item26",
+                                            "item27"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "28 = surcharge + interest + compromise.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L2854-L2861"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item29",
+                             "outputs":  [
+                                             "frm1701A:txt29A",
+                                             "frm1701A:txt29B"
+                                         ],
+                             "inputs":  [
+                                            "item24",
+                                            "item28"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item 24 is negative, copy Item 24 and ignore penalties; otherwise 29 = 24 + 28.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt29",
+                             "depends_on":  [
+                                                "1701a-item24",
+                                                "1701a-item28"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt29:L2863-L2878"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Re-derive whether penalties may be discarded when tax payable is negative.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item30",
+                             "outputs":  [
+                                             "frm1701A:txt30"
+                                         ],
+                             "inputs":  [
+                                            "item29A",
+                                            "item29B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "30 = 29A + 29B.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt30",
+                             "depends_on":  [
+                                                "1701a-item29"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt30:L2880-L2884"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item38",
+                             "outputs":  [
+                                             "frm1701A:txt38A",
+                                             "frm1701A:txt38B"
+                                         ],
+                             "inputs":  [
+                                            "item36",
+                                            "item37"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "38 = 36 - 37.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt38",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt38:L2886-L2893"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item39",
+                             "outputs":  [
+                                             "frm1701A:txt39A",
+                                             "frm1701A:txt39B"
+                                         ],
+                             "inputs":  [
+                                            "item38"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "39 = 40% of Item 38.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt39",
+                             "depends_on":  [
+                                                "1701a-item38"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt39:L2895-L2902"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item40",
+                             "outputs":  [
+                                             "frm1701A:txt40A",
+                                             "frm1701A:txt40B"
+                                         ],
+                             "inputs":  [
+                                            "item38",
+                                            "item39"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "40 = 38 - 39.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt40",
+                             "depends_on":  [
+                                                "1701a-item38",
+                                                "1701a-item39"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt40:L2904-L2911"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item42-modal",
+                             "outputs":  [
+                                             "frm1701A:txt42A",
+                                             "frm1701A:txt42B"
+                                         ],
+                             "inputs":  [
+                                            "frm1701A:txtmodalPartIVA_{N\u003e=1}C2",
+                                            "frm1701A:txtmodalPartIVA_{N\u003e=1}C3"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each party amount column across materialized Part IV.A modal rows.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computePartIVAModal/computePartIVAOtherIncome",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePartIVAModal:L3160-L3200",
+                                                 "official-hta-runtime#computePartIVAOtherIncome:L3201-L3210"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item44",
+                             "outputs":  [
+                                             "frm1701A:txt44A",
+                                             "frm1701A:txt44B"
+                                         ],
+                             "inputs":  [
+                                            "item41",
+                                            "item42",
+                                            "item43"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "44 = 41 + 42 + 43.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt44",
+                             "depends_on":  [
+                                                "1701a-item42-modal"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt44:L2913-L2920"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item45",
+                             "outputs":  [
+                                             "frm1701A:txt45A",
+                                             "frm1701A:txt45B"
+                                         ],
+                             "inputs":  [
+                                            "item40",
+                                            "item44"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "45 = 40 + 44.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt45",
+                             "depends_on":  [
+                                                "1701a-item40",
+                                                "1701a-item44"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt45:L2922-L2929"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item49",
+                             "outputs":  [
+                                             "frm1701A:txt49A",
+                                             "frm1701A:txt49B"
+                                         ],
+                             "inputs":  [
+                                            "item47",
+                                            "item48"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "49 = 47 - 48.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt49",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt49:L3067-L3074"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item51-modal",
+                             "outputs":  [
+                                             "frm1701A:txt51A",
+                                             "frm1701A:txt51B"
+                                         ],
+                             "inputs":  [
+                                            "frm1701A:txtmodalPartIVB_{N\u003e=1}C2",
+                                            "frm1701A:txtmodalPartIVB_{N\u003e=1}C3"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each party amount column across materialized Part IV.B modal rows.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computePartIVBModal/computePartIVBOtherIncome",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePartIVBModal:L3211-L3251",
+                                                 "official-hta-runtime#computePartIVBOtherIncome:L3252-L3260"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item52",
+                             "outputs":  [
+                                             "frm1701A:txt52A",
+                                             "frm1701A:txt52B"
+                                         ],
+                             "inputs":  [
+                                            "item50",
+                                            "item51"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "52 = 50 + 51.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt52",
+                             "depends_on":  [
+                                                "1701a-item51-modal"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt52:L3076-L3083"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item53",
+                             "outputs":  [
+                                             "frm1701A:txt53A",
+                                             "frm1701A:txt53B"
+                                         ],
+                             "inputs":  [
+                                            "item49",
+                                            "item52"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "53 = 49 + 52, then enforce the hard-coded 3m threshold.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt53",
+                             "depends_on":  [
+                                                "1701a-item49",
+                                                "1701a-item52"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt53:L3085-L3093"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item55",
+                             "outputs":  [
+                                             "frm1701A:txt55A",
+                                             "frm1701A:txt55B"
+                                         ],
+                             "inputs":  [
+                                            "item53",
+                                            "item54"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "55 = 53 - 54.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt55",
+                             "depends_on":  [
+                                                "1701a-item53"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt55:L3095-L3102"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item56",
+                             "outputs":  [
+                                             "frm1701A:txt56A",
+                                             "frm1701A:txt56B"
+                                         ],
+                             "inputs":  [
+                                            "item55"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "56 = 8% of Item 55; negative Item 55 forces zero.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt56",
+                             "depends_on":  [
+                                                "1701a-item55"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt56:L3104-L3119"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item64",
+                             "outputs":  [
+                                             "frm1701A:txt64A",
+                                             "frm1701A:txt64B",
+                                             "frm1701A:txt21A",
+                                             "frm1701A:txt21B"
+                                         ],
+                             "inputs":  [
+                                            "items57-through-63"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "64 = sum Items 57 through 63; Item 21 copies Item 64.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt64",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt64:L3121-L3134"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701a-item65",
+                             "outputs":  [
+                                             "frm1701A:txt65A",
+                                             "frm1701A:txt65B",
+                                             "frm1701A:txt22A",
+                                             "frm1701A:txt22B"
+                                         ],
+                             "inputs":  [
+                                            "item46",
+                                            "item56",
+                                            "item64",
+                                            "tax-rate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Graduated: 65 = 46 - 64; 8%: 65 = 56 - 64; Item 22 copies Item 65.",
+                             "rounding":  "Most paths call toFixed(0) before formatCurrency, producing whole-peso results despite some modal blur handlers requesting two decimals.",
+                             "trigger":  "computeTxt65",
+                             "depends_on":  [
+                                                "1701a-tax-table-2018-2022",
+                                                "1701a-tax-table-2023-plus",
+                                                "1701a-item56",
+                                                "1701a-item64"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt65:L3136-L3158"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

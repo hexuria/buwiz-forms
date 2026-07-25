@@ -1,0 +1,164 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200a-v2020",
+    "revision":  "2020-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "packaged-help"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2020 excise-tax return for removals of alcohol products, with Schedule 1."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L5938-L5959",
+                                           "official-hta-runtime#saveXML"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only a non-fully-blank return date, TIN, RDO, and name before flat serialization."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L5607-L5746"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate checks period, identity, production/removal place, relief, payment scheme, and fund sufficiency, but omits Schedule 1 completeness."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveEncryptedProfile",
+                                           "excluded-legacy-encrypted-keys"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Encryption exists, but the available 134-key final copy is proven legacy and excluded."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail",
+                                           "official-hta-runtime#uploadXMLFile"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport code exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Preserves duplicate key occurrences and runtime rows."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables final copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm",
+                                                "official-hta-runtime#enabledDisabledControls"
+                                            ],
+                            "guard":  "Main Validate checks pass, including sufficient deposit."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables most controls; Item 12A has a source defect."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts and compresses the copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile"
+                                            ],
+                            "guard":  "Finalization succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return period",
+                          "TIN/RDO and taxpayer identity",
+                          "Place of production and removal",
+                          "Tax relief specification when applicable",
+                          "Manner of payment",
+                          "Sufficient deposit/payment",
+                          "Schedule 1 should be complete although main Validate omits it"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L203-L218"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the alcohol products."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L203-L218"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the alcohol products."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L203-L218"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the alcohol products."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L203-L218"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the alcohol products."
+                             }
+                         ]
+}

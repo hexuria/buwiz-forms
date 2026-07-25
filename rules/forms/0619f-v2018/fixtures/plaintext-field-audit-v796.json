@@ -1,0 +1,16 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0619f-v2018",
+    "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\0619F\\0619F-save-#email-redacted#.xml",
+    "sha256":  "f7a1f2481104b8c23b22f92aef263ae02f768227ec6961cb10e4daf0817f8a18",
+    "field_count":  59,
+    "unique_field_count":  59,
+    "field_inventory_sha256":  "eebd0278ed63c59d085ece88eb5d66fe26902522bcc283a9f6ef2dd0ebabe069",
+    "encrypted_only_keys":  [
+                                "frm0619F:txtAddress2"
+                            ],
+    "plain_only_keys":  [
+
+                        ],
+    "values_emitted":  false
+}

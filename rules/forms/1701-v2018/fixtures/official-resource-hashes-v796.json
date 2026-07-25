@@ -1,0 +1,78 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "resources":  [
+                      {
+                          "asset_id":  "linked-jquery-1-7-1-min",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\jq\\jquery-1.7.1.min.js",
+                          "sha256":  "88171413fc76dda23ab32baa17b11e4fff89141c633ece737852445f1ba6c1bd",
+                          "size":  93868,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../jq/jquery-1.7.1.min.js."
+                      },
+                      {
+                          "asset_id":  "linked-jquery-ui-1-8-18-custom-min",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\jq\\jquery-ui-1.8.18.custom.min.js",
+                          "sha256":  "f38f53a28fe9992933dbc4ba83a76eb55e7c30c6fe84981df683ace83735ad43",
+                          "size":  210423,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../jq/jquery-ui-1.8.18.custom.min.js."
+                      },
+                      {
+                          "asset_id":  "linked-aes",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\aes.js",
+                          "sha256":  "177f098b1540af2a3fee43c15956a40b2021dd98c0dbec20efa8f8a2d1e4ed7e",
+                          "size":  19841,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../js/aes.js."
+                      },
+                      {
+                          "asset_id":  "linked-ebirtools",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\eBIRTools.vbs",
+                          "sha256":  "7d0ceb5aad2c0eb90aeca189d6104ff05163ecd1820379f456125634ff7460f7",
+                          "size":  7557,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../js/eBIRTools.vbs."
+                      },
+                      {
+                          "asset_id":  "linked-environment",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\environment.js",
+                          "sha256":  "53f86a9e4def3955950ade2b452c722b22236d3e3d5e51f767f32d1fff555c4c",
+                          "size":  11556,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../js/environment.js."
+                      },
+                      {
+                          "asset_id":  "linked-lz-string-1-0-2",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\lz-string-1.0.2.js",
+                          "sha256":  "58a7a887090cd33e763d470bd9558f177f4b2c52de99e01fabf0339a44c9f150",
+                          "size":  5350,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../js/lz-string-1.0.2.js."
+                      },
+                      {
+                          "asset_id":  "linked-rijndael",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\rijndael.js",
+                          "sha256":  "f1eda7677447fcab29e3c26ea7054800cc43a4b436c40e71102fb97d9faaab06",
+                          "size":  7045,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../js/rijndael.js."
+                      },
+                      {
+                          "asset_id":  "linked-string-util",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\string-util.js",
+                          "sha256":  "bc7f86f70bf993389a3a0135dcbd76c3e370c49d2eb95e2fc66ff318a2ebe43c",
+                          "size":  54582,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../js/string-util.js."
+                      },
+                      {
+                          "asset_id":  "linked-string-util2014",
+                          "kind":  "official-linked-script",
+                          "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\string-util2014.js",
+                          "sha256":  "ca42592694e7416a15eca97fa25491c01da17e383038fc97dd9d6261e67bcf7d",
+                          "size":  15980,
+                          "revision_binding":  "Loaded by the exact January 2018 HTA as ../js/string-util2014.js."
+                      }
+                  ]
+}

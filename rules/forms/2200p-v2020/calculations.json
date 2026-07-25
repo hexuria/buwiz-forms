@@ -1,0 +1,251 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200p-v2020",
+    "revision":  "2020-01-01",
+    "evaluation_order":  [
+                             "2200p-schedule-total",
+                             "2200p-item16",
+                             "2200p-item17c",
+                             "2200p-item18",
+                             "2200p-item20",
+                             "2200p-item21d",
+                             "2200p-item22",
+                             "2200p-item23b",
+                             "2200p-item23c",
+                             "2200p-item24"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2200p-schedule-total",
+                             "outputs":  [
+                                             "frm2200P:txtSched1TotalTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtSched1BasicExciseTaxDue{1..n}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum manually entered Basic Excise Tax Due across all extant rows.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "computeBasicExciseTaxDue",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeBasicExciseTaxDue:L5440-L5463"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item16",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I16ExciseTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtSched1TotalTaxDue"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 16 copies schedule total, or 0.00 when blank.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200p-schedule-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item17c",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I17CTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I17ABalCarriedOver",
+                                            "frm2200P:txtPg1P3I17BCredExciseTax"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "17C = 17A + 17B.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item18",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I18NetTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I16ExciseTaxDue",
+                                            "frm2200P:txtPg1P3I17CTotal"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "18 = 16 - 17C.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200p-item16",
+                                                "2200p-item17c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item20",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I20TaxStillDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I18NetTaxDue",
+                                            "frm2200P:txtPg1P3I19PmntOnRtrnPrevFiled"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "20 = 18 - 19.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200p-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item21d",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I21DTotPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I21ASurcharge",
+                                            "frm2200P:txtPg1P3I21BInterest",
+                                            "frm2200P:txtPg1P3I21CCompromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21D = 21A + 21B + 21C.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item22",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I22AmountPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I20TaxStillDue",
+                                            "frm2200P:txtPg1P3I21DTotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "22 = 20 + 21D.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200p-item20",
+                                                "2200p-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item23b",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I23BPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I21DTotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23B copies 21D.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200p-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item23c",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I23CTotPmntMade"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I23ATaxPmntDposit",
+                                            "frm2200P:txtPg1P3I23BPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23C = 23A + 23B.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200p-item23b"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200p-item24",
+                             "outputs":  [
+                                             "frm2200P:txtPg1P3I24BalToCarryOver"
+                                         ],
+                             "inputs":  [
+                                            "frm2200P:txtPg1P3I22AmountPayable",
+                                            "frm2200P:txtPg1P3I23CTotPmntMade"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 22 - 23C.",
+                             "rounding":  "toFixed(2), then formatCurrency.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200p-item22",
+                                                "2200p-item23c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and two-decimal display; replace manual derived schedule values with revision-pinned calculations.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/fields.schema.json",
+  "type": "object",
+  "required": ["schema_version", "form_id", "revision", "field_count", "fields"],
+  "properties": {
+    "$schema": { "type": "string" }, "schema_version": { "type": "string" }, "form_id": { "type": "string" },
+    "revision": { "type": "string" }, "field_count": { "type": "integer", "minimum": 0 },
+    "runtime_serializable_element_count": { "type": "integer", "minimum": 0 },
+    "inventory_sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["field_key", "label", "page", "item_number", "control_kind", "storage_type", "logical_type", "required", "constraints", "enum_values", "normalization", "computed", "source_refs", "confidence", "notes"],
+      "properties": {
+        "field_key": { "type": "string", "minLength": 1 },
+        "serialized_key": { "type": ["string", "null"], "minLength": 1 },
+        "serialized_occurrence": { "type": ["integer", "null"], "minimum": 1 },
+        "label": { "type": ["string", "null"] },
+        "page": { "type": ["integer", "null"], "minimum": 1 }, "item_number": { "type": ["string", "null"] },
+        "control_kind": { "type": "string" }, "storage_type": { "type": "string" }, "logical_type": { "type": "string" },
+        "required": { "enum": ["required", "optional", "computed", "hidden", "conditional", "unknown"] },
+        "required_when": { "type": ["string", "null"] }, "enabled_when": { "type": ["string", "null"] },
+        "visible_when": { "type": ["string", "null"] }, "default_value": { "type": ["string", "null"] },
+        "empty_representation": { "type": ["string", "null"] }, "constraints": { "type": "object" },
+        "enum_values": { "type": "array", "items": {} }, "normalization": { "type": "array", "items": { "type": "string" } },
+        "computed": { "type": "boolean" }, "calculation_id": { "type": ["string", "null"] },
+        "source_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "confidence": { "enum": ["high", "medium", "low", "unknown"] }, "notes": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

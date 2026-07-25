@@ -1,0 +1,347 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701ms-v2024",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1701ms-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Non-short-period return year is greater than or equal to the current calendar year."
+                                    },
+                      "expected_message":  "Future filing is not allowed. Please input correct year on Item 1",
+                      "expected_behavior":  "Current-year annual filing is rejected along with future years.",
+                      "rule_id":  "1701ms-validate-001"
+                  },
+                  {
+                      "case_id":  "case-02-1701ms-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Civil status is Married and no Item 5 filing choice is checked."
+                                    },
+                      "expected_message":  "Item 5 is required if Item 4 is marked as Married.",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-003"
+                  },
+                  {
+                      "case_id":  "case-03-1701ms-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint filing and any spouse TIN component is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6 for Spouse",
+                      "expected_behavior":  "Only nonblankness is checked.",
+                      "rule_id":  "1701ms-validate-004"
+                  },
+                  {
+                      "case_id":  "case-04-1701ms-validate-009",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint filing and taxpayer Item 11 has no selection."
+                                    },
+                      "expected_message":  "Please select an option on Item 11 for Taxpayer",
+                      "expected_behavior":  "Taxpayer Item 11 is checked only inside the joint-filing branch.",
+                      "rule_id":  "1701ms-validate-009"
+                  },
+                  {
+                      "case_id":  "case-05-1701ms-validate-011",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint filing and spouse Item 12 has no selection."
+                                    },
+                      "expected_message":  "Item 12 is required if Item 5 is marked as Jointly.",
+                      "expected_behavior":  "Joint spouse tax regime is required.",
+                      "rule_id":  "1701ms-validate-011"
+                  },
+                  {
+                      "case_id":  "case-06-1701ms-validate-013",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Aggregate Item 30 is negative and no Item 31 disposition is checked."
+                                    },
+                      "expected_message":  "Item 31 is mandatory because Item 30 is has negative value.",
+                      "expected_behavior":  "Negative aggregate requires disposition; message has duplicated grammar.",
+                      "rule_id":  "1701ms-validate-013"
+                  },
+                  {
+                      "case_id":  "case-07-1701ms-validate-014",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Selected Item 31 amounts do not exactly equal abs(Item 27A + Item 27B)."
+                                    },
+                      "expected_message":  "The total amount in Item 31 must equal the sum of Item 27A and Item 27B ({amount}).",
+                      "expected_behavior":  "Strict JavaScript number equality is used against abs(27A+27B), not Item 30.",
+                      "rule_id":  "1701ms-validate-014"
+                  },
+                  {
+                      "case_id":  "case-08-1701ms-validate-015",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Foreign-tax amount exists in either column but Item 7 reference text is blank."
+                                    },
+                      "expected_message":  "Part V - Item 7 Foreign Tax Credits is mandatory if the amount column has value.",
+                      "expected_behavior":  "Cross-column reference requirement is active.",
+                      "rule_id":  "1701ms-validate-015"
+                  },
+                  {
+                      "case_id":  "case-09-1701ms-validate-016",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Foreign-tax reference exists but both amount columns are blank/zero."
+                                    },
+                      "expected_message":  "Part V - Item 7 Foreign Tax Amount is mandatory if Foreign Tax Credits field has value.",
+                      "expected_behavior":  "At least one amount is required.",
+                      "rule_id":  "1701ms-validate-016"
+                  },
+                  {
+                      "case_id":  "case-10-1701ms-validate-017",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other-credit amount exists in either column but Item 9 description is blank."
+                                    },
+                      "expected_message":  "Part V - Item 9 Other Credits/Payments is mandatory if the Amount column has value.",
+                      "expected_behavior":  "Cross-column description requirement is active.",
+                      "rule_id":  "1701ms-validate-017"
+                  },
+                  {
+                      "case_id":  "case-11-1701ms-validate-018",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other-credit description exists but both amount columns are blank/zero."
+                                    },
+                      "expected_message":  "Part V - Item 9 Amount is mandatory if the Other Credits/Payments field has value.",
+                      "expected_behavior":  "At least one amount is required.",
+                      "rule_id":  "1701ms-validate-018"
+                  },
+                  {
+                      "case_id":  "case-12-1701ms-validate-019",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year or month is NaN."
+                                    },
+                      "expected_message":  "Please enter a valid year and month.",
+                      "expected_behavior":  "Coercive isNaN is used.",
+                      "rule_id":  "1701ms-validate-019"
+                  },
+                  {
+                      "case_id":  "case-13-1701ms-validate-021",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year strictly equals numeric currentYear and month is later than current month."
+                                    },
+                      "expected_message":  "Future filing is not allowed. Please enter a valid month.",
+                      "expected_behavior":  "The DOM year is a string, so strict equality with numeric currentYear is false and this duplicate guard does not fire.",
+                      "rule_id":  "1701ms-validate-021"
+                  },
+                  {
+                      "case_id":  "case-14-1701ms-validate-022",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN component on the page-two copy is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6",
+                      "expected_behavior":  "Only nonblankness is checked.",
+                      "rule_id":  "1701ms-validate-022"
+                  },
+                  {
+                      "case_id":  "case-15-1701ms-validate-023",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month or year is blank."
+                                    },
+                      "expected_message":  "Item 1 is a required field.",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-023"
+                  },
+                  {
+                      "case_id":  "case-16-1701ms-validate-024",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer RDO is blank."
+                                    },
+                      "expected_message":  "Please enter a valid RDO code on Item 7",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-024"
+                  },
+                  {
+                      "case_id":  "case-17-1701ms-validate-025",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-025"
+                  },
+                  {
+                      "case_id":  "case-18-1701ms-validate-026",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer email is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Email Address on Item 9",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-026"
+                  },
+                  {
+                      "case_id":  "case-19-1701ms-validate-027",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Item 10",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-027"
+                  },
+                  {
+                      "case_id":  "case-20-1701ms-validate-028",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer Item 12 has no selection."
+                                    },
+                      "expected_message":  "Taxpayer Item 12 is a required field ",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-028"
+                  },
+                  {
+                      "case_id":  "case-21-1701ms-validate-029",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer exempt/special regime selected and any Item 13-16 detail is blank."
+                                    },
+                      "expected_message":  "Please make sure to enter details on Item 13 to 16 on Taxpayer",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-029"
+                  },
+                  {
+                      "case_id":  "case-22-1701ms-validate-031",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer business/mixed/profession with graduated rates and no Item 17 choice."
+                                    },
+                      "expected_message":  "Item 17 is mandatory if Item 11 is Income from Business, Mixed Income and Income from Profession and Item 12 is Graduated Income Tax Rates.",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-031"
+                  },
+                  {
+                      "case_id":  "case-23-1701ms-validate-032",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Perjury clause is unchecked."
+                                    },
+                      "expected_message":  "You need to agree to the Perjury Clause.",
+                      "expected_behavior":  "The first matching branch alerts and returns.",
+                      "rule_id":  "1701ms-validate-032"
+                  },
+                  {
+                      "case_id":  "case-24-1701ms-validate-033",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer Item 11 is blank during a non-joint filing."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "The Item 11 check is nested inside the joint-filing branch, so non-joint returns bypass it.",
+                      "rule_id":  "1701ms-validate-033"
+                  },
+                  {
+                      "case_id":  "case-25-1701ms-validate-035",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse Item 12e alone is selected and Item 16 dates are invalid."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "The source compares the element object to true instead of checking .checked for Item 12e1.",
+                      "rule_id":  "1701ms-validate-035"
+                  },
+                  {
+                      "case_id":  "case-26-1701ms-change-003",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer/spouse Item 16 From is on/after the filing month end or To is before it."
+                                    },
+                      "expected_message":  "Invalid date. {Taxpayer|Spouse} Item 16 {From|To} date must be {boundary wording}.",
+                      "expected_behavior":  "Invalid/blank Date objects can bypass comparisons; From must be strictly earlier, not equal.",
+                      "rule_id":  "1701ms-change-003"
+                  },
+                  {
+                      "case_id":  "case-27-1701ms-change-004",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 26 exceeds either 50% of Item 23 or Item 25."
+                                    },
+                      "expected_message":  "The amount exceeds the allowed input based on the requirements",
+                      "expected_behavior":  "Both caps are enforced using JavaScript numbers.",
+                      "rule_id":  "1701ms-change-004"
+                  },
+                  {
+                      "case_id":  "case-28-1701ms-change-005",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Refund and Tax Credit Certificate are both selected."
+                                    },
+                      "expected_message":  "You cannot select BOTH \u0027To be refunded\u0027 and \u0027To be issued a Tax Credit Certificate\u0027.",
+                      "expected_behavior":  "Mutually exclusive pair enforced.",
+                      "rule_id":  "1701ms-change-005"
+                  },
+                  {
+                      "case_id":  "case-29-1701ms-change-007",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer or spouse mixed-income ATC mapping reaches the final exempt/special branch."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Boolean expressions use element objects and unparenthesized OR.",
+                      "rule_id":  "1701ms-change-007"
+                  },
+                  {
+                      "case_id":  "case-30-1701ms-change-008",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "AllControlDisabled is invoked."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "The first DOM access uses documentary instead of document.",
+                      "rule_id":  "1701ms-change-008"
+                  },
+                  {
+                      "case_id":  "case-31-1701ms-modal-410a",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 4 Item 10A taxpayer row has blank description/required legal basis or amount string equal to 0."
+                                    },
+                      "expected_message":  "Empty fields are not allowed",
+                      "expected_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "rule_id":  "1701ms-modal-410a"
+                  },
+                  {
+                      "case_id":  "case-32-1701ms-modal-420b",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 4 Item 20 spouse row has blank description/required legal basis or amount string equal to 0."
+                                    },
+                      "expected_message":  "Empty fields are not allowed",
+                      "expected_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "rule_id":  "1701ms-modal-420b"
+                  },
+                  {
+                      "case_id":  "case-33-1701ms-modal-5-9",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "Part V Item 9 row description is blank or both taxpayer/spouse amount strings equal 0."
+                                    },
+                      "expected_message":  "Empty fields are not allowed",
+                      "expected_behavior":  "Formatted 0.00 may bypass string comparison.",
+                      "rule_id":  "1701ms-modal-5-9"
+                  },
+                  {
+                      "case_id":  "case-34-1701ms-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any non-TIN field, spouse field, schedule, calculation, or perjury choice is invalid."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "The draft preflight is intentionally narrow.",
+                      "rule_id":  "1701ms-save-002"
+                  }
+              ]
+}

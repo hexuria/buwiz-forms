@@ -1,0 +1,22 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200p-v2020",
+    "cases":  [
+                  {
+                      "case_id":  "schedule-total",
+                      "official_output":  30.35,
+                      "calculation_id":  "2200p-schedule-total",
+                      "rows":  [
+                                   10.25,
+                                   20.1
+                               ]
+                  },
+                  {
+                      "case_id":  "item24",
+                      "item22":  1200,
+                      "calculation_id":  "2200p-item24",
+                      "official_output":  100,
+                      "item23c":  1100
+                  }
+              ]
+}

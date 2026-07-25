@@ -1,0 +1,507 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200s-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2200s-validate-001-leap29",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "February 29 is used in a non-leap filing year."
+                                    },
+                      "expected_message":  "Filing year is not a leap year.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-001-leap29"
+                  },
+                  {
+                      "case_id":  "case-02-2200s-validate-002-february",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "February day exceeds 29 under source leap branches."
+                                    },
+                      "expected_message":  "Invalid date entry on item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-002-february"
+                  },
+                  {
+                      "case_id":  "case-03-2200s-validate-003-day-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day is blank or numerically zero."
+                                    },
+                      "expected_message":  "Please enter valid day on item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-003-day-required"
+                  },
+                  {
+                      "case_id":  "case-04-2200s-validate-004-year-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Please enter valid year on item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-004-year-required"
+                  },
+                  {
+                      "case_id":  "case-05-2200s-validate-005-year-floor",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is numerically below 2013."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+                      "expected_behavior":  "The enforced floor is 2013 while the message says 1900 and the printed revision is January 2018.",
+                      "rule_id":  "2200s-validate-005-year-floor"
+                  },
+                  {
+                      "case_id":  "case-06-2200s-validate-006-day-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day has one character."
+                                    },
+                      "expected_message":  "Please enter a valid day on item 1. Format should be MM/DD/YYYY.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-006-day-format"
+                  },
+                  {
+                      "case_id":  "case-07-2200s-validate-007-day-positive",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day compares below 1."
+                                    },
+                      "expected_message":  "Please enter a valid day in Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-007-day-positive"
+                  },
+                  {
+                      "case_id":  "case-08-2200s-validate-008-month-length",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day exceeds 31 for a 31-day month or 30 for a 30-day month."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-008-month-length"
+                  },
+                  {
+                      "case_id":  "case-09-2200s-validate-009-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Composed return date is after today."
+                                    },
+                      "expected_message":  "Date on Item 1 cannot be a future date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-009-future"
+                  },
+                  {
+                      "case_id":  "case-10-2200s-validate-010-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "TIN/branch segment is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-010-tin"
+                  },
+                  {
+                      "case_id":  "case-11-2200s-validate-011-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-011-rdo"
+                  },
+                  {
+                      "case_id":  "case-12-2200s-validate-012-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-012-name"
+                  },
+                  {
+                      "case_id":  "case-13-2200s-validate-013-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-013-address"
+                  },
+                  {
+                      "case_id":  "case-14-2200s-validate-014-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP is blank or shorter than four characters."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 7A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-014-zip"
+                  },
+                  {
+                      "case_id":  "case-15-2200s-validate-015-contact",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact is blank."
+                                    },
+                      "expected_message":  "Please enter Contact Number on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-015-contact"
+                  },
+                  {
+                      "case_id":  "case-16-2200s-validate-016-business",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Main line of business is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Main Line of Business on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-016-business"
+                  },
+                  {
+                      "case_id":  "case-17-2200s-validate-017-psic",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "PSIC is blank or shorter than four characters."
+                                    },
+                      "expected_message":  "Please enter a valid PSIC on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-017-psic"
+                  },
+                  {
+                      "case_id":  "case-18-2200s-validate-018-email",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email is blank."
+                                    },
+                      "expected_message":  "Please enter Email Address on Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-018-email"
+                  },
+                  {
+                      "case_id":  "case-19-2200s-validate-019-production",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any production region/province/city selector has selectedIndex below 1."
+                                    },
+                      "expected_message":  "Please enter values on item no. 12. All entries must not be empty.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-019-production"
+                  },
+                  {
+                      "case_id":  "case-20-2200s-validate-020-removal",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any removal region/province/city selector has selectedIndex below 1."
+                                    },
+                      "expected_message":  "Please enter values on item no. 13. All entries must not be empty.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-020-removal"
+                  },
+                  {
+                      "case_id":  "case-21-2200s-validate-021-treaty",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Treaty Yes is selected and treaty list value is zero."
+                                    },
+                      "expected_message":  "Please select If yes, please specify on Item 14A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-021-treaty"
+                  },
+                  {
+                      "case_id":  "case-22-2200s-validate-022-payment-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Actual Removal nor Prepayment is selected."
+                                    },
+                      "expected_message":  "Please select an option on Part II Manner of Payment",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-022-payment-choice"
+                  },
+                  {
+                      "case_id":  "case-23-2200s-validate-023-payment-other",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other payment is selected and description is blank."
+                                    },
+                      "expected_message":  "Please enter a value on Item 17.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-023-payment-other"
+                  },
+                  {
+                      "case_id":  "case-24-2200s-validate-024-deposit",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Prepayment is selected and Item 23A is not positive."
+                                    },
+                      "expected_message":  "Please enter Tax Payment / Deposit on Item 25A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-024-deposit"
+                  },
+                  {
+                      "case_id":  "case-25-2200s-validate-025-balance",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 24 balance is positive."
+                                    },
+                      "expected_message":  "Payment not sufficient to cover amount payable. Please check amount in Item 25C.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-025-balance"
+                  },
+                  {
+                      "case_id":  "case-26-2200s-validate-026-schedule-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Actual Removal is selected and neither a fixed row nor Others row has positive volume removals."
+                                    },
+                      "expected_message":  "Please fill up Schedule 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-validate-026-schedule-required"
+                  },
+                  {
+                      "case_id":  "case-27-2200s-schedule-027-atc-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others ATC is blank or XB."
+                                    },
+                      "expected_message":  "Please enter a valid ATC in \"Others\" at Row {row}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-027-atc-required"
+                  },
+                  {
+                      "case_id":  "case-28-2200s-schedule-028-atc-prefix",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others ATC does not begin XB."
+                                    },
+                      "expected_message":  "The supplied ATC code in \"Others\" at Row {row} should start with \u0027XB\u0027.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-028-atc-prefix"
+                  },
+                  {
+                      "case_id":  "case-29-2200s-schedule-029-atc-fixed",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others ATC duplicates XB010..XB100 fixed table codes."
+                                    },
+                      "expected_message":  "Please enter a valid ATC code in \"Others\" at Row {row}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-029-atc-fixed"
+                  },
+                  {
+                      "case_id":  "case-30-2200s-schedule-030-description",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others description is blank."
+                                    },
+                      "expected_message":  "Please enter a Description in \"Others\" at Row {row}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-030-description"
+                  },
+                  {
+                      "case_id":  "case-31-2200s-schedule-031-bracket",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others tax bracket is blank."
+                                    },
+                      "expected_message":  "Please enter a Tax Bracket in \"Others\" at Row {row}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-031-bracket"
+                  },
+                  {
+                      "case_id":  "case-32-2200s-schedule-032-rate",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others applicable rate equals zero."
+                                    },
+                      "expected_message":  "Please enter a valid Applicable rate in \"Others\" at Row {row}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-032-rate"
+                  },
+                  {
+                      "case_id":  "case-33-2200s-schedule-033-volume",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others volume removals equals zero."
+                                    },
+                      "expected_message":  "Please enter a value on Volume Removals column in \"Others\" at Row {row}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-033-volume"
+                  },
+                  {
+                      "case_id":  "case-34-2200s-schedule-034-rate-unique",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ATC/rate combination duplicates another row under checkTaxRate."
+                                    },
+                      "expected_message":  "Please enter a unique Applicable rate in \"Others\" at Row {row}.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-schedule-034-rate-unique"
+                  },
+                  {
+                      "case_id":  "case-35-2200s-input-035-email",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email fails source regex."
+                                    },
+                      "expected_message":  "Please enter valid email address.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-input-035-email"
+                  },
+                  {
+                      "case_id":  "case-36-2200s-input-036-atc",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others ATC syntax is invalid."
+                                    },
+                      "expected_message":  "Invalid ATC.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-input-036-atc"
+                  },
+                  {
+                      "case_id":  "case-37-2200s-save-037-january-leap",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "January selectedIndex is 1 and day exceeds 28 in a non-leap year."
+                                    },
+                      "expected_message":  "Filing year is not a leap year.",
+                      "expected_behavior":  "The code treats selectedIndex 1 as February, but index 1 is January because index 0 is the placeholder.",
+                      "rule_id":  "2200s-save-037-january-leap"
+                  },
+                  {
+                      "case_id":  "case-38-2200s-save-038-january-day29",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "January selectedIndex is 1 and day exceeds 29 in a leap year."
+                                    },
+                      "expected_message":  "Invalid date entry.",
+                      "expected_behavior":  "The same month-index error rejects valid January 30/31 and does not apply the intended branch to February.",
+                      "rule_id":  "2200s-save-038-january-day29"
+                  },
+                  {
+                      "case_id":  "case-39-2200s-save-039-date-required",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day/year is blank or day is zero."
+                                    },
+                      "expected_message":  "Please enter valid day on item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-039-date-required"
+                  },
+                  {
+                      "case_id":  "case-40-2200s-save-040-year-floor",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is below 1900."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-040-year-floor"
+                  },
+                  {
+                      "case_id":  "case-41-2200s-save-041-day-range",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day exceeds 31 or is blank."
+                                    },
+                      "expected_message":  "Please indicate a valid Day.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-041-day-range"
+                  },
+                  {
+                      "case_id":  "case-42-2200s-save-042-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "TIN/branch segment is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-042-tin"
+                  },
+                  {
+                      "case_id":  "case-43-2200s-save-043-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value compares equal to zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-043-rdo"
+                  },
+                  {
+                      "case_id":  "case-44-2200s-save-044-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-044-name"
+                  },
+                  {
+                      "case_id":  "case-45-2200s-save-045-address",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Address is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Registered Address on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-045-address"
+                  },
+                  {
+                      "case_id":  "case-46-2200s-save-046-zip",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP is blank or shorter than four characters."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 7A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-046-zip"
+                  },
+                  {
+                      "case_id":  "case-47-2200s-save-047-contact",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-047-contact"
+                  },
+                  {
+                      "case_id":  "case-48-2200s-save-048-business",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Main line of business is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Main Line of Business on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200s-save-048-business"
+                  },
+                  {
+                      "case_id":  "case-49-2200s-defect-050-payment-other-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Only Other payment manner is selected."
+                                    },
+                      "expected_message":  "Please select an option on Part II Manner of Payment",
+                      "expected_behavior":  "The required-choice branch checks only Actual Removal and Prepayment, so Other alone is rejected even though a separate Other-description rule exists.",
+                      "rule_id":  "2200s-defect-050-payment-other-choice"
+                  },
+                  {
+                      "case_id":  "case-50-2200s-defect-052-overflow-focus",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Dynamic basic excise tax exceeds the maximum."
+                                    },
+                      "expected_message":  "Exceeded maximum amount of 999,999,999,999.99 on Basic Excise Tax Due.",
+                      "expected_behavior":  "After clearing the row, source focuses nonexistent txtsched1Taxable{n}; the actual input is txtsched1VolumeRemovals{n}.",
+                      "rule_id":  "2200s-defect-052-overflow-focus"
+                  }
+              ]
+}

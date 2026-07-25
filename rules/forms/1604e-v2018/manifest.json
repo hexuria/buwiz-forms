@@ -1,0 +1,85 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604e-v2018",
+    "form_code":  "1604E",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1604Ev2018.hta",
+                                "sha256":  "8e100c0457c6050dfcaeeddb0b7962443071433a5cd7b6218217d7a5288a0be8",
+                                "size":  436176,
+                                "revision_binding":  "APPLICATIONNAME 1604Ev2018 and printed January 2018 (ENCS)."
+                            },
+                            {
+                                "asset_id":  "official-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1604Ev2018.hta",
+                                "sha256":  "90f35839c2525d05710a1a301288f6ad8368a91dc2869cc947d35b05dbb7a58a",
+                                "size":  16036,
+                                "revision_binding":  "Revision-matched January 2018 instructions."
+                            },
+                            {
+                                "asset_id":  "xml-editable-v1",
+                                "kind":  "dummy-profile-editable-save",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-1604Ev2018-2025.xml",
+                                "sha256":  "78a460fc5953fb66d95e8327ba9389e2113a192472d62f860872f78b0dbab50b",
+                                "size":  11518,
+                                "revision_binding":  "UI-created target-revision save with 134 keys; values excluded."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1604Ev2018\\1604E Jan 2018 ENCS Final2.pdf",
+                                "sha256":  "1db203442630c74ff4c95b509e204f542c5ba8fb1bd812440793e314ce709876",
+                                "size":  818581,
+                                "revision_binding":  "January 2018 Form 1604-E."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  134,
+                   "runtime_field_families":  0,
+                   "fields_total":  134,
+                   "typed_fields":  134,
+                   "validation_rules":  106,
+                   "confirmed_official_bugs":  24,
+                   "calculations":  5,
+                   "negative_fixtures":  40,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "plaintext_field_audit":  "fixtures/plaintext-field-audit-v796.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer or release changes.",
+                        "No save values or email-bearing filenames are copied.",
+                        "The target-revision plaintext save has 134 unique keys and no active runtime field families.",
+                        "Available encrypted copies use the legacy 149-key field family and are explicitly excluded."
+                    ]
+}

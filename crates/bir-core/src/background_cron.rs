@@ -231,6 +231,7 @@ enum Queued2551QPreparation {
     },
     Rejected {
         draft: Form2551QDraft,
+        revision: Queued2551QRevision,
         errors: Vec<(String, String)>,
     },
     /// The row was canceled, replaced, or requeued after this job was spawned.
@@ -238,13 +239,14 @@ enum Queued2551QPreparation {
 }
 
 fn queued_2551q_revision(draft: &Form2551QDraft) -> Option<Queued2551QRevision> {
-    (matches!(draft.status, FilingStatus::Queued) && draft.submission_claim_token.is_none()).then(
-        || Queued2551QRevision {
-            fingerprint: draft.queued_submission_fingerprint.clone(),
-            next_retry_at: draft.next_retry_at.clone(),
-            submission_attempts: draft.submission_attempts,
-        },
-    )
+    (matches!(draft.status, FilingStatus::Queued)
+        && draft.submission_claim_token.is_none()
+        && draft.submission_claimed_at.is_none())
+    .then(|| Queued2551QRevision {
+        fingerprint: draft.queued_submission_fingerprint.clone(),
+        next_retry_at: draft.next_retry_at.clone(),
+        submission_attempts: draft.submission_attempts,
+    })
 }
 
 /// Pure submission-boundary preparation used both after a job is spawned and
@@ -270,12 +272,17 @@ fn prepare_queued_2551q(
         ));
         return Queued2551QPreparation::Rejected {
             draft,
+            revision,
             errors: vec![("profile_resolution".to_string(), error)],
         };
     }
     match draft.revalidate_queued_before_submission() {
         Ok(()) => Queued2551QPreparation::Ready { draft, revision },
-        Err(errors) => Queued2551QPreparation::Rejected { draft, errors },
+        Err(errors) => Queued2551QPreparation::Rejected {
+            draft,
+            revision,
+            errors,
+        },
     }
 }
 
@@ -302,13 +309,14 @@ enum Queued1601CPreparation {
 }
 
 fn queued_1601c_revision(draft: &Form1601CDraft) -> Option<Queued1601CRevision> {
-    (matches!(draft.status, FilingStatus::Queued) && draft.submission_claim_token.is_none()).then(
-        || Queued1601CRevision {
-            fingerprint: draft.queued_submission_fingerprint.clone(),
-            next_retry_at: draft.next_retry_at.clone(),
-            submission_attempts: draft.submission_attempts,
-        },
-    )
+    (matches!(draft.status, FilingStatus::Queued)
+        && draft.submission_claim_token.is_none()
+        && draft.submission_claimed_at.is_none())
+    .then(|| Queued1601CRevision {
+        fingerprint: draft.queued_submission_fingerprint.clone(),
+        next_retry_at: draft.next_retry_at.clone(),
+        submission_attempts: draft.submission_attempts,
+    })
 }
 
 fn prepare_queued_1601c(
@@ -338,6 +346,17 @@ fn validation_reason(errors: &[(String, String)]) -> String {
         .map(|(field, message)| format!("{field}: {message}"))
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+fn queued_retry_is_due(
+    next_retry_at: Option<&str>,
+    now: chrono::DateTime<Utc>,
+) -> Result<bool, chrono::ParseError> {
+    let Some(next_retry_at) = next_retry_at else {
+        return Ok(true);
+    };
+    let next_retry = chrono::DateTime::parse_from_rfc3339(next_retry_at)?;
+    Ok(now >= next_retry.with_timezone(&Utc))
 }
 
 trait SubmissionTransport {
@@ -392,7 +411,8 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         }
     };
 
-    if loaded_draft.submission_claim_token.is_some() {
+    if loaded_draft.submission_claim_token.is_some() || loaded_draft.submission_claimed_at.is_some()
+    {
         warn!(
             "Cron: 1601C {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
             loaded_draft.period_code()
@@ -428,11 +448,31 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         Queued1601CPreparation::Superseded => return,
     };
 
-    if let Some(next_retry) = &draft.next_retry_at
-        && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
-        && Utc::now() < next_time.with_timezone(&Utc)
-    {
-        return;
+    match queued_retry_is_due(draft.next_retry_at.as_deref(), Utc::now()) {
+        Ok(false) => return,
+        Ok(true) => {}
+        Err(error) => {
+            warn!(
+                "Cron: Refusing queued 1601C {} because its retry timestamp is invalid: {}",
+                draft.period_code(),
+                error
+            );
+            draft.revert_to_draft();
+            draft.submission_error = Some(
+                "Submission blocked because queued retry metadata is invalid; review and queue the return again"
+                    .to_string(),
+            );
+            if let Ok(db_guard) = db.lock() {
+                let _ = db_guard.replace_unclaimed_queued_1601c_submission(
+                    &draft,
+                    &queue_revision.fingerprint,
+                    &queue_revision.next_retry_at,
+                    queue_revision.submission_attempts,
+                );
+            }
+            crate::ipc::post_db_changed();
+            return;
+        }
     }
 
     info!(
@@ -641,7 +681,9 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     (draft, current_profile)
                 };
 
-                if loaded_draft.submission_claim_token.is_some() {
+                if loaded_draft.submission_claim_token.is_some()
+                    || loaded_draft.submission_claimed_at.is_some()
+                {
                     // A prior process may have crashed before or after BIR
                     // received the upload. Never lease-expire or retry this
                     // unknown outcome: doing so could create a duplicate filing.
@@ -656,7 +698,11 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 let (mut draft, queue_revision) =
                     match prepare_queued_2551q(loaded_draft, &current_profile, None) {
                         Queued2551QPreparation::Ready { draft, revision } => (draft, revision),
-                        Queued2551QPreparation::Rejected { draft, errors } => {
+                        Queued2551QPreparation::Rejected {
+                            draft,
+                            revision,
+                            errors,
+                        } => {
                             let reason = validation_reason(&errors);
                             warn!(
                                 "Cron: Refusing invalid queued form {} before XML generation: {}",
@@ -664,7 +710,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                                 reason
                             );
                             if let Ok(db_guard) = db_clone.lock() {
-                                let _ = db_guard.save_2551q_draft(&draft);
+                                let _ = db_guard.replace_unclaimed_queued_2551q_submission(
+                                    &draft,
+                                    &revision.fingerprint,
+                                    &revision.next_retry_at,
+                                    revision.submission_attempts,
+                                );
                             }
                             crate::ipc::post_db_changed();
                             return;
@@ -672,11 +723,31 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         Queued2551QPreparation::Superseded => return,
                     };
 
-                if let Some(next_retry) = &draft.next_retry_at
-                    && let Ok(next_time) = chrono::DateTime::parse_from_rfc3339(next_retry)
-                    && Utc::now() < next_time.with_timezone(&Utc)
-                {
-                    return;
+                match queued_retry_is_due(draft.next_retry_at.as_deref(), Utc::now()) {
+                    Ok(false) => return,
+                    Ok(true) => {}
+                    Err(error) => {
+                        warn!(
+                            "Cron: Refusing queued form {} because its retry timestamp is invalid: {}",
+                            draft.period_code(),
+                            error
+                        );
+                        draft.revert_to_draft();
+                        draft.last_error = Some(
+                            "Submission blocked because queued retry metadata is invalid; review and queue the return again"
+                                .to_string(),
+                        );
+                        if let Ok(db_guard) = db_clone.lock() {
+                            let _ = db_guard.replace_unclaimed_queued_2551q_submission(
+                                &draft,
+                                &queue_revision.fingerprint,
+                                &queue_revision.next_retry_at,
+                                queue_revision.submission_attempts,
+                            );
+                        }
+                        crate::ipc::post_db_changed();
+                        return;
+                    }
                 }
 
                 info!(
@@ -704,7 +775,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             "Submission blocked at XML generation boundary: {reason}"
                         ));
                         if let Ok(db_guard) = db_clone.lock() {
-                            let _ = db_guard.save_2551q_draft(&draft);
+                            let _ = db_guard.replace_unclaimed_queued_2551q_submission(
+                                &draft,
+                                &queue_revision.fingerprint,
+                                &queue_revision.next_retry_at,
+                                queue_revision.submission_attempts,
+                            );
                         }
                         crate::ipc::post_db_changed();
                         return;
@@ -716,7 +792,12 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                 ) {
                     Ok(enc) => enc,
                     Err(e) => {
-                        fail_draft_2551q(&mut draft, db_clone.clone(), e.to_string());
+                        fail_draft_2551q(
+                            &mut draft,
+                            &queue_revision,
+                            db_clone.clone(),
+                            e.to_string(),
+                        );
                         return;
                     }
                 };
@@ -770,9 +851,6 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             rejected_draft.period_code(),
                             reason
                         );
-                        if let Ok(db_guard) = db_clone.lock() {
-                            let _ = db_guard.save_2551q_draft(&rejected_draft);
-                        }
                         crate::ipc::post_db_changed();
                         return;
                     }
@@ -887,6 +965,7 @@ pub fn schedule_email_poll(
 
 fn fail_draft_2551q(
     draft: &mut crate::forms::form_2551q::Form2551QDraft,
+    revision: &Queued2551QRevision,
     db: Arc<Mutex<Database>>,
     error_msg: String,
 ) {
@@ -909,13 +988,22 @@ fn fail_draft_2551q(
     }
 
     if let Ok(db_guard) = db.lock() {
-        let result = db_guard.save_2551q_draft(draft);
-        if let Err(error) = result {
-            warn!(
+        match db_guard.replace_unclaimed_queued_2551q_submission(
+            draft,
+            &revision.fingerprint,
+            &revision.next_retry_at,
+            revision.submission_attempts,
+        ) {
+            Ok(true) => {}
+            Ok(false) => info!(
+                "Cron: Form {} was canceled or superseded before retry state persisted",
+                draft.period_code()
+            ),
+            Err(error) => warn!(
                 "Cron: Failed to persist submission failure for {}: {}",
                 draft.period_code(),
                 error
-            );
+            ),
         }
     }
 }
@@ -1177,6 +1265,29 @@ mod tests {
     use crate::profile::{EoptTier, IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
     use tempfile::NamedTempFile;
 
+    #[test]
+    fn retry_gate_is_due_only_for_absent_or_elapsed_valid_timestamps() {
+        let now = Utc
+            .with_ymd_and_hms(2026, 7, 24, 12, 0, 0)
+            .single()
+            .unwrap();
+
+        assert!(queued_retry_is_due(None, now).unwrap());
+        assert!(queued_retry_is_due(Some("2026-07-24T11:59:59Z"), now).unwrap());
+        assert!(!queued_retry_is_due(Some("2026-07-24T12:00:01Z"), now).unwrap());
+    }
+
+    #[test]
+    fn retry_gate_rejects_malformed_non_null_metadata() {
+        let now = Utc
+            .with_ymd_and_hms(2026, 7, 24, 12, 0, 0)
+            .single()
+            .unwrap();
+
+        assert!(queued_retry_is_due(Some("not-rfc3339"), now).is_err());
+        assert!(queued_retry_is_due(Some(""), now).is_err());
+    }
+
     fn test_profile() -> TaxpayerProfile {
         serde_json::from_value(serde_json::json!({
             "id": null,
@@ -1323,8 +1434,11 @@ mod tests {
         let decrypted_xml = String::from_utf8(decrypted)
             .expect("the decrypted transport payload should contain UTF-8 XML");
         assert_eq!(
-            crate::bir_xml::parse_bir_xml_checked(&decrypted_xml)
-                .expect("the decrypted transport payload should contain checked BIR XML"),
+            crate::bir_xml::parse_bir_xml_with_codec_checked(
+                &decrypted_xml,
+                bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+            )
+            .expect("the generated transport payload should contain checked UTF-8 BIR XML"),
             queued.to_bir_field_map()
         );
     }
@@ -1356,7 +1470,7 @@ mod tests {
         let prepared = prepare_queued_2551q(draft, &current_profile, None);
 
         match prepared {
-            Queued2551QPreparation::Rejected { draft, errors } => {
+            Queued2551QPreparation::Rejected { draft, errors, .. } => {
                 assert_eq!(draft.status, FilingStatus::Draft);
                 assert!(errors.iter().any(|(field, _)| field == "profile_snapshot"));
             }
@@ -1372,7 +1486,7 @@ mod tests {
         current_profile.profile_versions.clear();
 
         match prepare_queued_2551q(draft, &current_profile, None) {
-            Queued2551QPreparation::Rejected { draft, errors } => {
+            Queued2551QPreparation::Rejected { draft, errors, .. } => {
                 assert_eq!(draft.status, FilingStatus::Draft);
                 assert!(
                     draft
@@ -1385,6 +1499,35 @@ mod tests {
                 }));
             }
             _ => panic!("an unresolved effective profile must reject the queued return"),
+        }
+    }
+
+    #[test]
+    fn rejected_2551q_preparation_preserves_the_original_queue_revision() {
+        let mut reviewed_profile = reviewed_profile();
+        reviewed_profile.eopt_tier = Some(EoptTier::Medium);
+        reviewed_profile.profile_versions[0].eopt_tier = Some(EoptTier::Medium);
+        let mut draft = queued_draft(&reviewed_profile);
+        draft.submission_attempts = 3;
+        draft.next_retry_at = Some("2099-01-01T00:00:00Z".to_string());
+        let expected_revision =
+            queued_2551q_revision(&draft).expect("the unclaimed queue revision should exist");
+
+        let mut current_profile = reviewed_profile;
+        current_profile.eopt_tier = Some(EoptTier::Micro);
+        current_profile.profile_versions[0].eopt_tier = Some(EoptTier::Micro);
+
+        match prepare_queued_2551q(draft, &current_profile, None) {
+            Queued2551QPreparation::Rejected {
+                draft, revision, ..
+            } => {
+                assert_eq!(revision, expected_revision);
+                assert_eq!(draft.status, FilingStatus::Draft);
+                assert!(draft.queued_submission_fingerprint.is_none());
+                assert!(draft.next_retry_at.is_none());
+                assert_eq!(draft.submission_attempts, 0);
+            }
+            _ => panic!("a rejected preparation must retain its source queue revision"),
         }
     }
 

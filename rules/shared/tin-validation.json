@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "package_version": "7.9.6.0",
+  "status": "researching",
+  "rules": [
+    {
+      "rule_id": "shared-tin-001",
+      "official_behavior": "getTinChkCode concatenates the three 3-character TIN segments, treats all-blank as valid, explicitly accepts 999999999 as a testing bypass, and otherwise delegates to the external chkt.exe through VBScript ValidateTinWChkDgt.",
+      "source_refs": [
+        "string-util-runtime#L74-L104",
+        "ebirtools-runtime#L111-L122"
+      ],
+      "assessment": "official-bug-compatible",
+      "recommended_app_behavior": "Never carry the 999999999 test bypass into production. Use a reviewed native checksum implementation and preserve compatibility observations separately.",
+      "confidence": "high"
+    }
+  ],
+  "gaps": [
+    "chkt.exe was not present in the inspected runtime extraction or C:\\eBIRForms tree, so its algorithm and return codes remain unverified.",
+    "Primary 1701Q Validate does not invoke getTinChkCode; spouse validation does."
+  ]
+}

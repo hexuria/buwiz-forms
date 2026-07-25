@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/effect.schema.json",
+  "title": "eBIRForms executable rules IR v2 effects",
+  "$defs": {
+    "effect": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/emit_issue"
+        },
+        {
+          "$ref": "#/$defs/emit_notification"
+        },
+        {
+          "$ref": "#/$defs/set_derived"
+        },
+        {
+          "$ref": "#/$defs/normalize_field"
+        },
+        {
+          "$ref": "#/$defs/set_workflow_state"
+        }
+      ]
+    },
+    "emit_issue": {
+      "type": "object",
+      "required": [
+        "kind",
+        "severity",
+        "message",
+        "assessment",
+        "fields"
+      ],
+      "properties": {
+        "kind": {
+          "const": "emit-issue"
+        },
+        "severity": {
+          "$ref": "common.schema.json#/$defs/severity"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "official_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "assessment": {
+          "$ref": "common.schema.json#/$defs/assessment"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/field_ref"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "set_derived": {
+      "type": "object",
+      "required": [
+        "kind",
+        "output_id",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "set-derived"
+        },
+        "output_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "value": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "emit_notification": {
+      "type": "object",
+      "required": [
+        "kind",
+        "channel",
+        "message",
+        "official_message"
+      ],
+      "properties": {
+        "kind": {
+          "const": "emit-notification"
+        },
+        "channel": {
+          "enum": [
+            "alert"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "official_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "normalize_field": {
+      "type": "object",
+      "required": [
+        "kind",
+        "field",
+        "normalization"
+      ],
+      "properties": {
+        "kind": {
+          "const": "normalize-field"
+        },
+        "field": {
+          "$ref": "common.schema.json#/$defs/field_ref"
+        },
+        "normalization": {
+          "$ref": "normalization.schema.json#/$defs/pipeline"
+        }
+      },
+      "additionalProperties": false
+    },
+    "set_workflow_state": {
+      "type": "object",
+      "required": [
+        "kind",
+        "state_id"
+      ],
+      "properties": {
+        "kind": {
+          "const": "set-workflow-state"
+        },
+        "state_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/effect"
+}

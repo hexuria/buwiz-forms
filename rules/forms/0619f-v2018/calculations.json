@@ -1,0 +1,134 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "0619f-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "0619f-due-date",
+                             "0619f-item15-total-atc",
+                             "0619f-item17-net",
+                             "0619f-item18d-penalties",
+                             "0619f-item19-total"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "0619f-due-date",
+                             "outputs":  [
+                                             "frm0619F:txtDueMonth",
+                                             "frm0619F:txtDueDay",
+                                             "frm0619F:txtDueYear"
+                                         ],
+                             "inputs":  [
+                                            "frm0619F:txtMonth",
+                                            "frm0619F:txtYear"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Due date is the 10th day of the following month; December rolls to January of year + 1.",
+                             "rounding":  "formatCurrency after NumWithComma conversion; displayed to two decimal places.",
+                             "trigger":  "computeDueDate",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeDueDate:L2326-L2345"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "0619f-item15-total-atc",
+                             "outputs":  [
+                                             "frm0619F:txtTax15"
+                                         ],
+                             "inputs":  [
+                                            "frm0619F:txtTax13",
+                                            "frm0619F:txtTax14"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "15 = 13 + 14.",
+                             "rounding":  "formatCurrency after NumWithComma conversion; displayed to two decimal places.",
+                             "trigger":  "computeTotalAtc",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAtc:L2284-L2288"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "0619f-item17-net",
+                             "outputs":  [
+                                             "frm0619F:txtTax17"
+                                         ],
+                             "inputs":  [
+                                            "frm0619F:txtTax15",
+                                            "frm0619F:txtTax16"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "17 = 15 - 16.",
+                             "rounding":  "formatCurrency after NumWithComma conversion; displayed to two decimal places.",
+                             "trigger":  "computeNetAmtRem",
+                             "depends_on":  [
+                                                "0619f-item15-total-atc"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeNetAmtRem:L2291-L2294"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "0619f-item18d-penalties",
+                             "outputs":  [
+                                             "frm0619F:txtTax18D"
+                                         ],
+                             "inputs":  [
+                                            "frm0619F:txtTax18A",
+                                            "frm0619F:txtTax18B",
+                                            "frm0619F:txtTax18C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "18D = 18A + 18B + 18C.",
+                             "rounding":  "formatCurrency after NumWithComma conversion; displayed to two decimal places.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L2297-L2301"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "0619f-item19-total",
+                             "outputs":  [
+                                             "frm0619F:txtTax19"
+                                         ],
+                             "inputs":  [
+                                            "frm0619F:txtTax17",
+                                            "frm0619F:txtTax18D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "19 = 17 + 18D.",
+                             "rounding":  "formatCurrency after NumWithComma conversion; displayed to two decimal places.",
+                             "trigger":  "computeTotalAmtRem",
+                             "depends_on":  [
+                                                "0619f-item17-net",
+                                                "0619f-item18d-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAmtRem:L2304-L2307"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

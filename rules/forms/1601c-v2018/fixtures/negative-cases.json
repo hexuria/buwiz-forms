@@ -1,0 +1,397 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1601c-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1601c-input-002-month-year-format",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A nonblank Schedule I month/year is not exactly MM/YYYY with numeric month 01..12 and four-digit year."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/YYYY format)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-input-002-month-year-format"
+                  },
+                  {
+                      "case_id":  "case-02-1601c-input-003-month-year-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A valid Schedule I MM/YYYY value is after the current date."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-input-003-month-year-future"
+                  },
+                  {
+                      "case_id":  "case-03-1601c-input-004-date-format",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A nonblank Schedule I payment date is not a real MM/DD/YYYY date."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-input-004-date-format"
+                  },
+                  {
+                      "case_id":  "case-04-1601c-input-005-date-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A valid Schedule I payment date is after the current date."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-input-005-date-future"
+                  },
+                  {
+                      "case_id":  "case-05-1601c-input-006-return-period-floor",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return-period year is before 2018."
+                                    },
+                      "expected_message":  "Please file using the old version of the form.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-input-006-return-period-floor"
+                  },
+                  {
+                      "case_id":  "case-06-1601c-input-007-return-period-month-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return month is later than current month in current year."
+                                    },
+                      "expected_message":  "Invalid month. Month should not be later than the current month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-input-007-return-period-month-future"
+                  },
+                  {
+                      "case_id":  "case-07-1601c-input-008-return-period-year-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year exceeds current year."
+                                    },
+                      "expected_message":  "Invalid year. Year should not be later than the current year.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-input-008-return-period-year-future"
+                  },
+                  {
+                      "case_id":  "case-08-1601c-input-012-withheld-no-reset",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxes withheld/remitted changes to No while tax inputs or Schedule I adjustments are nonzero."
+                                    },
+                      "expected_message":  "You are about to change the value to \u0027No\u0027. Doing this will clear all computation field. Do you wish to proceed? ",
+                      "expected_behavior":  "Confirmation clears tax inputs and Schedule I values, then recomputes; cancellation restores Yes.",
+                      "rule_id":  "1601c-input-012-withheld-no-reset"
+                  },
+                  {
+                      "case_id":  "case-09-1601c-save-013-month",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return month is blank."
+                                    },
+                      "expected_message":  "Please enter Month on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-save-013-month"
+                  },
+                  {
+                      "case_id":  "case-10-1601c-save-014-year",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is blank."
+                                    },
+                      "expected_message":  "Please enter Year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-save-014-year"
+                  },
+                  {
+                      "case_id":  "case-11-1601c-save-015-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-save-015-tin"
+                  },
+                  {
+                      "case_id":  "case-12-1601c-save-016-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-save-016-rdo"
+                  },
+                  {
+                      "case_id":  "case-13-1601c-save-017-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-save-017-name"
+                  },
+                  {
+                      "case_id":  "case-14-1601c-save-019-amended-version",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "A finalized/versioned return exists and Amended Return is not Yes."
+                                    },
+                      "expected_message":  "If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-save-019-amended-version"
+                  },
+                  {
+                      "case_id":  "case-15-1601c-validate-020-year-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-020-year-required"
+                  },
+                  {
+                      "case_id":  "case-16-1601c-validate-021-month-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return month is blank."
+                                    },
+                      "expected_message":  "Please enter a valid month on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-021-month-required"
+                  },
+                  {
+                      "case_id":  "case-17-1601c-validate-022-year-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year exceeds current year."
+                                    },
+                      "expected_message":  "Invalid year. Year should not be later than the current year.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-022-year-future"
+                  },
+                  {
+                      "case_id":  "case-18-1601c-validate-023-month-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return month is later than current month in current year."
+                                    },
+                      "expected_message":  "Invalid month. Month should not be later than the current month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-023-month-future"
+                  },
+                  {
+                      "case_id":  "case-19-1601c-validate-024-withheld-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither taxes-withheld Yes nor No is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 3.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-024-withheld-choice"
+                  },
+                  {
+                      "case_id":  "case-20-1601c-validate-025-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-025-tin"
+                  },
+                  {
+                      "case_id":  "case-21-1601c-validate-027-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-027-rdo"
+                  },
+                  {
+                      "case_id":  "case-22-1601c-validate-028-name-typo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Witholding Agent\u0027s Name on Item 8.",
+                      "expected_behavior":  "The exact message misspells Withholding as Witholding.",
+                      "rule_id":  "1601c-validate-028-name-typo"
+                  },
+                  {
+                      "case_id":  "case-23-1601c-validate-029-telephone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-029-telephone"
+                  },
+                  {
+                      "case_id":  "case-24-1601c-validate-030-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Primary registered-address line is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-030-address"
+                  },
+                  {
+                      "case_id":  "case-25-1601c-validate-031-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 9A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-031-zip"
+                  },
+                  {
+                      "case_id":  "case-26-1601c-validate-032-category",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither private nor government category is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-032-category"
+                  },
+                  {
+                      "case_id":  "case-27-1601c-validate-033-item14-positive",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxes withheld Yes is selected and Item 14 equals zero."
+                                    },
+                      "expected_message":  "Invalid amount in Item no.14. Value must be greater than zero(0).",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-033-item14-positive"
+                  },
+                  {
+                      "case_id":  "case-28-1601c-validate-034-item25-positive",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxes withheld Yes is selected and Item 25 equals zero."
+                                    },
+                      "expected_message":  "Invalid amount in Item no.25. Value must be greater than zero(0).",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-034-item25-positive"
+                  },
+                  {
+                      "case_id":  "case-29-1601c-validate-035-schedule-month-shape",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A nonblank Schedule I month/year does not contain exactly two slash-delimited parts."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-035-schedule-month-shape"
+                  },
+                  {
+                      "case_id":  "case-30-1601c-validate-036-schedule-month-numeric",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I month part is nonnumeric."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-036-schedule-month-numeric"
+                  },
+                  {
+                      "case_id":  "case-31-1601c-validate-037-schedule-month-range-zero-bug",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I month is above 12 or below 0."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "expected_behavior":  "The comparison is month \u003c 0, so month 00 passes Validate.",
+                      "rule_id":  "1601c-validate-037-schedule-month-range-zero-bug"
+                  },
+                  {
+                      "case_id":  "case-32-1601c-validate-038-schedule-year-numeric",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I year part is nonnumeric."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-038-schedule-year-numeric"
+                  },
+                  {
+                      "case_id":  "case-33-1601c-validate-040-schedule-date-shape",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A nonblank Schedule I payment date does not contain exactly three slash-delimited parts."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-040-schedule-date-shape"
+                  },
+                  {
+                      "case_id":  "case-34-1601c-validate-041-schedule-date-month-numeric",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I payment-date month is nonnumeric."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-041-schedule-date-month-numeric"
+                  },
+                  {
+                      "case_id":  "case-35-1601c-validate-042-schedule-date-month-zero-bug",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I payment-date month is above 12 or below 0."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "expected_behavior":  "The comparison is month \u003c 0, so month 00 passes Validate.",
+                      "rule_id":  "1601c-validate-042-schedule-date-month-zero-bug"
+                  },
+                  {
+                      "case_id":  "case-36-1601c-validate-043-schedule-date-day-numeric",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I payment-date day is nonnumeric."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-043-schedule-date-day-numeric"
+                  },
+                  {
+                      "case_id":  "case-37-1601c-validate-044-schedule-date-day-range",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I payment-date day is outside 1..31."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-044-schedule-date-day-range"
+                  },
+                  {
+                      "case_id":  "case-38-1601c-validate-045-schedule-date-year-numeric",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule I payment-date year is nonnumeric."
+                                    },
+                      "expected_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1601c-validate-045-schedule-date-year-numeric"
+                  },
+                  {
+                      "case_id":  "case-39-1601c-validate-054-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All active Validate branches pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "Validate disables controls and enables Edit, Print, Final Copy, and upload.",
+                      "rule_id":  "1601c-validate-054-success"
+                  }
+              ]
+}

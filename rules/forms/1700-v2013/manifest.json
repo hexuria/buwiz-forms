@@ -1,0 +1,54 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1700-v2013",
+    "form_code":  "1700",
+    "revision":  "2013-06-01",
+    "revision_label":  "June 2013 (ENCS)",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0. Asset"
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  311,
+                   "runtime_field_families":  59,
+                   "fields_total":  370,
+                   "typed_fields":  370,
+                   "validation_rules":  88,
+                   "confirmed_official_bugs":  28,
+                   "calculations":  25,
+                   "negative_fixtures":  40,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "shared_function_fixture":  "fixtures/shared-1700-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release changes.",
+                        "No source values or email address are copied.",
+                        "311 concrete keys have identical plaintext/encrypted inventory hashes; 59 unbounded runtime families are explicit.",
+                        "The January 2018 1700v2018 PDF/HTA is a different revision and is not mixed into this package."
+                    ]
+}

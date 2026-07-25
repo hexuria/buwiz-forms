@@ -1,0 +1,1025 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "0619e-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Save and Validate alert the first matching active branch and return.",
+    "rules":  [
+                  {
+                      "rule_id":  "0619e-input-001-due-date",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "Filing month/year changes.",
+                      "fields":  [
+                                     "frm0619E:txtMonth",
+                                     "frm0619E:txtYear",
+                                     "frm0619E:txtDueMonth",
+                                     "frm0619E:txtDueYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#computeDueDate:L2246-L2268"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Due month becomes the next month; December rolls to January of the next year. Due day remains its default 10.",
+                      "recommended_app_behavior":  "Preserve the month rollover and explicitly derive the complete due date.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-input-002-unused-choice-helper",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  2,
+                      "condition":  "Withheld/remitted or category choice is absent.",
+                      "fields":  [
+                                     "choice-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkiftaxwheldisYes:L2203-L2214"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The helper returns messages but is never called.",
+                      "recommended_app_behavior":  "Use the active Validate branches as the compatibility source.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-input-003-helper-case-typo",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  3,
+                      "condition":  "The unused helper tries to find frm0619E:optcategory:G with a lowercase c.",
+                      "fields":  [
+                                     "frm0619E:optCategory:G"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkiftaxwheldisYes:L2208-L2212"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The ID does not match the live control, but the function is unreachable.",
+                      "recommended_app_behavior":  "Remove the dead helper and keep one correctly cased choice validator.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-save-004-tin",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "TIN-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L2526-L2534"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-save-005-rdo",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm0619E:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L2535-L2541"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-save-006-name",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  6,
+                      "condition":  "Withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm0619E:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L2542-L2550"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-save-007-sparse",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  7,
+                      "condition":  "Any field outside TIN/RDO/name is invalid.",
+                      "fields":  [
+                                     "all-other-form-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L2526-L2552"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save ignores filing period, due date, choices, address/contact/email, and remittance amounts.",
+                      "recommended_app_behavior":  "Allow incomplete drafts explicitly, but never equate sparse Save checks with validity.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-save-008-amended-version",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  8,
+                      "condition":  "A finalized/versioned return exists and Amended Return is not Yes.",
+                      "fields":  [
+                                     "frm0619E:optAmend:Y",
+                                     "frm0619E:optAmend:N"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveXML:L1744-L1831"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-009-month-required",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Filing month is blank.",
+                      "fields":  [
+                                     "frm0619E:txtMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid month on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2272-L2276"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-010-current-month",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Filing month equals the current month in the current year.",
+                      "fields":  [
+                                     "frm0619E:txtMonth",
+                                     "frm0619E:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid month on Item 1. Month should not be a current Date",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2277-L2283"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The source rejects the current month and rewinds the select before recomputing due date.",
+                      "recommended_app_behavior":  "Require a completed prior withholding month.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-011-future-month",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Filing month is after the current month in the current year.",
+                      "fields":  [
+                                     "frm0619E:txtMonth",
+                                     "frm0619E:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid month on Item 1. Month should not be a future Date",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2284-L2290"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-012-year-required",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Filing year is blank.",
+                      "fields":  [
+                                     "frm0619E:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2292-L2298"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-013-year-future",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Filing year exceeds current year.",
+                      "fields":  [
+                                     "frm0619E:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid year on Item 1. Year should not be a future Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2299-L2306"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-014-year-floor",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Filing year is before 2018.",
+                      "fields":  [
+                                     "frm0619E:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid entry on Item 1. Entry should not be a previous year from 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2307-L2314"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-015-due-required",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Any due-date component is blank.",
+                      "fields":  [
+                                     "due-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Date on Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2325-L2329"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-016-due-month",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Due month is outside 1..12.",
+                      "fields":  [
+                                     "frm0619E:txtDueMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Month on Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2329-L2332"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-017-due-day",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Due day is outside 1..31 or violates the selected month/leap year.",
+                      "fields":  [
+                                     "due-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Day on Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2332-L2350"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-018-due-year-future",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Due year exceeds current year.",
+                      "fields":  [
+                                     "frm0619E:txtDueYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Year should not be a future Date. Please enter a valid Year on Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2335-L2338"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-019-due-year-floor",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Due year is before 2018.",
+                      "fields":  [
+                                     "frm0619E:txtDueYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Previous year from 2018 is not applicable for this Form. Please enter a valid Year on Item 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2338-L2341"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-020-zero-padding",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Due month or day has one character after validation.",
+                      "fields":  [
+                                     "frm0619E:txtDueMonth",
+                                     "frm0619E:txtDueDay"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2351-L2358"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The source left-pads each component with zero.",
+                      "recommended_app_behavior":  "Normalize to two-digit month/day strings.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-021-withheld-choice",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Neither withheld/remitted Yes nor No is selected.",
+                      "fields":  [
+                                     "frm0619E:optWithheld:Y",
+                                     "frm0619E:optWithheld:N"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2360-L2364"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-022-category-choice",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Neither private nor government category is selected.",
+                      "fields":  [
+                                     "frm0619E:optCategory:P",
+                                     "frm0619E:optCategory:G"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2365-L2369"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-023-tin",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "TIN-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2374-L2378"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-024-tin-checksum-omitted",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "TIN segments are nonblank but fail shared checksum/branch semantics.",
+                      "fields":  [
+                                     "TIN-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2374-L2378"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source tests presence only.",
+                      "recommended_app_behavior":  "Apply the shared evidence-backed TIN validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-025-rdo",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "RDO selectedIndex is zero.",
+                      "fields":  [
+                                     "frm0619E:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2379-L2383"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-026-name",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Taxpayer/withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm0619E:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2384-L2388"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-027-contact",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm0619E:txtTelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Contact Number on Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2389-L2393"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-028-address",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Primary registered-address line is blank.",
+                      "fields":  [
+                                     "frm0619E:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2394-L2398"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-029-zip",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm0619E:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 10A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2399-L2403"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-030-email",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Email is blank.",
+                      "fields":  [
+                                     "txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter valid Email Address on Item 13.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2404-L2408"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-031-email-format-omitted",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "Email is nonblank but malformed.",
+                      "fields":  [
+                                     "txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2404-L2408"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate checks only blankness.",
+                      "recommended_app_behavior":  "Apply evidence-backed email syntax validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-032-tax14-conditional",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Item 4 Yes is selected and Item 14 equals numeric zero.",
+                      "fields":  [
+                                     "frm0619E:optWithheld:Y",
+                                     "frm0619E:txtTax14"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Part II - Tax Remittance if item 4 is set to Yes.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2409-L2415"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-033-amended-choice-omitted",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Neither Amended Return Yes nor No is selected.",
+                      "fields":  [
+                                     "frm0619E:optAmend:Y",
+                                     "frm0619E:optAmend:N"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2269-L2415"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate accepts the missing choice.",
+                      "recommended_app_behavior":  "Require an explicit Yes/No amended-return state.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-034-line-business-omitted",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "Line of business is blank.",
+                      "fields":  [
+                                     "frm0619E:txtLineBus"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2269-L2415"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "Validate never inspects the field.",
+                      "recommended_app_behavior":  "Preserve it and require it only when supported by revision-matched instructions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-035-address2-save-loss",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "Second registered-address line exists in the final copy.",
+                      "fields":  [
+                                     "frm0619E:txtAddress2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "xml-encrypted",
+                                          "xml-plaintext",
+                                          "official-hta-runtime#saveXML:L1671-L1953"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The encrypted final copy retains the field, while the paired plaintext save omits it.",
+                      "recommended_app_behavior":  "Preserve the field losslessly across every save/final-copy transition.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-036-negative-net",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  36,
+                      "condition":  "Item 15 exceeds Item 14, producing a negative Item 16 and potentially negative remittance.",
+                      "fields":  [
+                                     "frm0619E:txtTax14",
+                                     "frm0619E:txtTax15",
+                                     "frm0619E:txtTax16"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#computeNetAmtRem:L2228-L2233",
+                                          "official-hta-runtime#validateForm:L2269-L2415"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source computes the negative result and does not reject it.",
+                      "recommended_app_behavior":  "Validate the legally permitted relationship between remittance and adjustment.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "0619e-validate-037-success",
+                      "form_id":  "0619e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  37,
+                      "condition":  "All active Validate branches pass.",
+                      "fields":  [
+                                     "frm0619E:cmdValidate",
+                                     "frm0619E:cmdEdit"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2416-L2424"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Validate disables controls and enables Edit/Final Copy.",
+                      "recommended_app_behavior":  "Tie validation state to the exact field snapshot.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

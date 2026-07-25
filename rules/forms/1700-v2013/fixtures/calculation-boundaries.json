@@ -1,0 +1,52 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1700-v2013",
+    "cases":  [
+                  {
+                      "case_id":  "tax-10k",
+                      "inputs":  {
+                                     "taxable":  10000
+                                 },
+                      "calculation_id":  "1700-tax-table",
+                      "official_output":  "500"
+                  },
+                  {
+                      "case_id":  "tax-30k",
+                      "inputs":  {
+                                     "taxable":  30000
+                                 },
+                      "calculation_id":  "1700-tax-table",
+                      "official_output":  "2500"
+                  },
+                  {
+                      "case_id":  "tax-500k",
+                      "inputs":  {
+                                     "taxable":  500000
+                                 },
+                      "calculation_id":  "1700-tax-table",
+                      "official_output":  "125000"
+                  },
+                  {
+                      "case_id":  "item22-cap",
+                      "inputs":  {
+                                     "item21":  200,
+                                     "item14a":  100,
+                                     "item14b":  100,
+                                     "item22":  101
+                                 },
+                      "calculation_id":  "1700-item23-net-after-installment",
+                      "official_behavior":  "Clear Item 22 and alert because it exceeds 50% of Items 14A+14B."
+                  },
+                  {
+                      "case_id":  "page1-item31-override",
+                      "inputs":  {
+                                     "item29":  100,
+                                     "item28":  50,
+                                     "item30":  20
+                                 },
+                      "calculation_id":  "1700-page1-item31",
+                      "official_output":  "20",
+                      "recommended_review":  "Ordinary arithmetic would produce -30."
+                  }
+              ]
+}

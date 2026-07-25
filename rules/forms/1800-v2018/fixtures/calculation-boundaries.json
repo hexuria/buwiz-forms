@@ -1,0 +1,59 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1800-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "below-exemption",
+                      "inputs":  {
+                                     "cumulative":  100000
+                                 },
+                      "recommended_output":  0,
+                      "calculation_id":  "1800-taxable-net-gifts",
+                      "official_output":  -150000
+                  },
+                  {
+                      "case_id":  "at-exemption",
+                      "inputs":  {
+                                     "cumulative":  250000
+                                 },
+                      "calculation_id":  "1800-taxable-net-gifts",
+                      "official_output":  0
+                  },
+                  {
+                      "case_id":  "flat-six-percent",
+                      "inputs":  {
+                                     "taxable_net_gifts":  1000000
+                                 },
+                      "calculation_id":  "1800-donor-tax-due",
+                      "official_output":  60000
+                  },
+                  {
+                      "case_id":  "tax-credits",
+                      "inputs":  {
+                                     "c":  300,
+                                     "b":  200,
+                                     "a":  100
+                                 },
+                      "calculation_id":  "1800-tax-credits",
+                      "official_output":  600
+                  },
+                  {
+                      "case_id":  "recursion",
+                      "calculation_id":  "1800-mutual-recursion-defect",
+                      "entry":  "compute18",
+                      "official_result":  "unbounded mutual recursion / host stack failure"
+                  },
+                  {
+                      "case_id":  "schedule-sum",
+                      "inputs":  {
+                                     "rows":  [
+                                                  100,
+                                                  200,
+                                                  300
+                                              ]
+                                 },
+                      "calculation_id":  "1800-schedule-a-total",
+                      "official_output":  600
+                  }
+              ]
+}

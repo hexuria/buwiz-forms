@@ -41,7 +41,6 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
     },
 ];
 
-
 // Pinned by scripts/prepare_chromium_reference.mjs from the same official
 // PDF bytes; see references/1601c-2018-chromium-source.json
 // for the full pdf -> svg -> png provenance chain.

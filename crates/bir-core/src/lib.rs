@@ -24,6 +24,7 @@ pub mod email;
 pub mod email_fetcher; // legacy — kept for backward compat, delegates to `email`
 pub mod export;
 pub mod form;
+pub mod form_rules;
 pub mod forms;
 pub mod google_calendar;
 pub mod import;
@@ -44,11 +45,24 @@ pub mod transport;
 pub mod validation;
 
 // Re-export core types
-pub use bir_xml::{BirXmlParseError, generate_bir_xml, parse_bir_xml_checked};
+pub use bir_rules::{
+    BehaviorProfile, CompiledRuleSet, ContextFingerprint, ContextValueSnapshot, EvaluationResult,
+    FieldValueSource, FormRevisionKey, InputRevision, RuleAssessment, RuleFieldRef, RuleSeverity,
+    RuleViolation, ValidationContext, ValidationPhase, ValidationReport, WorkflowAction,
+    WorkflowNotification, WorkflowNotificationChannel, WorkflowStateId, WorkflowTransitionError,
+    WorkflowTransitionId, WorkflowTransitionResult,
+};
+pub use bir_xml::{
+    BirXmlParseError, generate_bir_xml, parse_bir_xml_checked, parse_bir_xml_with_codec_checked,
+};
 pub use email::{
     ImapAuthenticator, fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
 };
 pub use export::{export_database_zip, export_existing_database_zip, export_profile_data};
+pub use form_rules::{
+    CheckedFinalCopyPayload, CheckedFinalCopyPayloadError, ShadowEvaluationOutcome,
+    TrustedEvaluation, WorkflowDispatchError,
+};
 pub use forms::{
     ATC_TABLE_2551Q, FilingStatus, Form2551QDraft, FormDraftSummary, FormFilingProgress,
     FormSuggestion, FormSuggestionSource, FormsSetReconcileResult, QuarterState, Schedule1Row,

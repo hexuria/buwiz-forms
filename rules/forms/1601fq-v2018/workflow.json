@@ -1,0 +1,33 @@
+{
+  "$schema":"../../schema/workflow.schema.json","schema_version":"1.0.0","form_id":"1601fq-v2018","revision":"2018-01-01",
+  "phases":[
+    {"phase":"edit","official_behavior":"Controls are editable; Save uses only its narrow preflight.","source_refs":["official-hta-runtime#enableAllControl:L3425-L3528"],"confidence":"high"},
+    {"phase":"saved-draft","official_behavior":"Local XML may contain data that has not passed full Validate.","source_refs":["official-hta-runtime#saveXML:L2699-L3000"],"confidence":"high"},
+    {"phase":"validated","official_behavior":"Full first-error validation passes and controls are disabled.","source_refs":["official-hta-runtime#validate:L4208-L4405"],"confidence":"high"},
+    {"phase":"final-copy-confirmation","official_behavior":"The Final Copy action asks for confirmation to submit.","source_refs":["official-hta-runtime#openAlertEmail:L5161-L5230"],"confidence":"high"},
+    {"phase":"offline-final-copy","official_behavior":"No-network fallback sets final flag 3 and creates an encrypted copy.","source_refs":["official-hta-runtime#openAlertEmail:L5161-L5230","official-hta-runtime#saveEncryptedProfile:L2534-L2620"],"confidence":"high"},
+    {"phase":"submission-pending","official_behavior":"Enrollment/credential and encrypted-copy work precedes transport.","source_refs":["official-hta-runtime#sendEmail:L5232-L5307"],"confidence":"high"},
+    {"phase":"submitted","official_behavior":"Transport success sets final flag 1; BIR validation remains subsequent.","source_refs":["official-hta-runtime#sendEmail:L5232-L5307"],"confidence":"medium"},
+    {"phase":"retry","official_behavior":"Transport failure sets final flag 2.","source_refs":["official-hta-runtime#sendEmail:L5232-L5307"],"confidence":"high"}
+  ],
+  "transitions":[
+    {"from":"edit","action":"Save","to":"saved-draft","guard":"TIN, RDO and name pass Save preflight.","side_effects":["Writes versioned local XML."],"source_refs":["official-hta-runtime#saveXML:L2699-L3000"]},
+    {"from":"edit","action":"Validate","to":"validated","guard":"All ordered Validate rules pass.","side_effects":["Disables editable controls."],"source_refs":["official-hta-runtime#validate:L4208-L4405"]},
+    {"from":"validated","action":"Final Copy","to":"final-copy-confirmation","guard":"User invokes submission-first action.","side_effects":["Shows Internet/email confirmation."],"source_refs":["official-hta-runtime#openAlertEmail:L5161-L5230"]},
+    {"from":"final-copy-confirmation","action":"Confirm without network","to":"offline-final-copy","guard":"checkNetConnection is false.","side_effects":["Sets txtFinalFlag=3.","Creates encrypted offline artifact."],"source_refs":["official-hta-runtime#openAlertEmail:L5161-L5230"]},
+    {"from":"final-copy-confirmation","action":"Confirm with network","to":"submission-pending","guard":"Network path proceeds.","side_effects":["Builds encrypted submission artifact."],"source_refs":["official-hta-runtime#sendEmail:L5232-L5307"]},
+    {"from":"submission-pending","action":"Transport success","to":"submitted","guard":"RenameAndSendFile returns success.","side_effects":["Sets txtFinalFlag=1.","Persists final save."],"source_refs":["official-hta-runtime#sendEmail:L5232-L5307"]},
+    {"from":"submission-pending","action":"Transport failure","to":"retry","guard":"Nonzero return or exception.","side_effects":["Sets txtFinalFlag=2."],"source_refs":["official-hta-runtime#sendEmail:L5232-L5307"]}
+  ],
+  "prerequisites":["Correct January 2018 revision","Complete background information","Category-scoped ATC selection when taxes were withheld","Treaty and Schedule 1 data when Special Tax Yes is selected"],
+  "required_attachments":[
+    {"attachment_id":"qap","label":"Quarterly Alphalist of Payees (QAP)","required_when":"The official guide requires the quarterly alphalist.","official_ui_enforcement":"Not enforced by local Validate.","source_refs":["official-guide-2018#required-attachments"],"confidence":"high"},
+    {"attachment_id":"qap-receipt","label":"Acknowledgment Receipt/Validation Successful proof of QAP submission","required_when":"QAP is submitted electronically.","official_ui_enforcement":"Not enforced by local Validate.","source_refs":["official-guide-2018#required-attachments"],"confidence":"high"}
+  ],
+  "filing_deadlines":[
+    {"quarter":"Q1","due_date_rule":"Not later than the last day of the month following the close of the quarter.","source_refs":["official-guide-2018#when-and-where-to-file"],"confidence":"high"},
+    {"quarter":"Q2","due_date_rule":"Not later than the last day of the month following the close of the quarter.","source_refs":["official-guide-2018#when-and-where-to-file"],"confidence":"high"},
+    {"quarter":"Q3","due_date_rule":"Not later than the last day of the month following the close of the quarter.","source_refs":["official-guide-2018#when-and-where-to-file"],"confidence":"high"},
+    {"quarter":"Q4","due_date_rule":"Not later than the last day of the month following the close of the quarter.","source_refs":["official-guide-2018#when-and-where-to-file"],"confidence":"high"}
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/validations.schema.json",
+  "type": "object",
+  "required": ["schema_version", "form_id", "revision", "rules"],
+  "properties": {
+    "$schema": { "type": "string" }, "schema_version": { "type": "string" }, "form_id": { "type": "string" }, "revision": { "type": "string" },
+    "first_error_behavior": { "type": "string" }, "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": ["rule_id", "form_id", "revision", "phase", "order", "condition", "fields", "accepted_behavior", "rejected_behavior", "exact_message", "source_refs", "evidence_type", "assessment", "official_behavior", "recommended_app_behavior", "confidence", "unresolved_questions"],
+      "properties": {
+        "rule_id": { "type": "string" }, "form_id": { "type": "string" }, "revision": { "type": "string" },
+        "phase": { "enum": ["input", "blur/change", "page navigation", "save", "validate", "final-copy", "submit"] },
+        "order": { "type": ["integer", "null"], "minimum": 1 }, "condition": { "type": "string" },
+        "fields": { "type": "array", "items": { "type": "string" } }, "accepted_behavior": { "type": "string" },
+        "rejected_behavior": { "type": "string" }, "exact_message": { "type": ["string", "null"] },
+        "source_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "evidence_type": { "type": "array", "items": { "enum": ["source", "runtime-dom", "official-pdf", "official-guide", "ui-observation", "xml", "repository-code", "repository-test", "runtime-binary"] } },
+        "assessment": { "enum": ["verified-correct", "official-bug-compatible", "incorrect-official-behavior", "ambiguous", "unverified", "obsolete"] },
+        "official_behavior": { "type": "string" }, "recommended_app_behavior": { "type": "string" },
+        "confidence": { "enum": ["high", "medium", "low", "unknown"] }, "unresolved_questions": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

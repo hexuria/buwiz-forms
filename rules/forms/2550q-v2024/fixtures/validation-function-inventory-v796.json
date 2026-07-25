@@ -1,0 +1,14 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "official_hta_sha256":  "3a5a4d3b2b342a4dfc55a05c69b560fb9be47af6451d8c651d19e1d33406ec70",
+    "main_validate":  "L8407-L8620",
+    "save_preflight":  "L9065-L9080",
+    "covered_rule_count":  38,
+    "notable_omissions":  [
+                              "No TIN checksum or digit-shape validation.",
+                              "No email syntax validation.",
+                              "No main Validate enforcement of most numeric tax relationships.",
+                              "No amended-return or short-period selection requirement."
+                          ]
+}

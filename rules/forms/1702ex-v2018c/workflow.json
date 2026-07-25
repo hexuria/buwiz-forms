@@ -1,0 +1,185 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702ex-v2018c",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "package-release-notes#create-law"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "CREATE-law January 2018 corporate exempt return with nine pages and source-unbounded popup schedule rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L7818-L7828",
+                                           "official-hta-runtime#saveXML:L7242-L7557"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only RDO, name, address, and contact number before serializing current static and runtime-generated controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateAll:L4721-L4767",
+                                           "official-hta-runtime#validate:L7784-L7816"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate invokes validateAll, but defined Schedule 8 and CTC/SEC selection validators are unreachable."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML:L7242-L7557"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "The CREATE runtime defines final-copy encryption and 11 source-unbounded popup families, but no revision-matched final-copy sample is available."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail",
+                                           "official-hta-runtime#submitToEFPS"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online/EFPS transports exist but were not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Serializes runtime popup rows and UI-state keys."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L7242-L7557"
+                                            ],
+                            "guard":  "Four narrow Save checks and file-version guards pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Captures disabled text state.",
+                                                 "Disables controls.",
+                                                 "Enables print/final-copy/transport actions."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L7784-L7806"
+                                            ],
+                            "guard":  "All invoked validateAll checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls subject to deduction and period conditions."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L8291-L8306"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts/compresses the final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L7242-L7557"
+                                            ],
+                            "guard":  "Finalization/version flow succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Online/EFPS attempt; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail",
+                                                "official-hta-runtime#submitToEFPS"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return period and ATC",
+                          "RDO and corporation identity",
+                          "Contact and valid email",
+                          "Deduction method",
+                          "Tax-relief basis/agency/activity/effectivity",
+                          "Reconciled Part IV and Schedule 3 amounts",
+                          "Overpayment disposition when applicable"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "financial-statements",
+                                     "label":  "Audited financial statements and schedules required by the official instructions.",
+                                     "source_refs":  [
+                                                         "legacy-help-runtime#required-attachments"
+                                                     ],
+                                     "required_when":  "Applicable annual return filing.",
+                                     "official_ui_enforcement":  "Not fully enforced by local Validate.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-relief-support",
+                                     "label":  "Proof and schedules supporting exemption or tax-relief availment.",
+                                     "source_refs":  [
+                                                         "legacy-help-runtime#required-attachments",
+                                                         "official-hta-runtime#validateAll:L4739-L4765"
+                                                     ],
+                                     "required_when":  "Tax relief/exemption is claimed.",
+                                     "official_ui_enforcement":  "Local UI requires descriptive basis fields but not attachment presence.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-runtime"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return; revision-matched deadline text is not pinned because the packaged help is June 2013."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-runtime"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Annual return; revision-matched deadline text is not pinned because the packaged help is June 2013."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-runtime"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Annual return; revision-matched deadline text is not pinned because the packaged help is June 2013."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-runtime"
+                                                 ],
+                                 "confidence":  "low",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Annual return; revision-matched deadline text is not pinned because the packaged help is June 2013."
+                             }
+                         ]
+}

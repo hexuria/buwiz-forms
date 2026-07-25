@@ -1,0 +1,507 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1702mx-save-001-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code equals literal 000."
+                                    },
+                      "expected_message":  "Please select an RDO Code (Part I Item 7).",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702mx-save-001-rdo"
+                  },
+                  {
+                      "case_id":  "case-02-1702mx-save-002-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please provide a Registered Name (Part I Item 9).",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702mx-save-002-name"
+                  },
+                  {
+                      "case_id":  "case-03-1702mx-save-003-address",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please provide a Registered Address (Part I Item 10).",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702mx-save-003-address"
+                  },
+                  {
+                      "case_id":  "case-04-1702mx-save-004-contact",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please provide a Contact Number (Part I Item 11).",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702mx-save-004-contact"
+                  },
+                  {
+                      "case_id":  "case-05-1702mx-save-005-email",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email address is blank."
+                                    },
+                      "expected_message":  "Please provide an Email Address (Part I Item 12).",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1702mx-save-005-email"
+                  },
+                  {
+                      "case_id":  "case-06-1702mx-save-008-commented-profile",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Main line of business or PSIC is blank/short."
+                                    },
+                      "expected_message":  "Please provide a valid PSIC code (Part I Item 14).",
+                      "expected_behavior":  "Both checks are inside one block comment.",
+                      "rule_id":  "1702mx-save-008-commented-profile"
+                  },
+                  {
+                      "case_id":  "case-07-1702mx-validate-basis-A1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 1A is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 1A.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-A1"
+                  },
+                  {
+                      "case_id":  "case-08-1702mx-validate-basis-A2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 2A is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 2A.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-A2"
+                  },
+                  {
+                      "case_id":  "case-09-1702mx-validate-basis-A3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 3A is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 3A.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-A3"
+                  },
+                  {
+                      "case_id":  "case-10-1702mx-validate-basis-A5",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 5A is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 5A.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-A5"
+                  },
+                  {
+                      "case_id":  "case-11-1702mx-validate-basis-A6",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column A has any nonzero amount, and Schedule 1 Item 6A is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 6A.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-A6"
+                  },
+                  {
+                      "case_id":  "case-12-1702mx-validate-basis-B1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 1B is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 1B.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-B1"
+                  },
+                  {
+                      "case_id":  "case-13-1702mx-validate-basis-B2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 2B is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 2B.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-B2"
+                  },
+                  {
+                      "case_id":  "case-14-1702mx-validate-basis-B3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 3B is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 3B.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-B3"
+                  },
+                  {
+                      "case_id":  "case-15-1702mx-validate-basis-B4",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and the special tax rate is \u003c= 0."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 4B.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-B4"
+                  },
+                  {
+                      "case_id":  "case-16-1702mx-validate-basis-B5",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 5B is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 5B.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-B5"
+                  },
+                  {
+                      "case_id":  "case-17-1702mx-validate-basis-B6",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column B has any nonzero amount, and Schedule 1 Item 6B is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 6B.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-B6"
+                  },
+                  {
+                      "case_id":  "case-18-1702mx-validate-basis-C1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 1C is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 1C.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-C1"
+                  },
+                  {
+                      "case_id":  "case-19-1702mx-validate-basis-C2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 2C is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 2C.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-C2"
+                  },
+                  {
+                      "case_id":  "case-20-1702mx-validate-basis-C3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 3C is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 3C.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-C3"
+                  },
+                  {
+                      "case_id":  "case-21-1702mx-validate-basis-C5",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 5C is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 5C.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-C5"
+                  },
+                  {
+                      "case_id":  "case-22-1702mx-validate-basis-C6",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Instruction B is unchecked, Schedule 2 column C has any nonzero amount, and Schedule 1 Item 6C is blank."
+                                    },
+                      "expected_message":  "Please provide value on Page 2 Schedule 1 Item 6C.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-basis-C6"
+                  },
+                  {
+                      "case_id":  "case-23-1702mx-validate-income-tax-1a",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 Item 13A is positive and Schedule 4 Item 1A is \u003c= 0."
+                                    },
+                      "expected_message":  "Please provide value on Page 3 Schedule 4 Item 1A",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-income-tax-1a"
+                  },
+                  {
+                      "case_id":  "case-24-1702mx-validate-income-tax-1b",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 Item 13B is positive and Schedule 4 Item 1B is \u003c= 0."
+                                    },
+                      "expected_message":  "Please provide value on Page 3 Schedule 4 Item 1B",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-income-tax-1b"
+                  },
+                  {
+                      "case_id":  "case-25-1702mx-validate-income-tax-2a",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 Item 9A is positive and Schedule 4 Item 2A is \u003c= 0."
+                                    },
+                      "expected_message":  "Please provide value on Page 3 Schedule 4 Item 2A",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-income-tax-2a"
+                  },
+                  {
+                      "case_id":  "case-26-1702mx-validate-income-tax-2b",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 Item 9B is positive and Schedule 4 Item 2B is \u003c= 0."
+                                    },
+                      "expected_message":  "Please provide value on Page 3 Schedule 4 Item 2B",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-income-tax-2b"
+                  },
+                  {
+                      "case_id":  "case-27-1702mx-validate-income-tax-2c",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 Item 9C is positive and Schedule 4 Item 2C is \u003c= 0."
+                                    },
+                      "expected_message":  "Please provide value on Page 3 Schedule 4 Item 2C",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-income-tax-2c"
+                  },
+                  {
+                      "case_id":  "case-28-1702mx-validate-filing-basis",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Calendar nor Fiscal is selected."
+                                    },
+                      "expected_message":  "Please select if filing for Calendar or Fiscal Year (Page 1 Item 1).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-filing-basis"
+                  },
+                  {
+                      "case_id":  "case-29-1702mx-validate-period-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month or two-digit year ended is blank."
+                                    },
+                      "expected_message":  "Please select Month and Year for Year Ended (Page 1 Item 2).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-period-required"
+                  },
+                  {
+                      "case_id":  "case-30-1702mx-validate-year-fiscal-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Fiscal period is later than the current month."
+                                    },
+                      "expected_message":  "Date (Page 1 Item 2) cannot be greater than current date when filing for Fiscal Year.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-fiscal-future"
+                  },
+                  {
+                      "case_id":  "case-31-1702mx-validate-year-fiscal-december",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Fiscal month is December."
+                                    },
+                      "expected_message":  "Date (Page 1 Item 2) Month cannot be equal to December.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-fiscal-december"
+                  },
+                  {
+                      "case_id":  "case-32-1702mx-validate-year-before-effectivity",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Period is earlier than September 2013."
+                                    },
+                      "expected_message":  "Date (Page 1 Item 2) should not be earlier than September 2013.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-before-effectivity"
+                  },
+                  {
+                      "case_id":  "case-33-1702mx-validate-year-calendar-current",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Calendar, not short-period, and year is current or future."
+                                    },
+                      "expected_message":  "Year (Page 1 Item 2) cannot be greater than or equal to current year when filing for Calendar Year.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-calendar-current"
+                  },
+                  {
+                      "case_id":  "case-34-1702mx-validate-year-short-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Calendar short-period year is later than current year."
+                                    },
+                      "expected_message":  "Year (Page 1 Item 2) cannot be greater than the current year when filing for Calendar Year.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-short-future"
+                  },
+                  {
+                      "case_id":  "case-35-1702mx-validate-year-short-month-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Calendar short-period month is later than current month in the current year."
+                                    },
+                      "expected_message":  "Month (Page 1 Item 2) cannot be greater than  current month date when filing for Calendar Year  and  Short Period Return.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-short-month-future"
+                  },
+                  {
+                      "case_id":  "case-36-1702mx-validate-year-short-december",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Calendar short-period month is December in the current year."
+                                    },
+                      "expected_message":  "Month (Page 1 Item 2) cannot be equal to december  when filing for Calendar Year and  Short Period Return.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-short-december"
+                  },
+                  {
+                      "case_id":  "case-37-1702mx-validate-year-short-month-invalid",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Calendar short-period month coerces below zero."
+                                    },
+                      "expected_message":  "(Page 1 Item 2) Month is invalid.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-year-short-month-invalid"
+                  },
+                  {
+                      "case_id":  "case-38-1702mx-validate-year-empty-helper",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "validateYearEnd is called directly with blank year."
+                                    },
+                      "expected_message":  "This field cannot be empty.",
+                      "expected_behavior":  "The helper alerts but fails to set isValid=false; normal Validate never reaches this branch because its preceding required check returns.",
+                      "rule_id":  "1702mx-validate-year-empty-helper"
+                  },
+                  {
+                      "case_id":  "case-39-1702mx-validate-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither IC055 nor alternate ATC is checked."
+                                    },
+                      "expected_message":  "Please tick at least one ATC option (Page 1 Item 5).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-atc"
+                  },
+                  {
+                      "case_id":  "case-40-1702mx-validate-incorporation-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date of incorporation / organization is blank."
+                                    },
+                      "expected_message":  "Please provide Date of Incorporation / Organization (Part I Item 10).",
+                      "expected_behavior":  "The message says Item 10, while the control ID and printed placement are Part I Item 8.",
+                      "rule_id":  "1702mx-validate-incorporation-required"
+                  },
+                  {
+                      "case_id":  "case-41-1702mx-validate-incorporation-after-period",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Incorporation month/year is after the filing month/year."
+                                    },
+                      "expected_message":  "Date of Incorporation cannot be greater than Page 1 Item 2 Date.",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-incorporation-after-period"
+                  },
+                  {
+                      "case_id":  "case-42-1702mx-validate-incorporation-four-years-exact",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing year minus incorporation year equals exactly four and IC055 is unchecked."
+                                    },
+                      "expected_message":  "The Year of Incorporation is \u003cyear\u003e, ATC - IC 055 of Page 1 Item will be marked.",
+                      "expected_behavior":  "The message interpolates the incorporation year and automatically marks IC055.",
+                      "rule_id":  "1702mx-validate-incorporation-four-years-exact"
+                  },
+                  {
+                      "case_id":  "case-43-1702mx-validate-incorporation-under-four",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Filing year minus incorporation year is below four while IC055 is checked."
+                                    },
+                      "expected_message":  "Less than 4 years has passed since Date of Incorporation and the Filing Year, the mark in ATC - IC 055 of Page 1 Item 5 will be removed.",
+                      "expected_behavior":  "It unchecks/disables IC055, checks the alternate ATC, and returns false even after mutating the form.",
+                      "rule_id":  "1702mx-validate-incorporation-under-four"
+                  },
+                  {
+                      "case_id":  "case-44-1702mx-validate-incorporation-four-plus",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Elapsed time is at least four years and IC055 is unchecked."
+                                    },
+                      "expected_message":  "It has been 4 years or more since the Date of Incorporation and the Filing Year, ATC - IC 055 of Page 1 Item will be marked.",
+                      "expected_behavior":  "It marks IC055 but does not return false.",
+                      "rule_id":  "1702mx-validate-incorporation-four-plus"
+                  },
+                  {
+                      "case_id":  "case-45-1702mx-validate-overpayment-option",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Part II Item 16 or Item 21 is negative and no overpayment disposition is checked."
+                                    },
+                      "expected_message":  "Please select an Overpayment option (Page 1 Part II Item 21).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-overpayment-option"
+                  },
+                  {
+                      "case_id":  "case-46-1702mx-validate-schedule2-schedule10-crosscheck",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any Schedule 2 Item 13 A-D value differs (loose inequality after removeCommaParenthesis) from Schedule 10 Item 10 A-D."
+                                    },
+                      "expected_message":  "Page 2 Schedule 2 Item 13 Columns A, B, C \u0026 D must be equal to Page 4 Schedule 10 Item 10 Columns A, B, C \u0026 D.",
+                      "expected_behavior":  "The second key family is named Schedule 2 Item 10 even though the message calls it Schedule 10 Item 10; the calculation functions write Schedule 10 results into those keys.",
+                      "rule_id":  "1702mx-validate-schedule2-schedule10-crosscheck"
+                  },
+                  {
+                      "case_id":  "case-47-1702mx-validate-row-01",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17d are not both populated."
+                                    },
+                      "expected_message":  "Please provide complete data on Page 3 Schedule 5 Item 17d.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-row-01"
+                  },
+                  {
+                      "case_id":  "case-48-1702mx-validate-row-02",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17e are not both populated."
+                                    },
+                      "expected_message":  "Please provide complete data on Page 3 Schedule 5 Item 17e.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-row-02"
+                  },
+                  {
+                      "case_id":  "case-49-1702mx-validate-row-03",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17f are not both populated."
+                                    },
+                      "expected_message":  "Please provide complete data on Page 3 Schedule 5 Item 17f.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-row-03"
+                  },
+                  {
+                      "case_id":  "case-50-1702mx-validate-row-04",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The description/year side and positive-amount side of Page 3 Schedule 5 Item 17g are not both populated."
+                                    },
+                      "expected_message":  "Please provide complete data on Page 3 Schedule 5 Item 17g.\n(Amount cannot be zero [0] if Description is not empty and vice versa).",
+                      "expected_behavior":  "The branch alerts and returns from Validate.",
+                      "rule_id":  "1702mx-validate-row-04"
+                  }
+              ]
+}

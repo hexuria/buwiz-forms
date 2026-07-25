@@ -1,0 +1,327 @@
+{
+    "source_sha256":  "1c2f990e08d6ad02bd488bffdcd1b6cf1666d3c173ed0b5617f5faa0c546a7ed",
+    "function_count":  16,
+    "functions":  [
+                      {
+                          "name":  "Sum_Pg3Pt6S1I17",
+                          "start_line":  3561,
+                          "end_line":  3580,
+                          "body_sha256":  "0d6360cb2e096ee1c474b9fda24867878a884861c647ca1984348081d874d237",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "Sum_Pg3Pt6S2I4",
+                          "start_line":  3727,
+                          "end_line":  3745,
+                          "body_sha256":  "e80e45bff735cc2c1be64a197393f75904e45ab5b3d3fe9a32ac52ea4bc57c91",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "Sum_Pg3Pt6S3I3",
+                          "start_line":  3860,
+                          "end_line":  3879,
+                          "body_sha256":  "fa8edd8986ef5a24f407a0d965fd6375d3fa0e4ee68ded52ec8f4e5185ac12b7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "Sum_Pg3Pt6S3I6",
+                          "start_line":  3993,
+                          "end_line":  4013,
+                          "body_sha256":  "e8d3c4efdbbf681bc82e98ed02c84862305b6043a466c6af2e4320fc06927f38",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "Sum_Pg3Pt6S3I8",
+                          "start_line":  4127,
+                          "end_line":  4142,
+                          "body_sha256":  "31a206ddf165cb879301344e2efae6abff3157ead38df92f1ead4d535b5f7495",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "FormatValue",
+                          "start_line":  4350,
+                          "end_line":  4382,
+                          "body_sha256":  "0ba8a70416ca66446d344b75ffe04d34a22bde68cd0098cca18a34e30d1de9e9",
+                          "alerts":  [
+                                         "num"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "chkDtTaxRliefFrom",
+                          "start_line":  4570,
+                          "end_line":  4580,
+                          "body_sha256":  "4cd20e6a240b14ed59cf62c7b0492968894da666f32e0253f8b4835fe0619084",
+                          "alerts":  [
+                                         "\"Effective Tax Relief/Exemption date should not be greater than Taxable Year in Page 1 Item 2.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702EX:ddlPg1I2Date",
+                                              "frm1702EX:txtPg1I2YearEnd",
+                                              "frm1702EX:txtPg1Pt1I17EffectivityFrom"
+                                          ]
+                      },
+                      {
+                          "name":  "Compute_Page1_Item22",
+                          "start_line":  4661,
+                          "end_line":  4668,
+                          "body_sha256":  "192c6641b9e2fc2767bae4b48accc226e81cd33c202fb45fc1d9329da9f04003",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702EX:txtPg1Pt2I20TotalIncome",
+                                              "frm1702EX:txtPg1Pt2I21AddPenalty",
+                                              "frm1702EX:txtPg1Pt2I22TotalAmount"
+                                          ]
+                      },
+                      {
+                          "name":  "validateAmountDescription",
+                          "start_line":  5096,
+                          "end_line":  5124,
+                          "body_sha256":  "1e49e68acdf64adee7ecb1a249f8109a56b88d28b02aab93ea021b266161f575",
+                          "alerts":  [
+                                         "\u0027You have an empty data on Page \u0027 + myPage + \u0027 Part \u0027 + myPart + \u0027 Item \u0027 + myItem + \u0027.\u0027",
+                                         "\u0027You entered a data on Page \u0027 + myPage + \u0027 Part \u0027 + myPart + \u0027 Item \u0027 + myItem + \u0027. The amount should not be zero.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAmountDescription_pt2",
+                          "start_line":  5125,
+                          "end_line":  5293,
+                          "body_sha256":  "f5cba32287cdc3a68b4f1deb0cc8a15b6298a4157d248da622a7e7f66e29b26a",
+                          "alerts":  [
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 2 Item 1.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 2 Item 1. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 2 Item 2.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 2 Item 2. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 2 Item 3.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 2 Item 3. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 2 Item 4.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 2 Item 4. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 3 Item 2.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 3 Item 2. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 3 Item 3.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 3 Item 3. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 3 Item 5.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 3 Item 5. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 3 Item 6.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 3 Item 6. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 3 Item 7.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 3 Item 7. Amount should not be zero\u0027",
+                                         "\u0027You have an empty data on Page 3 Part VI Schedule 3 Item 8.\u0027",
+                                         "\u0027You entered a data on Page 3 Part VI Schedule 3 Item 8. Amount should not be zero\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702EX:txtPg3Pt6S2I1Amount",
+                                              "frm1702EX:txtPg3Pt6S2I1Description",
+                                              "frm1702EX:txtPg3Pt6S2I1LegalBasis",
+                                              "frm1702EX:txtPg3Pt6S2I2Amount",
+                                              "frm1702EX:txtPg3Pt6S2I2Description",
+                                              "frm1702EX:txtPg3Pt6S2I2LegalBasis",
+                                              "frm1702EX:txtPg3Pt6S2I3Amount",
+                                              "frm1702EX:txtPg3Pt6S2I3Description",
+                                              "frm1702EX:txtPg3Pt6S2I3LegalBasis",
+                                              "frm1702EX:txtPg3Pt6S2I4Amount",
+                                              "frm1702EX:txtPg3Pt6S2I4Description",
+                                              "frm1702EX:txtPg3Pt6S2I4LegalBasis",
+                                              "frm1702EX:txtPg3Pt6S3I2NonDeductExpenseOtherIncomeAmt",
+                                              "frm1702EX:txtPg3Pt6S3I2NonDeductExpenseOtherIncomeDesc",
+                                              "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeAmt",
+                                              "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
+                                              "frm1702EX:txtPg3Pt6S3I5NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
+                                              "frm1702EX:txtPg3Pt6S3I5NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+                                              "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
+                                              "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
+                                              "frm1702EX:txtPg3Pt6S3I7SpecialDeductAmt",
+                                              "frm1702EX:txtPg3Pt6S3I7SpecialDeductDesc",
+                                              "frm1702EX:txtPg3Pt6S3I8SpecialDeductAmt",
+                                              "frm1702EX:txtPg3Pt6S3I8SpecialDeductDesc"
+                                          ]
+                      },
+                      {
+                          "name":  "validateNetTaxInc",
+                          "start_line":  5503,
+                          "end_line":  5511,
+                          "body_sha256":  "2e1c9ee2fa8ea1f51943b1254322a895f88557c44050e66cb5425c7f3a626a4a",
+                          "alerts":  [
+                                         "\u0027Page 2 Part IV Item 39 should be equal to Page 3 Schedule 3 Item 10.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702EX:txtPg2Pt4I39NetTaxable",
+                                              "frm1702EX:txtPg3Pt6S3I10NetTaxableIncome"
+                                          ]
+                      },
+                      {
+                          "name":  "FormatAmount",
+                          "start_line":  5528,
+                          "end_line":  5629,
+                          "body_sha256":  "06eabab36a3f37e71c1b0a3f075be055606228da681b33989a1d8410cfcf11ef",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702EX:txtPg2Pt4I28SalesReceiptsRevFees",
+                                              "frm1702EX:txtPg2Pt4I29SalesRetAllowanceDisc",
+                                              "frm1702EX:txtPg2Pt4I30NetSalesReceiptsRevFees",
+                                              "frm1702EX:txtPg2Pt4I31CostOfSalesServ",
+                                              "frm1702EX:txtPg2Pt4I32GrossIncomeFromOper",
+                                              "frm1702EX:txtPg2Pt4I33AddOther",
+                                              "frm1702EX:txtPg2Pt4I34TotalGross",
+                                              "frm1702EX:txtPg2Pt4I38OptionalStandardDeduc",
+                                              "frm1702EX:txtPg2Pt4I42PriorYearExcessCr",
+                                              "frm1702EX:txtPg2Pt4I43IncomeTaxPmtFromPreviousQrt",
+                                              "frm1702EX:txtPg2Pt4I44CreditableTaxWithheldFromPrevQrt",
+                                              "frm1702EX:txtPg2Pt4I45CreditableTaxWithheldFor4thQrt",
+                                              "frm1702EX:txtPg2Pt4I46ForeignTaxCr",
+                                              "frm1702EX:txtPg2Pt4I47TaxPaidInReturnPrevFiled",
+                                              "frm1702EX:txtPg2Pt4I48OtherTaxCrPmtAmt",
+                                              "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt",
+                                              "frm1702EX:txtPg2Pt4I50TotalTaxCrPmt",
+                                              "frm1702EX:txtPg3Pt6I17OthersDAmt",
+                                              "frm1702EX:txtPg3Pt6I17OthersEAmt",
+                                              "frm1702EX:txtPg3Pt6I17OthersFAmt",
+                                              "frm1702EX:txtPg3Pt6I17OthersGAmt",
+                                              "frm1702EX:txtPg3Pt6I17OthersHAmt",
+                                              "frm1702EX:txtPg3Pt6I17OthersIAmt",
+                                              "frm1702EX:txtPg3Pt6S1I10PensionTrust",
+                                              "frm1702EX:txtPg3Pt6S1I11Rental",
+                                              "frm1702EX:txtPg3Pt6S1I12RnD",
+                                              "frm1702EX:txtPg3Pt6S1I13SalaryWageAllowance",
+                                              "frm1702EX:txtPg3Pt6S1I14SssGsisPHealthHDMFOthers",
+                                              "frm1702EX:txtPg3Pt6S1I15TaxAndLicense",
+                                              "frm1702EX:txtPg3Pt6S1I16TranspoAndTravel",
+                                              "frm1702EX:txtPg3Pt6S1I17aJanitorAndMessengerServ",
+                                              "frm1702EX:txtPg3Pt6S1I17bProfessionalFee",
+                                              "frm1702EX:txtPg3Pt6S1I17cSecurityServices",
+                                              "frm1702EX:txtPg3Pt6S1I18TotOrdinaryAllowableItemDeduc",
+                                              "frm1702EX:txtPg3Pt6S1I1Ammortization",
+                                              "frm1702EX:txtPg3Pt6S1I2BadDebts",
+                                              "frm1702EX:txtPg3Pt6S1I3CharitableContrib",
+                                              "frm1702EX:txtPg3Pt6S1I4Depletion",
+                                              "frm1702EX:txtPg3Pt6S1I5Depreciation",
+                                              "frm1702EX:txtPg3Pt6S1I6EntertainmentAmuseRecreate",
+                                              "frm1702EX:txtPg3Pt6S1I7FringeBenefits",
+                                              "frm1702EX:txtPg3Pt6S1I8Interest",
+                                              "frm1702EX:txtPg3Pt6S1I9Losses",
+                                              "frm1702EX:txtPg3Pt6S2I1Amount",
+                                              "frm1702EX:txtPg3Pt6S2I2Amount",
+                                              "frm1702EX:txtPg3Pt6S2I3Amount",
+                                              "frm1702EX:txtPg3Pt6S2I4Amount",
+                                              "frm1702EX:txtPg3Pt6S2I5TotSpecialAllowedItemDeduc",
+                                              "frm1702EX:txtPg3Pt6S3I10NetTaxableIncome",
+                                              "frm1702EX:txtPg3Pt6S3I1NetIncomePerBook",
+                                              "frm1702EX:txtPg3Pt6S3I2NonDeductExpenseOtherIncomeAmt",
+                                              "frm1702EX:txtPg3Pt6S3I3NonDeductExpenseOtherIncomeAmt",
+                                              "frm1702EX:txtPg3Pt6S3I4Total",
+                                              "frm1702EX:txtPg3Pt6S3I5NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
+                                              "frm1702EX:txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
+                                              "frm1702EX:txtPg3Pt6S3I7SpecialDeductAmt",
+                                              "frm1702EX:txtPg3Pt6S3I8SpecialDeductAmt",
+                                              "frm1702EX:txtPg3Pt6S3I9Total"
+                                          ]
+                      },
+                      {
+                          "name":  "amountComputation",
+                          "start_line":  5630,
+                          "end_line":  5724,
+                          "body_sha256":  "fb0d9b70dc828a9e11903cec095a2c01fa567ae1fad18577c22cef6a0dcfc63d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702EX:rdoPg1OverpaymentCarryOver",
+                                              "frm1702EX:rdoPg1OverpaymentRefund",
+                                              "frm1702EX:rdoPg1OverpaymentTCC",
+                                              "frm1702EX:rdoPg1Pt1I13MethodOfDeducItemized",
+                                              "frm1702EX:rdoPg1Pt1I13MethodOfDeducOptional",
+                                              "frm1702EX:txtPg1Pt2I18TaxDue",
+                                              "frm1702EX:txtPg1Pt2I19TotalTaxCrPmt",
+                                              "frm1702EX:txtPg1Pt2I20TotalOverpmt",
+                                              "frm1702EX:txtPg1Pt2I21PenaltyCompromise",
+                                              "frm1702EX:txtPg1Pt2I22TotalAmtPayable",
+                                              "frm1702EX:txtPg2Pt4I34TotalGross",
+                                              "frm1702EX:txtPg2Pt4I35OrdinaryAllowable",
+                                              "frm1702EX:txtPg2Pt4I36SpecialAllowable",
+                                              "frm1702EX:txtPg2Pt4I37TotalItemized",
+                                              "frm1702EX:txtPg2Pt4I38OptionalStandardDeduc",
+                                              "frm1702EX:txtPg2Pt4I39NetTaxable",
+                                              "frm1702EX:txtPg2Pt4I40TaxRate",
+                                              "frm1702EX:txtPg2Pt4I41TaxDue",
+                                              "frm1702EX:txtPg2Pt4I50TotalTaxCrPmt",
+                                              "frm1702EX:txtPg2Pt4I51TotalOverpayment",
+                                              "frm1702EX:txtPg3Pt6S1I18TotOrdinaryAllowableItemDeduc",
+                                              "frm1702EX:txtPg3Pt6S2I5TotSpecialAllowedItemDeduc"
+                                          ]
+                      },
+                      {
+                          "name":  "compTaxReliefAvail",
+                          "start_line":  5725,
+                          "end_line":  5736,
+                          "body_sha256":  "87f2149a18c26b139dee5de22acbf95497e7eadff0a5ada943b6f685cfd6b9e8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702EX:txtPg2Pt4I40TaxRate",
+                                              "frm1702EX:txtPg2Pt5I52RegularIncomeOtherwiseDue",
+                                              "frm1702EX:txtPg2Pt5I53SpecialAllowableItemizedDeduc",
+                                              "frm1702EX:txtPg2Pt5I54TotalTaxReliefAvailment"
+                                          ]
+                      },
+                      {
+                          "name":  "getAmount",
+                          "start_line":  5904,
+                          "end_line":  5910,
+                          "body_sha256":  "1a5c4217673202b2d0d108f5cabbef1c1f661734fb71d808fb72b5501ca12cd3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "fixAmount",
+                          "start_line":  5911,
+                          "end_line":  5914,
+                          "body_sha256":  "f8a40e0da06f794f1479165a280056901cf4a70bbda42c2b1f1f0f298b292786",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

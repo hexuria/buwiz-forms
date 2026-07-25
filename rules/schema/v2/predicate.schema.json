@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/predicate.schema.json",
+  "title": "eBIRForms executable rules IR v2 typed predicates",
+  "$defs": {
+    "predicate": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/constant"
+        },
+        {
+          "$ref": "#/$defs/not"
+        },
+        {
+          "$ref": "#/$defs/logical"
+        },
+        {
+          "$ref": "#/$defs/compare"
+        },
+        {
+          "$ref": "#/$defs/presence"
+        },
+        {
+          "$ref": "#/$defs/coercion_failed"
+        },
+        {
+          "$ref": "#/$defs/javascript_parse_float"
+        },
+        {
+          "$ref": "#/$defs/matches"
+        },
+        {
+          "$ref": "#/$defs/membership"
+        },
+        {
+          "$ref": "#/$defs/group_quantifier"
+        }
+      ]
+    },
+    "constant": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "constant"
+        },
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "not": {
+      "type": "object",
+      "required": [
+        "kind",
+        "predicate"
+      ],
+      "properties": {
+        "kind": {
+          "const": "not"
+        },
+        "predicate": {
+          "$ref": "#/$defs/predicate"
+        }
+      },
+      "additionalProperties": false
+    },
+    "logical": {
+      "type": "object",
+      "required": [
+        "kind",
+        "predicates"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "all",
+            "any"
+          ]
+        },
+        "predicates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/predicate"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "compare": {
+      "type": "object",
+      "required": [
+        "kind",
+        "operator",
+        "left",
+        "right"
+      ],
+      "properties": {
+        "kind": {
+          "const": "compare"
+        },
+        "operator": {
+          "enum": [
+            "equal",
+            "not-equal",
+            "less-than",
+            "less-than-or-equal",
+            "greater-than",
+            "greater-than-or-equal"
+          ]
+        },
+        "left": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        },
+        "right": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "presence": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "is-empty",
+            "is-present",
+            "is-null"
+          ]
+        },
+        "value": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "coercion_failed": {
+      "type": "object",
+      "required": [
+        "kind",
+        "field"
+      ],
+      "properties": {
+        "kind": {
+          "const": "coercion-failed"
+        },
+        "field": {
+          "$ref": "common.schema.json#/$defs/field_ref"
+        }
+      },
+      "additionalProperties": false
+    },
+    "javascript_parse_float": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/javascript_parse_float_is_nan"
+        },
+        {
+          "$ref": "#/$defs/javascript_parse_float_compare"
+        }
+      ]
+    },
+    "javascript_parse_float_is_nan": {
+      "type": "object",
+      "required": [
+        "kind",
+        "operator",
+        "input"
+      ],
+      "properties": {
+        "kind": {
+          "const": "javascript-parse-float"
+        },
+        "operator": {
+          "const": "is-nan"
+        },
+        "input": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "javascript_parse_float_compare": {
+      "type": "object",
+      "required": [
+        "kind",
+        "operator",
+        "input",
+        "operand"
+      ],
+      "properties": {
+        "kind": {
+          "const": "javascript-parse-float"
+        },
+        "operator": {
+          "enum": [
+            "strict-equal",
+            "greater-than"
+          ]
+        },
+        "input": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        },
+        "operand": {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "const": "decimal"
+            },
+            "value": {
+              "$ref": "decimal.schema.json#/$defs/decimal_literal"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "matches": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value",
+        "pattern",
+        "case_sensitive"
+      ],
+      "properties": {
+        "kind": {
+          "const": "matches"
+        },
+        "value": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "case_sensitive": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "membership": {
+      "type": "object",
+      "required": [
+        "kind",
+        "value",
+        "candidates"
+      ],
+      "properties": {
+        "kind": {
+          "const": "in"
+        },
+        "value": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/typed_value"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "group_quantifier": {
+      "type": "object",
+      "required": [
+        "kind",
+        "quantifier",
+        "group_id",
+        "predicate"
+      ],
+      "properties": {
+        "kind": {
+          "const": "group-quantifier"
+        },
+        "quantifier": {
+          "enum": [
+            "any",
+            "all",
+            "none"
+          ]
+        },
+        "group_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "predicate": {
+          "$ref": "#/$defs/predicate"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/predicate"
+}

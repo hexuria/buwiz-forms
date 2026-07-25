@@ -1,0 +1,308 @@
+{
+    "source_sha256":  "3fb7b4185264e47c9d77b0def4301fa696e7b4424ad30b4e973c7c0b1f759879",
+    "function_count":  13,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  2031,
+                          "end_line":  2123,
+                          "body_sha256":  "fd51e720f756bfa3d931b8e760aa2b26ac46d37352a86719f2441fd04aac5c7c",
+                          "alerts":  [
+                                         "\"File \u0027\"+xmlFileName+\"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:btnNextPage",
+                                              "frm1601c:btnPrevPage",
+                                              "frm1601c:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  2141,
+                          "end_line":  2153,
+                          "body_sha256":  "48ce23955c13384033ada8e950417e2ab18a5d53b7d3aecfa214d60e9aa04a54",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  2201,
+                          "end_line":  2494,
+                          "body_sha256":  "0721095954245bd480049893e85f47acf172a153e7ecf14fd7f2b6da11cb741c",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:AmendedRtn_1",
+                                              "frm1601c:AmendedRtn_2",
+                                              "frm1601c:txtAddress",
+                                              "frm1601c:txtAddress2",
+                                              "frm1601c:txtBranchCode",
+                                              "frm1601c:txtCurrentPage",
+                                              "frm1601c:txtLineBus",
+                                              "frm1601c:txtRDOCode",
+                                              "frm1601c:txtTax31",
+                                              "frm1601c:txtTax32",
+                                              "frm1601c:txtTax33",
+                                              "frm1601c:txtTax34",
+                                              "frm1601c:txtTax35",
+                                              "frm1601c:txtTax36",
+                                              "frm1601c:txtTaxpayerName",
+                                              "frm1601c:txtTelNum",
+                                              "frm1601c:txtTIN1",
+                                              "frm1601c:txtTIN2",
+                                              "frm1601c:txtTIN3",
+                                              "frm1601c:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2495,
+                          "end_line":  2699,
+                          "body_sha256":  "a85d3ea9f09eb755c912dc07f2f51ab36464840030cb945df9fc55d23f6566ad",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:AmendedRtn_1",
+                                              "frm1601c:AmendedRtn_2",
+                                              "frm1601c:txtAddress",
+                                              "frm1601c:txtAddress2",
+                                              "frm1601c:txtBranchCode",
+                                              "frm1601c:txtCurrentPage",
+                                              "frm1601c:txtLineBus",
+                                              "frm1601c:txtRDOCode",
+                                              "frm1601c:txtTax31",
+                                              "frm1601c:txtTax32",
+                                              "frm1601c:txtTax33",
+                                              "frm1601c:txtTax34",
+                                              "frm1601c:txtTax35",
+                                              "frm1601c:txtTax36",
+                                              "frm1601c:txtTaxpayerName",
+                                              "frm1601c:txtTelNum",
+                                              "frm1601c:txtTIN1",
+                                              "frm1601c:txtTIN2",
+                                              "frm1601c:txtTIN3",
+                                              "frm1601c:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validateMonthYear",
+                          "start_line":  2810,
+                          "end_line":  2854,
+                          "body_sha256":  "95ed1b8bbe2c7e864bbd65751dcabe278d0ec4117ec38d89b93ccc06dce17b60",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  2855,
+                          "end_line":  2921,
+                          "body_sha256":  "27d4f7850071b19f6b0d9d7753d950f19e9f7496492308351a298955fd7498df",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateRtnPeriod",
+                          "start_line":  2922,
+                          "end_line":  2941,
+                          "body_sha256":  "b360f6aa2149202b17c53a4a399c8da8313b50c5a6ae7582fcdfe7ec4babbf09",
+                          "alerts":  [
+                                         "\"Please file using the old version of the form.\"",
+                                         "\"Invalid month. Month should not be later than the current month.\"",
+                                         "\"Invalid year. Year should not be later than the current year.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtMonth",
+                                              "frm1601c:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  2942,
+                          "end_line":  3143,
+                          "body_sha256":  "ab4dd2c5ce1ad2b4a81b9365eaff03d5e01e78414b1b426d9252ca863e5b7f9c",
+                          "alerts":  [
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Please enter a valid month on Item 1.\"",
+                                         "\"Invalid month. Month should not be later than the current month.\"",
+                                         "\"Invalid year. Year should not be later than the current year.\"",
+                                         "\"Invalid year. Year should not be later than the current year.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\"",
+                                         "\"Invalid month. Month should not be later than the current month.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\"",
+                                         "\"Please select an option for Item 3.\") return; } if( (d.getElementById(\u0027frm1601c:txtTIN1\u0027).value == \"\" || d.getElementById(\u0027frm1601c:txtTIN2\u0027).value == \"\" || d.getElementById(\u0027frm1601c:txtTIN3\u0027).value == \"\" || d.getElementById(\u0027frm1601c:txtBranchCode\u0027).value == \"\") ) { alert(\"Please enter a valid TIN number on Item 6.\"",
+                                         "\"Please enter a valid RDO Code on Item 7.\"",
+                                         "\"Please enter a valid Line of Business/Occupation on Item 7.\"",
+                                         "\"Please enter a valid Witholding Agent\u0027s Name on Item 8.\"",
+                                         "\"Please enter a valid Telephone Number on Item 10.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 9.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 9A.\"",
+                                         "\"Please select an option for Item 11.\"",
+                                         "\"Invalid amount in Item no.14. Value must be greater than zero(0).\"",
+                                         "\"Invalid amount in Item no.25. Value must be greater than zero(0).\"",
+                                         "\"Invalid date entry on Section A, column 1 Record \"+i+\".Format is mm/yyyy\"",
+                                         "\"Invalid date entry on Section A, column 1 Record \"+i+\".Format is mm/yyyy\"",
+                                         "\"Invalid date entry on Section A, column 1 Record \"+i+\".Format is mm/yyyy\"",
+                                         "\"Invalid date entry on Section A, column 1.Format is mm/yyyy. Choose within 1900 and not above current Year\"",
+                                         "\"Invalid date entry on Section A, column 1 Record \"+i+\".Format is mm/yyyy\"",
+                                         "\"Invalid date entry on Section A, column 2 Record \"+i+\".Format is mm/dd/yyyy.\"",
+                                         "\"Invalid date entry on Section A, column 2 Record \"+i+\".Format is mm/dd/yyyy.\"",
+                                         "\"Invalid date entry on Section A, column 2 Record \"+i+\".Format is mm/dd/yyyy.\"",
+                                         "\"Invalid date entry on Section A, column 2 Record \"+i+\".Format is mm/dd/yyyy.\"",
+                                         "\"Invalid date entry on Section A, column 2 Record \"+i+\".Format is mm/dd/yyyy.\"",
+                                         "\"Invalid date entry on Section A, column 2 Record \"+i+\".Format is mm/dd/yyyy.\"",
+                                         "\"Please complete details on Section A.\"",
+                                         "\"Please complete details on Section A, row 2.\"",
+                                         "\"Please complete details on Section A, row 3.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:CatAgent_G",
+                                              "frm1601c:CatAgent_P",
+                                              "frm1601c:sched1:SelMonthYear1_1",
+                                              "frm1601c:sched1:SelMonthYear1_2",
+                                              "frm1601c:sched1:SelMonthYear2_1",
+                                              "frm1601c:sched1:SelMonthYear2_2",
+                                              "frm1601c:sched1:SelMonthYear3_1",
+                                              "frm1601c:sched1:SelMonthYear3_2",
+                                              "frm1601c:sched1:TxtBankCodeRadio1",
+                                              "frm1601c:sched1:TxtBankCodeRadio2",
+                                              "frm1601c:sched1:TxtBankCodeRadio3",
+                                              "frm1601c:sched1:txtDatePaid",
+                                              "frm1601c:sched1:TxtDatePaidRadio1",
+                                              "frm1601c:sched1:TxtDatePaidRadio2",
+                                              "frm1601c:sched1:TxtDatePaidRadio3",
+                                              "frm1601c:sched1:txtMonthYear",
+                                              "frm1601c:sched1:TxtMonthYearRadio1",
+                                              "frm1601c:sched1:TxtMonthYearRadio2",
+                                              "frm1601c:sched1:TxtMonthYearRadio3",
+                                              "frm1601c:sched1:TxtRORNoRadio1",
+                                              "frm1601c:sched1:TxtRORNoRadio2",
+                                              "frm1601c:sched1:TxtRORNoRadio3",
+                                              "frm1601c:TaxWithheld_1",
+                                              "frm1601c:TaxWithheld_2",
+                                              "frm1601c:txtAddress",
+                                              "frm1601c:txtBranchCode",
+                                              "frm1601c:txtLineBus",
+                                              "frm1601c:txtMonth",
+                                              "frm1601c:txtRDOCode",
+                                              "frm1601c:txtTax14",
+                                              "frm1601c:txtTax25",
+                                              "frm1601c:txtTaxpayerName",
+                                              "frm1601c:txtTelNum",
+                                              "frm1601c:txtTIN1",
+                                              "frm1601c:txtTIN2",
+                                              "frm1601c:txtTIN3",
+                                              "frm1601c:txtYear",
+                                              "frm1601c:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  3672,
+                          "end_line":  3734,
+                          "body_sha256":  "b0068bfd59374207bfc81448bb904137fe4ec0c7746bc72673d33a2a6da19255",
+                          "alerts":  [
+                                         "\"Please enter Month on Item 1.\"",
+                                         "\"Please enter Year on Item 1.\"",
+                                         "\"Please enter a valid TIN number on Item 6.\"",
+                                         "\"Please enter a valid RDO Code on Item 7.\"",
+                                         "\"Please enter a valid Withholding Agent\u0027s Name on Item 8.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtBranchCode",
+                                              "frm1601c:txtMonth",
+                                              "frm1601c:txtRDOCode",
+                                              "frm1601c:txtTaxpayerName",
+                                              "frm1601c:txtTIN1",
+                                              "frm1601c:txtTIN2",
+                                              "frm1601c:txtTIN3",
+                                              "frm1601c:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  3837,
+                          "end_line":  3875,
+                          "body_sha256":  "3d3e314953201cf018bc033458c2b90f6286a101d34c6e453a23c7e524944dc7",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtAddress",
+                                              "frm1601c:txtAddress2",
+                                              "frm1601c:txtBranchCode",
+                                              "frm1601c:txtLineBus",
+                                              "frm1601c:txtRDOCode",
+                                              "frm1601c:txtTaxpayerName",
+                                              "frm1601c:txtTelNum",
+                                              "frm1601c:txtTIN1",
+                                              "frm1601c:txtTIN2",
+                                              "frm1601c:txtTIN3",
+                                              "frm1601c:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  4235,
+                          "end_line":  4249,
+                          "body_sha256":  "1dc0ee7664de9e2d15f3c4db1c80c98c016c6a7452712c5cf493482680dbf461",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  4429,
+                          "end_line":  4442,
+                          "body_sha256":  "b2de3d87b1305516855a2c21157d501b0ba75cb503b0603dff5bcce26578e3ac",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enableSaveButton",
+                          "start_line":  4610,
+                          "end_line":  4622,
+                          "body_sha256":  "d62b640be3115c6c7d7b4490db50d8a4ba436b14207269e854fcfa4a053dfdf1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtBranchCode",
+                                              "frm1601c:txtMonth",
+                                              "frm1601c:txtTIN1",
+                                              "frm1601c:txtTIN2",
+                                              "frm1601c:txtTIN3",
+                                              "frm1601c:txtYear"
+                                          ]
+                      }
+                  ]
+}

@@ -1,7 +1,9 @@
 //! Form schema engine — JSON-driven form definitions.
 //!
-//! Each BIR form is defined as a JSON schema with fields, types,
-//! validation rules, and layout information.
+//! This module is retained as a legacy compatibility prototype while the
+//! reviewed, revision-pinned runtime is introduced in `bir-rules`. Its string
+//! formulas are not the extracted-rules execution format and must not be
+//! extended into one.
 
 use serde::{Deserialize, Serialize};
 

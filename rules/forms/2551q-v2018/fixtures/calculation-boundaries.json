@@ -1,0 +1,70 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "2551q-atc-row-tax-source-boundary",
+                      "calculation_id":  "2551q-atc-row-tax",
+                      "inputs":  {
+                                     "source_formula":  "For row N, tax due = amount * (rate / 100)."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2551q-schedule1-total-source-boundary",
+                      "calculation_id":  "2551q-schedule1-total",
+                      "inputs":  {
+                                     "source_formula":  "Sum six ATC tax-due rows and copy the total to Item 14."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2551q-item18-source-boundary",
+                      "calculation_id":  "2551q-item18",
+                      "inputs":  {
+                                     "source_formula":  "18 = 15 + 16 + 17."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2551q-item19-source-boundary",
+                      "calculation_id":  "2551q-item19",
+                      "inputs":  {
+                                     "source_formula":  "19 = 14 - 18."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2551q-item23-source-boundary",
+                      "calculation_id":  "2551q-item23",
+                      "inputs":  {
+                                     "source_formula":  "23 = 20 + 21 + 22."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2551q-item24-source-boundary",
+                      "calculation_id":  "2551q-item24",
+                      "inputs":  {
+                                     "source_formula":  "24 = 19 + 23."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2551q-eight-percent-zeroing-source-boundary",
+                      "calculation_id":  "2551q-eight-percent-zeroing",
+                      "inputs":  {
+                                     "source_formula":  "When 8% is selected, all listed values and all six ATC rows are forced to zero, then Items 18/19/23/24 recompute."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2551q-overpayment-state-source-boundary",
+                      "calculation_id":  "2551q-overpayment-state",
+                      "inputs":  {
+                                     "source_formula":  "If Item 24 \u003e= 0, clear and disable both overpayment dispositions; if negative, enable them."
+                                 },
+                      "official_output":  "Derived by pinned source formula; no taxpayer values are stored."
+                  }
+              ]
+}

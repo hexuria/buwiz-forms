@@ -23,7 +23,6 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[VisualReferencePage {
     sha256: "924db11df80f2ee4e5df63838ac6b93980725d677632c9739690c9ec9aacb83a",
 }];
 
-
 // Pinned by scripts/prepare_chromium_reference.mjs from the same official
 // PDF bytes; see references/0619e-2018-chromium-source.json
 // for the full pdf -> svg -> png provenance chain.
@@ -33,15 +32,13 @@ const CHROMIUM_REFERENCES: super::ChromiumReferenceSet = super::ChromiumReferenc
         playwright_version: "1.58.2",
         chromium_version: "145.0.7632.6",
     },
-    pages: &[
-        super::ChromiumVisualReference {
-            page: 1,
-            file_name: "0619e-2018-page-1-chromium.png",
-            sha256: "f3d3caa4b8635299f241f57548aafce0184ee97efa314adf1c8b49f3c6974737",
-            vector_svg_sha256: "4fcd762df5437628423246d6a290d5c504be4cd5b533dca33a98f694eb5ba4ba",
-            noise_floor_changed_pixels: 66_978,
-        },
-    ],
+    pages: &[super::ChromiumVisualReference {
+        page: 1,
+        file_name: "0619e-2018-page-1-chromium.png",
+        sha256: "f3d3caa4b8635299f241f57548aafce0184ee97efa314adf1c8b49f3c6974737",
+        vector_svg_sha256: "4fcd762df5437628423246d6a290d5c504be4cd5b533dca33a98f694eb5ba4ba",
+        noise_floor_changed_pixels: 66_978,
+    }],
 };
 
 pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {

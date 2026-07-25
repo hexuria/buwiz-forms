@@ -14,6 +14,8 @@
 
 mod drafts;
 pub(crate) use drafts::{Claim1601CSubmissionResult, Claim2551QSubmissionResult};
+mod form_rule_state;
+pub use form_rule_state::{FormFinalCopy, FormRuleIdentity, FormRuleState, FormRuleStateError};
 mod forms_set;
 mod google_calendar;
 mod jobs;
@@ -22,6 +24,7 @@ mod notices;
 mod profiles;
 mod providers;
 mod receipts;
+pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};

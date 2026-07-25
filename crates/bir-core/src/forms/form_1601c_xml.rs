@@ -1026,8 +1026,11 @@ frm1601c:txtLineBus
         assert_eq!(replayed_fields.len(), EXACT_REVIEWED_PLAIN_XML_FIELD_COUNT);
         assert_eq!(replayed_fields, source_fields);
         assert_eq!(
-            crate::bir_xml::parse_bir_xml_checked(&draft.to_bir_xml_payload())
-                .expect("generated replay must pass the checked parser"),
+            crate::bir_xml::parse_bir_xml_with_codec_checked(
+                &draft.to_bir_xml_payload(),
+                bir_rules::serialization::BodyCodec::Utf8PercentRfc3986Unreserved,
+            )
+            .expect("generated replay must pass the checked UTF-8 parser"),
             source_fields
         );
         assert_eq!(

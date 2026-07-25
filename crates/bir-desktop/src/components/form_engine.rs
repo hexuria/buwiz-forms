@@ -213,7 +213,6 @@ pub trait FormViewTrait: 'static + Sized {
 
     /// Render the standardized header with title and actions
     fn render_header(&self, cx: &Context<Self>) -> gpui::Div {
-        let is_draft = matches!(self.current_status(), FilingStatus::Draft);
         let generating = self.is_generating_pdf();
 
         let btn = gpui_component::button::Button::new("print_preview_btn")
@@ -238,9 +237,6 @@ pub trait FormViewTrait: 'static + Sized {
                 btn.disabled(true).into_any_element()
             } else {
                 btn.on_click(cx.listener(move |this, _, window, cx| {
-                    if is_draft {
-                        this.save_draft(window, cx);
-                    }
                     this.preview_pdf(window, cx);
                 }))
                 .into_any_element()

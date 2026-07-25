@@ -1,0 +1,185 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1601c-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "packaged-help"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 two-page monthly remittance return for income taxes withheld on compensation, with source-unbounded Schedule I rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3672-L3698"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only period, TIN, RDO, and withholding-agent name before serializing the current dynamic DOM."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L2942-L3142"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs ordered header, conditional tax amount, and partial Schedule I date checks."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveEncryptedProfile:L2031-L2122",
+                                           "xml-encrypted"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy writes an encrypted/compressed copy; the paired sample has 101 concrete keys and three Schedule I rows."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport code exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Add Schedule I row",
+                            "side_effects":  [
+                                                 "Appends one unbounded indexed row and rebuilds both Schedule I tables."
+                                             ],
+                            "to":  "edit",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#addSchedule:L3349-L3385"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Delete selected Schedule I rows",
+                            "side_effects":  [
+                                                 "Compacts surviving rows to zero-based indices and recomputes adjustments."
+                                             ],
+                            "to":  "edit",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#deleteSchedule:L3387-L3439"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML for the current dynamic DOM."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L2201-L2493"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Edit, Print, Final Copy, and upload."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L2942-L3142",
+                                                "official-hta-runtime#disableAllControl:L3228-L3295"
+                                            ],
+                            "guard":  "All ordered active validation branches pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables editable controls according to amended/special-tax branches."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L3144-L3227"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Writes encrypted/compressed copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile:L2031-L2122",
+                                                "xml-encrypted"
+                                            ],
+                            "guard":  "Final-copy save succeeds."
+                        },
+                        {
+                            "action":  "Online transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return period",
+                          "Taxes-withheld choice",
+                          "TIN/RDO and identity",
+                          "Category/contact/address",
+                          "Conditional Items 14 and 25",
+                          "Valid populated Schedule I dates"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Monthly filing deadline is not computed by this runtime; use revision-matched official guidance."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Monthly filing deadline is not computed by this runtime; use revision-matched official guidance."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Monthly filing deadline is not computed by this runtime; use revision-matched official guidance."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Monthly filing deadline is not computed by this runtime; use revision-matched official guidance."
+                             }
+                         ]
+}

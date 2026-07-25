@@ -1,0 +1,923 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1707a-v2021",
+    "revision":  "2021-04-01",
+    "first_error_behavior":  "Validate stops at the first blocking source-ordered failure, except Zip and overpayment branches only alert; Save runs a narrower graph.",
+    "rules":  [
+                  {
+                      "rule_id":  "1707a-validate-001-year-end-shape",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Year-end components do not form a valid MM/DD/YYYY date.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI1YearEndMonth",
+                                     "frm1707Av2021:txtI1YearEndDay",
+                                     "frm1707Av2021:txtI1YearEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid date (MM/DD/YYYY format) on Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L3515-L3522"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-002-zero-month",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Year-end month is 00 with otherwise parseable components.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI1YearEndMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L4150-L4212"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "validateDate rejects month below 0 rather than below 1, so month 00 can roll into the previous year.",
+                      "recommended_app_behavior":  "Require month 01 through 12.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-003-effectivity",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Year end is before July 1, 2001.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI1YearEndMonth",
+                                     "frm1707Av2021:txtI1YearEndDay",
+                                     "frm1707Av2021:txtI1YearEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Valid input for the Month and Year is June 2001 onwards on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L3524-L3533"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The code uses July 1, 2001 while the message says June 2001 onwards.",
+                      "recommended_app_behavior":  "Align the cutoff and message to the authoritative revision rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-004-future",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Year end is after today.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI1YearEndMonth",
+                                     "frm1707Av2021:txtI1YearEndDay",
+                                     "frm1707Av2021:txtI1YearEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Year Ended should not be a future date on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L3534-L3537"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-005-fiscal-december",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Fiscal is selected and year-end month is December.",
+                      "fields":  [
+                                     "frm1707Av2021:rdoI1Fiscal",
+                                     "frm1707Av2021:txtI1YearEndMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Month cannot be equal to December on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYearEnd:L3538-L3541"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-006-version-cutoff",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Year end is on or before March 31, 2021.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI1YearEndMonth",
+                                     "frm1707Av2021:txtI1YearEndDay",
+                                     "frm1707Av2021:txtI1YearEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Year shall not be greater than the present year and not earlier than April 2021.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkVersion:L2865-L2885"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The branch replaces the year with current year minus one, and the message describes only a year despite a full-date cutoff.",
+                      "recommended_app_behavior":  "Preserve user input and state the exact revision cutoff.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-007-atc",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Neither individual nor corporation ATC is selected.",
+                      "fields":  [
+                                     "frm1707Av2021:rdoI4ATCII030",
+                                     "frm1707Av2021:rdoI4ATCIC110"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an ATC Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4823-L4827"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-008-individual-calendar",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Individual ATC and Fiscal are both selected.",
+                      "fields":  [
+                                     "frm1707Av2021:rdoI4ATCII030",
+                                     "frm1707Av2021:rdoI1Fiscal"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "If you are filing as Individual, please select Calendar on item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4828-L4832"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-009-rdo",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "RDO is 000.",
+                      "fields":  [
+                                     "frm1707Av2021:rdoI6RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4833"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-010-name",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI8RegisteredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid Line of Business/Occupation on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4835"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message labels the registered-name field as Line of Business/Occupation.",
+                      "recommended_app_behavior":  "Name the field as registered name.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-011-address",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI9RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4837"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-012-zip",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Zip code is blank.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI10ZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Zip Code is required, please validate your registration information and update accordingly using BIR Form 1905, if necessary.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4839-L4842"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The branch alerts but does not return false, so validation continues.",
+                      "recommended_app_behavior":  "Return false after the alert.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-013-treaty-choice",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Neither treaty-relief Yes nor No is selected.",
+                      "fields":  [
+                                     "frm1707Av2021:rdoI11TaxTreatyYes",
+                                     "frm1707Av2021:rdoI11TaxTreatyNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please choose at least one from item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4844-L4848"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-014-treaty-spec",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Treaty-relief Yes is selected and specification is blank.",
+                      "fields":  [
+                                     "frm1707Av2021:rdoI11TaxTreatyYes",
+                                     "frm1707Av2021:txtI11ASpecify"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please specify the tax relief on item 12A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4850-L4854"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-015-schedule-presence",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Both Schedule 1 and Schedule 2 selling-price and cost totals are zero.",
+                      "fields":  [
+                                     "frm1707Av2021:txtS1I20TotalSellingPrice",
+                                     "frm1707Av2021:txtS1I20TotalCost",
+                                     "frm1707Av2021:txtS2I21TotalSellingPrice",
+                                     "frm1707Av2021:txtS2I21TotalCost"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "You need to have at least one value on either Schedule 1 or Schedule 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched1and2:L4792-L4812",
+                                          "official-hta-runtime#validateAll:L4856-L4861"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-016-date-shape",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "A schedule date is not a valid MM/DD/YYYY date.",
+                      "fields":  [
+                                     "schedule-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format) in Date of Transaction on row {row}{schedule}",
+                      "source_refs":  [
+                                          "official-hta-runtime#recheckSchedDate:L4618-L4650"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-017-date-minimum",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "A schedule transaction year is before 2001.",
+                      "fields":  [
+                                     "schedule-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "The year should not be less than 2001 in Date of Transaction on row {row}{schedule}",
+                      "source_refs":  [
+                                          "official-hta-runtime#recheckSchedDate:L4628-L4632"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-018-date-after-period",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "A schedule transaction date is after year end.",
+                      "fields":  [
+                                     "schedule-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "The Date of Transaction should not be greater than the Taxable Period on row {row}{schedule}",
+                      "source_refs":  [
+                                          "official-hta-runtime#recheckSchedDate:L4633-L4637"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-019-date-range",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "A schedule transaction date is more than one year before year end.",
+                      "fields":  [
+                                     "schedule-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "The Date of Transaction should be in the range of up to one year until the Taxable Period on row {row}{schedule}",
+                      "source_refs":  [
+                                          "official-hta-runtime#recheckSchedDate:L4638-L4642"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-020-stock-numeric",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Corporate-stock name is entirely numeric.",
+                      "fields":  [
+                                     "schedule-stock-name-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Name of Corporate Stock should not be all numeric in row {row}{schedule}",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedules:L4684-L4691"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-021-negative-input",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Selling price or cost uses the parenthesized negative representation.",
+                      "fields":  [
+                                     "schedule-selling-price-fields",
+                                     "schedule-cost-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "There should be no negative value in row {row}{schedule}",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedules:L4714-L4721"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-022-incomplete",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "A nonempty fixed schedule row has any missing date, stock name, selling price, or cost.",
+                      "fields":  [
+                                     "fixed-schedule-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "There is an empty item on {schedule}. Please fill in all items in row {row}",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedules:L4735-L4739"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-023-gain-negative",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Schedule 1 capital gain is negative.",
+                      "fields":  [
+                                     "frm1707Av2021:txtS1C5CapitalGainsI1",
+                                     "frm1707Av2021:txtS1C5CapitalGains_{N\u003e=1}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Your Capital Gains is negative in row {row} Schedule 1\\n Please move and encode this in Schedule 2",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedules:L4749-L4753"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-024-loss-negative",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Schedule 2 capital loss is negative.",
+                      "fields":  [
+                                     "frm1707Av2021:txtS2C5CapitalLossI1",
+                                     "frm1707Av2021:txtS2C5CapitalLoss_{N\u003e=1}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Your Capital Loss is negative in row {row} Schedule 2\\n Please move and encode this in Schedule 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedules:L4757-L4761"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-schedule-025-modal-incomplete",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "An additional modal row is empty or partially populated.",
+                      "fields":  [
+                                     "runtime-schedule-families"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Row {row} is empty. Please remove row or fill in all items first in{schedule}",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedules:L4779-L4783"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-validate-026-overpayment",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Tax still payable is parenthesized negative.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI17TaxStillPayable"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "You have a negative value for Part 2 Item 19. \\n\\nIn case of overpayment apply for tax refund using BIR Form No. 1914 (Application for Tax Credits/Refunds)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L4867-L4870"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The alert is shown but return false is commented out, so Validate succeeds.",
+                      "recommended_app_behavior":  "Represent the overpayment separately and require an explicit disposition if applicable.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-rate-027-upper",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "Applicable tax rate is at least 100.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI16ApplicableTaxRate"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Tax rate should be below 100.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkRate:L2844-L2851"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-rate-028-negative",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "Applicable tax rate is negative.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI16ApplicableTaxRate"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkRate:L2844-L2851"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only the upper bound is checked, so a negative rate is accepted.",
+                      "recommended_app_behavior":  "Require a rate from zero through less than 100.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-save-029-rdo",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "RDO is 000.",
+                      "fields":  [
+                                     "frm1707Av2021:rdoI6RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6570-L6577"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save labels the RDO as Item 6 while Validate labels it Item 7.",
+                      "recommended_app_behavior":  "Use the printed item number consistently.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-save-030-name",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI8RegisteredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6578"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-save-031-address",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI9RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6579"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-save-032-year-end",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "validateYearEnd fails.",
+                      "fields":  [
+                                     "frm1707Av2021:txtI1YearEndMonth",
+                                     "frm1707Av2021:txtI1YearEndDay",
+                                     "frm1707Av2021:txtI1YearEndYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "First validateYearEnd message.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6580"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1707a-save-033-sparse",
+                      "form_id":  "1707a-v2021",
+                      "revision":  "2021-04-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "ATC, version cutoff, treaty, schedule, Zip, or overpayment validation fails.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L6570-L6583",
+                                          "official-hta-runtime#validateAll:L4816-L4873"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save bypasses most of the Validate graph.",
+                      "recommended_app_behavior":  "Use a shared validation graph with explicit phase exceptions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

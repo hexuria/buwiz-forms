@@ -1,0 +1,159 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "0619e-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "packaged-help"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 monthly remittance form for creditable income taxes withheld (expanded)."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L2526-L2552"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only TIN, RDO, and withholding-agent name before serializing the draft."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L2269-L2415"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs filing-period, due-date, choice, identity/contact, and conditional remittance checks."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveEncryptedProfile:L1507-L1593",
+                                           "xml-encrypted"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy is enabled after Validate and writes an encrypted/compressed copy with 59 keys."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport code exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L1671-L1953"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Edit and Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm:L2269-L2415"
+                                            ],
+                            "guard":  "All ordered active validation branches pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables editable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Writes encrypted/compressed copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile:L1507-L1593"
+                                            ],
+                            "guard":  "Final-copy save succeeds."
+                        },
+                        {
+                            "action":  "Online transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Completed prior withholding month",
+                          "Derived due date",
+                          "Withheld/remitted choice",
+                          "TIN/RDO and identity",
+                          "Category/contact/address/email",
+                          "Conditional Part II remittance"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-hta-runtime#computeDueDate:L2246-L2268"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "For each covered month, the source derives the due date as the 10th day of the following month."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-hta-runtime#computeDueDate:L2246-L2268"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "For each covered month, the source derives the due date as the 10th day of the following month."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-hta-runtime#computeDueDate:L2246-L2268"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "For each covered month, the source derives the due date as the 10th day of the following month."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-hta-runtime#computeDueDate:L2246-L2268"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "For each covered month, the source derives the due date as the 10th day of the following month."
+                             }
+                         ]
+}

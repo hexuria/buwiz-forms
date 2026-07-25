@@ -1,0 +1,325 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1707a-v2021",
+    "revision":  "2021-04-01",
+    "evaluation_order":  [
+                             "1707a-s1-row-gain",
+                             "1707a-s1-modal-totals",
+                             "1707a-s1-fixed-totals",
+                             "1707a-s2-row-loss",
+                             "1707a-s2-modal-totals",
+                             "1707a-s2-fixed-totals",
+                             "1707a-item14-net",
+                             "1707a-item15-tax",
+                             "1707a-item16c-paid",
+                             "1707a-item17-payable",
+                             "1707a-item18d-penalties",
+                             "1707a-item19-payable"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1707a-s1-row-gain",
+                             "outputs":  [
+                                             "frm1707Av2021:txtS1C5CapitalGainsI{1..4}",
+                                             "frm1707Av2021:txtS1C5CapitalGains_{N\u003e=1}"
+                                         ],
+                             "inputs":  [
+                                            "schedule1-selling-price",
+                                            "schedule1-cost"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Capital gain per row = selling price - cost.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "selling price/cost blur",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#row-gain:L4318-L4351",
+                                                 "official-hta-runtime#elemModalSched1Compute"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-s1-modal-totals",
+                             "outputs":  [
+                                             "frm1707Av2021:txtS1ModalTotalSellingPrice",
+                                             "frm1707Av2021:txtS1ModalTotalCost",
+                                             "frm1707Av2021:txtS1ModalTotalCapitalGains",
+                                             "frm1707Av2021:txtS1ModalTotalTaxPaid"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtS1C3SellingPrice_{N\u003e=1}",
+                                            "frm1707Av2021:txtS1C4Cost_{N\u003e=1}",
+                                            "frm1707Av2021:txtS1C5CapitalGains_{N\u003e=1}",
+                                            "frm1707Av2021:txtS1C6TaxPaid_{N\u003e=1}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each additional Schedule 1 column.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "modalSched1Subtotal",
+                             "depends_on":  [
+                                                "1707a-s1-row-gain"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#modalSched1Subtotal:L3088-L3110"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-s1-fixed-totals",
+                             "outputs":  [
+                                             "frm1707Av2021:txtS1I20TotalSellingPrice",
+                                             "frm1707Av2021:txtS1I20TotalCost",
+                                             "frm1707Av2021:txtS1I20TotalCapitalGains",
+                                             "frm1707Av2021:txtS1I20TotalTaxPaid",
+                                             "frm1707Av2021:txtI12TotalCapitalGains",
+                                             "frm1707Av2021:txtI16ATotalTaxPaid"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 1 fixed rows 1..4, with row 4 carrying modal totals when used"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each Schedule 1 fixed column; copy total gain to Item 12 and total tax paid to Item 16A.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computeSched1",
+                             "depends_on":  [
+                                                "1707a-s1-modal-totals"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1SellingPrice:L4377-L4385",
+                                                 "official-hta-runtime#computeSched1Cost:L4387-L4395",
+                                                 "official-hta-runtime#computeSched1CapitalGains:L4397-L4408",
+                                                 "official-hta-runtime#computeSched1TaxPaid:L4410-L4421"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-s2-row-loss",
+                             "outputs":  [
+                                             "frm1707Av2021:txtS2C5CapitalLossI{1..4}",
+                                             "frm1707Av2021:txtS2C5CapitalLoss_{N\u003e=1}"
+                                         ],
+                             "inputs":  [
+                                            "schedule2-selling-price",
+                                            "schedule2-cost"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Capital loss per row = cost - selling price.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "selling price/cost blur",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#row-loss:L4423-L4460",
+                                                 "official-hta-runtime#elemModalSched2Compute"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-s2-modal-totals",
+                             "outputs":  [
+                                             "frm1707Av2021:txtS2ModalTotalSellingPrice",
+                                             "frm1707Av2021:txtS2ModalTotalCost",
+                                             "frm1707Av2021:txtS2ModalTotalCapitalLoss"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtS2C3SellingPrice_{N\u003e=1}",
+                                            "frm1707Av2021:txtS2C4Cost_{N\u003e=1}",
+                                            "frm1707Av2021:txtS2C5CapitalLoss_{N\u003e=1}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each additional Schedule 2 column.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "modalSched2Subtotal",
+                             "depends_on":  [
+                                                "1707a-s2-row-loss"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#modalSched2Subtotal:L3370-L3388"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-s2-fixed-totals",
+                             "outputs":  [
+                                             "frm1707Av2021:txtS2I21TotalSellingPrice",
+                                             "frm1707Av2021:txtS2I21TotalCost",
+                                             "frm1707Av2021:txtS2I21TotalCapitalLoss",
+                                             "frm1707Av2021:txtI13TotalCapitalLoss"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 fixed rows 1..4, with row 4 carrying modal totals when used"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum each Schedule 2 fixed column; copy total loss to Item 13.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computeSched2",
+                             "depends_on":  [
+                                                "1707a-s2-modal-totals"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched2SellingPrice:L4467-L4475",
+                                                 "official-hta-runtime#computeSched2Cost:L4477-L4485",
+                                                 "official-hta-runtime#computeSched2CapitalLoss:L4487-L4499"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-item14-net",
+                             "outputs":  [
+                                             "frm1707Av2021:txtI14NetCapitalGainLoss"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtI12TotalCapitalGains",
+                                            "frm1707Av2021:txtI13TotalCapitalLoss"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 14 = Item 12 - Item 13.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computePart2Item14GainLoss",
+                             "depends_on":  [
+                                                "1707a-s1-fixed-totals",
+                                                "1707a-s2-fixed-totals"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePart2Item14GainLoss:L4511-L4520"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-item15-tax",
+                             "outputs":  [
+                                             "frm1707Av2021:txtI15TaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtI14NetCapitalGainLoss",
+                                            "frm1707Av2021:txtI16ApplicableTaxRate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 15 = max(0, Item 14 Ã— applicable rate / 100).",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computePart2Item15TaxDue",
+                             "depends_on":  [
+                                                "1707a-item14-net"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePart2Item15TaxDue:L4522-L4534"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-item16c-paid",
+                             "outputs":  [
+                                             "frm1707Av2021:txtI16CTotalTaxPaid"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtI16ATotalTaxPaid",
+                                            "frm1707Av2021:txtI16BTotalTaxPaid"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 16C = Item 16A + Item 16B.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computePart2Item16CTaxPaid",
+                             "depends_on":  [
+                                                "1707a-s1-fixed-totals"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePart2Item16CTaxPaid:L4536-L4545"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-item17-payable",
+                             "outputs":  [
+                                             "frm1707Av2021:txtI17TaxStillPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtI15TaxDue",
+                                            "frm1707Av2021:txtI16CTotalTaxPaid"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 17 = Item 15 - Item 16C.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computePart2Item17TaxPayable",
+                             "depends_on":  [
+                                                "1707a-item15-tax",
+                                                "1707a-item16c-paid"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePart2Item17TaxPayable:L4547-L4567"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-item18d-penalties",
+                             "outputs":  [
+                                             "frm1707Av2021:txtI18DPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtI18ASurcharge",
+                                            "frm1707Av2021:txtI18BInterest",
+                                            "frm1707Av2021:txtI18CCompromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 18D = surcharge + interest + compromise.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computePart2Item18DPenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePart2Item18DPenalties:L4571-L4581"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official preciseCompute/roundAmount order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1707a-item19-payable",
+                             "outputs":  [
+                                             "frm1707Av2021:txtI19TotalAmountPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1707Av2021:txtI17TaxStillPayable",
+                                            "frm1707Av2021:txtI18DPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item 17 is negative and penalties are positive, Item 19 = penalties; otherwise Item 19 = Item 17 + penalties.",
+                             "rounding":  "preciseCompute followed by roundAmount at displayed boundaries.",
+                             "trigger":  "computePart2Item19TotalPayable",
+                             "depends_on":  [
+                                                "1707a-item17-payable",
+                                                "1707a-item18d-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePart2Item19TotalPayable:L4583-L4598"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "When Item 17 is negative and penalties are zero, Item 19 remains negative; represent overpayment separately and payable as zero.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

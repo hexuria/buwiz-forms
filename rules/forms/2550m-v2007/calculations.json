@@ -1,0 +1,754 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550m-v2007",
+    "revision":  "2007-02-01",
+    "evaluation_order":  [
+                             "2550m-s1-row-output-tax",
+                             "2550m-s1-totals",
+                             "2550m-item13b",
+                             "2550m-item16a",
+                             "2550m-item16b",
+                             "2550m-item17f",
+                             "2550m-s2-row",
+                             "2550m-s2-totals",
+                             "2550m-s3a-row",
+                             "2550m-s3a-totals",
+                             "2550m-s3b-row",
+                             "2550m-s3b-totals",
+                             "2550m-s3-total",
+                             "2550m-s6-totals",
+                             "2550m-s7-totals",
+                             "2550m-s8-totals",
+                             "2550m-item18-paired-output-tax",
+                             "2550m-item18p",
+                             "2550m-item19",
+                             "2550m-s4-allocation",
+                             "2550m-s4-standard-input",
+                             "2550m-s5-allocation",
+                             "2550m-item20f",
+                             "2550m-item21",
+                             "2550m-item22",
+                             "2550m-item23g",
+                             "2550m-item25d",
+                             "2550m-item24",
+                             "2550m-item26"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2550m-s1-row-output-tax",
+                             "outputs":  [
+                                             "frm2550m:txtOutputTaxN"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtAmountSalesN"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "output tax = sales/receipts * 0.12",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "getRequiredWithheld",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getRequiredWithheld:L3947-L3950"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s1-totals",
+                             "outputs":  [
+                                             "frm2550M:txtmodaltxtTotal12A",
+                                             "frm2550M:txtmodaltxtTotal12B"
+                                         ],
+                             "inputs":  [
+                                            "all Schedule 1 rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "sum sales and sum output tax independently",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "totalAmountandOutputTax",
+                             "depends_on":  [
+                                                "2550m-s1-row-output-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#totalAmountandOutputTax:L3978-L3989"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item13b",
+                             "outputs":  [
+                                             "frm2550m:txtTax13B"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax13A"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "13B = 13A * 0.12",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute13B",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute13B:L6528-L6531"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item16a",
+                             "outputs":  [
+                                             "frm2550m:txtTax16A"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax12A",
+                                            "frm2550m:txtTax13A",
+                                            "frm2550m:txtTax14",
+                                            "frm2550m:txtTax15"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "16A = 12A + 13A + 14 + 15",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute16A",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute16A:L6533-L6537"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item16b",
+                             "outputs":  [
+                                             "frm2550m:txtTax16B"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax12B",
+                                            "frm2550m:txtTax13B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "16B = 12B + 13B",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute16B",
+                             "depends_on":  [
+                                                "2550m-item13b"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute16B:L6539-L6543"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item17f",
+                             "outputs":  [
+                                             "frm2550m:txtTax17F"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax17A",
+                                            "frm2550m:txtTax17B",
+                                            "frm2550m:txtTax17C",
+                                            "frm2550m:txtTax17D",
+                                            "frm2550m:txtTax17E"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "17F = 17A + 17B + 17C + 17D + 17E",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute17F",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute17F:L6545-L6549"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s2-row",
+                             "outputs":  [
+                                             "txtInputTax{N\u003e=0}"
+                                         ],
+                             "inputs":  [
+                                            "txtAmt{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "input tax = net-of-VAT amount * 0.12",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "getInputTaxCompute",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getInputTaxCompute:L6552-L6557"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s2-totals",
+                             "outputs":  [
+                                             "txtmodalTotalAmt",
+                                             "txtmodalTotalInputTax"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "sum net amounts and input tax",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "getInputTaxCompute",
+                             "depends_on":  [
+                                                "2550m-s2-row"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getInputTaxCompute:L6552-L6568"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s3a-row",
+                             "outputs":  [
+                                             "txtInputTax3A{N\u003e=0}",
+                                             "txtAllowInputTax3A{N\u003e=0}",
+                                             "txtBalInputTax3A{N\u003e=0}"
+                                         ],
+                             "inputs":  [
+                                            "txtAmt3A{N\u003e=0}",
+                                            "txtRecogLife3A{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "input = amount * 0.12; allowable = input / recognized life; balance = input - allowable",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "getInputTaxCompute3A",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getInputTaxCompute3A:L6570-L6583"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s3a-totals",
+                             "outputs":  [
+                                             "txtmodalTotalAmountSched3",
+                                             "txtmodalTotalInputTaxSched3",
+                                             "txtmodalTotalBalanceSched3A"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 3A rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "sum amount, allowable input tax, and balance columns",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "getInputTaxCompute3A",
+                             "depends_on":  [
+                                                "2550m-s3a-row"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getInputTaxCompute3A:L6570-L6594"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s3b-row",
+                             "outputs":  [
+                                             "txtAllowInputTax3B{N\u003e=0}",
+                                             "txtBalInputTax3B{N\u003e=0}"
+                                         ],
+                             "inputs":  [
+                                            "txtBalInputTaxPrevious3B{N\u003e=0}",
+                                            "txtRecogLife3B{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "allowable = prior balance / recognized life; balance = prior balance - allowable",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "getInputTaxCompute3B",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getInputTaxCompute3B:L6596-L6607"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s3b-totals",
+                             "outputs":  [
+                                             "txtmodalTotalBalanceSched3B"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 3B rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "sum remaining balance from all Schedule 3B rows",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "getInputTaxCompute3B",
+                             "depends_on":  [
+                                                "2550m-s3b-row"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getInputTaxCompute3B:L6596-L6607"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s3-total",
+                             "outputs":  [
+                                             "txtmodalTotalInputTax20ASched3"
+                                         ],
+                             "inputs":  [
+                                            "txtmodalTotalBalanceSched3A",
+                                            "txtmodalTotalBalanceSched3B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Schedule 3 total = Part A balance + Part B balance",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "computeSumTax3B",
+                             "depends_on":  [
+                                                "2550m-s3a-totals",
+                                                "2550m-s3b-totals"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSumTax3B:L6645-L6647"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s6-totals",
+                             "outputs":  [
+                                             "txtmodalTotal23A",
+                                             "txtmodalTotalSched6AppliedCurrent"
+                                         ],
+                             "inputs":  [
+                                            "txtTotalWithheld{N\u003e=0}",
+                                            "txtAppliedCurr{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "sum total withheld and applied-current amount independently",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "Schedule 6 row change handlers",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule6-totals:L6609-L6619"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s7-totals",
+                             "outputs":  [
+                                             "txtmodalTotal23B",
+                                             "txtmodalTotalSched7AppliedCurrent"
+                                         ],
+                             "inputs":  [
+                                            "txtAmountPaidSch7{N\u003e=0}",
+                                            "txtAppliedCurrSch7{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "sum amount paid and applied-current amount independently",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "Schedule 7 row change handlers",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule7-totals:L6621-L6631"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s8-totals",
+                             "outputs":  [
+                                             "txtmodalTotal23C",
+                                             "txtmodalTotalSched8AppliedCurrent"
+                                         ],
+                             "inputs":  [
+                                            "txtTotalWithheldSch8{N\u003e=0}",
+                                            "txtAppliedCurrSch8{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "sum total withheld and applied-current amount independently",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "Schedule 8 row change handlers",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule8-totals:L6633-L6643"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item18-paired-output-tax",
+                             "outputs":  [
+                                             "frm2550m:txtTax18F",
+                                             "frm2550m:txtTax18H",
+                                             "frm2550m:txtTax18J",
+                                             "frm2550m:txtTax18L",
+                                             "frm2550m:txtTax18O"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax18E",
+                                            "frm2550m:txtTax18G",
+                                            "frm2550m:txtTax18I",
+                                            "frm2550m:txtTax18K",
+                                            "frm2550m:txtTax18N"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "each paired output-tax field = its base * 0.12",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "change handlers",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#item18-pairs:L6649-L6664"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item18p",
+                             "outputs":  [
+                                             "frm2550m:txtTax18P"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax18A",
+                                            "frm2550m:txtTax18C",
+                                            "frm2550m:txtTax18E",
+                                            "frm2550m:txtTax18G",
+                                            "frm2550m:txtTax18I",
+                                            "frm2550m:txtTax18K",
+                                            "frm2550m:txtTax18M",
+                                            "frm2550m:txtTax18N"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "18P = 18A + 18C + 18E + 18G + 18I + 18K + 18M + 18N",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute18P",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute18P:L6666-L6672"
+                                             ],
+                             "assessment":  "ambiguous",
+                             "recommended_app_behavior":  "Preserve the official formula but verify Item 18 column semantics against the PDF before implementation.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item19",
+                             "outputs":  [
+                                             "frm2550m:txtTax19"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax17F",
+                                            "frm2550m:txtTax18B",
+                                            "frm2550m:txtTax18D",
+                                            "frm2550m:txtTax18F",
+                                            "frm2550m:txtTax18H",
+                                            "frm2550m:txtTax18J",
+                                            "frm2550m:txtTax18L",
+                                            "frm2550m:txtTax18O"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "19 = 17F + 18B + 18D + 18F + 18H + 18J + 18L + 18O",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute19",
+                             "depends_on":  [
+                                                "2550m-item17f",
+                                                "2550m-item18-paired-output-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute19:L6674-L6679"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s4-allocation",
+                             "outputs":  [
+                                             "txtTotalInputTaxnotDirectSched4",
+                                             "txtTotalInputSaletoGovernmentSched4",
+                                             "txtTotal20BSched4"
+                                         ],
+                             "inputs":  [
+                                            "txtTaxableSaleSched4",
+                                            "txtTotalSaleSched4",
+                                            "txtInputTaxnotDirectSched4",
+                                            "txtinputtaxSched4",
+                                            "txtlessStdTaxSched4"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "allocated = taxable-government-sales / total-sales * non-direct input tax; total = direct + allocated; result = total - standard input tax",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "Schedule 4 change handlers",
+                             "depends_on":  [
+                                                "2550m-item16a"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule4:L6681-L6690"
+                                             ],
+                             "assessment":  "obsolete",
+                             "recommended_app_behavior":  "Deactivate for periods from January 2021 under RMC 36-2021; retain only for historical compatibility.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s4-standard-input",
+                             "outputs":  [
+                                             "txtlessStdTaxSched4"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax13A"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "standard input tax = 13A * 0.07 (despite static default 5.00)",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "changedTxtTax13A",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#changedTxtTax13A:L6688-L6690"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Do not infer a 5% or 7% rule outside the exact legacy revision; Schedule 4 is deactivated for periods from January 2021.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-s5-allocation",
+                             "outputs":  [
+                                             "txtProductnotDirectSched5",
+                                             "txtTotal20CSched5"
+                                         ],
+                             "inputs":  [
+                                            "txtTotSaleSched5",
+                                            "txtSumTotalSaleSched5",
+                                            "txtAmountInputnotDirectSched5",
+                                            "txtinputtaxSched5"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "allocated = exempt sales / total sales * non-direct input tax; total = direct + allocated",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "Schedule 5 change handlers",
+                             "depends_on":  [
+                                                "2550m-item16a"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule5:L6692-L6695"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item20f",
+                             "outputs":  [
+                                             "frm2550m:txtTax20F"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax20A",
+                                            "frm2550m:txtTax20B",
+                                            "frm2550m:txtTax20C",
+                                            "frm2550m:txtTax20D",
+                                            "frm2550m:txtTax20E"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "20F = 20A + 20B + 20C + 20D + 20E",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute20F",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute20F:L6697-L6701"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item21",
+                             "outputs":  [
+                                             "frm2550m:txtTax21"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax19",
+                                            "frm2550m:txtTax20F"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21 = 19 - 20F",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute21",
+                             "depends_on":  [
+                                                "2550m-item19",
+                                                "2550m-item20f"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute21:L6703-L6706"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item22",
+                             "outputs":  [
+                                             "frm2550m:txtTax22"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax16B",
+                                            "frm2550m:txtTax21"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "22 = 16B - 21",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute22",
+                             "depends_on":  [
+                                                "2550m-item16b",
+                                                "2550m-item21"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute22:L6708-L6711"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item23g",
+                             "outputs":  [
+                                             "frm2550m:txtTax23G"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax23A",
+                                            "frm2550m:txtTax23B",
+                                            "frm2550m:txtTax23C",
+                                            "frm2550m:txtTax23D",
+                                            "frm2550m:txtTax23E",
+                                            "frm2550m:txtTax23F"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23G = 23A + 23B + 23C + 23D + 23E + 23F",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute23G",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute23G:L6713-L6717"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Use the six-term formula but correct the stale printed label that says Sum A-E.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item25d",
+                             "outputs":  [
+                                             "frm2550m:txtTax25D"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax25A",
+                                            "frm2550m:txtTax25B",
+                                            "frm2550m:txtTax25C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "25D = 25A + 25B + 25C",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute25D",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute25D:L6720-L6723"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item24",
+                             "outputs":  [
+                                             "frm2550m:txtTax24"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax22",
+                                            "frm2550m:txtTax23G"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 22 - 23G",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute24",
+                             "depends_on":  [
+                                                "2550m-item22",
+                                                "2550m-item23g"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute24:L6725-L6728"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Use 23G as the source formula does; correct the printed Item 24 label that says Item 23F.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2550m-item26",
+                             "outputs":  [
+                                             "frm2550m:txtTax26"
+                                         ],
+                             "inputs":  [
+                                            "frm2550m:txtTax24",
+                                            "frm2550m:txtTax25D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "26 = 24 + 25D",
+                             "rounding":  "formatCurrency/JavaScript number semantics unless noted.",
+                             "trigger":  "compute26",
+                             "depends_on":  [
+                                                "2550m-item24",
+                                                "2550m-item25d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute26:L6729-L6731"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

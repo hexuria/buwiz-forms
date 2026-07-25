@@ -7,6 +7,7 @@ pub mod date_input;
 pub mod document_viewer;
 pub mod filter_bar;
 pub mod form_multi_select;
+pub mod form_validation;
 pub mod hotkey_recorder;
 pub mod multi_select;
 pub mod smart_date_filter;

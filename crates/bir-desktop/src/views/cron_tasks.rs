@@ -433,12 +433,11 @@ impl CronTasksView {
             && let Some(sum) = summaries.into_iter().find(|s| s.id == db_id)
         {
             if sum.form_code == "2551Q" {
-                if let Ok(Some(mut draft)) =
+                if let Ok(Some(draft)) =
                     db.get_2551q_draft(&sum.tin, sum.taxable_year, sum.quarter.unwrap_or(0))
                     && !matches!(draft.status, bir_core::forms::FilingStatus::Paid)
                 {
-                    draft.revert_to_draft();
-                    let _ = db.save_2551q_draft(&draft);
+                    let _ = db.cancel_queued_2551q_submission(&draft);
                 }
             } else if sum.form_code == "1601C"
                 && let Ok(Some(mut draft)) =

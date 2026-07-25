@@ -1,0 +1,367 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1706-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1706-save-001-seller-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any seller TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only nonblankness is checked.",
+                      "rule_id":  "1706-save-001-seller-tin"
+                  },
+                  {
+                      "case_id":  "case-02-1706-save-002-seller-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Seller RDO equals literal 000."
+                                    },
+                      "expected_message":  "Please enter a valid Seller\u0027s RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1706-save-002-seller-rdo"
+                  },
+                  {
+                      "case_id":  "case-03-1706-save-003-seller-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Seller name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Seller\u0027s Name on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1706-save-003-seller-name"
+                  },
+                  {
+                      "case_id":  "case-04-1706-save-004-title-number",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "TCT/OCT/CCT number is blank."
+                                    },
+                      "expected_message":  "Please enter the TCT/OCT/CCT No.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1706-save-004-title-number"
+                  },
+                  {
+                      "case_id":  "case-05-1706-validate-001-date-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any transaction-date component is present and validateMonthDayYearDate returns true."
+                                    },
+                      "expected_message":  "Invalid date entry on item 1.",
+                      "expected_behavior":  "Returns literal true from Validate after the alert, unlike later failure branches.",
+                      "rule_id":  "1706-validate-001-date-format"
+                  },
+                  {
+                      "case_id":  "case-06-1706-validate-002-date-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All three transaction-date components are blank."
+                                    },
+                      "expected_message":  "Please indicate date of transaction on item 1.",
+                      "expected_behavior":  "Returns literal true from Validate after the alert.",
+                      "rule_id":  "1706-validate-002-date-required"
+                  },
+                  {
+                      "case_id":  "case-07-1706-validate-003-year-minimum",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Transaction year coerces below 1904."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1904.",
+                      "expected_behavior":  "The January 2018 form retains a 1904 lower bound with no documented revision justification.",
+                      "rule_id":  "1706-validate-003-year-minimum"
+                  },
+                  {
+                      "case_id":  "case-08-1706-validate-004-amended",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither amended-return Yes nor No is selected."
+                                    },
+                      "expected_message":  "Please choose amended return on item 2.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-004-amended"
+                  },
+                  {
+                      "case_id":  "case-09-1706-validate-005-item4",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Item 4 option is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 4.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-005-item4"
+                  },
+                  {
+                      "case_id":  "case-10-1706-validate-006-seller-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any seller TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter the Seller\u0027s TIN.",
+                      "expected_behavior":  "Four sequential branches repeat the same message and check only blankness.",
+                      "rule_id":  "1706-validate-006-seller-tin"
+                  },
+                  {
+                      "case_id":  "case-11-1706-validate-007-seller-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Seller RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter the Seller\u0027s RDO Code.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-007-seller-rdo"
+                  },
+                  {
+                      "case_id":  "case-12-1706-validate-008-buyer-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any buyer TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter the Buyer\u0027s TIN.",
+                      "expected_behavior":  "Four sequential branches repeat the same message and check only blankness.",
+                      "rule_id":  "1706-validate-008-buyer-tin"
+                  },
+                  {
+                      "case_id":  "case-13-1706-validate-009-different-tins",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Concatenated seller and buyer TIN+branch strings compare equal."
+                                    },
+                      "expected_message":  "TIN for Buyer and Seller should be different.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-009-different-tins"
+                  },
+                  {
+                      "case_id":  "case-14-1706-validate-010-buyer-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Buyer RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter the Buyer\u0027s RDO Code.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-010-buyer-rdo"
+                  },
+                  {
+                      "case_id":  "case-15-1706-validate-011-seller-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Seller name is blank."
+                                    },
+                      "expected_message":  "Please enter the Seller\u0027s Name.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-011-seller-name"
+                  },
+                  {
+                      "case_id":  "case-16-1706-validate-012-buyer-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Buyer name is blank."
+                                    },
+                      "expected_message":  "Please enter the Buyer\u0027s Name.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-012-buyer-name"
+                  },
+                  {
+                      "case_id":  "case-17-1706-validate-013-seller-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Seller registered address is blank."
+                                    },
+                      "expected_message":  "Please enter the Seller\u0027s Address.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-013-seller-address"
+                  },
+                  {
+                      "case_id":  "case-18-1706-validate-014-buyer-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Buyer registered address is blank."
+                                    },
+                      "expected_message":  "Please enter the Buyer\u0027s address.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-014-buyer-address"
+                  },
+                  {
+                      "case_id":  "case-19-1706-validate-015-location",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Property location is blank."
+                                    },
+                      "expected_message":  "Please enter the Location of the Property.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-015-location"
+                  },
+                  {
+                      "case_id":  "case-20-1706-validate-016-property-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 14A RDO selectedIndex is \u003c= 0."
+                                    },
+                      "expected_message":  "Please enter the RDO Code on Item 14A.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-016-property-rdo"
+                  },
+                  {
+                      "case_id":  "case-21-1706-validate-017-classification",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No Item 15 classification radio is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 15.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-017-classification"
+                  },
+                  {
+                      "case_id":  "case-22-1706-validate-019-title-number",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "TCT/OCT/CCT number is blank."
+                                    },
+                      "expected_message":  "Please enter the TCT/OCT/CCT No.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-019-title-number"
+                  },
+                  {
+                      "case_id":  "case-23-1706-validate-020-principal-residence",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 4 opt4 is checked and neither Item 17 option is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 17.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-020-principal-residence"
+                  },
+                  {
+                      "case_id":  "case-24-1706-validate-021-proceeds-utilized",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 4 opt4 is checked and neither Item 18 option is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 18.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-021-proceeds-utilized"
+                  },
+                  {
+                      "case_id":  "case-25-1706-validate-022-item19",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Item 19 option is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 19.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-022-item19"
+                  },
+                  {
+                      "case_id":  "case-26-1706-validate-023-transaction",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No Item 21 transaction radio is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 21.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-023-transaction"
+                  },
+                  {
+                      "case_id":  "case-27-1706-validate-024-treaty",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Treaty relief is selected and the treaty dropdown selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please specify tax relief you are availing for Item 20.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-024-treaty"
+                  },
+                  {
+                      "case_id":  "case-28-1706-validate-025-fmv-commented",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Cash Sale is selected and an Item 29 FMV input is zero or blank."
+                                    },
+                      "expected_message":  "Please provide a valid value for 29A.",
+                      "expected_behavior":  "All four FMV-required branches are in one block comment.",
+                      "rule_id":  "1706-validate-025-fmv-commented"
+                  },
+                  {
+                      "case_id":  "case-29-1706-validate-026-transaction-description",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 21 Exempt or Others is selected and its description is blank."
+                                    },
+                      "expected_message":  "Please specify a valid description of transaction in item 21.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-026-transaction-description"
+                  },
+                  {
+                      "case_id":  "case-30-1706-validate-027-taxable-base-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No Item 30 taxable-base radio is selected."
+                                    },
+                      "expected_message":  "Please choose Determination of taxable base in Item 30",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-027-taxable-base-choice"
+                  },
+                  {
+                      "case_id":  "case-31-1706-validate-029-overpayment-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 36 is negative and neither Item 37 refund nor TCC is selected."
+                                    },
+                      "expected_message":  "Please choose if to be refunded or to be issued a Tax Credit Certificate.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1706-validate-029-overpayment-choice"
+                  },
+                  {
+                      "case_id":  "case-32-1706-validate-030-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All active checks pass and global flag is truthy."
+                                    },
+                      "expected_message":  "Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.",
+                      "expected_behavior":  "Controls are disabled before the global flag is tested; if flag is falsey, validation state changes without a success alert.",
+                      "rule_id":  "1706-validate-030-success"
+                  },
+                  {
+                      "case_id":  "case-33-1706-validate-031-future-date-commented",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Transaction date is after the current date."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be later than Current Date.",
+                      "expected_behavior":  "Every future-date branch is commented out.",
+                      "rule_id":  "1706-validate-031-future-date-commented"
+                  },
+                  {
+                      "case_id":  "case-34-1706-validate-034-tin-blur",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "checkTIN receives a nondigit value."
+                                    },
+                      "expected_message":  "Please enter a valid TIN",
+                      "expected_behavior":  "The helper clears the value; static segmented TIN controls are not shown invoking this full-value helper.",
+                      "rule_id":  "1706-validate-034-tin-blur"
+                  },
+                  {
+                      "case_id":  "case-35-1706-validate-035-tin-length",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "checkTIN receives fewer than 12 characters."
+                                    },
+                      "expected_message":  "TIN should not be less 12 digits.",
+                      "expected_behavior":  "The grammar is defective and no checksum is checked.",
+                      "rule_id":  "1706-validate-035-tin-length"
+                  },
+                  {
+                      "case_id":  "case-36-1706-validate-036-unreachable-after-return",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "enableSelTreaty finds neither Item 19 option selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 19.",
+                      "expected_behavior":  "The assignment that would default No appears after return and is unreachable.",
+                      "rule_id":  "1706-validate-036-unreachable-after-return"
+                  }
+              ]
+}

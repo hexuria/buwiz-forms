@@ -1,0 +1,438 @@
+{
+    "source_sha256":  "fdb74a14ebf1813bb8c466e8416ff6c5c703592b2207c887f3047f6fa01fab6e",
+    "function_count":  36,
+    "functions":  [
+                      {
+                          "name":  "populateTaxpayerBean",
+                          "start_line":  94,
+                          "end_line":  163,
+                          "body_sha256":  "93fba019d81c9d641e120ed22161473e82fd327f529494f6258654427b181a3c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTotalTaxpayerBean",
+                          "start_line":  164,
+                          "end_line":  199,
+                          "body_sha256":  "70093dc29c41eaa20e0054016a73bc52b2c579521f3e33d4419adefb1ca2d6e8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateComputationOfTaxBean",
+                          "start_line":  200,
+                          "end_line":  260,
+                          "body_sha256":  "43c995c15ae036bc40278ebf4276c7139b98159a54428ce1827c5aa757bab3f8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxReliefAvailmentBean",
+                          "start_line":  261,
+                          "end_line":  273,
+                          "body_sha256":  "39d5770f5b3225bf0ebb38310698da57832e5795bb2a7c514ba6d78cb6350dbf",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateExternalAuditorAccreditedTaxAgentBean",
+                          "start_line":  274,
+                          "end_line":  294,
+                          "body_sha256":  "43f417ee11355db1c193bb9a5ab5810e321eb18dba94bfda86c3b56ef2957b0c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSalesRevenueBean",
+                          "start_line":  295,
+                          "end_line":  312,
+                          "body_sha256":  "c43db29bdcbb4e6297a9add4aa582a391eccd2b08f7ebf9c976bd5c8f079720a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateCostOfSaleBean",
+                          "start_line":  313,
+                          "end_line":  363,
+                          "body_sha256":  "4b15a5c7e084dc519b9f148c0160d89510830a5fa7e2ac20d891613dcc389495",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSchedule3",
+                          "start_line":  364,
+                          "end_line":  377,
+                          "body_sha256":  "be35365ef9057ab1a07969d889aeca15fe09dc4d8aa775f2f5b9424b20b8ff94",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfOtherTaxableIncomeNotSubjectToFinalTaxBean",
+                          "start_line":  378,
+                          "end_line":  386,
+                          "body_sha256":  "92819566fbb0bde1ee0d073799b12cb4f59ea247440eef251166f83d61384d85",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSchedule4",
+                          "start_line":  387,
+                          "end_line":  442,
+                          "body_sha256":  "763bdbed2907ebdad432a6bd8b95f6b0480db7476155cdcbc9194c906b5a2ddd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfAmortization",
+                          "start_line":  443,
+                          "end_line":  451,
+                          "body_sha256":  "203be52ca2140e167cd424f7d58172607a7df4f64719dd868ed318c31eb17dbc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfOthers",
+                          "start_line":  452,
+                          "end_line":  460,
+                          "body_sha256":  "d8d38b920cf64a185d5c3b028dc08517e0260e0d45d256712dba02abe0140fd7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSchedule5",
+                          "start_line":  461,
+                          "end_line":  494,
+                          "body_sha256":  "0795fa06e80ede58b91722601a2f227f24a0a0bc418b98d00187655544ce25a6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfSpecialAllowableItemizedDeductionsBean",
+                          "start_line":  495,
+                          "end_line":  504,
+                          "body_sha256":  "0c8e49dd6057ac2c1412ecda81f70e7ace9a3ec23bfebe4ed90d17dc98e8039e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateComputationOfNetOperatingLossCarryOverBean",
+                          "start_line":  505,
+                          "end_line":  566,
+                          "body_sha256":  "1215a566ed7d53fa092fe5edb27a4b7d5bd211ae5cf3636abe4ba10c9156c09c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSchedule7",
+                          "start_line":  567,
+                          "end_line":  590,
+                          "body_sha256":  "c0809ac24cddc28ffad0712237b513dcf3ec3f386f40efd8e6c0e339b9f87f86",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxCreditsPaymentsBean",
+                          "start_line":  591,
+                          "end_line":  604,
+                          "body_sha256":  "1ef91fa09ed14660f24dcf44de6702693fc2f6a888a035e0f9310fc08b7105bb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfOtherCreditsBean",
+                          "start_line":  605,
+                          "end_line":  615,
+                          "body_sha256":  "8288d5b2816bc0d59d12c11ff30a31da304b83cbf20c6a59e5cc90a2fe3d48a9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateComputationOfMinimunCorporateIncomeBean",
+                          "start_line":  616,
+                          "end_line":  671,
+                          "body_sha256":  "4184bc4497157ef6da8c4a71fe1cca94b7f87d40d3f3a1f56c9169c6743e2d20",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateReconciliationOfNetIncomePerBooksAgainstTaxableIncomeBean",
+                          "start_line":  672,
+                          "end_line":  718,
+                          "body_sha256":  "4ac1716f8ab60059955621a3e03966edddc6fd4d1f7b7d9aa674507f353f5cc5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfNonDeductibleExpensesItemBean",
+                          "start_line":  719,
+                          "end_line":  727,
+                          "body_sha256":  "dd30fb007441d0403c9644d09f1fe0bfcd86f32c1e8ca74161e87d08d59b8312",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfNonTaxableAndSpDeductionsItemBean",
+                          "start_line":  728,
+                          "end_line":  736,
+                          "body_sha256":  "56eb532c026a427f4c61375ab1bf0cd0b117e5e168414efff4dba81feeecb3d9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfSpecialDeductionsItemBean",
+                          "start_line":  737,
+                          "end_line":  745,
+                          "body_sha256":  "3ac252244913f9c3a938ec3b8669d50b03ad8a49800adb0fa33b1ed4b9878881",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSchedule10",
+                          "start_line":  746,
+                          "end_line":  786,
+                          "body_sha256":  "63c76f1cf35b960e62fa95bad70d994b019ec20df5ca3fadcf855316991eb6df",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSchedule11",
+                          "start_line":  787,
+                          "end_line":  794,
+                          "body_sha256":  "362727079ce1de9af50f496aa81a1e7eb51748bc04f35ca15344cb00b785e358",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfstockholders",
+                          "start_line":  795,
+                          "end_line":  814,
+                          "body_sha256":  "45fc6d863243a8ee9620d66b7fff9d24765c8a270c7075895bea4797404a891b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateSchedule12I",
+                          "start_line":  815,
+                          "end_line":  845,
+                          "body_sha256":  "66be48bf8bcb4d6b3a04625d1f5e483a70c43074779c523958e068a7c34a77d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfGrossIncomeSubjectToFinalWithholdingBean",
+                          "start_line":  846,
+                          "end_line":  860,
+                          "body_sha256":  "eedd22fc18c5bcca92c2f69b505e0772301055d38302cd6029ff4bcba7888f74",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfRealPropertySaleBean",
+                          "start_line":  861,
+                          "end_line":  877,
+                          "body_sha256":  "a9f3e999b7b4e9800eccb927563e4f104f482c8a60aa7f3c38e78a10f49525df",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfStockShareSaleBean",
+                          "start_line":  878,
+                          "end_line":  899,
+                          "body_sha256":  "469a85945972c38f2e85fb3115a5c1acbc50695c29b4f0591f20fd1584d520f5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfOtherIncomeBean",
+                          "start_line":  900,
+                          "end_line":  911,
+                          "body_sha256":  "adc19f1085360bb087879b4db40fea85359f550248e876a7a0037d2661b0de98",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfOtherIncome",
+                          "start_line":  912,
+                          "end_line":  919,
+                          "body_sha256":  "67794e59986ac3ac2ef4a26431aaa7032a3092a26d3119b1c783f4bb540b757e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfPersonalPropertyReceivedBean",
+                          "start_line":  920,
+                          "end_line":  933,
+                          "body_sha256":  "46787e99e38916b0d9f05ab1c9dab34743ad3c8dc1082270091925313fc1a056",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateListOfOtherExemptIncomeBean",
+                          "start_line":  934,
+                          "end_line":  943,
+                          "body_sha256":  "6251e9e279d38478ffc8d062f7451e4d8a3a25cd7080a93cb5d2d234500a2f3c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processSuccess",
+                          "start_line":  1006,
+                          "end_line":  1013,
+                          "body_sha256":  "a4a347516a6f4dd96261dc8525cab8acdee1760471a9bbdfaa9ff37376ba942f",
+                          "alerts":  [
+                                         "data.text"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processError",
+                          "start_line":  1014,
+                          "end_line":  1018,
+                          "body_sha256":  "68eb92144e16270863192293518081d6d95a7eaf1bf618c61ae3f390f695b139",
+                          "alerts":  [
+                                         "typeof data.text == \"undefined\" ? \"Failed to connect to efps online.\" : data.text"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

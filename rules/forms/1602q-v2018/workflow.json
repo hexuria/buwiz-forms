@@ -1,0 +1,170 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1602q-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-help-v2018"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Three-page January 2018 quarterly return with fixed Schedule 1 rows and two-row treaty and IPA schedules."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L5798-L5812",
+                                           "official-hta-runtime#saveXML:L4170-L4248",
+                                           "revision-matched-encrypted-sample"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save applies only TIN blankness, RDO 000, and withholding-agent-name blankness before serializing all 110 runtime controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L5425-L5547"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate applies period, identity, classification, Part IV, over-remittance, Schedule 2, and Schedule 3 checks in source order."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "revision-matched-encrypted-sample",
+                                           "encrypted-field-audit"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "A revision-matched encrypted final copy proves the exact 110-key inventory; values were not emitted."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport code exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes the flat pseudo-XML field stream.",
+                                                 "Retains unprefixed email and runtime UI-state fields."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L4002-L4313"
+                                            ],
+                            "guard":  "The three narrow Save checks and file-version guards pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables editable controls.",
+                                                 "Enables print, edit, and final-copy actions."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L5425-L5547"
+                                            ],
+                            "guard":  "All source-ordered Validate and schedule checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls, subject to conditional schedule state."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L5637-L5714"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Writes and encrypts/compresses the final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L4002-L4313"
+                                            ],
+                            "guard":  "Finalization/version flow succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Online submission attempt; deliberately untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return year and quarter",
+                          "Amended-return and tax-withheld choices",
+                          "Withholding-agent identity and RDO",
+                          "Agent and special-tax classifications",
+                          "Applicable Schedule 1, 2, and 3 details",
+                          "Over-remittance disposition when Item 28 is negative"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "deposit-slip",
+                                     "label":  "BIR-prescribed deposit slip when filing with an Authorized Agent Bank.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#L129-L135"
+                                                     ],
+                                     "required_when":  "Payment/remittance is made through an AAB.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#L107-L120"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Not later than the last day of the month following the close of the quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#L107-L120"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not later than the last day of the month following the close of the quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#L107-L120"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not later than the last day of the month following the close of the quarter."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#L107-L120"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not later than the last day of the month following the close of the quarter."
+                             }
+                         ]
+}

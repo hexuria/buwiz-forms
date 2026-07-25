@@ -1,0 +1,1089 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200t-v2020",
+    "revision":  "2020-01-01",
+    "first_error_behavior":  "Validate and Save alert the first matching branch and return; successful Validate then disables editing.",
+    "rules":  [
+                  {
+                      "rule_id":  "2200t-input-001-amount-number",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "input",
+                      "order":  1,
+                      "condition":  "An amount field wired to blockletter contains a non-number on blur.",
+                      "fields":  [
+                                     "amount-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletter:L5466-L5477"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The value is normalized to 0.00 without an alert.",
+                      "recommended_app_behavior":  "Parse typed decimals and surface invalid input before normalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-input-002-nonnegative",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "input",
+                      "order":  2,
+                      "condition":  "A field wired to blockNegativeNumber is negative on blur.",
+                      "fields":  [
+                                     "nonnegative-amount-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockNegativeNumber:L5478-L5484"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The value is silently replaced with 0.00.",
+                      "recommended_app_behavior":  "Reject negative input visibly or normalize only with an explicit user-facing explanation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-input-003-integer",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "input",
+                      "order":  3,
+                      "condition":  "A field wired to blockLetterInt contains a non-number.",
+                      "fields":  [
+                                     "integer-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockLetterInt:L5496-L5505"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The value is silently cleared.",
+                      "recommended_app_behavior":  "Use a typed integer parser and preserve a structured invalid state.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-input-004-date-format",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "input",
+                      "order":  4,
+                      "condition":  "validateDate receives malformed MM/DD/YYYY input.",
+                      "fields":  [
+                                     "date-input"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6932-L6989"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-input-005-date-future",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "input",
+                      "order":  5,
+                      "condition":  "validateDate receives a future date.",
+                      "fields":  [
+                                     "date-input"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This date cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6990-L6994"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-input-006-date-floor",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "input",
+                      "order":  6,
+                      "condition":  "validateDate receives a date before 2018.",
+                      "fields":  [
+                                     "date-input"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This date cannot be prior to 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6995-L7000"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The generic helper enforces 2018, while Validate enforces only 1904 and the printed form is January 2020.",
+                      "recommended_app_behavior":  "Bind the minimum accepted date to the January 2020 revision.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-save-007-return-date",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  7,
+                      "condition":  "All three return-date components are blank.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateMonth",
+                                     "frm2200Tv2020:txtDateDay",
+                                     "frm2200Tv2020:txtDateYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Return Date",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5795-L5800"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save rejects only when all three components are blank; a partially populated or malformed date passes this guard.",
+                      "recommended_app_behavior":  "Require a complete valid calendar date before saving a finalizable draft.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-save-008-tin",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  8,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2200Tv2020:tinA",
+                                     "frm2200Tv2020:tinB",
+                                     "frm2200Tv2020:tinC",
+                                     "frm2200Tv2020:branchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5801-L5805"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-save-009-rdo",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  9,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm2200Tv2020:rdoCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5806-L5809"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-save-010-name",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  10,
+                      "condition":  "Registered name is blank.",
+                      "fields":  [
+                                     "frm2200Tv2020:registeredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5810-L5814"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The correct field is checked, but the message says Item 7 even though registered name is Item 6.",
+                      "recommended_app_behavior":  "Require the field and report Item 6.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-save-011-amended-version",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  11,
+                      "condition":  "A finalized/versioned return exists and Amended Return is not Yes.",
+                      "fields":  [
+                                     "frm2200Tv2020:amendedRtn_1",
+                                     "frm2200Tv2020:amendedRtn_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveXML:L4966-L5030"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-012-month",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Parsed month is blank, below 1, above 12, or NaN/zero.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid month on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5529-L5534"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-013-february",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "The day exceeds 28 in a non-leap February.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateMonth",
+                                     "frm2200Tv2020:txtDateDay",
+                                     "frm2200Tv2020:txtDateYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid date on Item 1. Filing year is not a leap year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5535-L5539"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-014-day",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Parsed day is blank, below 1, above the computed month maximum, or NaN/zero.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateDay"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid day on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5540-L5544"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-015-year-required",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Year is the empty string.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5545-L5549"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-016-year-floor",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Year coerces below 1904.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Item 1. Entry should not be lower than 1904.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5550-L5554"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The January 2020 form accepts years back to 1904; the separate validateDate helper uses 2018.",
+                      "recommended_app_behavior":  "Enforce a revision-supported return period beginning January 2020.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-017-nonnumeric-year",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Year is nonempty and nonnumeric after a manipulated load or programmatic edit.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5512-L5559"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "JavaScript comparisons with NaN are false, so the nonnumeric year can pass the year-floor and future-date branches.",
+                      "recommended_app_behavior":  "Require a four-digit numeric year before constructing the date.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-018-future",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "The composed return date is after the current local date.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtDateMonth",
+                                     "frm2200Tv2020:txtDateDay",
+                                     "frm2200Tv2020:txtDateYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Item 1. Date cannot be after the current date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5555-L5559"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-019-tin-presence",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2200Tv2020:tinA",
+                                     "frm2200Tv2020:tinB",
+                                     "frm2200Tv2020:tinC",
+                                     "frm2200Tv2020:branchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5560-L5564"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-020-tin-checksum-omitted",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "TIN segments are merely nonblank; no TIN checksum is invoked by validateForm.",
+                      "fields":  [
+                                     "frm2200Tv2020:tinA",
+                                     "frm2200Tv2020:tinB",
+                                     "frm2200Tv2020:tinC",
+                                     "frm2200Tv2020:branchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5560-L5564"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source labels the check as valid TIN but tests presence only.",
+                      "recommended_app_behavior":  "Apply the shared evidence-backed TIN checksum and branch-code rules.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-021-rdo",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "RDO selectedIndex is zero.",
+                      "fields":  [
+                                     "frm2200Tv2020:rdoCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5565-L5569"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-022-name",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Registered name is exactly empty.",
+                      "fields":  [
+                                     "frm2200Tv2020:registeredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer\u0027s Name on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5570-L5574"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-023-address",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Registered address is exactly empty.",
+                      "fields":  [
+                                     "frm2200Tv2020:registeredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5575-L5579"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-024-zip",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "ZIP code is exactly empty.",
+                      "fields":  [
+                                     "frm2200Tv2020:zipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 7A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5580-L5584"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-025-phone",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Telephone number is exactly empty.",
+                      "fields":  [
+                                     "frm2200Tv2020:phoneNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Telephone Number on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5585-L5589"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-026-production-city",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Place-of-production city selectedIndex is zero.",
+                      "fields":  [
+                                     "frm2200Tv2020:prodCity"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Place of Production on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5590-L5594"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-027-removal-city",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Place-of-removal city selectedIndex is zero.",
+                      "fields":  [
+                                     "frm2200Tv2020:remCity"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Place of Removal on Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5595-L5599"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-028-relief-specification",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Tax relief Yes is checked and the specification is empty.",
+                      "fields":  [
+                                     "frm2200Tv2020:optTreaty_1",
+                                     "frm2200Tv2020:treatyY"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please specify a Tax Relief on Item 12A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5600-L5604"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-029-relief-choice-omitted",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Neither tax-relief radio is checked.",
+                      "fields":  [
+                                     "frm2200Tv2020:optTreaty_1",
+                                     "frm2200Tv2020:optTreaty_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5600-L5604"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate accepts the form because only the Yes-plus-empty-specification case is tested.",
+                      "recommended_app_behavior":  "Require an explicit Yes or No choice.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-030-payment-choice",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "None of the three manner-of-payment radios is checked.",
+                      "fields":  [
+                                     "frm2200Tv2020:optPayment_1",
+                                     "frm2200Tv2020:optPayment_2",
+                                     "frm2200Tv2020:optPayment_3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a Manner of Payment on Part II.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5605-L5612"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-031-payment-other",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "Other manner of payment is checked and its description is empty.",
+                      "fields":  [
+                                     "frm2200Tv2020:optPayment_3",
+                                     "frm2200Tv2020:paymentOther"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please specify a Scheme on Item 15.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5613-L5617"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-032-email-omitted",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Email is blank or malformed.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5507-L5632",
+                                          "official-hta-runtime#openAlertEmail:L6351-L6412"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate performs no email check even though Final Copy asks the taxpayer to ensure a valid email address.",
+                      "recommended_app_behavior":  "Validate email syntax before enabling Final Copy.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-033-line-business-omitted",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Line of business is blank.",
+                      "fields":  [
+                                     "frm2200Tv2020:txtLineBus"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5507-L5632"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "Validate does not inspect the printed line-of-business field.",
+                      "recommended_app_behavior":  "Preserve it losslessly and require it only if the January 2020 legal instructions establish that obligation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-034-schedule-omitted",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "Schedule 1 contains no positive tax base or excise-due amount.",
+                      "fields":  [
+                                     "schedule-1-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5507-L5632",
+                                          "official-hta-runtime#calculate_Sched1_TotalDue:L7061-L7076"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate never inspects Schedule 1 and accepts an all-zero schedule.",
+                      "recommended_app_behavior":  "Require the applicable tobacco line and validate the selected effective-year row.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-035-row-formula-omitted",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "A Schedule 1 Due cell disagrees with taxable base multiplied by the printed rate.",
+                      "fields":  [
+                                     "schedule-1-due-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-controls:L1478-L2340",
+                                          "official-hta-runtime#calculate_Sched1_TotalDue:L7061-L7076"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Due cells are editable inputs; the source only sums them and never computes or cross-checks the printed tax rates.",
+                      "recommended_app_behavior":  "Compute each due amount from the revision-specific rate and taxable base, preserving any official rounding rule.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-validate-036-success",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  36,
+                      "condition":  "All preceding Validate branches pass.",
+                      "fields":  [
+                                     "frm2200Tv2020:cmdValidate",
+                                     "frm2200Tv2020:cmdEdit"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L5619-L5631"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Validate disables itself, enables Print/Edit/Final Copy, and disables editable controls.",
+                      "recommended_app_behavior":  "Transition to a validated state while retaining an explicit Edit transition.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-final-037-validation-state",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "final-copy",
+                      "order":  37,
+                      "condition":  "The form has not reached the successful Validate state.",
+                      "fields":  [
+                                     "frm2200Tv2020:cmdValidate",
+                                     "frm2200Tv2020:btnFinalCopy"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#init:L5396-L5417",
+                                          "official-hta-runtime#validateForm:L5619-L5631"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The Final Copy button remains disabled until Validate succeeds.",
+                      "recommended_app_behavior":  "Require a validation snapshot tied to the exact current field state.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-final-038-confirmation",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "final-copy",
+                      "order":  38,
+                      "condition":  "The user declines the submission/final-copy confirmation.",
+                      "fields":  [
+                                     "frm2200Tv2020:btnFinalCopy"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?",
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L6401-L6404"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The confirm dialog cancels when the user does not affirm.",
+                      "recommended_app_behavior":  "Keep Final Copy and online Submit as separately named, explicit actions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200t-final-039-offline",
+                      "form_id":  "2200t-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "final-copy",
+                      "order":  39,
+                      "condition":  "The connection check fails.",
+                      "fields":  [
+                                     "frm2200Tv2020:btnFinalCopy"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "The system detected that you have no internet connection.\nPlease contact your internet service provider.",
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L6405-L6412"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "The source sets final flag 3 and still saves an encrypted profile for offline handling.",
+                      "recommended_app_behavior":  "Allow an explicitly offline Final Copy without representing it as an online submission.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

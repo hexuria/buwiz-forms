@@ -1,0 +1,14 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\1701v2018\\00000000000000-1701v2018-122025#\u003cemail-redacted\u003e#.xml",
+    "ciphertext_sha256":  "3771c99c191ef5e84b1b5e4c51499911bfbec6002febc3c53dca3f08730e92e3",
+    "zlib_header":  "78da",
+    "decrypted_byte_count":  67763,
+    "decrypted_sha256":  "95ee42ed78f104335f50168a40e207f8af71ddf8eced9ddd0db1ad42d6366800",
+    "field_count":  838,
+    "unique_field_count":  838,
+    "encrypted_only_field":  "frm1701:txtPg1I9Address2",
+    "xml_version":  "051414",
+    "values_emitted":  false
+}

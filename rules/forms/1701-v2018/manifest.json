@@ -1,0 +1,53 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "form_code":  "1701",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018 (ENCS)",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0. Asset"
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  838,
+                   "runtime_field_families":  115,
+                   "fields_total":  953,
+                   "typed_fields":  953,
+                   "validation_rules":  69,
+                   "confirmed_official_bugs":  17,
+                   "calculations":  32,
+                   "negative_fixtures":  40,
+                   "unverified_gaps":  4
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research artifacts only; no renderer, migration, release, or capability changes.",
+                        "No source values, email address, or online submission data are copied.",
+                        "The exact reviewed plaintext/encrypted snapshots contain 837/838 keys; 115 additional descriptors preserve the unbounded EXn/SPn attachment families.",
+                        "The June 2013 BIR-Form1701.hta and its 452-key save are a separate revision and are excluded."
+                    ]
+}

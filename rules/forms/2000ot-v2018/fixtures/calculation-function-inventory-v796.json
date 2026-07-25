@@ -1,0 +1,125 @@
+{
+    "source_sha256":  "e44331e99dd8edb8d6fd01529f82e5d6612a9640307c7421b8be397ac87ebe33",
+    "function_count":  7,
+    "functions":  [
+                      {
+                          "name":  "atcPropertyJS",
+                          "start_line":  1847,
+                          "end_line":  1865,
+                          "body_sha256":  "c35884c0ae1ca57364ad7cf3583cbdd4f70a7af7c3bf97bcd8929c8fadef9aa4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "SelectedATC",
+                          "start_line":  5069,
+                          "end_line":  5088,
+                          "body_sha256":  "f1062be3c3cc8cee97d4c568e3c3ae1b2e1f9d303464bfe0aa35db3c379e8856",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:ATC_1",
+                                              "frm2000OT:ATC_2",
+                                              "frm2000OT:ATC_3",
+                                              "frm2000OT:txtTax16"
+                                          ]
+                      },
+                      {
+                          "name":  "TaxComputation",
+                          "start_line":  5108,
+                          "end_line":  5186,
+                          "body_sha256":  "199e6add450751a6b3157e9d93cfd3366ee9d33673459ceb88890e845093924f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:rbTransNature_1",
+                                              "frm2000OT:rbTransNature_2",
+                                              "frm2000OT:rbTransNature_3",
+                                              "frm2000OT:txtTax14",
+                                              "frm2000OT:txtTax16",
+                                              "frm2000OT:txtTax17",
+                                              "frm2000OT:txtTax18",
+                                              "frm2000OT:txtTax19",
+                                              "frm2000OT:txtTax20A",
+                                              "frm2000OT:txtTax20B",
+                                              "frm2000OT:txtTax20C",
+                                              "frm2000OT:txtTax20D",
+                                              "frm2000OT:txtTax21"
+                                          ]
+                      },
+                      {
+                          "name":  "ComputeSharesOfStock",
+                          "start_line":  5187,
+                          "end_line":  5216,
+                          "body_sha256":  "011a26e3dcbd1c1ca3353c783e0239b6dec0310650eb06c9b3bd0428a52e9990",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:sched1B:txtDSTPaid",
+                                              "frm2000OT:sched1B:txtParValOfShares",
+                                              "frm2000OT:txtTax14"
+                                          ]
+                      },
+                      {
+                          "name":  "ComputeRealProperty",
+                          "start_line":  5217,
+                          "end_line":  5271,
+                          "body_sha256":  "2227bd80e351313b5a50434b2b6cf8c3cbfca89e8af10fd7f1d613481f3e3160",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:sched1A:txtFMVCol1",
+                                              "frm2000OT:sched1A:txtFMVCol2",
+                                              "frm2000OT:sched1A:txtFMVSubTot",
+                                              "frm2000OT:sched1A:txtFMVTotal",
+                                              "frm2000OT:Sched2:txtGrossSellingPrice",
+                                              "frm2000OT:Sched2:txtOthers",
+                                              "frm2000OT:Sched2:txtOthersAmount",
+                                              "frm2000OT:Sched2:txtTaxableBase",
+                                              "frm2000OT:Sched2:txtTotalFairMarket",
+                                              "frm2000OT:txtTax14",
+                                              "frm2000OT:txtTax15"
+                                          ]
+                      },
+                      {
+                          "name":  "ComputeFMVAddDel",
+                          "start_line":  5272,
+                          "end_line":  5288,
+                          "body_sha256":  "63fde0f69b60e0e47b849d6e752f148af4e30fddd0b4bd8939b823dfe12f7da7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:sched1A:txtFMVCol1",
+                                              "frm2000OT:sched1A:txtFMVCol2",
+                                              "frm2000OT:sched1A:txtFMVSubTot",
+                                              "frm2000OT:sched1A:txtFMVTotal",
+                                              "frm2000OT:Sched2:txtTotalFairMarket"
+                                          ]
+                      },
+                      {
+                          "name":  "ComputeFMV",
+                          "start_line":  5289,
+                          "end_line":  5306,
+                          "body_sha256":  "36e19c9644193e79d14e9f689ae6000782947298d9049cc652d160367426d8dc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2000OT:sched1A:txtFMVCol1",
+                                              "frm2000OT:sched1A:txtFMVCol2",
+                                              "frm2000OT:sched1A:txtFMVSubTot",
+                                              "frm2000OT:sched1A:txtFMVTotal",
+                                              "frm2000OT:Sched2:txtTotalFairMarket"
+                                          ]
+                      }
+                  ]
+}

@@ -1,0 +1,307 @@
+{
+    "source_sha256":  "67f3bb050668791c87060c0e7f2c20f3215434082ed443f5309bcb3f8e79c2df",
+    "function_count":  14,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  1801,
+                          "end_line":  1883,
+                          "body_sha256":  "f3bad6f61de861c934ebf0a9d049cd401c09899ecbacb011d7c9f3be72ecb05d",
+                          "alerts":  [
+                                         "\"File \u0027\"+xmlFileName+\"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  1901,
+                          "end_line":  1913,
+                          "body_sha256":  "48ce23955c13384033ada8e950417e2ab18a5d53b7d3aecfa214d60e9aa04a54",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  1967,
+                          "end_line":  2250,
+                          "body_sha256":  "0818c3044e46e6baae64d13af0e20bc29c5519b5459f71d3b3f98f8a6d0badbc",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:optAmended_1",
+                                              "frm2553:optAmended_2",
+                                              "frm2553:txt21",
+                                              "frm2553:txt22A",
+                                              "frm2553:txt22B",
+                                              "frm2553:txt22C",
+                                              "frm2553:txt22D",
+                                              "frm2553:txt23",
+                                              "frm2553:txtAddress",
+                                              "frm2553:txtBranchCode",
+                                              "frm2553:txtDescription",
+                                              "frm2553:txtRDOCode",
+                                              "frm2553:txtTelNum",
+                                              "frm2553:txtTIN1",
+                                              "frm2553:txtTIN2",
+                                              "frm2553:txtTIN3",
+                                              "frm2553:txtTPName",
+                                              "frm2553:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2251,
+                          "end_line":  2456,
+                          "body_sha256":  "5d16e838bde0073319519bdb293bc5b6a729dcaee5d71f1175bc795e73346a0a",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:optAmended_1",
+                                              "frm2553:optAmended_2",
+                                              "frm2553:txt21",
+                                              "frm2553:txt22A",
+                                              "frm2553:txt22B",
+                                              "frm2553:txt22C",
+                                              "frm2553:txt22D",
+                                              "frm2553:txt23",
+                                              "frm2553:txtAddress",
+                                              "frm2553:txtBranchCode",
+                                              "frm2553:txtDescription",
+                                              "frm2553:txtRDOCode",
+                                              "frm2553:txtTelNum",
+                                              "frm2553:txtTIN1",
+                                              "frm2553:txtTIN2",
+                                              "frm2553:txtTIN3",
+                                              "frm2553:txtTPName",
+                                              "frm2553:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "checkOverpayment",
+                          "start_line":  2758,
+                          "end_line":  2772,
+                          "body_sha256":  "3bb43ac47747de38873351d3c3393858b86778fa8cd7f4660649809fb8cdf2e9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:ifoverpay_1",
+                                              "frm2553:ifoverpay_2",
+                                              "frm2553:txt23"
+                                          ]
+                      },
+                      {
+                          "name":  "selectTreaty",
+                          "start_line":  2780,
+                          "end_line":  2790,
+                          "body_sha256":  "4b20d591574f6232610cfe7f661c8fa97c17e79e71ada4a700a4cf8eb5b84261",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:lstTaxTreaty",
+                                              "frm2553:optTreaty_1"
+                                          ]
+                      },
+                      {
+                          "name":  "validateForm",
+                          "start_line":  2791,
+                          "end_line":  2900,
+                          "body_sha256":  "1b78aafc5874f38c9d8c70b223576a13a20ebe82cbf40415737a6a08f9205d40",
+                          "alerts":  [
+                                         "\"Please select an option for item 1.\"",
+                                         "\"Please select valid month on item 2.\"",
+                                         "\"Please enter valid year on item 2.\"",
+                                         "\"Invalid date entry on Item no.2. Entry should not be later than Current Date.\") return; }*/ if(d.getElementById(\u0027frm2553:txtYearEnded\u0027).value*1 \u003c 1900) { alert(\"Invalid date entry on Item no.2. Entry should not be lower than 1900.\") return; } if(d.getElementById(\u0027frm2553:optQtr:_1\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm2553:optQtr:_2\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm2553:optQtr:_3\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm2553:optQtr:_4\u0027).checked == false) { alert(\"Select a Quarter on Item no. 3.\") return; } if( (d.getElementById(\u0027frm2553:txtTIN1\u0027).value == \"\" || d.getElementById(\u0027frm2553:txtTIN2\u0027).value == \"\" || d.getElementById(\u0027frm2553:txtTIN3\u0027).value == \"\" || d.getElementById(\u0027frm2553:txtBranchCode\u0027).value == \"\") ) { alert(\"Please enter a valid TIN number on Item 6.\"",
+                                         "\"Please enter a valid RDO Code on Item 7.\"",
+                                         "\"Please enter a valid Line of Business/Occupation on Item 8.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 9.\"",
+                                         "\"Please enter a valid Telephone Number on Item 10.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 11.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 12.\"",
+                                         "\"Please indicate refund type for overpayment in Item 23.\") return; } } var x = 14; while(x \u003c 19){ if(d.getElementById(\u0027frm2553:txt\u0027 + x + \u0027B\u0027).value != \"\"){ if(d.getElementById(\u0027frm2553:txt\u0027 + x + \u0027C\u0027).value == 0){ alert(\"Please enter a valid amount for Item \" + x + \"C.\") return; } } x++; } if(d.getElementById(\"frm2553:optTreaty_1\").checked \u0026\u0026 d.getElementById(\"frm2553:lstTaxTreaty\").value == 0) { alert(\"Please select a Tax Treaty from the list.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:cmdEdit",
+                                              "frm2553:cmdValidate",
+                                              "frm2553:ifoverpay_1",
+                                              "frm2553:ifoverpay_2",
+                                              "frm2553:itemFiscalStartMonth:_1",
+                                              "frm2553:itemFiscalStartMonth:_2",
+                                              "frm2553:itemYearEndMonth",
+                                              "frm2553:lstTaxTreaty",
+                                              "frm2553:optQtr:_1",
+                                              "frm2553:optQtr:_2",
+                                              "frm2553:optQtr:_3",
+                                              "frm2553:optQtr:_4",
+                                              "frm2553:optTreaty_1",
+                                              "frm2553:txt",
+                                              "frm2553:txt23",
+                                              "frm2553:txtAddress",
+                                              "frm2553:txtBranchCode",
+                                              "frm2553:txtDescription",
+                                              "frm2553:txtRDOCode",
+                                              "frm2553:txtTelNum",
+                                              "frm2553:txtTIN1",
+                                              "frm2553:txtTIN2",
+                                              "frm2553:txtTIN3",
+                                              "frm2553:txtTPName",
+                                              "frm2553:txtYearEnded",
+                                              "frm2553:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "enableDisabledFields",
+                          "start_line":  2917,
+                          "end_line":  2988,
+                          "body_sha256":  "efc0113d488101e2de62a4884b339af225a38b7d5f05e080b85dbda102eeb28a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:btn",
+                                              "frm2553:btnFinalCopy",
+                                              "frm2553:ifoverpay_1",
+                                              "frm2553:ifoverpay_2",
+                                              "frm2553:itemFiscalStartMonth:_1",
+                                              "frm2553:itemFiscalStartMonth:_2",
+                                              "frm2553:itemYearEndMonth",
+                                              "frm2553:optAmended_1",
+                                              "frm2553:optAmended_2",
+                                              "frm2553:optQtr:_1",
+                                              "frm2553:optQtr:_2",
+                                              "frm2553:optQtr:_3",
+                                              "frm2553:optQtr:_4",
+                                              "frm2553:optTreaty_1",
+                                              "frm2553:optTreaty_2",
+                                              "frm2553:txt",
+                                              "frm2553:txt20A",
+                                              "frm2553:txt20B",
+                                              "frm2553:txt22A",
+                                              "frm2553:txt22B",
+                                              "frm2553:txt22C",
+                                              "frm2553:txt23",
+                                              "frm2553:txtAddress",
+                                              "frm2553:txtBranchCode",
+                                              "frm2553:txtDescription",
+                                              "frm2553:txtRDOCode",
+                                              "frm2553:txtSheets",
+                                              "frm2553:txtTelNum",
+                                              "frm2553:txtTIN1",
+                                              "frm2553:txtTIN2",
+                                              "frm2553:txtTIN3",
+                                              "frm2553:txtTPName",
+                                              "frm2553:txtYearEnded",
+                                              "frm2553:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "dateyear",
+                          "start_line":  3003,
+                          "end_line":  3016,
+                          "body_sha256":  "a04486484162000614c8c445174a6ca1818feaa834afe486948cf527eccf0c4d",
+                          "alerts":  [
+                                         "\u0027You have entered invalid month for Fiscal Year\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:itemFiscalStartMonth:_1",
+                                              "frm2553:itemFiscalStartMonth:_2",
+                                              "frm2553:itemYearEndMonth"
+                                          ]
+                      },
+                      {
+                          "name":  "datemonth",
+                          "start_line":  3017,
+                          "end_line":  3030,
+                          "body_sha256":  "c0350bcbfd6825f010926ea482303987152a74fa243f5da63a40333713bbec48",
+                          "alerts":  [
+                                         "\u0027You have entered a filing year not ending in December. This filing will be considered as a Fiscal Year Filing.\u0027",
+                                         "\u0027You have entered a filing year ending in December. This filing will be considered as a Calendar Year Filing.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:itemFiscalStartMonth:_1",
+                                              "frm2553:itemFiscalStartMonth:_2",
+                                              "frm2553:itemYearEndMonth"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  3031,
+                          "end_line":  3082,
+                          "body_sha256":  "f9aca4a6b37f39f4a6b617091d06dacefffa43d21790daebe9fca1cc5c20bba7",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 6.\"",
+                                         "\"Please enter a valid RDO Code on Item 7.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 9.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:txtBranchCode",
+                                              "frm2553:txtRDOCode",
+                                              "frm2553:txtTIN1",
+                                              "frm2553:txtTIN2",
+                                              "frm2553:txtTIN3",
+                                              "frm2553:txtTPName"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  3170,
+                          "end_line":  3210,
+                          "body_sha256":  "2232b783a656da4136b3ebdab5a19f08f608380d4af0dfa3bb01a7ba416fce44",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2553:txtAddress",
+                                              "frm2553:txtBranchCode",
+                                              "frm2553:txtDescription",
+                                              "frm2553:txtRDOCode",
+                                              "frm2553:txtTelNum",
+                                              "frm2553:txtTIN1",
+                                              "frm2553:txtTIN2",
+                                              "frm2553:txtTIN3",
+                                              "frm2553:txtTPName",
+                                              "frm2553:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  3562,
+                          "end_line":  3575,
+                          "body_sha256":  "52ccee1d7987f14a7f3d603fffaae3ed9cd2a5d5d22aea407bdcea3d624593c7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  3773,
+                          "end_line":  3786,
+                          "body_sha256":  "b2de3d87b1305516855a2c21157d501b0ba75cb503b0603dff5bcce26578e3ac",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

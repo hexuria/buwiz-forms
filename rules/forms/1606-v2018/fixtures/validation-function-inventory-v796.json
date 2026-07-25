@@ -1,0 +1,625 @@
+{
+    "source_sha256":  "e7c7831e29cdd110a5cc325cb0bed7ee620684c21a483d59b25555c41d378a80",
+    "function_count":  21,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  1879,
+                          "end_line":  1963,
+                          "body_sha256":  "719d15b16f0dbf55bcbd3394186a97aab42226a49bd168fee4b4af883e15ef3b",
+                          "alerts":  [
+                                         "\"File \u0027\" + xmlFileName + \"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  1981,
+                          "end_line":  1993,
+                          "body_sha256":  "4d25be71968ce9e55a79ee650f929b27f1578d1a98300087c75f1f99bdb67415",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  2041,
+                          "end_line":  2319,
+                          "body_sha256":  "103f07ad587e94613d16eda9e84206d1f5557311441c6e1d750a5ad161ebd5a7",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:j_id217:_1",
+                                              "frm1606:j_id217:_2",
+                                              "frm1606:txtBranchCode",
+                                              "frm1606:txtBuyerAddress",
+                                              "frm1606:txtBuyerName",
+                                              "frm1606:txtCompromise",
+                                              "frm1606:txtDateMonth",
+                                              "frm1606:txtDateYear",
+                                              "frm1606:txtInterest",
+                                              "frm1606:txtRDOCode",
+                                              "frm1606:txtSellerAddress",
+                                              "frm1606:txtSellerName",
+                                              "frm1606:txtSurcharge",
+                                              "frm1606:txtTaxDue",
+                                              "frm1606:txtTIN1",
+                                              "frm1606:txtTIN2",
+                                              "frm1606:txtTIN3",
+                                              "frm1606:txtTotal",
+                                              "frm1606:txtTotalPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  2320,
+                          "end_line":  2514,
+                          "body_sha256":  "71b0b60d1128adf43055e6093d5edfb394aa4f728293ec6543e857a61cd8cb0a",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:j_id217:_1",
+                                              "frm1606:j_id217:_2",
+                                              "frm1606:txtBranchCode",
+                                              "frm1606:txtBuyerAddress",
+                                              "frm1606:txtBuyerName",
+                                              "frm1606:txtCompromise",
+                                              "frm1606:txtDateMonth",
+                                              "frm1606:txtDateYear",
+                                              "frm1606:txtInterest",
+                                              "frm1606:txtRDOCode",
+                                              "frm1606:txtSellerAddress",
+                                              "frm1606:txtSellerName",
+                                              "frm1606:txtSurcharge",
+                                              "frm1606:txtTaxDue",
+                                              "frm1606:txtTIN1",
+                                              "frm1606:txtTIN2",
+                                              "frm1606:txtTIN3",
+                                              "frm1606:txtTotal",
+                                              "frm1606:txtTotalPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "disableAllControl",
+                          "start_line":  2665,
+                          "end_line":  2752,
+                          "body_sha256":  "740a53728503a6bbc4258f95c8ba1be9eb74f9362b98ac6d85deefa71d3b4541",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:btnFinalCopy",
+                                              "frm1606:cmdEdit",
+                                              "frm1606:Habitual_1",
+                                              "frm1606:Habitual_2",
+                                              "frm1606:j_id217:_1",
+                                              "frm1606:j_id217:_2",
+                                              "frm1606:j_id252:_1",
+                                              "frm1606:j_id252:_2",
+                                              "frm1606:j_id392:_1",
+                                              "frm1606:j_id392:_2",
+                                              "frm1606:j_id393:_1",
+                                              "frm1606:j_id393:_2",
+                                              "frm1606:j_id393:_3",
+                                              "frm1606:j_id393:_4",
+                                              "frm1606:j_id393:_5",
+                                              "frm1606:j_id393:_6",
+                                              "frm1606:j_id393_7",
+                                              "frm1606:j_id393_8",
+                                              "frm1606:j_id394:_1",
+                                              "frm1606:j_id394:_2",
+                                              "frm1606:j_id395:_1",
+                                              "frm1606:j_id395:_2",
+                                              "frm1606:j_id395:_3",
+                                              "frm1606:j_id395:_4",
+                                              "frm1606:j_id395:_5",
+                                              "frm1606:opt28A",
+                                              "frm1606:opt28B",
+                                              "frm1606:opt28C",
+                                              "frm1606:opt28D",
+                                              "frm1606:opt28E",
+                                              "frm1606:optATC13_2",
+                                              "frm1606:optATC13_3",
+                                              "frm1606:rdTreaty:_1",
+                                              "frm1606:rdTreaty:_2",
+                                              "frm1606:selTreaty",
+                                              "frm1606:txtAmount",
+                                              "frm1606:txtArea",
+                                              "frm1606:txtBid",
+                                              "frm1606:txtBranchCode",
+                                              "frm1606:txtBranchCodeS",
+                                              "frm1606:txtBuyerAddress",
+                                              "frm1606:txtBuyerName",
+                                              "frm1606:txtCompromise",
+                                              "frm1606:txtCost",
+                                              "frm1606:txtDateDay",
+                                              "frm1606:txtDateMonth",
+                                              "frm1606:txtDateYear",
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVLI",
+                                              "frm1606:txtFMVZonal",
+                                              "frm1606:txtGross",
+                                              "frm1606:txtInstallment",
+                                              "frm1606:txtInterest",
+                                              "frm1606:txtLess",
+                                              "frm1606:txtLocation",
+                                              "frm1606:txtMortgage",
+                                              "frm1606:txtOthers",
+                                              "frm1606:txtOthers20",
+                                              "frm1606:txtOthers28E",
+                                              "frm1606:txtOtherss28E",
+                                              "frm1606:txtRDOCode",
+                                              "frm1606:txtRDOCode16A",
+                                              "frm1606:txtRDOCodeS",
+                                              "frm1606:txtSellerAddress",
+                                              "frm1606:txtSellerName",
+                                              "frm1606:txtSelling",
+                                              "frm1606:txtSheets",
+                                              "frm1606:txtSurcharge",
+                                              "frm1606:txtTaxDC",
+                                              "frm1606:txtTaxRate",
+                                              "frm1606:txtTCT",
+                                              "frm1606:txtTIN1",
+                                              "frm1606:txtTIN2",
+                                              "frm1606:txtTIN3",
+                                              "frm1606:txtTINS1",
+                                              "frm1606:txtTINS2",
+                                              "frm1606:txtTINS3",
+                                              "frm1606:txtTotalN",
+                                              "frm1606:txtTotalP"
+                                          ]
+                      },
+                      {
+                          "name":  "enableAllControl",
+                          "start_line":  2753,
+                          "end_line":  2890,
+                          "body_sha256":  "7b7daa73603b60a6291604b379e2d675cdeb86e2dd337d7d93685d364c6df7bd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:btnFinalCopy",
+                                              "frm1606:cmdEdit",
+                                              "frm1606:cmdValidate",
+                                              "frm1606:Habitual_1",
+                                              "frm1606:Habitual_2",
+                                              "frm1606:j_id217:_1",
+                                              "frm1606:j_id217:_2",
+                                              "frm1606:j_id252:_1",
+                                              "frm1606:j_id252:_2",
+                                              "frm1606:j_id392:_1",
+                                              "frm1606:j_id392:_2",
+                                              "frm1606:j_id393:_1",
+                                              "frm1606:j_id393:_2",
+                                              "frm1606:j_id393:_3",
+                                              "frm1606:j_id393:_4",
+                                              "frm1606:j_id393:_5",
+                                              "frm1606:j_id393:_6",
+                                              "frm1606:j_id393_7",
+                                              "frm1606:j_id393_8",
+                                              "frm1606:j_id394:_1",
+                                              "frm1606:j_id394:_2",
+                                              "frm1606:j_id395:_1",
+                                              "frm1606:j_id395:_2",
+                                              "frm1606:j_id395:_3",
+                                              "frm1606:j_id395:_4",
+                                              "frm1606:j_id395:_5",
+                                              "frm1606:opt28A",
+                                              "frm1606:opt28B",
+                                              "frm1606:opt28C",
+                                              "frm1606:opt28D",
+                                              "frm1606:opt28E",
+                                              "frm1606:opt37:_1",
+                                              "frm1606:opt37:_2",
+                                              "frm1606:optATC13_2",
+                                              "frm1606:optATC13_3",
+                                              "frm1606:rdTreaty:_1",
+                                              "frm1606:rdTreaty:_2",
+                                              "frm1606:selTreaty",
+                                              "frm1606:txtAmount",
+                                              "frm1606:txtArea",
+                                              "frm1606:txtBid",
+                                              "frm1606:txtBranchCode",
+                                              "frm1606:txtBranchCodeS",
+                                              "frm1606:txtBuyerAddress",
+                                              "frm1606:txtBuyerName",
+                                              "frm1606:txtCompromise",
+                                              "frm1606:txtCost",
+                                              "frm1606:txtDateDay",
+                                              "frm1606:txtDateMonth",
+                                              "frm1606:txtDateYear",
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVLI",
+                                              "frm1606:txtFMVZonal",
+                                              "frm1606:txtGross",
+                                              "frm1606:txtInstallment",
+                                              "frm1606:txtInterest",
+                                              "frm1606:txtLess",
+                                              "frm1606:txtLocation",
+                                              "frm1606:txtMortgage",
+                                              "frm1606:txtOthers",
+                                              "frm1606:txtOthers20",
+                                              "frm1606:txtOthers28E",
+                                              "frm1606:txtOtherss28E",
+                                              "frm1606:txtRDOCode",
+                                              "frm1606:txtRDOCode16A",
+                                              "frm1606:txtRDOCodeS",
+                                              "frm1606:txtSellerAddress",
+                                              "frm1606:txtSellerName",
+                                              "frm1606:txtSelling",
+                                              "frm1606:txtSheets",
+                                              "frm1606:txtSurcharge",
+                                              "frm1606:txtTaxDC",
+                                              "frm1606:txtTaxRate",
+                                              "frm1606:txtTCT",
+                                              "frm1606:txtTIN1",
+                                              "frm1606:txtTIN2",
+                                              "frm1606:txtTIN3",
+                                              "frm1606:txtTINS1",
+                                              "frm1606:txtTINS2",
+                                              "frm1606:txtTINS3",
+                                              "frm1606:txtTotal",
+                                              "frm1606:txtTotalN",
+                                              "frm1606:txtTotalP"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  2911,
+                          "end_line":  3137,
+                          "body_sha256":  "331e889e883868664a74894aca27f08de70c1bef31a4afe4fa604794cbe9e8c1",
+                          "alerts":  [
+                                         "\"Please enter a valid month on item 1. Format should be MM/DD/YYYY.\") return; } if (d1.length == 1) { alert(\"Please enter a valid day on item 1. Format should be MM/DD/YYYY.\") return; } var isLeap = new Date(document.getElementById(\u0027frm1606:txtDateYear\u0027).value, 1, 29).getMonth() == 1; if (!isLeap \u0026\u0026 document.getElementById(\u0027frm1606:txtDateMonth\u0027).value == 2 \u0026\u0026 document.getElementById(\u0027frm1606:txtDateDay\u0027).value == 29) { alert(\"Filing year is not a leap year.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\"",
+                                         "\"Invalid month entry on Item no.1. Please enter a valid month.\") return; } if ((document.getElementById(\u0027frm1606:txtDateMonth\u0027).value == \"\")) { alert(\"Please enter a valid month on Item 1.\"",
+                                         "\"Invalid day entry on Item no.1. Please enter a valid day.\") return; }*/ if ((document.getElementById(\u0027frm1606:txtDateDay\u0027).value == \"\")) { alert(\"Please enter a valid day on Item 1.\"",
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\") return; }*/ if (document.getElementById(\u0027frm1606:txtDateYear\u0027).value * 1 \u003c 1904) { alert(\"Invalid year entry on Item no.1. Year should not be lower than 1904.\") return; } if (document.getElementById(\u0027frm1606:j_id217:_1\u0027).checked == false \u0026\u0026 document.getElementById(\u0027frm1606:j_id217:_2\u0027).checked == false) { alert(\"Please choose amended return on item 2.\") return; } if (document.getElementById(\u0027frm1606:j_id252:_1\u0027).checked == false \u0026\u0026 document.getElementById(\u0027frm1606:j_id252:_2\u0027).checked == false) { alert(\"Please select an option for Item 4.\") return; } if ((document.getElementById(\u0027frm1606:txtTIN1\u0027).value == \"\")) { alert(\"Please enter the Buyer\u0027s TIN.\") return; } if ((document.getElementById(\u0027frm1606:txtTIN2\u0027).value == \"\")) { alert(\"Please enter the Buyer\u0027s TIN.\") return; } if ((document.getElementById(\u0027frm1606:txtTIN3\u0027).value == \"\")) { alert(\"Please enter the Buyer\u0027s TIN.\") return; } if ((document.getElementById(\u0027frm1606:txtBranchCode\u0027).value == \"\")) { alert(\"Please enter the Buyer\u0027s TIN.\") return; } if ((document.getElementById(\u0027frm1606:txtRDOCode\u0027).selectedIndex == 0)) { alert(\"Please enter the Buyer\u0027s RDO Code.\") return; } if ((document.getElementById(\u0027frm1606:txtTINS1\u0027).value == \"\")) { alert(\"Please enter the Seller\u0027s TIN.\") return; } if ((document.getElementById(\u0027frm1606:txtTINS2\u0027).value == \"\")) { alert(\"Please enter the Seller\u0027s TIN.\") return; } if ((document.getElementById(\u0027frm1606:txtTINS3\u0027).value == \"\")) { alert(\"Please enter the Seller\u0027s TIN.\") return; } if ((document.getElementById(\u0027frm1606:txtBranchCodeS\u0027).value == \"\")) { alert(\"Please enter the Seller\u0027s TIN.\") return; } if (buyer.localeCompare(seller) == 0) { alert(\"TIN for Buyer and Seller should be different.\") return; } if ((document.getElementById(\u0027frm1606:txtRDOCodeS\u0027).selectedIndex == 0)) { alert(\"Please enter the Seller\u0027s RDO Code.\") return; } if ((document.getElementById(\u0027frm1606:txtBuyerName\u0027).value == \"\")) { alert(\"Please enter the Buyer\u0027s Name.\") return; } if ((document.getElementById(\u0027frm1606:txtSellerName\u0027).value == \"\")) { alert(\"Please enter the Seller\u0027s Name.\") return; } if ((document.getElementById(\u0027frm1606:txtBuyerAddress\u0027).value == \"\")) { alert(\"Please enter the Buyer\u0027s Address.\") return; } if (document.getElementById(\u0027frm1606:optATC13_2\u0027).checked == false \u0026\u0026 document.getElementById(\u0027frm1606:optATC13_3\u0027).checked == false) { alert(\"Please select an option for Item 13.\"",
+                                         "\"Please select an option for Item 14.\"",
+                                         "\"Please select an option for Item 15.\"",
+                                         "\"Please enter the Location of the Property on Item 16.\") return; } if ((document.getElementById(\u0027frm1606:txtRDOCode16A\u0027).selectedIndex == 0)) { alert(\"Please enter the RDO Code on Item 16A.\") return; } if ((document.getElementById(\u0027frm1606:txtTCT\u0027).value == \"\")) { alert(\"Please enter the TCT/OCT/CCT No.\") return; } //JTrac779: 1606 -offline default value of item 19. //dgarfin 01/29/13: Added validation to ensure that when \u0027frm1606:rdTreaty:_1\u0027 is checked, //Tax Relief dropdown should have a value. if (document.getElementById(\u0027frm1606:rdTreaty:_1\u0027).checked == true \u0026\u0026 (document.getElementById(\u0027frm1606:selTreaty\u0027).selectedIndex == 0)) { alert(\"Please select a tax relief for Item 19.\") return; } /*if ( document.getElementById(\u0027frm1606:j_id395:_1\u0027).checked == true \u0026\u0026 (document.getElementById(\u0027frm1606:txtFMVLand\u0027).value \u003c= 0) ) { alert(\"Please provide a valid value for 27A.\") return; } if ( document.getElementById(\u0027frm1606:j_id395:_1\u0027).checked == true \u0026\u0026 document.getElementById(\u0027frm1606:txtFMVImprovements\u0027).value \u003c= 0 ) { alert(\"Please provide a valid value for 27B.\") return; } if ( document.getElementById(\u0027frm1606:j_id395:_1\u0027).checked == true \u0026\u0026 document.getElementById(\u0027frm1606:txtFMVZonal\u0027).value \u003c= 0 ) { alert(\"Please provide a valid value for 27C.\") return; } if ( document.getElementById(\u0027frm1606:j_id395:_1\u0027).checked == true \u0026\u0026 document.getElementById(\u0027frm1606:txtFMVBIR\u0027).value \u003c= 0 ) { alert(\"Please provide a valid value for 27D.\") return; }*/ //if ( (document.getElementById(\u0027frm1606:opt27A\u0027).checked == true \u0026\u0026 document.getElementById(\u0027frm1606:opt27C\u0027).checked == true \u0026\u0026 document.getElementById(\u0027frm1606:opt27B\u0027).checked == false \u0026\u0026 document.getElementById(\u0027frm1606:opt27D\u0027).checked == false) || (document.getElementById(\u0027frm1606:opt27B\u0027).checked == true \u0026\u0026 document.getElementById(\u0027frm1606:opt27D\u0027).checked == true \u0026\u0026 document.getElementById(\u0027frm1606:opt27A\u0027).checked == false \u0026\u0026 document.getElementById(\u0027frm1606:opt27C\u0027).checked == false) ) //{ // alert(\"Selected combination on Item 27 is not allowed.\") // return; //} // all forms validate with entry document.getElementById(\u0027frm1606:cmdValidate\u0027).disabled = true; document.getElementById(\u0027frm1606:cmdEdit\u0027).disabled = false; d.getElementById(\u0027btnUpload\u0027).disabled = false; //document.getElementById(\u0027btnSave\u0027).disabled = false; disableAllControl(",
+                                         "\"Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:cmdEdit",
+                                              "frm1606:cmdValidate",
+                                              "frm1606:j_id217:_1",
+                                              "frm1606:j_id217:_2",
+                                              "frm1606:j_id252:_1",
+                                              "frm1606:j_id252:_2",
+                                              "frm1606:j_id392:_1",
+                                              "frm1606:j_id392:_2",
+                                              "frm1606:j_id393:_1",
+                                              "frm1606:j_id393:_2",
+                                              "frm1606:j_id393:_3",
+                                              "frm1606:j_id393:_4",
+                                              "frm1606:j_id393:_5",
+                                              "frm1606:j_id393:_6",
+                                              "frm1606:j_id393_8",
+                                              "frm1606:j_id395:_1",
+                                              "frm1606:opt27A",
+                                              "frm1606:opt27B",
+                                              "frm1606:opt27C",
+                                              "frm1606:opt27D",
+                                              "frm1606:optATC13_2",
+                                              "frm1606:optATC13_3",
+                                              "frm1606:rdTreaty:_1",
+                                              "frm1606:selTreaty",
+                                              "frm1606:txtBranchCode",
+                                              "frm1606:txtBranchCodeS",
+                                              "frm1606:txtBuyerAddress",
+                                              "frm1606:txtBuyerName",
+                                              "frm1606:txtDateDay",
+                                              "frm1606:txtDateMonth",
+                                              "frm1606:txtDateYear",
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVZonal",
+                                              "frm1606:txtLocation",
+                                              "frm1606:txtRDOCode",
+                                              "frm1606:txtRDOCode16A",
+                                              "frm1606:txtRDOCodeS",
+                                              "frm1606:txtSellerName",
+                                              "frm1606:txtTCT",
+                                              "frm1606:txtTIN1",
+                                              "frm1606:txtTIN2",
+                                              "frm1606:txtTIN3",
+                                              "frm1606:txtTINS1",
+                                              "frm1606:txtTINS2",
+                                              "frm1606:txtTINS3"
+                                          ]
+                      },
+                      {
+                          "name":  "enableSelTreaty",
+                          "start_line":  3138,
+                          "end_line":  3149,
+                          "body_sha256":  "42f6f5f12e83bee59c9a302fac46bc3a99b95655e1f3b94f4ed66a13baecb9f5",
+                          "alerts":  [
+                                         "\"Please select an option for Item 14.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:j_id392:_1",
+                                              "frm1606:j_id392:_2",
+                                              "frm1606:rdTreaty:_2",
+                                              "frm1606:selTreaty"
+                                          ]
+                      },
+                      {
+                          "name":  "disableSelTreaty",
+                          "start_line":  3150,
+                          "end_line":  3155,
+                          "body_sha256":  "2d9e8117c190049b1f2e3176b7b28a2ba2b650f56fe82ad73050b4bab48c069c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:selTreaty"
+                                          ]
+                      },
+                      {
+                          "name":  "checkTIN",
+                          "start_line":  3195,
+                          "end_line":  3208,
+                          "body_sha256":  "5126e1043f4d9431a4529919e0b2d87e7f65c26f575a7a52e980bdab3827a47c",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:dtSched:txtTin"
+                                          ]
+                      },
+                      {
+                          "name":  "checkiftaxwheldisYes",
+                          "start_line":  3209,
+                          "end_line":  3221,
+                          "body_sha256":  "676b53e90f46f6b953c54bfdba95cb169d93c1e981448d5f33cc0886aaf14ac4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:j_id252:_1",
+                                              "frm1606:j_id252:_2",
+                                              "frm1606:j_id392:_1",
+                                              "frm1606:j_id392:_2"
+                                          ]
+                      },
+                      {
+                          "name":  "checkTINlength",
+                          "start_line":  3222,
+                          "end_line":  3229,
+                          "body_sha256":  "a2d3e2afd9127c6de1f8cee473fd688cde3abaaf7978ad1e3be0f379ca8148d6",
+                          "alerts":  [
+                                         "\"TIN not valid\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enableInstallment",
+                          "start_line":  3230,
+                          "end_line":  3266,
+                          "body_sha256":  "116d046f698851c5a855466916ed6c81927b398e6e32283490e96679679f9393",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:opt27A",
+                                              "frm1606:opt27B",
+                                              "frm1606:opt27C",
+                                              "frm1606:opt27D",
+                                              "frm1606:opt28A",
+                                              "frm1606:opt28B",
+                                              "frm1606:opt28C",
+                                              "frm1606:opt28D",
+                                              "frm1606:opt28E",
+                                              "frm1606:txtAmount",
+                                              "frm1606:txtBid",
+                                              "frm1606:txtCost",
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVLI",
+                                              "frm1606:txtFMVZonal",
+                                              "frm1606:txtGross",
+                                              "frm1606:txtInstallment",
+                                              "frm1606:txtMortgage",
+                                              "frm1606:txtOthers20",
+                                              "frm1606:txtOthers28E",
+                                              "frm1606:txtOtherss28E",
+                                              "frm1606:txtSelling",
+                                              "frm1606:txtTotalN",
+                                              "frm1606:txtTotalP"
+                                          ]
+                      },
+                      {
+                          "name":  "enableExempt",
+                          "start_line":  3267,
+                          "end_line":  3309,
+                          "body_sha256":  "3b5250076c569479143426dd199fcce3671c0d1b83b1c677ed04b174be7f43d8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:opt27A",
+                                              "frm1606:opt27B",
+                                              "frm1606:opt27C",
+                                              "frm1606:opt27D",
+                                              "frm1606:opt28A",
+                                              "frm1606:opt28B",
+                                              "frm1606:opt28C",
+                                              "frm1606:opt28D",
+                                              "frm1606:opt28E",
+                                              "frm1606:txtAmount",
+                                              "frm1606:txtBid",
+                                              "frm1606:txtCost",
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVLI",
+                                              "frm1606:txtFMVZonal",
+                                              "frm1606:txtGross",
+                                              "frm1606:txtInstallment",
+                                              "frm1606:txtMortgage",
+                                              "frm1606:txtOthers20",
+                                              "frm1606:txtOthers28E",
+                                              "frm1606:txtOtherss28E",
+                                              "frm1606:txtSelling",
+                                              "frm1606:txtTotalN",
+                                              "frm1606:txtTotalP"
+                                          ]
+                      },
+                      {
+                          "name":  "tickCheckboxWithValue",
+                          "start_line":  3475,
+                          "end_line":  3490,
+                          "body_sha256":  "2ed3e4070160050c76205cbf33432193f1e2999a4cfdcebacdd9867e4e1c5ff6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:opt27A",
+                                              "frm1606:opt27B",
+                                              "frm1606:opt27C",
+                                              "frm1606:opt27D",
+                                              "frm1606:txtFMVBIR",
+                                              "frm1606:txtFMVImprovements",
+                                              "frm1606:txtFMVLand",
+                                              "frm1606:txtFMVZonal"
+                                          ]
+                      },
+                      {
+                          "name":  "disablePart2",
+                          "start_line":  3501,
+                          "end_line":  3517,
+                          "body_sha256":  "822eab250353761cf8709b7803ba0fbbf1cb4167cfd3f931a09480f349bc93b3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:opt37:_1",
+                                              "frm1606:opt37:_2",
+                                              "frm1606:txtCompromise",
+                                              "frm1606:txtInterest",
+                                              "frm1606:txtLess",
+                                              "frm1606:txtSurcharge",
+                                              "frm1606:txtTax",
+                                              "frm1606:txtTaxDue",
+                                              "frm1606:txtTaxR",
+                                              "frm1606:txtTaxRate",
+                                              "frm1606:txtTotal",
+                                              "frm1606:txtTotalPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "enablePart2",
+                          "start_line":  3518,
+                          "end_line":  3534,
+                          "body_sha256":  "bf67982cd479578b8b7c18c896ccfe72d6a8669ff7719b28f16998bc38e0388d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:opt37:_1",
+                                              "frm1606:opt37:_2",
+                                              "frm1606:txtCompromise",
+                                              "frm1606:txtInterest",
+                                              "frm1606:txtLess",
+                                              "frm1606:txtSurcharge",
+                                              "frm1606:txtTax",
+                                              "frm1606:txtTaxDue",
+                                              "frm1606:txtTaxR",
+                                              "frm1606:txtTaxRate",
+                                              "frm1606:txtTotal",
+                                              "frm1606:txtTotalPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  3535,
+                          "end_line":  3589,
+                          "body_sha256":  "224ea543c4f0bc5a7ee32b5738114dc2f9d2fe868413a066a5d887c0edba34b3",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid Buyer\u0027s RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Buyer\u0027s Name on Item 9.\"",
+                                         "\"Please enter the TCT/OCT/CCT No.\") return false; } return true; } //topNav $(document).ready(function () { $(\"ul.subnav\").parent().append(\"\u003cspan\u003e\u003c/span\u003e\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:txtBranchCode",
+                                              "frm1606:txtBuyerName",
+                                              "frm1606:txtRDOCode",
+                                              "frm1606:txtTCT",
+                                              "frm1606:txtTIN1",
+                                              "frm1606:txtTIN2",
+                                              "frm1606:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  3676,
+                          "end_line":  3714,
+                          "body_sha256":  "5502d6f91777e479468a8ee941b1e096b8b6ddf2b48addceb56fd8db0a655ecd",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1606:txtBranchCode",
+                                              "frm1606:txtBuyerAddress",
+                                              "frm1606:txtBuyerName",
+                                              "frm1606:txtRDOCode",
+                                              "frm1606:txtTIN1",
+                                              "frm1606:txtTIN2",
+                                              "frm1606:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  4051,
+                          "end_line":  4064,
+                          "body_sha256":  "ddedfad6595ce516f29f629525fa6d838bd9d0b04c294ac4e730d663036e693c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  4248,
+                          "end_line":  4261,
+                          "body_sha256":  "a11990830f29ce3f8d157bced0d5cd876f18fa8126489e8fc7085f3b854de8f2",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

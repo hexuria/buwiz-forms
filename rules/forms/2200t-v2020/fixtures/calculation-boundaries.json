@@ -1,0 +1,31 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200t-v2020",
+    "cases":  [
+                  {
+                      "case_id":  "schedule-total",
+                      "calculation_id":  "2200t-schedule-total",
+                      "official_output":  300.5,
+                      "due_values":  [
+                                         100.25,
+                                         200.25
+                                     ]
+                  },
+                  {
+                      "entered_due":  0,
+                      "recommended_output":  231,
+                      "printed_rate":  2.31,
+                      "calculation_id":  "2200t-schedule-total",
+                      "case_id":  "row-due-not-computed",
+                      "taxable_base":  100,
+                      "official_output":  0
+                  },
+                  {
+                      "case_id":  "part3-balance",
+                      "item22":  1200,
+                      "calculation_id":  "2200t-item24-balance",
+                      "official_output":  100,
+                      "item23c":  1100
+                  }
+              ]
+}

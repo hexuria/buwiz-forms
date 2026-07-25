@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/field.schema.json",
+  "title": "eBIRForms executable rules IR v2 fields and serialized occurrences",
+  "$defs": {
+    "serialized_occurrence": {
+      "type": "object",
+      "required": [
+        "serialized_key",
+        "occurrence",
+        "document",
+        "presence",
+        "default_value"
+      ],
+      "properties": {
+        "serialized_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "occurrence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "document": {
+          "enum": [
+            "editable-save",
+            "final-copy"
+          ]
+        },
+        "presence": {
+          "enum": [
+            "always",
+            "conditional",
+            "generated",
+            "omitted"
+          ]
+        },
+        "default_value": {
+          "$ref": "common.schema.json#/$defs/typed_value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_group": {
+      "type": "object",
+      "required": [
+        "group_id",
+        "min_occurs",
+        "max_occurs",
+        "instance_identity",
+        "members",
+        "source_refs"
+      ],
+      "properties": {
+        "group_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "min_occurs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_occurs": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instance_identity": {
+          "enum": [
+            "assigned-stable-id",
+            "assigned-uuid",
+            "official-row-id",
+            "serialized-occurrence-key"
+          ]
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_behavior_executable": {
+      "type": "object",
+      "required": [
+        "state",
+        "normalization",
+        "coercion",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "state": {
+          "const": "executable"
+        },
+        "normalization": {
+          "$ref": "normalization.schema.json#/$defs/pipeline"
+        },
+        "coercion": {
+          "$ref": "coercion.schema.json#/$defs/coercion"
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_behavior_branch": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/field_behavior_executable"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    },
+    "field_behavior": {
+      "type": "object",
+      "required": [
+        "official",
+        "filing_safe"
+      ],
+      "properties": {
+        "official": {
+          "$ref": "#/$defs/field_behavior_branch"
+        },
+        "filing_safe": {
+          "$ref": "#/$defs/field_behavior_branch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field": {
+      "type": "object",
+      "required": [
+        "field_id",
+        "value_type",
+        "control_kind",
+        "requiredness",
+        "group_id",
+        "calculation_id",
+        "serialized",
+        "behavior",
+        "source_refs"
+      ],
+      "properties": {
+        "field_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "value_type": {
+          "$ref": "common.schema.json#/$defs/value_type"
+        },
+        "control_kind": {
+          "enum": [
+            "text",
+            "textarea",
+            "checkbox",
+            "radio",
+            "select",
+            "date",
+            "currency",
+            "hidden",
+            "computed",
+            "serialized-only"
+          ]
+        },
+        "requiredness": {
+          "enum": [
+            "required",
+            "optional",
+            "conditional",
+            "computed",
+            "hidden"
+          ]
+        },
+        "group_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calculation_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serialized": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/serialized_occurrence"
+          },
+          "uniqueItems": true
+        },
+        "behavior": {
+          "$ref": "#/$defs/field_behavior"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

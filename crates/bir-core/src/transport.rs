@@ -26,7 +26,10 @@ const BIR_FTP_PASS: &str = "12birBIR";
 /// `form_type` must match exactly the subfolder name on the BIR server (e.g., "2551Qv2018").
 /// `filename` must be the IAF filename (e.g., "010558054000-2551Qv2018-122026Q1#email@.xml").
 /// `payload` is the raw encrypted bytes of the IAF file.
-pub async fn submit_iaf(
+///
+/// This raw irreversible boundary is crate-internal. External callers must not
+/// bypass the reviewed Final Copy, queue-admission, and claim workflows.
+pub(crate) async fn submit_iaf(
     form_type: &str,
     filename: &str,
     payload: &[u8],

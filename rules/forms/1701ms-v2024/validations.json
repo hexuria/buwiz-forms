@@ -1,0 +1,1612 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701ms-v2024",
+    "revision":  "2024-08-01",
+    "first_error_behavior":  "validate() and each modal row validator alert and return at the first active failing branch. Change handlers may also reset/disable values immediately.",
+    "rules":  [
+                  {
+                      "rule_id":  "1701ms-save-001",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any taxpayer TIN segment or branch code on the first-page copy is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtPg1TIN1",
+                                     "frm1701MS:txtPg1TIN2",
+                                     "frm1701MS:txtPg1TIN3",
+                                     "frm1701MS:txtPg1BranchCode"
+                                 ],
+                      "accepted_behavior":  "All four are nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5533-L5539"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save checks only nonblank TIN components and nothing else.",
+                      "recommended_app_behavior":  "Preserve incomplete drafts losslessly; validate TIN shape/checksum before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-save-002",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Any non-TIN field, spouse field, schedule, calculation, or perjury choice is invalid.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Save still proceeds after the four nonblank TIN checks.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5533-L5539",
+                                          "official-hta-runtime#saveXML:L6776-L7060"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The draft preflight is intentionally narrow.",
+                      "recommended_app_behavior":  "Keep lossless draft saving but surface completeness separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-001",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Non-short-period return year is greater than or equal to the current calendar year.",
+                      "fields":  [
+                                     "frm1701MS:txtReturnPeriodYesNo3",
+                                     "frm1701MS:txtYearNo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Current-year annual filing is rejected along with future years.",
+                      "exact_message":  "Future filing is not allowed. Please input correct year on Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7644-L7650"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "Current-year annual filing is rejected along with future years.",
+                      "recommended_app_behavior":  "Apply the filing-period rules from the August 2024 guide explicitly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-002",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Short-period month is later than current month and year is current/future.",
+                      "fields":  [
+                                     "frm1701MS:txtReturnPeriodYesNo3",
+                                     "frm1701MS:txtMonthNo1",
+                                     "frm1701MS:txtYearNo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The message cites year even when month triggers.",
+                      "exact_message":  "Future filing is not allowed. Please input correct year on Item 1",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7651-L7656"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The message cites year even when month triggers.",
+                      "recommended_app_behavior":  "Use a period-specific message.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-003",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Civil status is Married and no Item 5 filing choice is checked.",
+                      "fields":  [
+                                     "frm1701MS:civilStatus",
+                                     "frm1701MS:txtIfMarriedJointlyNo5",
+                                     "frm1701MS:txtIfMarriedSeparatelyNo5",
+                                     "frm1701MS:txtIfMarriedNotApplicableNo5"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Item 5 is required if Item 4 is marked as Married.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7661-L7670"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-004",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Joint filing and any spouse TIN component is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtPg2TIN1Spouse",
+                                     "frm1701MS:txtPg2TIN2Spouse",
+                                     "frm1701MS:txtPg2TIN3Spouse",
+                                     "frm1701MS:txtPg2BranchCodeSpouse"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Only nonblankness is checked.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6 for Spouse",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7674-L7683"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-005",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Joint filing and spouse RDO is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtRDOCodeb"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Blank spouse RDO is rejected.",
+                      "exact_message":  "Please enter a valid RDO code for Spouse on Item 7",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7684-L7687"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Blank spouse RDO is rejected.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-006",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Joint filing and spouse name is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo8b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Blank spouse name is rejected.",
+                      "exact_message":  "Please enter a valid Name for Spouse on Item 8",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7688-L7691"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Blank spouse name is rejected.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-007",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Joint filing and spouse email is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtEmailb"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Only nonblankness is checked; malformed email passes.",
+                      "exact_message":  "Please enter a valid Email Address for Spouse on Item 9",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7692-L7696"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked; malformed email passes.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-008",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Joint filing and spouse contact number is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtTelNum10b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Only nonblankness is checked; malformed phone passes.",
+                      "exact_message":  "Please enter a valid Contact Number for Spouse on Item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7698-L7702"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked; malformed phone passes.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-009",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Joint filing and taxpayer Item 11 has no selection.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo11a",
+                                     "frm1701MS:txtTaxpayerNo11b",
+                                     "frm1701MS:txtTaxpayerNo11c"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Taxpayer Item 11 is checked only inside the joint-filing branch.",
+                      "exact_message":  "Please select an option on Item 11 for Taxpayer",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7704-L7711"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Taxpayer Item 11 is checked only inside the joint-filing branch.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-010",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Joint filing and spouse Item 11 has no selection.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo11a1",
+                                     "frm1701MS:txtTaxpayerNo11b1",
+                                     "frm1701MS:txtTaxpayerNo11c1",
+                                     "frm1701MS:txtTaxpayerNo11d1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Joint spouse source of income is required.",
+                      "exact_message":  "Please select an option on Item 11 for Spouse",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7713-L7721"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Joint spouse source of income is required.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-011",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Joint filing and spouse Item 12 has no selection.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo12b1",
+                                     "frm1701MS:txtTaxpayerNo12c1",
+                                     "frm1701MS:txtTaxpayerNo12d1",
+                                     "frm1701MS:txtTaxpayerNo12e1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Joint spouse tax regime is required.",
+                      "exact_message":  "Item 12 is required if Item 5 is marked as Jointly.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7723-L7731"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Joint spouse tax regime is required.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-012",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Joint spouse uses relevant business income with graduated rates and no Item 17 deduction method.",
+                      "fields":  [
+                                     "frm1701MS:txtSpouseNo17a",
+                                     "frm1701MS:txtSpouseNo17b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Deduction method is required for the branch.",
+                      "exact_message":  "Item 17 is mandatory if Item 11 is Income from Business, Mixed Income and Income from Profession and Item 12 is Graduated Income Tax Rates.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7741-L7748"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Deduction method is required for the branch.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-013",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Aggregate Item 30 is negative and no Item 31 disposition is checked.",
+                      "fields":  [
+                                     "frm1701MS:txtAggregateAmountPayable30a",
+                                     "frm1701MS:txtToBeRefunded",
+                                     "frm1701MS:txtToBeIssued",
+                                     "frm1701MS:txtToBeCarried"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Negative aggregate requires disposition; message has duplicated grammar.",
+                      "exact_message":  "Item 31 is mandatory because Item 30 is has negative value.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7768-L7778"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Negative aggregate requires disposition; message has duplicated grammar.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-014",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Selected Item 31 amounts do not exactly equal abs(Item 27A + Item 27B).",
+                      "fields":  [
+                                     "frm1701MS:txtAmountPayableNo27a",
+                                     "frm1701MS:txtAmountPayableNo27b",
+                                     "frm1701MS:txtToBeRefunded1",
+                                     "frm1701MS:txtToBeIssued1",
+                                     "frm1701MS:txtToBeCarried1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Strict JavaScript number equality is used against abs(27A+27B), not Item 30.",
+                      "exact_message":  "The total amount in Item 31 must equal the sum of Item 27A and Item 27B ({amount}).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7780-L7791"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "Strict JavaScript number equality is used against abs(27A+27B), not Item 30.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-015",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Foreign-tax amount exists in either column but Item 7 reference text is blank.",
+                      "fields":  [
+                                     "frm1701MS:addForeignTaxCredits",
+                                     "frm1701MS:txtForeignTaxCreditsNo7a",
+                                     "frm1701MS:txtForeignTaxCreditsNo7b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Cross-column reference requirement is active.",
+                      "exact_message":  "Part V - Item 7 Foreign Tax Credits is mandatory if the amount column has value.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7852-L7868"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Cross-column reference requirement is active.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-016",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Foreign-tax reference exists but both amount columns are blank/zero.",
+                      "fields":  [
+                                     "frm1701MS:addForeignTaxCredits",
+                                     "frm1701MS:txtForeignTaxCreditsNo7a",
+                                     "frm1701MS:txtForeignTaxCreditsNo7b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "At least one amount is required.",
+                      "exact_message":  "Part V - Item 7 Foreign Tax Amount is mandatory if Foreign Tax Credits field has value.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7869-L7874"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "At least one amount is required.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-017",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Other-credit amount exists in either column but Item 9 description is blank.",
+                      "fields":  [
+                                     "frm1701MS:addOtherCreditsPayments",
+                                     "frm1701MS:txtOtherCreditsPaymentsNo9a",
+                                     "frm1701MS:txtOtherCreditsPaymentsNo9b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Cross-column description requirement is active.",
+                      "exact_message":  "Part V - Item 9 Other Credits/Payments is mandatory if the Amount column has value.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7876-L7892"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Cross-column description requirement is active.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-018",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Other-credit description exists but both amount columns are blank/zero.",
+                      "fields":  [
+                                     "frm1701MS:addOtherCreditsPayments",
+                                     "frm1701MS:txtOtherCreditsPaymentsNo9a",
+                                     "frm1701MS:txtOtherCreditsPaymentsNo9b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "At least one amount is required.",
+                      "exact_message":  "Part V - Item 9 Amount is mandatory if the Other Credits/Payments field has value.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7893-L7898"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "At least one amount is required.",
+                      "recommended_app_behavior":  "Retain with decimal-safe presence tests.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-019",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Year or month is NaN.",
+                      "fields":  [
+                                     "frm1701MS:txtYearNo1",
+                                     "frm1701MS:txtMonthNo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Coercive isNaN is used.",
+                      "exact_message":  "Please enter a valid year and month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7919-L7923"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Coercive isNaN is used.",
+                      "recommended_app_behavior":  "Validate exact month/year syntax.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-020",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Year is greater than current year.",
+                      "fields":  [
+                                     "frm1701MS:txtYearNo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Future filing is not allowed. Please enter a valid year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7925-L7929"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-021",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Year strictly equals numeric currentYear and month is later than current month.",
+                      "fields":  [
+                                     "frm1701MS:txtYearNo1",
+                                     "frm1701MS:txtMonthNo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The DOM year is a string, so strict equality with numeric currentYear is false and this duplicate guard does not fire.",
+                      "exact_message":  "Future filing is not allowed. Please enter a valid month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7931-L7935"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The DOM year is a string, so strict equality with numeric currentYear is false and this duplicate guard does not fire.",
+                      "recommended_app_behavior":  "Parse year once and compare typed values.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-022",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Any taxpayer TIN component on the page-two copy is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtPg2TIN1",
+                                     "frm1701MS:txtPg2TIN2",
+                                     "frm1701MS:txtPg2TIN3",
+                                     "frm1701MS:txtPg2BranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "Only nonblankness is checked.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7938-L7945"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked.",
+                      "recommended_app_behavior":  "Validate lengths, digits, branch, and checksum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-023",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Month or year is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtMonthNo1",
+                                     "frm1701MS:txtYearNo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Item 1 is a required field.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7949-L7954"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-024",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Taxpayer RDO is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtRDOCodea"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Please enter a valid RDO code on Item 7",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7956-L7960"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-025",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo8a"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7962-L7966"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-026",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Taxpayer email is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtEmaila"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Please enter a valid Email Address on Item 9",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7970-L7974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-027",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Taxpayer contact number is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtTelNum10a"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Please enter a valid Contact Number on Item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7976-L7980"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-028",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Taxpayer Item 12 has no selection.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo12b",
+                                     "frm1701MS:txtTaxpayerNo12c",
+                                     "frm1701MS:txtTaxpayerNo12d",
+                                     "frm1701MS:txtTaxpayerNo12e"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Taxpayer Item 12 is a required field ",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7984-L7987"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-029",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Taxpayer exempt/special regime selected and any Item 13-16 detail is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo13a",
+                                     "frm1701MS:txtTaxpayerNo14a",
+                                     "frm1701MS:txtTaxpayerNo15a",
+                                     "frm1701MS:txtTaxpayerNo16a",
+                                     "frm1701MS:txtTaxpayerNo16a1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Please make sure to enter details on Item 13 to 16 on Taxpayer",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7991-L7995"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-030",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Spouse exempt/special regime selected and any Item 13-16 detail is blank.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo13b",
+                                     "frm1701MS:txtTaxpayerNo14b",
+                                     "frm1701MS:txtTaxpayerNo15b",
+                                     "frm1701MS:txtTaxpayerNo16b",
+                                     "frm1701MS:txtTaxpayerNo16b1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Please make sure to enter details on Item 13 to 16 on Spouse",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7997-L8001"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-031",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "Taxpayer business/mixed/profession with graduated rates and no Item 17 choice.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo17a",
+                                     "frm1701MS:txtTaxpayerNo17b"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "Item 17 is mandatory if Item 11 is Income from Business, Mixed Income and Income from Profession and Item 12 is Graduated Income Tax Rates.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8003-L8009"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-032",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Perjury clause is unchecked.",
+                      "fields":  [
+                                     "frm1701MS:perjuryClause"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The first matching branch alerts and returns.",
+                      "exact_message":  "You need to agree to the Perjury Clause.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L8014-L8022"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first matching branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-033",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Taxpayer Item 11 is blank during a non-joint filing.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo11a",
+                                     "frm1701MS:txtTaxpayerNo11b",
+                                     "frm1701MS:txtTaxpayerNo11c"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "The Item 11 check is nested inside the joint-filing branch, so non-joint returns bypass it.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7704-L7711,8031-L8033"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The Item 11 check is nested inside the joint-filing branch, so non-joint returns bypass it.",
+                      "recommended_app_behavior":  "Require taxpayer source of income for every applicable filer.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-034",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "Amended yes/no, short-period yes/no, civil status, amounts, schedules, or computed consistency is otherwise missing/invalid.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false and validation continues.",
+                      "rejected_behavior":  "No general completeness or calculation-consistency pass exists.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7629-L8034"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "No general completeness or calculation-consistency pass exists.",
+                      "recommended_app_behavior":  "Validate every applicable branch and recompute before locking.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-001",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Short-period return is selected with month/year not equal to the current month/year.",
+                      "fields":  [
+                                     "frm1701MS:txtReturnPeriodYesNo3",
+                                     "frm1701MS:txtMonthNo1",
+                                     "frm1701MS:txtYearNo1"
+                                 ],
+                      "accepted_behavior":  "Current month/year passes.",
+                      "rejected_behavior":  "Change validation rejects.",
+                      "exact_message":  "For short period return, the month should be the current month and the year should be the current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateCurrentYear:L9692-L9727"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "Short-period filing is hard-coded to the runtime current month.",
+                      "recommended_app_behavior":  "Use the legally valid short-period end date range.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-002",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Non-short-period month/year is not December of prior current year.",
+                      "fields":  [
+                                     "frm1701MS:txtReturnPeriodYesNo3",
+                                     "frm1701MS:txtMonthNo1",
+                                     "frm1701MS:txtYearNo1"
+                                 ],
+                      "accepted_behavior":  "December/prior year returns true.",
+                      "rejected_behavior":  "Returns false without an alert.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateCurrentYear:L9722-L9727"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Silent false result can leave unclear UI state.",
+                      "recommended_app_behavior":  "Return a structured period error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-003",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Taxpayer/spouse Item 16 From is on/after the filing month end or To is before it.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo16a",
+                                     "frm1701MS:txtTaxpayerNo16a1",
+                                     "frm1701MS:txtTaxpayerNo16b",
+                                     "frm1701MS:txtTaxpayerNo16b1"
+                                 ],
+                      "accepted_behavior":  "Dates straddle the filing month end.",
+                      "rejected_behavior":  "Alerts and returns false.",
+                      "exact_message":  "Invalid date. {Taxpayer|Spouse} Item 16 {From|To} date must be {boundary wording}.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEffectivityDateTaxpayer16:L10666-L10706",
+                                          "official-hta-runtime#validateEffectivityDateSpouse16:L10708-L10747"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Invalid/blank Date objects can bypass comparisons; From must be strictly earlier, not equal.",
+                      "recommended_app_behavior":  "Parse strict dates and encode inclusive boundaries from the guide.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-validate-035",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "Spouse Item 12e alone is selected and Item 16 dates are invalid.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxpayerNo12e1",
+                                     "frm1701MS:txtTaxpayerNo16b",
+                                     "frm1701MS:txtTaxpayerNo16b1"
+                                 ],
+                      "accepted_behavior":  "The invalid dates pass this call site.",
+                      "rejected_behavior":  "No spouse effectivity validation occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L7733-L7739"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source compares the element object to true instead of checking .checked for Item 12e1.",
+                      "recommended_app_behavior":  "Invoke date validation for both 12d1 and 12e1 checked states.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-004",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 26 exceeds either 50% of Item 23 or Item 25.",
+                      "fields":  [
+                                     "frm1701MS:txtTaxDueAllowedNo26a",
+                                     "frm1701MS:txtTaxDueAllowedNo26b",
+                                     "frm1701MS:txtTotalIncomeTaxDueNo23a",
+                                     "frm1701MS:txtTotalIncomeTaxDueNo23b",
+                                     "frm1701MS:txtTaxPayableNo25a",
+                                     "frm1701MS:txtTaxPayableNo25b"
+                                 ],
+                      "accepted_behavior":  "Input is within both caps.",
+                      "rejected_behavior":  "Value resets to 0 and focus returns.",
+                      "exact_message":  "The amount exceeds the allowed input based on the requirements",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateInput26a:L11420-L11459",
+                                          "official-hta-runtime#validateInput26b:L11461-L11500"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Both caps are enforced using JavaScript numbers.",
+                      "recommended_app_behavior":  "Use whole-peso decimal/integer arithmetic.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-005",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Refund and Tax Credit Certificate are both selected.",
+                      "fields":  [
+                                     "frm1701MS:txtToBeRefunded",
+                                     "frm1701MS:txtToBeIssued"
+                                 ],
+                      "accepted_behavior":  "At most one of this pair.",
+                      "rejected_behavior":  "Tax Credit Certificate is unchecked.",
+                      "exact_message":  "You cannot select BOTH \u0027To be refunded\u0027 and \u0027To be issued a Tax Credit Certificate\u0027.",
+                      "source_refs":  [
+                                          "official-hta-runtime#enforceSelectionRules:L10918-L10979"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Mutually exclusive pair enforced.",
+                      "recommended_app_behavior":  "Represent as an explicit incompatibility constraint.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-006",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "More than two Item 31 choices would be selected.",
+                      "fields":  [
+                                     "frm1701MS:txtToBeRefunded",
+                                     "frm1701MS:txtToBeIssued",
+                                     "frm1701MS:txtToBeCarried"
+                                 ],
+                      "accepted_behavior":  "At most two remain selectable.",
+                      "rejected_behavior":  "Unchecked choices are disabled.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#enforceSelectionRules:L10964-L10976"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "UI limits selection count.",
+                      "recommended_app_behavior":  "Enforce without silently clearing amounts.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-007",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Taxpayer or spouse mixed-income ATC mapping reaches the final exempt/special branch.",
+                      "fields":  [
+                                     "taxCodeDropdown",
+                                     "taxCodeDropdownSpouse"
+                                 ],
+                      "accepted_behavior":  "Intended combinations map to II013.",
+                      "rejected_behavior":  "Operator precedence and missing .checked permit special alone or mixed with a truthy element to map II013.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#checkButtons:L11109-L11113",
+                                          "official-hta-runtime#checkButtonsSP:L11190-L11194"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Boolean expressions use element objects and unparenthesized OR.",
+                      "recommended_app_behavior":  "Use explicit checked booleans and a table-driven mapping.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-change-008",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "AllControlDisabled is invoked.",
+                      "fields":  [
+                                     "frm1701MS:txtAmendedYesNo2",
+                                     "frm1701MS:txtAmendedNoNo2"
+                                 ],
+                      "accepted_behavior":  "No reliable behavior.",
+                      "rejected_behavior":  "ReferenceError because documentary is undefined.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#AllControlDisabled:L9677-L9680"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The first DOM access uses documentary instead of document.",
+                      "recommended_app_behavior":  "Remove or correct the dead/broken helper.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-410a",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 10A taxpayer row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:sched410A:Description{N\u003e=0}",
+                                     "frm1701MS:sched410A:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L13229-L13239"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-410a-sp",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 10A spouse row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:sched410aSpouse:Description{N\u003e=0}",
+                                     "frm1701MS:sched410aSpouse:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L13557-L13567"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-410b-tp",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 10B taxpayer row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:sched410A1:Description{N\u003e=0}",
+                                     "frm1701MS:sched410A1:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L13902-L13912"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-410b-sp",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 10B spouse row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:sched410A2:Description{N\u003e=0}",
+                                     "frm1701MS:sched410A2:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L14257-L14268"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-413a",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 13 taxpayer row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:sched413A:Description{N\u003e=0}",
+                                     "frm1701MS:sched413A:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L14576-L14586"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-413b",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 13 spouse row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:Sched413B:Description{N\u003e=0}",
+                                     "frm1701MS:Sched413B:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L14682-L14692"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-420a",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 20 taxpayer row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:sched420A:Description{N\u003e=0}",
+                                     "frm1701MS:sched420A:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L15290-L15300"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-420b",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Schedule 4 Item 20 spouse row has blank description/required legal basis or amount string equal to 0.",
+                      "fields":  [
+                                     "frm1701MS:sched42OB:Description{N\u003e=0}",
+                                     "frm1701MS:sched420B:Amount{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Every materialized row passes.",
+                      "rejected_behavior":  "First incomplete row is rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#schedule-row-validation:L15603-L15613"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String equality to 0 misses formatted zero variants.",
+                      "recommended_app_behavior":  "Parse the amount and require a positive whole-peso value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-modal-5-9",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Part V Item 9 row description is blank or both taxpayer/spouse amount strings equal 0.",
+                      "fields":  [
+                                     "frm1701MS:sched5No9:Description{N\u003e=0}",
+                                     "frm1701MS:sched5No9:Amount{N\u003e=0}",
+                                     "frm1701MS:sched5No9:Spouse{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Description plus either column amount passes.",
+                      "rejected_behavior":  "Row rejected.",
+                      "exact_message":  "Empty fields are not allowed",
+                      "source_refs":  [
+                                          "official-hta-runtime#validationSpecify:L14619-L14628"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Formatted 0.00 may bypass string comparison.",
+                      "recommended_app_behavior":  "Require description and at least one positive parsed amount.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-final-001",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Confirmation/connectivity workflow proceeds.",
+                      "rejected_behavior":  "Offline/encrypted-copy state differs by transport result.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L6479-L6573",
+                                          "official-hta-runtime#saveEncryptedProfile:L6684-L6775"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Final copy remains coupled to transport workflow.",
+                      "recommended_app_behavior":  "Create deterministic offline final copy independently of submission.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701ms-submit-001",
+                      "form_id":  "1701ms-v2024",
+                      "revision":  "2024-08-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Online transport is invoked.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Encrypted payload is prepared.",
+                      "rejected_behavior":  "No online submission was exercised in this research.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L6574-L6659",
+                                          "official-hta-runtime#saveXMLsubmit:L7494-L7628"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Source-derived only.",
+                      "recommended_app_behavior":  "Keep local validation testable without network.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

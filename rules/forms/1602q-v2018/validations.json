@@ -1,0 +1,1022 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1602q-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate and Save alert and return on the first source-ordered failure.",
+    "rules":  [
+                  {
+                      "rule_id":  "1602q-validate-001-year-required",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Item 1 year is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5425-L5429"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-002-year-future",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Item 1 year exceeds the current full calendar year.",
+                      "fields":  [
+                                     "frm1602Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Item no.1. Entry should not be later than Current Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5430-L5434"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-003-year-before-2018",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Item 1 year is below 2018.",
+                      "fields":  [
+                                     "frm1602Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Item 1. Entry should not be lower than 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5436-L5439"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-004-quarter",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "No quarter radio is selected.",
+                      "fields":  [
+                                     "frm1602Q:qtr_1",
+                                     "frm1602Q:qtr_2",
+                                     "frm1602Q:qtr_3",
+                                     "frm1602Q:qtr_4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item number 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5441-L5446"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-005-amended",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Neither amended-return radio is selected.",
+                      "fields":  [
+                                     "frm1602Q:AmendedRtn1",
+                                     "frm1602Q:AmendedRtn2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item number 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5448-L5452"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-006-tin",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtTIN1",
+                                     "frm1602Q:txtTIN2",
+                                     "frm1602Q:txtTIN3",
+                                     "frm1602Q:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5454-L5457"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Apply the shared TIN checksum and segment constraints.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-007-rdo",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "The runtime RDO select remains at index zero.",
+                      "fields":  [
+                                     "frm1602Q:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5458-L5462"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-008-name",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5467-L5470"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-009-phone",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Telephone number is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtTelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5471-L5474"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Validate the accepted telephone syntax.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-010-address",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5475-L5478"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-011-zip",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Zip code is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5479-L5482"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-012-withheld",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Neither Item 4 tax-withheld radio is selected.",
+                      "fields":  [
+                                     "frm1602Q:OptTaxWithheld1",
+                                     "frm1602Q:OptTaxWithheld2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5484-L5486"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-013-agent-category",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Neither Item 12 withholding-agent category is selected.",
+                      "fields":  [
+                                     "frm1602Q:OptCategoryAgent1",
+                                     "frm1602Q:OptCategoryAgent2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5488-L5490"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message cites Item 11 although the controls are printed as Item 12.",
+                      "recommended_app_behavior":  "Cite Item 12 while retaining the official text as compatibility metadata.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-014-special-tax",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Neither Item 13 special-tax radio is selected.",
+                      "fields":  [
+                                     "frm1602Q:OptSpecialTax1",
+                                     "frm1602Q:OptSpecialTax2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item 13.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5492-L5496"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-015-special-tax-kind",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Item 13 is Yes but Item 13A is still the blank option.",
+                      "fields":  [
+                                     "frm1602Q:OptSpecialTax1",
+                                     "frm1602Q:lstSpecialTax"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option in item 13A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5498-L5505"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-016-part-iv",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Item 4 is Yes and Items 14 and 15 are zero.",
+                      "fields":  [
+                                     "frm1602Q:OptTaxWithheld1",
+                                     "frm1602Q:txt14",
+                                     "frm1602Q:txt15",
+                                     "frm1602Q:txt16"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Part IV if item 4 is set to Yes.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5507-L5514"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source compares Item 15 twice and never examines Item 16, so a Schedule 3-only amount is rejected.",
+                      "recommended_app_behavior":  "Test Items 14, 15, and 16 exactly once.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-017-overremittance",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Item 28 is negative and no disposition radio is selected.",
+                      "fields":  [
+                                     "frm1602Q:txt28",
+                                     "frm1602Q:OverRemittance1",
+                                     "frm1602Q:OverRemittance2",
+                                     "frm1602Q:OverRemittance3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for over-remittance below item 28.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5516-L5524"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched2-001-row1-atc",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Schedule 2 row 1 has a treaty code but no ATC.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode1",
+                                     "frm1602Q:txtSched2ATC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up ATC field in Schedule 2 row 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L4956-L4965"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched2-002-row1-treaty",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Schedule 2 row 1 has an ATC but no treaty code.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode1",
+                                     "frm1602Q:txtSched2ATC1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Treaty Code field in Schedule 2 row 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L4967-L4974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched2-003-row1-complete",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Schedule 2 row 1 amount or rate is positive while ATC or treaty code is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode1",
+                                     "frm1602Q:txtSched2ATC1",
+                                     "frm1602Q:txtSched2Interest1",
+                                     "frm1602Q:txtSched2TaxRate1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Schedule 2 row 1 completely.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L4976-L4992"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched2-004-row2-atc",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Schedule 2 row 2 has a treaty code but no ATC.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode2",
+                                     "frm1602Q:txtSched2ATC2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up ATC field in Schedule 2 row 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L4995-L5002"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched2-005-row2-treaty",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Schedule 2 row 2 has an ATC but no treaty code.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode2",
+                                     "frm1602Q:txtSched2ATC2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Treaty Code field in Schedule 2 row 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L5004-L5011"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched2-006-row2-amount",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Schedule 2 row 2 amount is positive while ATC or treaty code is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode2",
+                                     "frm1602Q:txtSched2ATC2",
+                                     "frm1602Q:txtSched2Interest2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Schedule 2 row 2 completely.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L5013-L5020"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched2-007-row2-rate",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Schedule 2 row 2 rate is positive while ATC or treaty code is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode2",
+                                     "frm1602Q:txtSched2ATC2",
+                                     "frm1602Q:txtSched2TaxRate2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Schedule 2 row 12 completely.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched2:L5022-L5029"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message says row 12 although the branch validates row 2.",
+                      "recommended_app_behavior":  "Report Schedule 2 row 2.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched3-001-row1",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Schedule 3 row 1 amount or rate is positive while IPA is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtSched3IPA1",
+                                     "frm1602Q:txtSched3TotInterest1",
+                                     "frm1602Q:txtSched3TaxRate1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Schedule 3 row 1 completely.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched3:L5034-L5052"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-sched3-002-row2",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Schedule 3 row 2 amount or rate is positive while IPA is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtSched3IPA2",
+                                     "frm1602Q:txtSched3TotInterest2",
+                                     "frm1602Q:txtSched3TaxRate2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Schedule 3 row 2 completely.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSched3:L5054-L5070"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-validate-027-success",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "All prior checks pass.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5536-L5546"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Controls are disabled and final-copy/print actions are enabled.",
+                      "recommended_app_behavior":  "Model validated state explicitly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-save-001-tin",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtTIN1",
+                                     "frm1602Q:txtTIN2",
+                                     "frm1602Q:txtTIN3",
+                                     "frm1602Q:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5798-L5802"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Apply shared TIN checksum and format rules.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-save-002-rdo",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm1602Q:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5803-L5806"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-save-003-name",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm1602Q:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5807-L5811"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-save-004-sparse",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Any Validate-only identity, period, classification, computation, or schedule rule fails.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5798-L5812",
+                                          "official-hta-runtime#validate:L5425-L5547"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save ignores all checks except TIN blankness, RDO 000, and name blankness.",
+                      "recommended_app_behavior":  "Use a shared validation graph with explicit phase exceptions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-year-blur-getyear",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "Any normal four-digit year is compared with Date.getYear(), which returns year minus 1900 in this runtime.",
+                      "fields":  [
+                                     "frm1602Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid year. Year should not be later than the current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#control:L326",
+                                          "official-hta-runtime#validateYear:L5410-L5421"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The field can be reset to a value such as 126 instead of 2026.",
+                      "recommended_app_behavior":  "Use getFullYear() and retain a four-digit year.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-atc-code-list",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "A Schedule 2 ATC is outside the hard-coded 13-code list.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2ATC1",
+                                     "frm1602Q:txtSched2ATC2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid ATC Code! Please refer to the ATC Codes in Schedule 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateATC:L5286-L5302"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-treaty-code-list",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  3,
+                      "condition":  "A Schedule 2 treaty code is outside the hard-coded country-code list.",
+                      "fields":  [
+                                     "frm1602Q:txtSched2TreatyCode1",
+                                     "frm1602Q:txtSched2TreatyCode2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid Treaty Code! Please refer to the treaty code in schedule 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateTreatyCode:L5304-L5321"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-ipa-code-list",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  4,
+                      "condition":  "A Schedule 3 IPA is outside the hard-coded IPA list.",
+                      "fields":  [
+                                     "frm1602Q:txtSched3IPA1",
+                                     "frm1602Q:txtSched3IPA2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid IPA Code! Please refer to IPA Codes in Schedule 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateIPA:L5224-L5240"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1602q-serialization-unprefixed-email",
+                      "form_id":  "1602q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  null,
+                      "condition":  "The generic serializer reaches the email control.",
+                      "fields":  [
+                                     "txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#control:L596",
+                                          "official-hta-runtime#saveXML:L4170-L4248"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The unprefixed ID txtEmail becomes the XML key.",
+                      "recommended_app_behavior":  "Preserve the literal key with a typed alias.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

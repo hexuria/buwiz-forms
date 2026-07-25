@@ -107,6 +107,32 @@ jobs:
     - name: Test
       run: cargo test --locked --workspace --target ${{ matrix.target }}
 
+  validation-rules-v1:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Validate legacy v1 rules
+      shell: pwsh
+      run: ./rules/validate.ps1 -RequireJsonSchema
+
+  validation-rules-v2:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+
+    - name: Check generated validation rules
+      run: cargo run --locked -p bir-rules-codegen -- check
+
+    - name: Test validation rules
+      run: cargo test --locked -p bir-rules -p bir-rules-codegen
+
   renderer:
     runs-on: ubuntu-22.04
     steps:

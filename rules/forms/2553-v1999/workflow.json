@@ -1,0 +1,192 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2553-v1999",
+    "revision":  "1999-07-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "packaged-help"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "July 1999 return for percentage tax payable under special laws."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3031-L3047",
+                                           "revision-matched-final-copy-keys"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only TIN, RDO, and taxpayer name, then serializes 68 controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L2791-L2899"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate checks period, identity, conditional overpayment, populated-row amounts, and treaty selection."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "revision-matched-final-copy-keys",
+                                           "official-hta-runtime#saveEncryptedProfile"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The supplied encrypted final copy proves the complete 68-key serialization without exposing values."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail",
+                                           "official-hta-runtime#uploadXMLFile"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport code exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Preserves all 68 controls."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables editable controls.",
+                                                 "Enables print, edit, upload, and final copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm",
+                                                "official-hta-runtime#enableDisabledFields"
+                                            ],
+                            "guard":  "All source-ordered Validate checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls conditionally."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts and compresses the copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile"
+                                            ],
+                            "guard":  "Finalization succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Transaction period",
+                          "TIN and RDO",
+                          "Taxpayer identity and address",
+                          "Complete populated tax rows",
+                          "Treaty basis when applicable",
+                          "Overpayment disposition when applicable"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "bir-2307",
+                                     "label":  "Certificate of Creditable Tax Withheld at Source (BIR Form 2307), if applicable.",
+                                     "source_refs":  [
+                                                         "packaged-help#L218-L227"
+                                                     ],
+                                     "required_when":  "Creditable withholding applies.",
+                                     "official_ui_enforcement":  "Not enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-debit-memo",
+                                     "label":  "Duly approved Tax Debit Memo, if applicable.",
+                                     "source_refs":  [
+                                                         "packaged-help#L218-L227"
+                                                     ],
+                                     "required_when":  "A tax debit memo is used.",
+                                     "official_ui_enforcement":  "Not enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "amended-return-support",
+                                     "label":  "Proof of payment and the return previously filed.",
+                                     "source_refs":  [
+                                                         "packaged-help#L218-L227"
+                                                     ],
+                                     "required_when":  "The return is amended.",
+                                     "official_ui_enforcement":  "Not enforced.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L146-L158"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "On or before the due date for payment of the tax stated in the applicable special law."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L146-L158"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "On or before the due date for payment of the tax stated in the applicable special law."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L146-L158"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "On or before the due date for payment of the tax stated in the applicable special law."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L146-L158"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "On or before the due date for payment of the tax stated in the applicable special law."
+                             }
+                         ]
+}
