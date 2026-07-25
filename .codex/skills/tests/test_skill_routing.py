@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 CONVERSION = ROOT / ".codex/skills/ebirforms-convert-form-to-html/SKILL.md"
 MAINTENANCE = ROOT / ".codex/skills/ebirforms-print-preview/SKILL.md"
+VALIDATION_RULES = ROOT / ".codex/skills/ebirforms-validation-rules/SKILL.md"
 ARTWORK = (
     ROOT
     / ".codex/skills/ebirforms-convert-form-to-html/references/discrete-artwork.md"
@@ -33,6 +34,11 @@ def expected_route(prompt: str) -> str:
         "one xml" in normalized or "one savefile" in normalized
     ):
         return "fail_closed"
+    if any(
+        word in normalized
+        for word in ("validation rule", "rules corpus", "rule set", "bir-rules", "rule evidence")
+    ):
+        return "ebirforms-validation-rules"
     if any(word in normalized for word in ("convert", "create", "missing")) and "html" in normalized:
         return "ebirforms-convert-form-to-html"
     if any(word in normalized for word in ("fix", "align", "alignment", "calibrate")):
@@ -54,6 +60,15 @@ class SkillRoutingTests(unittest.TestCase):
             expected_route("Generate a fileable form from one XML sample"),
             "fail_closed",
         )
+        self.assertEqual(
+            expected_route("Audit the validation rules corpus for 2550Q"),
+            "ebirforms-validation-rules",
+        )
+        # Would have routed to the renderer skill on the bare verb "fix".
+        self.assertEqual(
+            expected_route("Fix the bir-rules source-set digest"),
+            "ebirforms-validation-rules",
+        )
 
     def test_discovery_descriptions_express_same_boundary(self) -> None:
         conversion = description(CONVERSION).lower()
@@ -63,6 +78,16 @@ class SkillRoutingTests(unittest.TestCase):
         self.assertIn("fileable form from xml/savefile samples", conversion)
         self.assertIn("existing ebirforms semantic html print preview", maintenance)
         self.assertIn("renderer is missing", maintenance)
+        rules = description(VALIDATION_RULES).lower()
+        self.assertIn("validation rules corpus", rules)
+        self.assertIn("do not use for html print preview", rules)
+
+    def test_validation_rules_skill_states_the_promotion_boundary(self) -> None:
+        """The rule that must survive every future edit of this skill."""
+        rules = VALIDATION_RULES.read_text(encoding="utf-8").lower()
+        self.assertIn("test-only", rules)
+        self.assertIn("must never be promoted", rules)
+        self.assertIn("never weaken a validator", rules)
 
     def test_conversion_skill_explicitly_fails_closed_on_one_sample(self) -> None:
         conversion = CONVERSION.read_text(encoding="utf-8").lower()

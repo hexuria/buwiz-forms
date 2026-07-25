@@ -19,9 +19,17 @@ commits went. Text correctness is proven by content assertions instead.
 
 The replacement criterion is `official-fidelity-v1`, a **composite of six bound
 components**, currently **implemented and running in reporting mode but not
-gating**. The component table lives in
-`docs/form-print-readiness/official-fidelity-criterion-v1.md` — read it before
-touching the criterion.
+gating**. Read
+`docs/form-print-readiness/official-fidelity-criterion-v1.md` before touching it.
+
+| Component | Binds |
+| --- | --- |
+| `cell-edge-f1-v1` | displacement, per scoring cell, tolerance radius **1** |
+| `structural-ink-coverage-v1` | rules, boxes, fills — font-independent by construction |
+| `page-ink-budget-v1` | ink volume and exactly-white paper pixels (the tint attack) |
+| `static-text-exhaustive-v1` | every printed string, ordered — **the only thing standing between us and a wrong tax rate** |
+| `encoded-artwork-integrity-v1` | payload + raster crop hash + transform |
+| `official-complete-page-v2` | retained, **mandatory, never hidden**, no longer gating |
 
 Rules that are not negotiable:
 
@@ -101,6 +109,61 @@ are superseded by the per-form contract-derived lists.
 - Mutate confirmed COR facts directly; the replacement-version + review flow is the designed audit trail.
 - Spawn subagents with full conversation history; use compact prompts with exact file paths.
 
+## Key commands
+
+```sh
+rtk npm run audit:forms:migration          # migration/evidence audit (add -- --require-clean-source before evidence runs)
+rtk npm run audit:no-legacy                # legacy-absence audit
+rtk npm run contracts:check                # generated contracts match tracked files
+rtk npm run typecheck:forms && rtk npm run test:forms
+rtk npm run test:forms:visual              # the parity gate; artifacts land in test-results/form-renderer/
+rtk npm run references:generate            # rebuild references/manifest.json from Rust pins
+rtk cargo test --locked -p bir-print
+```
+
+## Validation rules — a separate objective in the same checkout
+
+`rules/`, `crates/bir-rules/`, `crates/bir-rules-codegen/`,
+`crates/bir-core/src/form_rules/` and
+`crates/bir-desktop/src/components/form_validation/` are the official-eBIRForms
+**validation-rules** subsystem. It is unrelated to the print migration above and
+has its own objective, plan and gates. Do not apply print-parity reasoning to it.
+
+- Objective and progress: `.claude/GOAL.md`. Plan:
+  `docs/validation-rules/execution-plan.md`. Prior session:
+  `handoff.md`.
+- The single machine-checkable condition is
+  `rtk cargo run -q --locked -p bir-rules-codegen -- status`. It separates
+  **boundary** criteria (a production filing path must stay closed) from
+  **slice** criteria (the current task). A boundary failure is far more serious
+  than an open slice.
+- Corpus audit: `rtk cargo run --locked -p bir-rules-codegen -- validate-v1`.
+  Baseline: 43 forms, 659 JSON (139 v2), 9,592 fields, 2,007 validations, 623
+  calculations, 1,354 negative fixtures, 216 schema documents. If any count
+  moves, the change is wrong — never adjust the validator to match.
+
+**Only 2550Q has a v2 rule set, it is `candidate`, and it is test-only. It must
+never be promoted.** Five guards keep production closed, each one edit away from
+opening a filing path:
+
+- `crates/bir-core/src/form_rules/form_2550q.rs:42-44` — returns `None`
+- `crates/bir-rules/src/generated/mod.rs:4` — `#[cfg(test)]` candidate module
+- `crates/bir-core/src/form_rules/form_2550q.rs:930` — `#[cfg(test)]` evaluator
+- `crates/bir-rules/src/generated/registry.rs:18-19` — empty reviewed registry
+- `crates/bir-core/src/form_rules/payload.rs:228-234` — always returns `Err`
+
+Also non-negotiable: filing-safe stays `unresolved`; all three serialization
+artifacts stay `documented_only`, node-less and `values_emitted: false`;
+preserve official defects in the official profile rather than silently fixing
+them; a source-set digest roll is a 123-file atomic transaction that must fail
+rather than be partially applied; never use the official submission path for
+discovery and never use real taxpayer data.
+
+`rules/tools/*.ps1` are mostly **provenance records, not tools** — their inputs
+(extracted installer, `.hta`, `atcCodes.xml`, savefile XML) are not tracked, so
+they cannot run from a clone on any OS. Read `rules/tools/README.md` before
+invoking any of them.
+
 ## Deep guidance
 
 - **Conversion strategy (start here for any new form): `docs/form-print-readiness/conversion-strategy-v2.md`** — structure-first calibration, generated geometry contracts, text via content assertions (never text-pixel chasing: all 35 source PDFs have substituted fonts, so text pixels are unwinnable by proof), dynamic-behaviour pattern library, and the 35-form wave plan.
@@ -108,4 +171,6 @@ are superseded by the per-form contract-derived lists.
 - Release-criterion design and the six-component table: `docs/form-print-readiness/official-fidelity-criterion-v1.md` (see the status statement above — reporting mode, not gating, baselines not pinned).
 - Process playbooks (follow them, as amended by the strategy above): `.codex/skills/ebirforms-convert-form-to-html/` and `.codex/skills/ebirforms-print-preview/`.
 - Honest per-form readiness numbers: `docs/form-print-readiness/priority-forms-readiness.md`.
-- `AGENTS.md` covers only the legacy GPUI native-UI layer, not this migration.
+- `AGENT.md` (singular) covers only the legacy GPUI native-UI layer, not this
+  migration. `AGENTS.md` is the Codex-side mirror of *this* file and must be
+  kept in step with it.

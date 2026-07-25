@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "codex/**" ]
   pull_request:
     branches: [ "main" ]
 
@@ -107,14 +107,27 @@ jobs:
     - name: Test
       run: cargo test --locked --workspace --target ${{ matrix.target }}
 
+  # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
+  # PowerShell job, which is exactly why three separate Windows-path defects in
+  # rules/validate.ps1 went undetected: on macOS and Linux the v2 exclusions
+  # never matched, so the wrong file set was audited (and the script exited 1).
   validation-rules-v1:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-22.04, macos-14, windows-latest ]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
 
-    - name: Validate legacy v1 rules
-      shell: pwsh
-      run: ./rules/validate.ps1 -RequireJsonSchema
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+
+    - name: Audit legacy v1 rules corpus
+      run: cargo run --locked -p bir-rules-codegen -- validate-v1
 
   validation-rules-v2:
     runs-on: ubuntu-22.04
@@ -126,6 +139,10 @@ jobs:
 
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
+
+    # `audit` is a distinct subcommand from `check` and was never run in CI.
+    - name: Audit validation-rules v2 IR
+      run: cargo run --locked -p bir-rules-codegen -- audit
 
     - name: Check generated validation rules
       run: cargo run --locked -p bir-rules-codegen -- check
