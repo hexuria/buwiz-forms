@@ -5,9 +5,11 @@
 
 mod field_focus;
 mod state;
+mod summary;
 
 pub use field_focus::{DuplicateSemanticFieldTarget, SemanticFieldTargets};
 pub use state::{
     EvaluationAcceptance, EvaluatorUnavailable, EvaluatorUnavailableKind, FormValidationState,
     IncompleteEvaluationSnapshot, PendingEvaluation, RevisionAdvanceError,
 };
+pub use summary::{SummaryIssue, SummaryUnavailable, ValidationSummary};
