@@ -31,6 +31,8 @@ const INDEX_PATH: &str = "rules/ir/v2/index.json";
 const INVENTORY_PATH: &str =
     "rules/forms/2550q-v2024/fixtures/serialization-binding-inventory-v796.json";
 const GENERATED_REGISTRY_PATH: &str = "crates/bir-rules/src/generated/registry.rs";
+const V1_VALIDATIONS_PATH: &str = "rules/forms/2550q-v2024/validations.json";
+const SHADOW_PATH: &str = "crates/bir-core/src/form_rules/shadow.rs";
 
 /// The published occurrence decomposition. Every one of these is quoted as fact
 /// in `handoff.md` and the 2550Q review documents.
@@ -125,6 +127,8 @@ pub fn status(options: &StatusOptions) -> Result<StatusReport> {
     check_occurrence_classification(&inventory, &rule_set, &mut criteria);
     check_declared_sources_are_clone_reproducible(&repo_root, &rule_set, &mut criteria);
     check_remaining_plan_deliverables(&repo_root, &mut criteria);
+    check_filing_safe_resolved_where_official_is_correct(&repo_root, &rule_set, &mut criteria);
+    check_shadow_difference_dimensions(&repo_root, &mut criteria);
 
     Ok(StatusReport {
         rule_set_id: RULE_SET_ID,
@@ -605,7 +609,7 @@ fn check_declared_sources_are_clone_reproducible(
 /// work declared complete. Add to this as further deliverables land; never
 /// remove one to make the command pass.
 fn check_remaining_plan_deliverables(repo_root: &Path, criteria: &mut Vec<Criterion>) {
-    const DELIVERABLES: [(&str, &str, &str); 5] = [
+    const DELIVERABLES: [(&str, &str, &str); 6] = [
         (
             "projectors-ported",
             "crates/bir-rules-codegen/src/projections.rs",
@@ -634,6 +638,11 @@ fn check_remaining_plan_deliverables(repo_root: &Path, criteria: &mut Vec<Criter
             ".codex/skills/ebirforms-validation-rules/SKILL.md",
             "D4 — durable skill coverage for the validation-rules domain",
         ),
+        (
+            "builder-staging-guard",
+            "rules/tools/STAGING.md",
+            "A5b — builders write straight into the canonical corpus with no staging root (UPDATING.md:33-36)",
+        ),
     ];
 
     for (id, relative, detail) in DELIVERABLES {
@@ -650,6 +659,118 @@ fn check_remaining_plan_deliverables(repo_root: &Path, criteria: &mut Vec<Criter
             },
         );
     }
+}
+
+/// Promotion needs zero `"state": "unresolved"` anywhere in the rule set. Of the
+/// 135 present, most carry no judgement: 94 field branches and every rule whose
+/// v1 assessment is `verified-correct` can only mean "filing-safe behaves as
+/// official does", because official was reviewed and found correct.
+///
+/// This criterion covers exactly that mechanical part. It deliberately does
+/// **not** cover the rules assessed `incorrect-official-behavior` or
+/// `official-bug-compatible` — those are real decisions about what safer
+/// behaviour should be, and mirroring official for them would silently inherit
+/// a defect into the filing-safe profile.
+fn check_filing_safe_resolved_where_official_is_correct(
+    repo_root: &Path,
+    rule_set: &JsonValue,
+    criteria: &mut Vec<Criterion>,
+) {
+    let Ok(validations) = read_json(repo_root, V1_VALIDATIONS_PATH) else {
+        push(
+            criteria,
+            "filing-safe-mirrors-verified-official",
+            CriterionKind::Slice,
+            false,
+            format!("cannot read {V1_VALIDATIONS_PATH}"),
+        );
+        return;
+    };
+    let mut verified: BTreeMap<&str, ()> = BTreeMap::new();
+    if let Some(JsonValue::Array(rules)) = validations.object().and_then(|d| d.get("rules")) {
+        for rule in rules {
+            if string_at(rule, "assessment") == Some("verified-correct") {
+                if let Some(id) = string_at(rule, "rule_id") {
+                    verified.insert(id, ());
+                }
+            }
+        }
+    }
+
+    let unresolved_state = |branch: Option<&JsonValue>| {
+        branch.and_then(|b| string_at(b, "state")) == Some("unresolved")
+    };
+
+    let mut open_fields = 0usize;
+    if let Some(JsonValue::Array(fields)) = rule_set.object().and_then(|r| r.get("fields")) {
+        for field in fields {
+            let branch = field
+                .object()
+                .and_then(|f| f.get("behavior"))
+                .and_then(|b| b.object())
+                .and_then(|b| b.get("filing_safe"));
+            if unresolved_state(branch) {
+                open_fields += 1;
+            }
+        }
+    }
+
+    let mut open_rules = Vec::new();
+    if let Some(JsonValue::Array(rules)) = rule_set.object().and_then(|r| r.get("rules")) {
+        for rule in rules {
+            let Some(id) = string_at(rule, "rule_id") else {
+                continue;
+            };
+            if !verified.contains_key(id) {
+                continue;
+            }
+            let branch = rule
+                .object()
+                .and_then(|r| r.get("profiles"))
+                .and_then(|p| p.object())
+                .and_then(|p| p.get("filing_safe"));
+            if unresolved_state(branch) {
+                open_rules.push(id.to_owned());
+            }
+        }
+    }
+
+    let met = open_fields == 0 && open_rules.is_empty();
+    push(
+        criteria,
+        "filing-safe-mirrors-verified-official",
+        CriterionKind::Slice,
+        met,
+        if met {
+            "every field and every verified-correct rule has a resolved filing-safe branch"
+                .to_owned()
+        } else {
+            format!(
+                "{open_fields} field(s) and {} verified-correct rule(s) still unresolved on filing_safe",
+                open_rules.len()
+            )
+        },
+    );
+}
+
+/// `shadow.rs` holds only `EvaluationStamp` and `ShadowEvaluationOutcome`. The
+/// four difference dimensions the plan calls for are what make a shadow run
+/// useful: without them a shadow evaluation produces a result nobody compares.
+fn check_shadow_difference_dimensions(repo_root: &Path, criteria: &mut Vec<Criterion>) {
+    let present = read_text(repo_root, SHADOW_PATH)
+        .map(|source| source.contains("ShadowDifference"))
+        .unwrap_or(false);
+    push(
+        criteria,
+        "shadow-difference-dimensions",
+        CriterionKind::Slice,
+        present,
+        if present {
+            "shadow.rs reports evaluation differences".to_owned()
+        } else {
+            "shadow.rs records outcomes but reports no differences to compare".to_owned()
+        },
+    );
 }
 
 fn occurrence_bindings(inventory: &JsonValue) -> Option<&Vec<JsonValue>> {
@@ -729,8 +850,14 @@ mod tests {
     /// id below must be present. Deleting one to make `status` pass fails here.
     #[test]
     fn every_declared_criterion_is_still_evaluated() {
-        const REQUIRED: [&str; 16] = [
+        const REQUIRED: [&str; 19] = [
             "artifacts-documented-only",
+            "builder-staging-guard",
+            "filing-safe-mirrors-verified-official",
+            "shadow-difference-dimensions",
+            "builder-staging-guard",
+            "filing-safe-mirrors-verified-official",
+            "shadow-difference-dimensions",
             "credentials-not-field-authority",
             "declared-sources-clone-reproducible",
             "documented-only-projection-count",

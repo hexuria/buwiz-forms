@@ -40,7 +40,10 @@ pub use payload::{CheckedFinalCopyPayload, CheckedFinalCopyPayloadError};
 pub use registry::{
     FormRuleEvaluator, TrustedEvaluation, TrustedEvaluationError, WorkflowDispatchError,
 };
-pub use shadow::{EvaluationStamp, ShadowEvaluationOutcome};
+pub use shadow::{
+    EvaluationStamp, ShadowDifference, ShadowDifferenceKind, ShadowDifferenceReport,
+    ShadowEvaluationOutcome,
+};
 pub use submission_preflight::{
     PersistedSubmissionAuthorityInput, SubmissionPreflightArtifact, SubmissionPreflightError,
     preflight_active_form_submission,
