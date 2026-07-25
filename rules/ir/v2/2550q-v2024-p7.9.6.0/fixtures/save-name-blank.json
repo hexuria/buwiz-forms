@@ -1,1988 +1,1716 @@
 {
-    "$schema":  "../../../../schema/v2/fixture.schema.json",
-    "schema_version":  "2.0.0",
-    "fixture_id":  "2550q-save-name-blank",
-    "kind":  "evaluation",
-    "description":  "A blank taxpayer name preserves the official Item 9 Withholding Agent wording.",
-    "source_refs":  [
-                        {
-                            "source_id":  "v1-negative-fixtures",
-                            "locator":  "#/cases/27"
-                        },
-                        {
-                            "source_id":  "candidate-save-review",
-                            "locator":  "#official-profile-executable-scope"
-                        }
-                    ],
-    "input":  {
-                  "rule_set":  {
-                                   "rule_set_id":  "2550q-v2024-p7.9.6.0",
-                                   "form_code":  "2550Q",
-                                   "form_revision":  "2024-04-01",
-                                   "official_package_version":  "7.9.6.0",
-                                   "source_set_sha256":  "e51819028a4b2199debac87ca024fbe05b3ccb518cccbe76a436e6f8e08d45e0"
-                               },
-                  "context":  {
-                                  "phase":  "save",
-                                  "profile":  "official"
-                              },
-                  "input_revision":  1,
-                  "context_fingerprint":  "1ff11db03b04da68eb0bea649ab17bf124b6aaa84cdfef9f7f63f60343fe993b",
-                  "context_values":  {
-                                         "values":  [
-                                                        {
-                                                            "id":  "local-current-date",
-                                                            "value":  {
-                                                                          "type":  "date",
-                                                                          "value":  {
-                                                                                        "year":  2024,
-                                                                                        "month":  10,
-                                                                                        "day":  15
-                                                                                    }
-                                                                      }
-                                                        }
-                                                    ]
-                                     },
-                  "raw_inputs":  {
-                                     "repeated_group_instances":  [
-
-                                                                  ],
-                                     "fields":  [
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:OptQuarter1",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "true"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:OptQuarter2",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:OptQuarter3",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:OptQuarter4",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:OptShortPrd1",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:OptShortPrd2",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:RtnPeriodFromNo4",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:RtnPeriodToNo4",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "10/15/2024"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:addInputVat",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:addOutputVat",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:addSpecifyNo19",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:addSpecifyNo42",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:addSpecifyNo47",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:addSpecifyNo56",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:amendedReturnNo5",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:amendedReturnYesNo5",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:branchCode",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "00001"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:calendarNo1",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "true"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:compromise",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:domesticInputTax",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:domesticPurchase",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:domesticPurchaseNoTax",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:exemptSales",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:fiscalNo1",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:importInputTax",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:importPurchase",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:inputTaxCarried",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:inputVatUnpaid",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:interest",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:internationalTreatyYn",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:lessOutputVat",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:otherCreditsNo19",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "0.00"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:otherSpecify42",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "0.00"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:otherSpecify47",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "0.00"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:otherSpecify56",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "0.00"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:presumptiveInputTax",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:sched2AmountInputTax",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:sched2InputTaxDirect",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:sched2VatExemptSale",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:selectedMonthNo2",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:serviceInputTax",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:servicesPurchase",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:specialRateYn",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:specifyInternationalTreaty",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:surcharge",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxPayerClassification1",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "true"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxPayerClassification2",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxPayerClassification3",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxPayerClassification4",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "false"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxpayerAddress",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "123 SENTINEL ROAD"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxpayerContactNumber",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "09171234567"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxpayerEmailAddress",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "not-an-email"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxpayerName",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:taxpayerZip",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "1000"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:transitionalInputTax",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:txtRDOCode",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "001"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:txtTIN1",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "123"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:txtTIN2",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "456"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:txtTIN3",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "789"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:txtYearNo2",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  "2024"
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:vatExemptImports",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:vatPaidReturn",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:vatRefund",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:vatableSales",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "frm2550qv2024:zeroRatedSales",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    },
-                                                    {
-                                                        "field":  {
-                                                                      "field_id":  "otherSpecify47B",
-                                                                      "group_path":  [
-
-                                                                                     ]
-                                                                  },
-                                                        "value":  {
-                                                                      "state":  "text",
-                                                                      "text":  ""
-                                                                  }
-                                                    }
-                                                ]
-                                 }
+  "$schema": "../../../../schema/v2/fixture.schema.json",
+  "description": "A blank taxpayer name preserves the official Item 9 Withholding Agent wording.",
+  "expected": {
+    "canonical_inputs": [
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": true
+        },
+        "field": {
+          "field_id": "frm2550qv2024:OptQuarter1",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "true"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:OptQuarter2",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:OptQuarter3",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:OptQuarter4",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:OptShortPrd1",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:OptShortPrd2",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:RtnPeriodFromNo4",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "10/15/2024"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:RtnPeriodToNo4",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "10/15/2024"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:addInputVat",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:addOutputVat",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "blank"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:addSpecifyNo19",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "blank"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:addSpecifyNo42",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "blank"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:addSpecifyNo47",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "blank"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:addSpecifyNo56",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:amendedReturnNo5",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:amendedReturnYesNo5",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "00001"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:branchCode",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "00001"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": true
+        },
+        "field": {
+          "field_id": "frm2550qv2024:calendarNo1",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "true"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:compromise",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:domesticInputTax",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:domesticPurchase",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:domesticPurchaseNoTax",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:exemptSales",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:fiscalNo1",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:importInputTax",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:importPurchase",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:inputTaxCarried",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:inputVatUnpaid",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:interest",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:internationalTreatyYn",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:lessOutputVat",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "0.00"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:otherCreditsNo19",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "0.00"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "0.00"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:otherSpecify42",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "0.00"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "0.00"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:otherSpecify47",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "0.00"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "0.00"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:otherSpecify56",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "0.00"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:presumptiveInputTax",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:sched2AmountInputTax",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:sched2InputTaxDirect",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:sched2VatExemptSale",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:selectedMonthNo2",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:serviceInputTax",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:servicesPurchase",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:specialRateYn",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "blank"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:specifyInternationalTreaty",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:surcharge",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": true
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxPayerClassification1",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "true"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxPayerClassification2",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxPayerClassification3",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "boolean",
+          "value": false
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxPayerClassification4",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "false"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "123 SENTINEL ROAD"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxpayerAddress",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "123 SENTINEL ROAD"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "09171234567"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxpayerContactNumber",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "09171234567"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "not-an-email"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxpayerEmailAddress",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "not-an-email"
+        }
+      },
+      {
+        "canonical": {
+          "type": "blank"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxpayerName",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "1000"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:taxpayerZip",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "1000"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:transitionalInputTax",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "001"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:txtRDOCode",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "001"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "123"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:txtTIN1",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "123"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "456"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:txtTIN2",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "456"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "789"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:txtTIN3",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "789"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": "2024"
+        },
+        "field": {
+          "field_id": "frm2550qv2024:txtYearNo2",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": "2024"
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:vatExemptImports",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:vatPaidReturn",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:vatRefund",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:vatableSales",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "frm2550qv2024:zeroRatedSales",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      },
+      {
+        "canonical": {
+          "type": "text",
+          "value": ""
+        },
+        "field": {
+          "field_id": "otherSpecify47B",
+          "group_path": []
+        },
+        "raw": {
+          "state": "text",
+          "text": ""
+        }
+      }
+    ],
+    "derived_outputs": [],
+    "expected_outputs": [],
+    "report": {
+      "context": {
+        "phase": "save",
+        "profile": "official"
+      },
+      "context_fingerprint": "1ff11db03b04da68eb0bea649ab17bf124b6aaa84cdfef9f7f63f60343fe993b",
+      "evaluated_rules": [
+        {
+          "instance": null,
+          "rule_id": "2550q-save-tin"
+        },
+        {
+          "instance": null,
+          "rule_id": "2550q-save-rdo"
+        },
+        {
+          "instance": null,
+          "rule_id": "2550q-save-name"
+        }
+      ],
+      "expected_rules": [
+        {
+          "execution": {
+            "instance": null,
+            "rule_id": "2550q-save-tin"
+          },
+          "order": 1
+        },
+        {
+          "execution": {
+            "instance": null,
+            "rule_id": "2550q-save-rdo"
+          },
+          "order": 2
+        },
+        {
+          "execution": {
+            "instance": null,
+            "rule_id": "2550q-save-name"
+          },
+          "order": 3
+        }
+      ],
+      "input_revision": 1,
+      "rule_set": {
+        "form_code": "2550Q",
+        "form_revision": "2024-04-01",
+        "official_package_version": "7.9.6.0",
+        "rule_set_id": "2550q-v2024-p7.9.6.0",
+        "source_set_sha256": "0f37a2e3a1ee16e1b8464a6454faea153bfef6250358e8c251c306a34750b766"
+      },
+      "violations": [
+        {
+          "assessment": "incorrect-official-behavior",
+          "execution": {
+            "instance": null,
+            "rule_id": "2550q-save-name"
+          },
+          "fields": [
+            {
+              "field": {
+                "field_id": "frm2550qv2024:taxpayerName",
+                "group_path": []
               },
-    "expected":  {
-                     "report":  {
-                                    "rule_set":  {
-                                                     "rule_set_id":  "2550q-v2024-p7.9.6.0",
-                                                     "form_code":  "2550Q",
-                                                     "form_revision":  "2024-04-01",
-                                                     "official_package_version":  "7.9.6.0",
-                                                     "source_set_sha256":  "e51819028a4b2199debac87ca024fbe05b3ccb518cccbe76a436e6f8e08d45e0"
-                                                 },
-                                    "context":  {
-                                                    "phase":  "save",
-                                                    "profile":  "official"
-                                                },
-                                    "input_revision":  1,
-                                    "context_fingerprint":  "1ff11db03b04da68eb0bea649ab17bf124b6aaa84cdfef9f7f63f60343fe993b",
-                                    "expected_rules":  [
-                                                           {
-                                                               "execution":  {
-                                                                                 "rule_id":  "2550q-save-tin",
-                                                                                 "instance":  null
-                                                                             },
-                                                               "order":  1
-                                                           },
-                                                           {
-                                                               "execution":  {
-                                                                                 "rule_id":  "2550q-save-rdo",
-                                                                                 "instance":  null
-                                                                             },
-                                                               "order":  2
-                                                           },
-                                                           {
-                                                               "execution":  {
-                                                                                 "rule_id":  "2550q-save-name",
-                                                                                 "instance":  null
-                                                                             },
-                                                               "order":  3
-                                                           }
-                                                       ],
-                                    "evaluated_rules":  [
-                                                            {
-                                                                "rule_id":  "2550q-save-tin",
-                                                                "instance":  null
-                                                            },
-                                                            {
-                                                                "rule_id":  "2550q-save-rdo",
-                                                                "instance":  null
-                                                            },
-                                                            {
-                                                                "rule_id":  "2550q-save-name",
-                                                                "instance":  null
-                                                            }
-                                                        ],
-                                    "violations":  [
-                                                       {
-                                                           "execution":  {
-                                                                             "rule_id":  "2550q-save-name",
-                                                                             "instance":  null
-                                                                         },
-                                                           "phase":  "save",
-                                                           "order":  {
-                                                                         "rule_order":  3,
-                                                                         "occurrence":  0
-                                                                     },
-                                                           "fields":  [
-                                                                          {
-                                                                              "field":  {
-                                                                                            "field_id":  "frm2550qv2024:taxpayerName",
-                                                                                            "group_path":  [
-
-                                                                                                           ]
-                                                                                        },
-                                                                              "xml_key":  null,
-                                                                              "serialized_occurrence":  null
-                                                                          }
-                                                                      ],
-                                                           "official_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 9.",
-                                                           "message":  "Please enter a valid Withholding Agent\u0027s Name on Item 9.",
-                                                           "assessment":  "incorrect-official-behavior",
-                                                           "severity":  "blocking",
-                                                           "profile":  "official"
-                                                       }
-                                                   ]
-                                },
-                     "canonical_inputs":  [
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:OptQuarter1",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "true"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  true
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:OptQuarter2",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:OptQuarter3",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:OptQuarter4",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:OptShortPrd1",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:OptShortPrd2",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:RtnPeriodFromNo4",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:RtnPeriodToNo4",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "10/15/2024"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "10/15/2024"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:addInputVat",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:addOutputVat",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:addSpecifyNo19",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "blank"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:addSpecifyNo42",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "blank"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:addSpecifyNo47",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "blank"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:addSpecifyNo56",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "blank"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:amendedReturnNo5",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:amendedReturnYesNo5",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:branchCode",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "00001"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "00001"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:calendarNo1",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "true"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  true
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:compromise",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:domesticInputTax",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:domesticPurchase",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:domesticPurchaseNoTax",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:exemptSales",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:fiscalNo1",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:importInputTax",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:importPurchase",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:inputTaxCarried",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:inputVatUnpaid",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:interest",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:internationalTreatyYn",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:lessOutputVat",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:otherCreditsNo19",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "0.00"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "0.00"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:otherSpecify42",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "0.00"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "0.00"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:otherSpecify47",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "0.00"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "0.00"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:otherSpecify56",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "0.00"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "0.00"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:presumptiveInputTax",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:sched2AmountInputTax",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:sched2InputTaxDirect",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:sched2VatExemptSale",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:selectedMonthNo2",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:serviceInputTax",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:servicesPurchase",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:specialRateYn",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:specifyInternationalTreaty",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "blank"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:surcharge",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxPayerClassification1",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "true"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  true
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxPayerClassification2",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxPayerClassification3",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxPayerClassification4",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "false"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "boolean",
-                                                                    "value":  false
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxpayerAddress",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "123 SENTINEL ROAD"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "123 SENTINEL ROAD"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxpayerContactNumber",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "09171234567"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "09171234567"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxpayerEmailAddress",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "not-an-email"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "not-an-email"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxpayerName",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "blank"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:taxpayerZip",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "1000"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "1000"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:transitionalInputTax",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:txtRDOCode",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "001"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "001"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:txtTIN1",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "123"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "123"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:txtTIN2",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "456"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "456"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:txtTIN3",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "789"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "789"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:txtYearNo2",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  "2024"
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  "2024"
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:vatExemptImports",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:vatPaidReturn",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:vatRefund",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:vatableSales",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "frm2550qv2024:zeroRatedSales",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              },
-                                              {
-                                                  "field":  {
-                                                                "field_id":  "otherSpecify47B",
-                                                                "group_path":  [
-
-                                                                               ]
-                                                            },
-                                                  "raw":  {
-                                                              "state":  "text",
-                                                              "text":  ""
-                                                          },
-                                                  "canonical":  {
-                                                                    "type":  "text",
-                                                                    "value":  ""
-                                                                }
-                                              }
-                                          ],
-                     "expected_outputs":  [
-
-                                          ],
-                     "derived_outputs":  [
-
-                                         ]
-                 }
+              "serialized_occurrence": null,
+              "xml_key": null
+            }
+          ],
+          "message": "Please enter a valid Withholding Agent's Name on Item 9.",
+          "official_message": "Please enter a valid Withholding Agent's Name on Item 9.",
+          "order": {
+            "occurrence": 0,
+            "rule_order": 3
+          },
+          "phase": "save",
+          "profile": "official",
+          "severity": "blocking"
+        }
+      ]
+    }
+  },
+  "fixture_id": "2550q-save-name-blank",
+  "input": {
+    "context": {
+      "phase": "save",
+      "profile": "official"
+    },
+    "context_fingerprint": "1ff11db03b04da68eb0bea649ab17bf124b6aaa84cdfef9f7f63f60343fe993b",
+    "context_values": {
+      "values": [
+        {
+          "id": "local-current-date",
+          "value": {
+            "type": "date",
+            "value": {
+              "day": 15,
+              "month": 10,
+              "year": 2024
+            }
+          }
+        }
+      ]
+    },
+    "input_revision": 1,
+    "raw_inputs": {
+      "fields": [
+        {
+          "field": {
+            "field_id": "frm2550qv2024:OptQuarter1",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "true"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:OptQuarter2",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:OptQuarter3",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:OptQuarter4",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:OptShortPrd1",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:OptShortPrd2",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:RtnPeriodFromNo4",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:RtnPeriodToNo4",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "10/15/2024"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:addInputVat",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:addOutputVat",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:addSpecifyNo19",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:addSpecifyNo42",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:addSpecifyNo47",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:addSpecifyNo56",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:amendedReturnNo5",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:amendedReturnYesNo5",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:branchCode",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "00001"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:calendarNo1",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "true"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:compromise",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:domesticInputTax",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:domesticPurchase",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:domesticPurchaseNoTax",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:exemptSales",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:fiscalNo1",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:importInputTax",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:importPurchase",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:inputTaxCarried",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:inputVatUnpaid",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:interest",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:internationalTreatyYn",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:lessOutputVat",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:otherCreditsNo19",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "0.00"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:otherSpecify42",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "0.00"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:otherSpecify47",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "0.00"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:otherSpecify56",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "0.00"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:presumptiveInputTax",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:sched2AmountInputTax",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:sched2InputTaxDirect",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:sched2VatExemptSale",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:selectedMonthNo2",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:serviceInputTax",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:servicesPurchase",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:specialRateYn",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:specifyInternationalTreaty",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:surcharge",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxPayerClassification1",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "true"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxPayerClassification2",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxPayerClassification3",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxPayerClassification4",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "false"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxpayerAddress",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "123 SENTINEL ROAD"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxpayerContactNumber",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "09171234567"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxpayerEmailAddress",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "not-an-email"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxpayerName",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:taxpayerZip",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "1000"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:transitionalInputTax",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:txtRDOCode",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "001"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:txtTIN1",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "123"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:txtTIN2",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "456"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:txtTIN3",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "789"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:txtYearNo2",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": "2024"
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:vatExemptImports",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:vatPaidReturn",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:vatRefund",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:vatableSales",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "frm2550qv2024:zeroRatedSales",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        },
+        {
+          "field": {
+            "field_id": "otherSpecify47B",
+            "group_path": []
+          },
+          "value": {
+            "state": "text",
+            "text": ""
+          }
+        }
+      ],
+      "repeated_group_instances": []
+    },
+    "rule_set": {
+      "form_code": "2550Q",
+      "form_revision": "2024-04-01",
+      "official_package_version": "7.9.6.0",
+      "rule_set_id": "2550q-v2024-p7.9.6.0",
+      "source_set_sha256": "0f37a2e3a1ee16e1b8464a6454faea153bfef6250358e8c251c306a34750b766"
+    }
+  },
+  "kind": "evaluation",
+  "schema_version": "2.0.0",
+  "source_refs": [
+    {
+      "locator": "#/cases/27",
+      "source_id": "v1-negative-fixtures"
+    },
+    {
+      "locator": "#official-profile-executable-scope",
+      "source_id": "candidate-save-review"
+    }
+  ]
 }

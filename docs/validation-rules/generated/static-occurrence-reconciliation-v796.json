@@ -1,0 +1,48 @@
+{
+  "form_id": "2550q-v2024",
+  "generated_from": "serialization-binding-inventory-v796.json occurrence classifications",
+  "occurrence_total": 160,
+  "package_version": "7.9.6.0",
+  "partitions": [
+    {
+      "partition": "occurrence-projection-kind",
+      "terms": {
+        "generated-local-date": 1,
+        "raw-group-field": 40,
+        "raw-static-control": 119
+      },
+      "total": 160
+    },
+    {
+      "partition": "static-executable-vs-documented-only",
+      "terms": {
+        "documented-only": 53,
+        "executable-singleton": 66
+      },
+      "total": 119
+    },
+    {
+      "partition": "documented-only-detail",
+      "terms": {
+        "credential": 4,
+        "derived-or-alias": 44,
+        "workflow-or-ui": 5
+      },
+      "total": 53
+    },
+    {
+      "partition": "classification",
+      "terms": {
+        "documented-only-credential": 4,
+        "documented-only-derived-or-alias": 44,
+        "documented-only-workflow-or-ui": 5,
+        "executable-group-field": 40,
+        "executable-singleton": 66,
+        "generated-context-metadata": 1
+      },
+      "total": 160
+    }
+  ],
+  "schema_version": "1.0.0",
+  "values_emitted": false
+}
