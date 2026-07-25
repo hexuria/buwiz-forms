@@ -65,7 +65,9 @@ use serde::Serialize;
 use crate::error::{CodegenError, Result};
 use crate::files::read_bytes;
 use crate::json::{JsonValue, parse_strict};
-use crate::path::{canonical_repo_root, is_json_file, resolve_existing_under};
+use crate::path::{
+    canonical_repo_root, is_json_file, resolve_existing_under, resolve_output_under,
+};
 
 const RULE_SET_PATH: &str = "rules/ir/v2/2550q-v2024-p7.9.6.0/rule-set.json";
 const FIXTURES_PATH: &str = "rules/ir/v2/2550q-v2024-p7.9.6.0/fixtures";
@@ -123,12 +125,23 @@ const EXPECTED_FIELD_COUNT: usize = 94;
 #[derive(Clone, Debug)]
 pub struct ProjectStaticSurfaceOptions {
     pub repo_root: PathBuf,
+    /// Repository-relative directory to project into instead of the canonical
+    /// corpus.
+    ///
+    /// `rules/UPDATING.md:33-36` requires a staging root and a
+    /// fail-if-target-exists guard before a builder is pointed at a new
+    /// release, because these writers otherwise overwrite a historical snapshot
+    /// in place. Writing into the canonical corpus is only defensible for
+    /// idempotent regeneration of the snapshot that is already there — which is
+    /// why that stays the default, and why staging refuses to overwrite.
+    pub staging_root: Option<String>,
 }
 
 impl ProjectStaticSurfaceOptions {
     pub fn new(repo_root: impl Into<PathBuf>) -> Self {
         Self {
             repo_root: repo_root.into(),
+            staging_root: None,
         }
     }
 }
@@ -158,11 +171,46 @@ pub fn project_2550q_static_surface(
     let repo_root = canonical_repo_root(&options.repo_root)?;
     let plan = build_static_projection(&repo_root)?;
 
-    write_atomically(&plan.rule_set_path, &render(&plan.rule_set)?)?;
+    let staging = match &options.staging_root {
+        Some(relative) => Some(resolve_output_under(
+            &repo_root,
+            relative,
+            "static projection staging root",
+        )?),
+        None => None,
+    };
+    let target = |path: &Path| -> Result<PathBuf> {
+        let Some(staging) = &staging else {
+            return Ok(path.to_owned());
+        };
+        let relative = path.strip_prefix(&repo_root).map_err(|_| {
+            CodegenError::new(format!(
+                "projected path `{}` is not under the repository root",
+                path.display()
+            ))
+        })?;
+        let destination = staging.join(relative);
+        // The guard UPDATING.md asks for: staging must never silently replace
+        // an artifact that a previous run already produced there.
+        if destination.exists() {
+            return Err(CodegenError::new(format!(
+                "staged output `{}` already exists; refusing to overwrite a previous projection",
+                destination.display()
+            )));
+        }
+        if let Some(parent) = destination.parent() {
+            std::fs::create_dir_all(parent).map_err(|source| {
+                CodegenError::io("create staged output directory", parent, source)
+            })?;
+        }
+        Ok(destination)
+    };
+
+    write_atomically(&target(&plan.rule_set_path)?, &render(&plan.rule_set)?)?;
     for fixture_path in &plan.fixture_paths {
         let mut fixture = read_json(fixture_path)?;
         project_fixture(&mut fixture, &plan.singleton_fields, fixture_path)?;
-        write_atomically(fixture_path, &render(&fixture)?)?;
+        write_atomically(&target(fixture_path)?, &render(&fixture)?)?;
     }
 
     Ok(StaticProjectionReport {

@@ -58,6 +58,7 @@ fn run() -> Result<()> {
     let mut output_file = None;
     let mut rule_set_id = None;
     let mut dry_run = false;
+    let mut staging_root = None;
     let mut json_output = false;
     let mut skip_runtime_tests = false;
     while let Some(argument) = arguments.next() {
@@ -76,6 +77,9 @@ fn run() -> Result<()> {
                 rule_set_id = Some(next_value(&mut arguments, "--rule-set-id")?);
             }
             "--dry-run" if command == "roll-pin" => dry_run = true,
+            "--staging-root" if command == "project-2550q" => {
+                staging_root = Some(next_value(&mut arguments, "--staging-root")?);
+            }
             "--json" if matches!(command.as_str(), "validate-v1" | "status" | "coverage") => {
                 json_output = true;
             }
@@ -249,8 +253,11 @@ fn run() -> Result<()> {
                     "`project-2550q` rewrites a tracked rule set and its fixtures and does not accept v2 source/schema/output options",
                 ));
             }
-            let report =
-                project_2550q_static_surface(&ProjectStaticSurfaceOptions::new(&repo_root))?;
+            let report = {
+                let mut options = ProjectStaticSurfaceOptions::new(&repo_root);
+                options.staging_root = staging_root;
+                project_2550q_static_surface(&options)?
+            };
             println!(
                 "Updated 2550Q v2 static projections: {} executable raw field(s) emitted, \
                  {} identity-only documented control(s) left unprojected, {} total field(s), \
@@ -376,6 +383,7 @@ fn usage() -> String {
      \x20 --output REPOSITORY/RELATIVE/PATH   (build-2550q-bindings only)\n\
      \x20 --rule-set-id ID       (roll-pin only)\n\
      \x20 --dry-run              (roll-pin only)\n\
+     \x20 --staging-root REPOSITORY/RELATIVE/PATH   (project-2550q only)\n\
      \x20 --skip-runtime-tests   (check only)"
         .to_owned()
 }

@@ -67,7 +67,14 @@ Smallest verifiable unit first; verify each; revert anything that regresses.
 
 ## In flight
 
-- Nothing running in the background.
+- Background gate sweep (`b6izu7fgy`) covering the **builder staging guard**,
+  which is written but **not yet committed**. Read its output first on wake and
+  confirm every gate before committing — a commit made ahead of its suite
+  earlier this session shipped code that did not compile under test.
+- Working tree holds: `projections.rs` (`--staging-root` plus a
+  fail-if-target-exists guard), `main.rs` wiring, `rules/tools/STAGING.md`, and
+  a regenerated manifest. Verified by hand: staging writes 122 files, leaves the
+  canonical corpus untouched, and a second run into the same root refuses.
 
 ## Progress
 
