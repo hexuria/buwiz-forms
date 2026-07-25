@@ -16,7 +16,7 @@ rtk cargo run -q --locked -p bir-rules-codegen -- status
 ```
 
 Exits 0 only when every boundary still holds **and** every slice criterion is
-met. Currently 17 of 19. As deliverables land, add criteria — the condition may
+met. Currently 18 of 19. As deliverables land, add criteria — the condition may
 only ever get stricter, and a criterion may never be removed to make it pass.
 
 Plus these, with no regressions:
@@ -67,14 +67,7 @@ Smallest verifiable unit first; verify each; revert anything that regresses.
 
 ## In flight
 
-- Background gate sweep (`b6izu7fgy`) covering the **builder staging guard**,
-  which is written but **not yet committed**. Read its output first on wake and
-  confirm every gate before committing — a commit made ahead of its suite
-  earlier this session shipped code that did not compile under test.
-- Working tree holds: `projections.rs` (`--staging-root` plus a
-  fail-if-target-exists guard), `main.rs` wiring, `rules/tools/STAGING.md`, and
-  a regenerated manifest. Verified by hand: staging writes 122 files, leaves the
-  canonical corpus untouched, and a second run into the same root refuses.
+- Nothing. Staging guard committed after its gate sweep passed.
 
 ## Progress
 
@@ -100,21 +93,38 @@ One self-inflicted error worth recording: that commit was made before its suite
 finished and shipped a duplicated criterion list that did not compile under
 test. Repaired in the next commit. **Wait for the suite before committing.**
 
-**Open (2 criteria):**
+**Also done: `builder-staging-guard`.** `project-2550q --staging-root` mirrors
+the corpus layout beneath a staging root and refuses a target that already
+exists. Verified: 122 files staged, canonical corpus untouched, second run
+refuses by path. `rules/tools/STAGING.md` records why writing into the corpus is
+defensible only for idempotent regeneration.
 
-1. `builder-staging-guard` — builders write straight into the canonical corpus
-   with no staging root and no fail-if-exists guard (`UPDATING.md:33-36`).
-   Blocks any multi-form rollout.
-3. `filing-safe-mirrors-verified-official` — 94 field branches and 22
-   `verified-correct` rule branches are `unresolved`. Mirroring official is the
-   null decision where official was reviewed and found correct. Needs a
-   generator, a source-pinned review document, an audit assertion that mirroring
-   happened **only** where the v1 assessment is `verified-correct`, and a digest
-   roll. This is an evidence change — do it as its own commit with a fresh,
-   careful pass, not tacked onto something else.
+**Open — 1 criterion, and it is deliberately not mine to close.**
+
+`filing-safe-mirrors-verified-official` — 94 field branches and 22
+`verified-correct` rule branches are `unresolved`. The mechanics are ready to
+build: copy each `official` branch into `filing_safe`, restricted to rules whose
+v1 assessment is `verified-correct`, with an audit assertion that the restriction
+held, then a digest roll.
+
+**I stopped short of doing it, and the reason is not difficulty.** Encoding it
+requires authoring a source-pinned review document asserting a filing-safe
+position, and `implementation-plan.md:556` requires filing-safe decisions to
+carry independent legal or domain evidence. I have none. Framing it as "parity,
+not a change" is defensible but still a substantive claim: that filing this form
+through the filing-safe path behaves exactly as the official package does for
+those 22 rules. Writing that review myself would manufacture the evidence this
+whole system exists to prevent being manufactured.
+
+It reduces to **one question**, which belongs with the other five.
 
 ## Blocked
 
+- **The parity policy.** May `filing_safe` mirror `official` wherever the v1
+  assessment is `verified-correct`? That covers 94 field branches and 22 rules —
+  116 of the 135 unresolved states — and is mechanical once approved. It asserts
+  parity with official, not safety beyond it, and explicitly excludes the five
+  rules below. One yes unblocks 116 resolutions.
 - **Five filing-safe decisions, and only the user can make them**:
   `2550q-save-tin`, `2550q-save-name`, `2550q-validate-tin`,
   `2550q-validate-email` (all `incorrect-official-behavior`) and
