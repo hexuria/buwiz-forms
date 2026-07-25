@@ -24,6 +24,7 @@ mod audit;
 mod bindings;
 mod check;
 mod corpus;
+mod coverage;
 mod emit;
 mod error;
 mod files;
@@ -46,6 +47,7 @@ pub use corpus::{
     CorpusReport, DEFAULT_RULES_DIR, FormResult, V1_SCHEMA_VALIDATOR_ID, ValidateV1Options,
     validate_v1,
 };
+pub use coverage::{CoverageOptions, CoverageReport, FormCoverage, coverage};
 pub use error::{CodegenError, Result};
 pub use generate::{GenerateOptions, GenerationReport, MANIFEST_FORMAT, generate};
 pub use json::CANONICALIZATION_ID;

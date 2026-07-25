@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use bir_rules_codegen::{
-    AuditOptions, BuildBindingsOptions, CheckOptions, CodegenError, GenerateOptions,
-    ProjectStaticSurfaceOptions, Result, RollPinOptions, StatusOptions, ValidateV1Options, audit,
-    build_2550q_bindings, check, generate, project_2550q_static_surface, roll_pin, status,
-    validate_v1,
+    AuditOptions, BuildBindingsOptions, CheckOptions, CodegenError, CoverageOptions,
+    GenerateOptions, ProjectStaticSurfaceOptions, Result, RollPinOptions, StatusOptions,
+    ValidateV1Options, audit, build_2550q_bindings, check, coverage, generate,
+    project_2550q_static_surface, roll_pin, status, validate_v1,
 };
 
 fn main() -> ExitCode {
@@ -42,6 +42,7 @@ fn run() -> Result<()> {
             | "build-2550q-bindings"
             | "project-2550q"
             | "roll-pin"
+            | "coverage"
     ) {
         return Err(CodegenError::new(format!(
             "unknown command `{command}`\n\n{}",
@@ -75,7 +76,9 @@ fn run() -> Result<()> {
                 rule_set_id = Some(next_value(&mut arguments, "--rule-set-id")?);
             }
             "--dry-run" if command == "roll-pin" => dry_run = true,
-            "--json" if matches!(command.as_str(), "validate-v1" | "status") => json_output = true,
+            "--json" if matches!(command.as_str(), "validate-v1" | "status" | "coverage") => {
+                json_output = true;
+            }
             "--skip-runtime-tests" if command == "check" => skip_runtime_tests = true,
             "--help" | "-h" => {
                 print_usage();
@@ -103,6 +106,53 @@ fn run() -> Result<()> {
     }
 
     match command.as_str() {
+        "coverage" => {
+            let report = coverage(&CoverageOptions::new(&repo_root))?;
+            if json_output {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).map_err(|source| {
+                        CodegenError::with_source("serialize coverage report", source)
+                    })?
+                );
+            } else {
+                println!(
+                    "{:<16}{:>7}{:>7}{:>7}   {:<11}{:>5}{:>6}",
+                    "form", "fields", "rules", "calcs", "v2", "v2r", "v2c"
+                );
+                for form in &report.forms {
+                    println!(
+                        "{:<16}{:>7}{:>7}{:>7}   {:<11}{:>5}{:>6}",
+                        form.form_id,
+                        form.v1_fields,
+                        form.v1_rules,
+                        form.v1_calculations,
+                        form.v2_review_status.as_deref().unwrap_or("-"),
+                        form.v2_rules,
+                        form.v2_calculations,
+                    );
+                }
+                println!();
+                println!(
+                    "{} form(s); {} with a v2 snapshot; {} resolvable at runtime",
+                    report.form_count,
+                    report.forms_with_v2_snapshot,
+                    report.forms_runtime_resolvable
+                );
+                println!(
+                    "executable rules       {}/{} ({:.1}%)",
+                    report.v2_rules,
+                    report.v1_rules,
+                    report.rule_coverage_percent()
+                );
+                println!(
+                    "executable calculations {}/{} ({:.1}%)",
+                    report.v2_calculations,
+                    report.v1_calculations,
+                    report.calculation_coverage_percent()
+                );
+            }
+        }
         "status" => {
             if v2_options_present {
                 return Err(CodegenError::new(

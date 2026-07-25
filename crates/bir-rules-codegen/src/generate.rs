@@ -763,6 +763,7 @@ const GENERATOR_SOURCES: &[(&str, &[u8])] = &[
     ("src/bindings.rs", include_bytes!("bindings.rs")),
     ("src/check.rs", include_bytes!("check.rs")),
     ("src/corpus.rs", include_bytes!("corpus.rs")),
+    ("src/coverage.rs", include_bytes!("coverage.rs")),
     ("src/emit.rs", include_bytes!("emit.rs")),
     ("src/error.rs", include_bytes!("error.rs")),
     ("src/files.rs", include_bytes!("files.rs")),
