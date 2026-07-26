@@ -871,6 +871,129 @@ mod tests {
             .expect_err("candidate profile cannot borrow a non-executable policy branch");
     }
 
+    #[test]
+    fn legacy_record_classification_schema_is_closed_and_source_bound() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
+        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let rule_set_path = root.join("../../ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
+        let mut rule_set = parse_strict(
+            &fs::read(&rule_set_path).expect("read landed rule set"),
+            &rule_set_path,
+        )
+        .expect("parse landed rule set");
+        let classifications = serde_json::from_value(serde_json::json!([{
+            "outcome": "non-runtime",
+            "artifact": "validations",
+            "legacy_id": "example-rule",
+            "locator": "#/rules/0",
+            "reason": "proven-unreachable",
+            "source_refs": [{
+                "source_id": "v1-validations",
+                "locator": "#/rules/0"
+            }]
+        }]))
+        .expect("classification JSON");
+        rule_set
+            .object_mut()
+            .unwrap()
+            .get_mut("legacy_v1")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .insert("record_classifications".to_owned(), classifications);
+        schemas
+            .validate("rule-set.schema.json", &rule_set)
+            .expect("closed non-runtime classification validates");
+
+        let mut workflow_rule_set = rule_set.clone();
+        let workflow_classifications = serde_json::from_value(serde_json::json!([{
+            "outcome": "non-runtime",
+            "artifact": "workflow",
+            "locator": "#/phases/0",
+            "reason": "non-validation-ui-behavior",
+            "source_refs": [{
+                "source_id": "v1-workflow",
+                "locator": "#/phases/0"
+            }]
+        }]))
+        .expect("workflow classification JSON");
+        workflow_rule_set
+            .object_mut()
+            .unwrap()
+            .get_mut("legacy_v1")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .insert(
+                "record_classifications".to_owned(),
+                workflow_classifications,
+            );
+        schemas
+            .validate("rule-set.schema.json", &workflow_rule_set)
+            .expect("ID-less workflow classification validates by locator");
+
+        let workflow_classifications = workflow_rule_set
+            .object_mut()
+            .unwrap()
+            .get_mut("legacy_v1")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .get_mut("record_classifications")
+            .unwrap();
+        let JsonValue::Array(workflow_classifications) = workflow_classifications else {
+            panic!("workflow record classifications are an array");
+        };
+        workflow_classifications[0].object_mut().unwrap().insert(
+            "legacy_id".to_owned(),
+            JsonValue::String("invented-phase-id".to_owned()),
+        );
+        schemas
+            .validate("rule-set.schema.json", &workflow_rule_set)
+            .expect_err("workflow classification cannot invent a legacy ID");
+
+        let classifications = rule_set
+            .object_mut()
+            .unwrap()
+            .get_mut("legacy_v1")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .get_mut("record_classifications")
+            .unwrap();
+        let JsonValue::Array(classifications) = classifications else {
+            panic!("record classifications are an array");
+        };
+        classifications[0].object_mut().unwrap().remove("legacy_id");
+        schemas
+            .validate("rule-set.schema.json", &rule_set)
+            .expect_err("ID-bearing artifact classification requires legacy_id");
+
+        let classifications = rule_set
+            .object_mut()
+            .unwrap()
+            .get_mut("legacy_v1")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .get_mut("record_classifications")
+            .unwrap();
+        let JsonValue::Array(classifications) = classifications else {
+            panic!("record classifications are an array");
+        };
+        classifications[0].object_mut().unwrap().insert(
+            "legacy_id".to_owned(),
+            JsonValue::String("example-rule".to_owned()),
+        );
+        classifications[0].object_mut().unwrap().insert(
+            "reason".to_owned(),
+            JsonValue::String("whatever-makes-the-count-pass".to_owned()),
+        );
+        schemas
+            .validate("rule-set.schema.json", &rule_set)
+            .expect_err("classification reason vocabulary is closed");
+    }
+
     fn serialization_contract_with_node(node: serde_json::Value) -> JsonValue {
         serde_json::from_value(serde_json::json!({
             "contract_version": "1.0.0",

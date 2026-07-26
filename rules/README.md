@@ -16,11 +16,13 @@ The inventory records official behavior without assuming that behavior is legall
 
 `pending` means no revision has been selected. `researching` means the form is incomplete and must not be used as an implementation specification. `complete` means the per-form definition of complete in the goal has been audited and all remaining uncertainty is explicit in `gaps.md`.
 
-Run `rules/validate.ps1` on Windows for the legacy v1 corpus. It parses every
-JSON file, performs the 43-form structural audit, and schema-validates the 519
-v1 documents; `rules/ir/v2` and `rules/schema/v2` use cross-file Draft 2020-12
-references and are validated separately by `npm run rules:check`. The
-per-form audit also records the exact verification command used.
+Run `rtk cargo run --locked -p bir-rules-codegen -- validate-v1` for the
+portable corpus audit. It reads all 659 JSON files, performs the 43-form
+structural audit, and validates the 520 legacy-v1 JSON documents separately
+from the 139 v2 JSON documents. The `rules/ir/v2` and `rules/schema/v2`
+documents use cross-file Draft 2020-12 references and are also checked by
+`rtk npm run rules:check`. The per-form audit records the exact verification
+command used.
 
 ## Repository ownership and runtime consumption
 
@@ -42,6 +44,10 @@ official-package compatibility tests remain reproducible.
 
 ## Current coverage
 
-All 43 forms in `FORM_BUILD_PRIORITY.md` are indexed once, in priorities 1–43, with revision-specific manifests and explicit gaps. The final strict audit covered 519 JSON files, 9,592 typed field entries, 2,007 validation rules, 623 calculations, and 1,354 negative fixtures. Structural checks and all 216 schema-bearing documents passed.
+All 43 forms in `FORM_BUILD_PRIORITY.md` are indexed once, in priorities 1–43,
+with revision-specific manifests and explicit gaps. The final strict audit
+covered 659 JSON files: 520 legacy-v1 and 139 v2. It also covered 9,592 typed
+field entries, 2,007 validation rules, 623 calculations, and 1,354 negative
+fixtures. Structural checks and all 216 schema-bearing documents passed.
 
 The validator also rejects duplicate form IDs, priorities, or manifest paths; noncontiguous priorities; queue/order mismatches; and index/manifest identity, revision, or status mismatches.

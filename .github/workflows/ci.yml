@@ -130,7 +130,11 @@ jobs:
       run: cargo run --locked -p bir-rules-codegen -- validate-v1
 
   validation-rules-v2:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-14, ubuntu-22.04, windows-latest ]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
 
@@ -140,6 +144,9 @@ jobs:
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
 
+    - name: Lock immutable v1 corpus census
+      run: cargo test --locked -p bir-rules-codegen corpus::tests::landed_v1_corpus_reconciles_its_published_counts -- --exact
+
     # `audit` is a distinct subcommand from `check` and was never run in CI.
     - name: Audit validation-rules v2 IR
       run: cargo run --locked -p bir-rules-codegen -- audit
@@ -147,8 +154,28 @@ jobs:
     - name: Check generated validation rules
       run: cargo run --locked -p bir-rules-codegen -- check
 
+    - name: Verify validation-rules digest roll
+      run: cargo run --locked -p bir-rules-codegen -- roll-pin --all --dry-run
+
+    - name: Report validation-rules operator census
+      run: cargo run --locked -p bir-rules-codegen -- operator-census --json
+
+    - name: Report validation-rules reconciliation
+      run: cargo run --locked -p bir-rules-codegen -- reconciliation --json
+
+    - name: Check validation-rules production boundaries
+      run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
+
+    - name: Check tracked validation evidence packet set
+      if: ${{ hashFiles('evidence/validation-rules/packets/v1/packet-set.json') != '' }}
+      run: cargo run --locked -p bir-rules-codegen -- check-evidence-packet-set --packet-root evidence/validation-rules/packets/v1
+
+    - name: Require complete validation library status after packet landing
+      if: ${{ hashFiles('evidence/validation-rules/packets/v1/packet-set.json') != '' }}
+      run: cargo run -q --locked -p bir-rules-codegen -- status
+
     - name: Test validation rules
-      run: cargo test --locked -p bir-rules -p bir-rules-codegen
+      run: cargo test --locked -p bir-rules -p bir-rules-codegen -p bir-rules-platform
 
   renderer:
     runs-on: ubuntu-22.04

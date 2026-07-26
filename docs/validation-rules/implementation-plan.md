@@ -1,5 +1,13 @@
 # Executable validation-rules plan
 
+> **Superseded as an execution queue (2026-07-26).** This document remains the
+> architecture and phase-history record; its GPUI, Final Copy, promotion, and
+> remaining-form sequencing is not the live plan. Continue from
+> [execution-plan.md](execution-plan.md), which requires portable evidence
+> packets and an ordered 43-form candidate library before any application or
+> filing work resumes. Nothing in this historical plan authorizes a reviewed
+> registry entry or a production path.
+
 This plan introduces the extracted rules without changing any current form,
 renderer, release status, capability flag, queue authorization, or submission
 behavior until the applicable phase gate is satisfied.

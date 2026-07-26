@@ -320,6 +320,156 @@
       },
       "additionalProperties": false
     },
+    "legacy_record_classification": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "outcome",
+            "artifact",
+            "legacy_id",
+            "locator",
+            "reason",
+            "source_refs"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "non-runtime"
+            },
+            "artifact": {
+              "enum": [
+                "fields",
+                "validations",
+                "calculations"
+              ]
+            },
+            "legacy_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "locator": {
+              "type": "string",
+              "pattern": "^#/(fields|rules|calculations)/[0-9]+$"
+            },
+            "reason": {
+              "enum": [
+                "proven-unreachable",
+                "obsolete",
+                "external-submission-or-credential",
+                "non-validation-ui-behavior",
+                "evidence-blocked"
+              ]
+            },
+            "source_refs": {
+              "$ref": "common.schema.json#/$defs/source_refs"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "outcome",
+            "artifact",
+            "legacy_id",
+            "locator",
+            "reason",
+            "source_refs"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "unresolved"
+            },
+            "artifact": {
+              "enum": [
+                "fields",
+                "validations",
+                "calculations"
+              ]
+            },
+            "legacy_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "locator": {
+              "type": "string",
+              "pattern": "^#/(fields|rules|calculations)/[0-9]+$"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_refs": {
+              "$ref": "common.schema.json#/$defs/source_refs"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "outcome",
+            "artifact",
+            "locator",
+            "reason",
+            "source_refs"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "non-runtime"
+            },
+            "artifact": {
+              "const": "workflow"
+            },
+            "locator": {
+              "type": "string",
+              "pattern": "^#/(phases|transitions)/[0-9]+$"
+            },
+            "reason": {
+              "enum": [
+                "proven-unreachable",
+                "obsolete",
+                "external-submission-or-credential",
+                "non-validation-ui-behavior",
+                "evidence-blocked"
+              ]
+            },
+            "source_refs": {
+              "$ref": "common.schema.json#/$defs/source_refs"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "outcome",
+            "artifact",
+            "locator",
+            "reason",
+            "source_refs"
+          ],
+          "properties": {
+            "outcome": {
+              "const": "unresolved"
+            },
+            "artifact": {
+              "const": "workflow"
+            },
+            "locator": {
+              "type": "string",
+              "pattern": "^#/(phases|transitions)/[0-9]+$"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_refs": {
+              "$ref": "common.schema.json#/$defs/source_refs"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "legacy_counts": {
       "type": "object",
       "required": [
@@ -401,6 +551,13 @@
           },
           "minItems": 5,
           "maxItems": 5,
+          "uniqueItems": true
+        },
+        "record_classifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/legacy_record_classification"
+          },
           "uniqueItems": true
         },
         "declared_counts": {

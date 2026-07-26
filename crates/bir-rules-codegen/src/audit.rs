@@ -65,6 +65,50 @@ pub struct AuditReport {
     pub(crate) snapshots: Vec<AuditedSnapshot>,
 }
 
+/// Read-only identity and review metadata for one fully audited snapshot.
+///
+/// The summary deliberately owns no mutable access to the audited document,
+/// fixtures, or canonical source bytes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotSummary {
+    rule_set_id: String,
+    form_code: String,
+    form_revision: String,
+    official_package_version: String,
+    source_set_sha256: Option<String>,
+    review_status: ReviewStatus,
+}
+
+impl SnapshotSummary {
+    pub fn rule_set_id(&self) -> &str {
+        &self.rule_set_id
+    }
+
+    pub fn form_code(&self) -> &str {
+        &self.form_code
+    }
+
+    pub fn form_revision(&self) -> &str {
+        &self.form_revision
+    }
+
+    pub fn official_package_version(&self) -> &str {
+        &self.official_package_version
+    }
+
+    pub fn source_set_sha256(&self) -> Option<&str> {
+        self.source_set_sha256.as_deref()
+    }
+
+    pub fn review_status(&self) -> &'static str {
+        match self.review_status {
+            ReviewStatus::Skeleton => "skeleton",
+            ReviewStatus::Candidate => "candidate",
+            ReviewStatus::Reviewed => "reviewed",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct AuditedSnapshot {
     pub(crate) index: IndexSnapshot,
@@ -86,6 +130,28 @@ impl AuditReport {
 
     pub fn normalized_source_digest(&self) -> &str {
         &self.normalized_source_digest
+    }
+
+    /// Requires an exact rule-set identity without narrowing the audited
+    /// aggregate or exposing its mutable internals.
+    pub fn require_rule_set(&self, rule_set_id: &str) -> Result<SnapshotSummary> {
+        let snapshot = self
+            .snapshots
+            .iter()
+            .find(|snapshot| snapshot.index.rule_set_id == rule_set_id)
+            .ok_or_else(|| {
+                CodegenError::new(format!(
+                    "v2 audit contains no snapshot with rule_set_id `{rule_set_id}`"
+                ))
+            })?;
+        Ok(SnapshotSummary {
+            rule_set_id: snapshot.index.rule_set_id.clone(),
+            form_code: snapshot.index.form_code.clone(),
+            form_revision: snapshot.index.form_revision.clone(),
+            official_package_version: snapshot.index.official_package_version.clone(),
+            source_set_sha256: snapshot.index.source_set_sha256.clone(),
+            review_status: snapshot.index.review_status,
+        })
     }
 }
 
@@ -206,6 +272,56 @@ pub fn audit(options: &AuditOptions) -> Result<AuditReport> {
         normalized_source_digest,
         snapshots,
     })
+}
+
+#[cfg(test)]
+mod snapshot_summary_tests {
+    use super::{AuditOptions, audit};
+
+    const RULE_SET_ID: &str = "2550q-v2024-p7.9.6.0";
+
+    #[test]
+    fn required_rule_set_exposes_only_immutable_audited_summary() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let report = audit(&AuditOptions::new(root)).expect("audit landed v2 corpus");
+
+        let summary = report
+            .require_rule_set(RULE_SET_ID)
+            .expect("require landed candidate");
+        assert_eq!(summary.rule_set_id(), RULE_SET_ID);
+        assert_eq!(summary.form_code(), "2550Q");
+        assert_eq!(summary.form_revision(), "2024-04-01");
+        assert_eq!(summary.official_package_version(), "7.9.6.0");
+        assert_eq!(summary.review_status(), "candidate");
+        assert_eq!(
+            summary
+                .source_set_sha256()
+                .expect("candidate source-set digest")
+                .len(),
+            64
+        );
+        assert_eq!(report.snapshot_count(), 1, "focus must not narrow audit");
+    }
+
+    #[test]
+    fn unknown_required_rule_set_fails_closed() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let report = audit(&AuditOptions::new(root)).expect("audit landed v2 corpus");
+
+        let error = report
+            .require_rule_set("unknown-rule-set")
+            .expect_err("unknown selector must fail");
+        assert!(
+            error
+                .message()
+                .contains("no snapshot with rule_set_id `unknown-rule-set`")
+        );
+        assert_eq!(
+            report.snapshot_count(),
+            1,
+            "failed focus must not narrow audit"
+        );
+    }
 }
 
 fn validate_index(
@@ -511,6 +627,7 @@ fn validate_legacy_mapping(document: &RuleSetDocument, rules_root: &Path) -> Res
         .iter()
         .map(|source| (source.source_id.as_str(), source))
         .collect::<BTreeMap<_, _>>();
+    let mut legacy_documents = BTreeMap::new();
     for mapping in &document.legacy_v1.mappings {
         let source = sources.get(mapping.source_id.as_str()).ok_or_else(|| {
             CodegenError::new(format!(
@@ -535,6 +652,10 @@ fn validate_legacy_mapping(document: &RuleSetDocument, rules_root: &Path) -> Res
             LegacyArtifact::Fields => array_len_property(&value, "fields")?,
             LegacyArtifact::Validations => array_len_property(&value, "rules")?,
             LegacyArtifact::Calculations => array_len_property(&value, "calculations")?,
+            // `legacy_v1.schema_version = 1.0.0` defined this mapping count as
+            // the transition count. Keep that wire-compatible for the landed
+            // 2550Q candidate; the complete workflow record universe is
+            // validated and reconciled from both declared counts below.
             LegacyArtifact::Workflow => array_len_property(&value, "transitions")?,
         };
         if actual_count != mapping.record_count {
@@ -544,6 +665,7 @@ fn validate_legacy_mapping(document: &RuleSetDocument, rules_root: &Path) -> Res
                 mapping.record_count
             )));
         }
+        legacy_documents.insert(mapping.artifact, value);
     }
 
     let counts = &document.legacy_v1.declared_counts;
@@ -559,7 +681,327 @@ fn validate_legacy_mapping(document: &RuleSetDocument, rules_root: &Path) -> Res
         LegacyArtifact::Workflow,
         counts.workflow_transitions,
     )?;
+    let workflow = legacy_documents
+        .get(&LegacyArtifact::Workflow)
+        .expect("legacy workflow source coverage was validated");
+    validate_legacy_workflow_count(
+        "states",
+        array_len_property(workflow, "phases")?,
+        counts.workflow_states,
+    )?;
+    validate_legacy_workflow_count(
+        "transitions",
+        array_len_property(workflow, "transitions")?,
+        counts.workflow_transitions,
+    )?;
+    validate_legacy_record_classifications(document, &legacy_documents)?;
     Ok(())
+}
+
+fn validate_legacy_workflow_count(label: &str, actual: u64, declared: u64) -> Result<()> {
+    if actual == declared {
+        Ok(())
+    } else {
+        Err(CodegenError::new(format!(
+            "legacy workflow {label} source count {actual} differs from declared count {declared}"
+        )))
+    }
+}
+
+fn validate_legacy_record_classifications(
+    document: &RuleSetDocument,
+    legacy_documents: &BTreeMap<LegacyArtifact, JsonValue>,
+) -> Result<()> {
+    let source_ids = document
+        .legacy_v1
+        .mappings
+        .iter()
+        .map(|mapping| (mapping.artifact, mapping.source_id.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let represented = represented_legacy_locators(document, &source_ids, legacy_documents)?;
+    let mut classified = BTreeSet::new();
+
+    for classification in &document.legacy_v1.record_classifications {
+        let artifact = classification.artifact();
+        let allowed_array_keys: &[&'static str] = match artifact {
+            LegacyArtifact::Fields => &["fields"],
+            LegacyArtifact::Validations => &["rules"],
+            LegacyArtifact::Calculations => &["calculations"],
+            LegacyArtifact::Workflow => &["phases", "transitions"],
+            LegacyArtifact::Manifest => {
+                return Err(CodegenError::new(
+                    "legacy manifest cannot be a record-level classification",
+                ));
+            }
+        };
+        let locator = classification.locator();
+        let (array_key, index) = parse_canonical_legacy_record_locator(
+            artifact,
+            allowed_array_keys,
+            locator,
+            "classification",
+        )?;
+        let key = (artifact, locator.to_owned());
+        if !classified.insert(key.clone()) {
+            return Err(CodegenError::new(format!(
+                "legacy {} record `{locator}` is classified more than once",
+                artifact.label()
+            )));
+        }
+        if represented.contains(&key) {
+            return Err(CodegenError::new(format!(
+                "legacy {} record `{locator}` is both represented by v2 and classified without a runtime target",
+                artifact.label()
+            )));
+        }
+
+        let legacy = legacy_documents.get(&artifact).ok_or_else(|| {
+            CodegenError::new(format!(
+                "legacy {} source is unavailable for record classification",
+                artifact.label()
+            ))
+        })?;
+        let legacy = required_object(legacy, "legacy record classification source")?;
+        let records = required_array(legacy, array_key, "legacy record classification source")?;
+        let record = records.get(index).ok_or_else(|| {
+            CodegenError::new(format!(
+                "legacy {} classification locator `{locator}` is out of range",
+                artifact.label()
+            ))
+        })?;
+        let record = required_object(record, "legacy classified record")?;
+        match artifact {
+            LegacyArtifact::Fields | LegacyArtifact::Validations | LegacyArtifact::Calculations => {
+                let id_key = match artifact {
+                    LegacyArtifact::Fields => "field_key",
+                    LegacyArtifact::Validations => "rule_id",
+                    LegacyArtifact::Calculations => "calculation_id",
+                    LegacyArtifact::Manifest | LegacyArtifact::Workflow => unreachable!(),
+                };
+                let legacy_id = classification.legacy_id().ok_or_else(|| {
+                    CodegenError::new(format!(
+                        "legacy {} classification `{locator}` must name its source `{id_key}`",
+                        artifact.label()
+                    ))
+                })?;
+                let actual_id = required_string(record, id_key, "legacy classified record")?;
+                if actual_id != legacy_id {
+                    return Err(CodegenError::new(format!(
+                        "legacy {} classification `{locator}` names `{legacy_id}`, source record names `{actual_id}`",
+                        artifact.label()
+                    )));
+                }
+            }
+            LegacyArtifact::Workflow => {
+                if let Some(legacy_id) = classification.legacy_id() {
+                    return Err(CodegenError::new(format!(
+                        "legacy workflow classification `{locator}` must use locator identity, not invented legacy_id `{legacy_id}`"
+                    )));
+                }
+            }
+            LegacyArtifact::Manifest => unreachable!(),
+        }
+        let expected_source_id = source_ids
+            .get(&artifact)
+            .expect("legacy source coverage was validated");
+        if !classification.source_refs().iter().any(|source_ref| {
+            source_ref.source_id.as_str() == *expected_source_id
+                && source_ref.locator.as_deref() == Some(locator)
+        }) {
+            return Err(CodegenError::new(format!(
+                "legacy {} classification `{locator}` must cite exact source `{expected_source_id}` and locator",
+                artifact.label()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn represented_legacy_locators(
+    document: &RuleSetDocument,
+    source_ids: &BTreeMap<LegacyArtifact, &str>,
+    legacy_documents: &BTreeMap<LegacyArtifact, JsonValue>,
+) -> Result<BTreeSet<(LegacyArtifact, String)>> {
+    let mut represented = BTreeSet::new();
+    collect_represented_legacy_entity_locators(
+        LegacyArtifact::Fields,
+        "fields",
+        document.field_groups.iter().chain(document.fields.iter()),
+        source_ids,
+        legacy_documents,
+        &mut represented,
+    )?;
+    collect_represented_legacy_entity_locators(
+        LegacyArtifact::Validations,
+        "rules",
+        document.rules.iter(),
+        source_ids,
+        legacy_documents,
+        &mut represented,
+    )?;
+    collect_represented_legacy_entity_locators(
+        LegacyArtifact::Calculations,
+        "calculations",
+        document.calculations.iter(),
+        source_ids,
+        legacy_documents,
+        &mut represented,
+    )?;
+    if let Some(workflow) = document.workflow.object() {
+        if let Some(JsonValue::Array(states)) = workflow.get("states") {
+            collect_represented_legacy_entity_locators(
+                LegacyArtifact::Workflow,
+                "phases",
+                states.iter(),
+                source_ids,
+                legacy_documents,
+                &mut represented,
+            )?;
+        }
+        if let Some(JsonValue::Array(transitions)) = workflow.get("transitions") {
+            collect_represented_legacy_entity_locators(
+                LegacyArtifact::Workflow,
+                "transitions",
+                transitions.iter(),
+                source_ids,
+                legacy_documents,
+                &mut represented,
+            )?;
+        }
+    }
+    Ok(represented)
+}
+
+fn collect_represented_legacy_entity_locators<'a>(
+    artifact: LegacyArtifact,
+    legacy_array_key: &'static str,
+    entities: impl Iterator<Item = &'a JsonValue>,
+    source_ids: &BTreeMap<LegacyArtifact, &str>,
+    legacy_documents: &BTreeMap<LegacyArtifact, JsonValue>,
+    represented: &mut BTreeSet<(LegacyArtifact, String)>,
+) -> Result<()> {
+    for entity in entities {
+        let Some(source_refs) = entity
+            .object()
+            .and_then(|entity| entity.get("source_refs"))
+            .and_then(|source_refs| match source_refs {
+                JsonValue::Array(source_refs) => Some(source_refs),
+                _ => None,
+            })
+        else {
+            continue;
+        };
+        for source_ref in source_refs {
+            let Some(source_ref) = source_ref.object() else {
+                continue;
+            };
+            let Some(source_id) = source_ref.get("source_id").and_then(JsonValue::as_str) else {
+                continue;
+            };
+            let Some(source_artifact) =
+                source_ids
+                    .iter()
+                    .find_map(|(mapped_artifact, mapped_source_id)| {
+                        (*mapped_source_id == source_id).then_some(*mapped_artifact)
+                    })
+            else {
+                continue;
+            };
+            if source_artifact != artifact {
+                // A v2 entity may cite a different legacy artifact as
+                // supporting evidence (for example, a calculation can cite
+                // the validation handler that invokes it). Such a citation is
+                // not reconciliation authority for this entity. Ignore it
+                // here; without a same-artifact locator the source record
+                // remains unrepresented and the aggregate gap stays open.
+                continue;
+            }
+            let locator = source_ref
+                .get("locator")
+                .and_then(JsonValue::as_str)
+                .ok_or_else(|| {
+                    CodegenError::new(format!(
+                        "v2 {} entity citation of legacy source `{source_id}` must include a record locator",
+                        artifact.label()
+                    ))
+                })?;
+            validate_represented_legacy_locator(
+                artifact,
+                legacy_array_key,
+                locator,
+                legacy_documents,
+            )?;
+            if !represented.insert((artifact, locator.to_owned())) {
+                return Err(CodegenError::new(format!(
+                    "v2 {} source locator `{locator}` is referenced more than once",
+                    artifact.label()
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_represented_legacy_locator(
+    artifact: LegacyArtifact,
+    array_key: &'static str,
+    locator: &str,
+    legacy_documents: &BTreeMap<LegacyArtifact, JsonValue>,
+) -> Result<()> {
+    let (_, index) =
+        parse_canonical_legacy_record_locator(artifact, &[array_key], locator, "v2 source")?;
+    let legacy = legacy_documents.get(&artifact).ok_or_else(|| {
+        CodegenError::new(format!(
+            "legacy {} source is unavailable for v2 record reconciliation",
+            artifact.label()
+        ))
+    })?;
+    let legacy = required_object(legacy, "legacy represented-record source")?;
+    let records = required_array(legacy, array_key, "legacy represented-record source")?;
+    if index >= records.len() {
+        return Err(CodegenError::new(format!(
+            "v2 {} source locator `{locator}` is out of range for {} legacy record(s)",
+            artifact.label(),
+            records.len()
+        )));
+    }
+    Ok(())
+}
+
+fn parse_canonical_legacy_record_locator(
+    artifact: LegacyArtifact,
+    allowed_array_keys: &[&'static str],
+    locator: &str,
+    owner: &str,
+) -> Result<(&'static str, usize)> {
+    let Some((array_key, raw_index)) = allowed_array_keys.iter().find_map(|array_key| {
+        locator
+            .strip_prefix(&format!("#/{array_key}/"))
+            .map(|raw_index| (*array_key, raw_index))
+    }) else {
+        let expected = allowed_array_keys
+            .iter()
+            .map(|array_key| format!("#/{array_key}/<index>"))
+            .collect::<Vec<_>>()
+            .join(" or ");
+        return Err(CodegenError::new(format!(
+            "legacy {} {owner} locator `{locator}` is invalid for the artifact; expected {expected}",
+            artifact.label()
+        )));
+    };
+    let index = raw_index.parse::<usize>().map_err(|_| {
+        CodegenError::new(format!(
+            "legacy {} {owner} locator `{locator}` must end in a decimal record index",
+            artifact.label()
+        ))
+    })?;
+    if raw_index != index.to_string() {
+        return Err(CodegenError::new(format!(
+            "legacy {} {owner} locator `{locator}` is not a canonical JSON-array locator",
+            artifact.label()
+        )));
+    }
+    Ok((array_key, index))
 }
 
 fn validate_mapping_count(
@@ -8648,6 +9090,255 @@ mod reviewed_completeness_tests {
             validate_reviewed_legacy_locator_bijections(&missing_phase, &legacy_artifacts())
                 .expect_err("workflow state locator must resolve to one legacy phase");
         assert!(error.message().contains("does not resolve"));
+    }
+
+    #[test]
+    fn legacy_record_cannot_be_both_represented_and_non_runtime() {
+        let mut document = reviewed_document();
+        document.legacy_v1.record_classifications.push(
+            crate::model::LegacyRecordClassification::NonRuntime {
+                artifact: LegacyArtifact::Fields,
+                legacy_id: Some("legacy-field".to_owned()),
+                locator: "#/fields/0".to_owned(),
+                reason: crate::model::LegacyNonRuntimeReason::ProvenUnreachable,
+                source_refs: vec![crate::model::SourceRef {
+                    source_id: "legacy-fields".to_owned(),
+                    locator: Some("#/fields/0".to_owned()),
+                }],
+            },
+        );
+        let error = validate_legacy_record_classifications(&document, &legacy_artifacts())
+            .expect_err("represented record classification must fail");
+        assert!(error.message().contains("both represented by v2"));
+    }
+
+    #[test]
+    fn idless_workflow_records_classify_by_locator_only() {
+        let mut document = reviewed_document();
+        let workflow = document.workflow.object_mut().unwrap();
+        for array_key in ["states", "transitions"] {
+            let JsonValue::Array(entities) = workflow.get_mut(array_key).unwrap() else {
+                panic!("workflow entities are an array");
+            };
+            entities[0]
+                .object_mut()
+                .unwrap()
+                .insert("source_refs".to_owned(), JsonValue::Array(Vec::new()));
+        }
+        document.legacy_v1.record_classifications = vec![
+            workflow_classification("#/phases/0"),
+            workflow_classification("#/transitions/0"),
+        ];
+        validate_legacy_record_classifications(&document, &legacy_artifacts())
+            .expect("ID-less phases and transitions classify by exact locator");
+
+        let duplicate = document.legacy_v1.record_classifications[0].clone();
+        document.legacy_v1.record_classifications.push(duplicate);
+        let error = validate_legacy_record_classifications(&document, &legacy_artifacts())
+            .expect_err("duplicate workflow classification must fail");
+        assert!(error.message().contains("classified more than once"));
+
+        document.legacy_v1.record_classifications.pop();
+        let crate::model::LegacyRecordClassification::NonRuntime { legacy_id, .. } =
+            &mut document.legacy_v1.record_classifications[0]
+        else {
+            unreachable!()
+        };
+        *legacy_id = Some("invented-phase-id".to_owned());
+        let error = validate_legacy_record_classifications(&document, &legacy_artifacts())
+            .expect_err("workflow classification cannot invent an ID");
+        assert!(error.message().contains("must use locator identity"));
+    }
+
+    #[test]
+    fn id_bearing_classification_still_requires_exact_legacy_id() {
+        let mut document = reviewed_document();
+        document.rules[0]
+            .object_mut()
+            .unwrap()
+            .insert("source_refs".to_owned(), JsonValue::Array(Vec::new()));
+        document.legacy_v1.record_classifications =
+            vec![crate::model::LegacyRecordClassification::NonRuntime {
+                artifact: LegacyArtifact::Validations,
+                legacy_id: None,
+                locator: "#/rules/0".to_owned(),
+                reason: crate::model::LegacyNonRuntimeReason::ProvenUnreachable,
+                source_refs: vec![crate::model::SourceRef {
+                    source_id: "legacy-validations".to_owned(),
+                    locator: Some("#/rules/0".to_owned()),
+                }],
+            }];
+        let mut artifacts = legacy_artifacts();
+        artifacts.insert(
+            LegacyArtifact::Validations,
+            serde_json::from_value(json!({
+                "rules": [{"rule_id": "legacy-rule"}]
+            }))
+            .unwrap(),
+        );
+        let error = validate_legacy_record_classifications(&document, &artifacts)
+            .expect_err("validation classification without legacy ID must fail");
+        assert!(error.message().contains("must name its source `rule_id`"));
+    }
+
+    #[test]
+    fn represented_workflow_locators_are_exact_unique_and_in_range() {
+        let source_ids = BTreeMap::from([
+            (LegacyArtifact::Fields, "legacy-fields"),
+            (LegacyArtifact::Validations, "legacy-validations"),
+            (LegacyArtifact::Calculations, "legacy-calculations"),
+            (LegacyArtifact::Workflow, "legacy-workflow"),
+        ]);
+        let document = reviewed_document();
+        let represented = represented_legacy_locators(&document, &source_ids, &legacy_artifacts())
+            .expect("workflow locators reconcile");
+        assert!(represented.contains(&(LegacyArtifact::Workflow, "#/phases/0".to_owned())));
+        assert!(represented.contains(&(LegacyArtifact::Workflow, "#/transitions/0".to_owned())));
+
+        let mut duplicate = reviewed_document();
+        let workflow = duplicate.workflow.object_mut().unwrap();
+        let JsonValue::Array(states) = workflow.get_mut("states").unwrap() else {
+            panic!("workflow states are an array");
+        };
+        let source_ref = states[0]
+            .object()
+            .unwrap()
+            .get("source_refs")
+            .unwrap()
+            .clone();
+        states.push(
+            serde_json::from_value(json!({
+                "source_refs": source_ref
+            }))
+            .unwrap(),
+        );
+        let error = represented_legacy_locators(&duplicate, &source_ids, &legacy_artifacts())
+            .expect_err("duplicate phase locator must fail");
+        assert!(error.message().contains("referenced more than once"));
+
+        let mut wrong_array = reviewed_document();
+        set_workflow_state_locator(&mut wrong_array, "#/transitions/0");
+        let error = represented_legacy_locators(&wrong_array, &source_ids, &legacy_artifacts())
+            .expect_err("state cannot cite a transition record");
+        assert!(error.message().contains("invalid for the artifact"));
+
+        let mut out_of_range = reviewed_document();
+        set_workflow_state_locator(&mut out_of_range, "#/phases/1");
+        let error = represented_legacy_locators(&out_of_range, &source_ids, &legacy_artifacts())
+            .expect_err("out-of-range phase locator must fail");
+        assert!(error.message().contains("out of range"));
+    }
+
+    #[test]
+    fn supporting_cross_artifact_citations_are_not_reconciliation_authority() {
+        let source_ids = BTreeMap::from([
+            (LegacyArtifact::Fields, "legacy-fields"),
+            (LegacyArtifact::Validations, "legacy-validations"),
+            (LegacyArtifact::Calculations, "legacy-calculations"),
+            (LegacyArtifact::Workflow, "legacy-workflow"),
+        ]);
+        let mut document = reviewed_document();
+        let calculation = document.calculations[0]
+            .object_mut()
+            .expect("calculation is an object");
+        let JsonValue::Array(source_refs) = calculation
+            .get_mut("source_refs")
+            .expect("calculation source refs")
+        else {
+            panic!("calculation source_refs are an array");
+        };
+        source_refs.push(
+            serde_json::from_value(json!({
+                "source_id": "legacy-validations",
+                "locator": "#/rules/0"
+            }))
+            .expect("supporting validation source ref"),
+        );
+
+        let represented = represented_legacy_locators(&document, &source_ids, &legacy_artifacts())
+            .expect("supporting cross-artifact evidence is permitted");
+        assert!(
+            represented.contains(&(LegacyArtifact::Calculations, "#/calculations/0".to_owned()))
+        );
+        assert_eq!(
+            represented
+                .iter()
+                .filter(|(artifact, _)| *artifact == LegacyArtifact::Validations)
+                .count(),
+            1,
+            "supporting validation citation must not become a second represented validation"
+        );
+    }
+
+    fn workflow_classification(locator: &str) -> crate::model::LegacyRecordClassification {
+        crate::model::LegacyRecordClassification::NonRuntime {
+            artifact: LegacyArtifact::Workflow,
+            legacy_id: None,
+            locator: locator.to_owned(),
+            reason: crate::model::LegacyNonRuntimeReason::NonValidationUiBehavior,
+            source_refs: vec![crate::model::SourceRef {
+                source_id: "legacy-workflow".to_owned(),
+                locator: Some(locator.to_owned()),
+            }],
+        }
+    }
+
+    fn set_workflow_state_locator(document: &mut RuleSetDocument, locator: &str) {
+        let workflow = document.workflow.object_mut().unwrap();
+        let JsonValue::Array(states) = workflow.get_mut("states").unwrap() else {
+            panic!("workflow states are an array");
+        };
+        let JsonValue::Array(source_refs) = states[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("source_refs")
+            .unwrap()
+        else {
+            panic!("workflow state source_refs are an array");
+        };
+        source_refs[0]
+            .object_mut()
+            .unwrap()
+            .insert("locator".to_owned(), JsonValue::String(locator.to_owned()));
+    }
+
+    #[test]
+    fn represented_legacy_locator_must_be_canonical_and_in_range() {
+        fn set_rule_locator(document: &mut RuleSetDocument, locator: &str) {
+            let source_ref = document.rules[0]
+                .object_mut()
+                .unwrap()
+                .get_mut("source_refs")
+                .unwrap();
+            let JsonValue::Array(source_refs) = source_ref else {
+                panic!("rule source_refs are an array");
+            };
+            source_refs[0]
+                .object_mut()
+                .unwrap()
+                .insert("locator".to_owned(), JsonValue::String(locator.to_owned()));
+        }
+
+        let source_ids = BTreeMap::from([
+            (LegacyArtifact::Fields, "legacy-fields"),
+            (LegacyArtifact::Validations, "legacy-validations"),
+            (LegacyArtifact::Calculations, "legacy-calculations"),
+            (LegacyArtifact::Workflow, "legacy-workflow"),
+        ]);
+        let mut document = reviewed_document();
+        set_rule_locator(&mut document, "#/rules/00");
+        let error = represented_legacy_locators(&document, &source_ids, &legacy_artifacts())
+            .expect_err("non-canonical legacy locator must fail");
+        assert!(
+            error
+                .message()
+                .contains("not a canonical JSON-array locator")
+        );
+
+        set_rule_locator(&mut document, "#/rules/1");
+        let error = represented_legacy_locators(&document, &source_ids, &legacy_artifacts())
+            .expect_err("out-of-range legacy locator must fail");
+        assert!(error.message().contains("out of range"));
     }
 
     #[test]

@@ -21,3 +21,27 @@ static REVIEWED_RULE_SET_ENTRIES: LazyLock<Vec<RuleSetRegistryEntry>> = LazyLock
 pub fn reviewed_rule_set_entries() -> &'static [RuleSetRegistryEntry] {
     REVIEWED_RULE_SET_ENTRIES.as_slice()
 }
+
+// Candidate providers exist for library verification only. Both the modules and
+// this catalog are absent from non-test builds.
+#[cfg(test)]
+pub static CANDIDATE_RULE_SET_METADATA: &[GeneratedRuleSetMetadata] = &[GeneratedRuleSetMetadata {
+    rule_set_id: super::form_2550q_v2024_04_01_p7_9_6_0::RULE_SET_ID,
+    form_code: super::form_2550q_v2024_04_01_p7_9_6_0::FORM_CODE,
+    form_revision: super::form_2550q_v2024_04_01_p7_9_6_0::FORM_REVISION,
+    official_package_version: super::form_2550q_v2024_04_01_p7_9_6_0::OFFICIAL_PACKAGE_VERSION,
+    source_set_sha256: super::form_2550q_v2024_04_01_p7_9_6_0::SOURCE_SET_SHA256,
+    canonical_rule_set_json: super::form_2550q_v2024_04_01_p7_9_6_0::CANONICAL_RULE_SET_JSON,
+}];
+
+#[cfg(test)]
+static CANDIDATE_RULE_SET_ENTRIES: LazyLock<Vec<RuleSetRegistryEntry>> = LazyLock::new(|| {
+    vec![RuleSetRegistryEntry::new(
+        &*super::form_2550q_v2024_04_01_p7_9_6_0::COMPILED_RULE_SET,
+    )]
+});
+
+#[cfg(test)]
+pub fn candidate_rule_set_entries() -> &'static [RuleSetRegistryEntry] {
+    CANDIDATE_RULE_SET_ENTRIES.as_slice()
+}

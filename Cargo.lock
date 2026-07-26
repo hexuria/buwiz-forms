@@ -782,11 +782,20 @@ name = "bir-rules-codegen"
 version = "0.1.0"
 dependencies = [
  "bir-rules",
+ "bir-rules-platform",
  "regex",
+ "rustix 1.1.4",
+ "same-file",
  "serde",
  "serde_json",
  "sha2",
+ "syn 2.0.117",
+ "winapi-util",
 ]
+
+[[package]]
+name = "bir-rules-platform"
+version = "0.1.0"
 
 [[package]]
 name = "bit-set"

@@ -72,6 +72,12 @@ pub struct RollPinReport {
     pub applied: bool,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct RollAllPinsReport {
+    pub snapshots: Vec<RollPinReport>,
+    pub all_consistent: bool,
+}
+
 impl RollPinReport {
     /// True when the corpus already agrees with itself and nothing was written.
     pub fn already_consistent(&self) -> bool {
@@ -115,6 +121,17 @@ pub fn roll_pin(options: &RollPinOptions) -> Result<RollPinReport> {
 
     let original_rule_set_text = read_text(&rule_set_path)?;
     let original_rule_set = parse_strict(original_rule_set_text.as_bytes(), &rule_set_path)?;
+    let document_rule_set_id = original_rule_set
+        .object()
+        .and_then(|rule_set| rule_set.get("identity"))
+        .and_then(|identity| string_at(identity, "rule_set_id"))
+        .ok_or_else(|| CodegenError::new("rule set identity has no rule_set_id"))?;
+    if document_rule_set_id != options.rule_set_id {
+        return Err(CodegenError::new(format!(
+            "index snapshot `{}` points to rule set `{document_rule_set_id}`",
+            options.rule_set_id
+        )));
+    }
 
     let previous_digest = original_rule_set
         .object()
@@ -126,6 +143,18 @@ pub fn roll_pin(options: &RollPinOptions) -> Result<RollPinReport> {
             )
         })?
         .to_owned();
+    let indexed_digest = string_at(snapshot, "source_set_sha256").ok_or_else(|| {
+        CodegenError::new(format!(
+            "snapshot `{}` has no source_set_sha256 in {INDEX_PATH}",
+            options.rule_set_id
+        ))
+    })?;
+    if indexed_digest != previous_digest {
+        return Err(CodegenError::new(format!(
+            "snapshot `{}` source_set_sha256 differs between index and rule set; refusing to update a possibly unrelated text occurrence",
+            options.rule_set_id
+        )));
+    }
 
     // 1. Re-pin declared sources first: `sources[]` is part of the rule set's
     //    canonical bytes, so it must settle before the source-set digest is
@@ -207,6 +236,36 @@ pub fn roll_pin(options: &RollPinOptions) -> Result<RollPinReport> {
     })
 }
 
+/// Dry-runs the independently atomic roll for every indexed snapshot.
+///
+/// Applying multiple snapshot rolls as one command would require a second,
+/// cross-snapshot transaction protocol because every roll touches the shared
+/// index. The all-snapshot form is therefore verification-only; callers apply
+/// a changed snapshot explicitly by ID after reviewing its transaction.
+pub fn roll_all_pins(repo_root: impl Into<PathBuf>) -> Result<RollAllPinsReport> {
+    let repo_root = canonical_repo_root(&repo_root.into())?;
+    let index_path = resolve_existing_under(&repo_root, INDEX_PATH, "v2 index")?;
+    let index = parse_strict(&read_bytes(&index_path)?, &index_path)?;
+    let snapshots = index
+        .object()
+        .and_then(|index| index.get("snapshots"))
+        .and_then(as_array)
+        .ok_or_else(|| CodegenError::new("v2 index has no snapshots array"))?;
+    let mut reports = Vec::with_capacity(snapshots.len());
+    for snapshot in snapshots {
+        let rule_set_id = string_at(snapshot, "rule_set_id")
+            .ok_or_else(|| CodegenError::new("an indexed snapshot has no rule_set_id"))?;
+        let mut options = RollPinOptions::new(&repo_root, rule_set_id);
+        options.dry_run = true;
+        reports.push(roll_pin(&options)?);
+    }
+    let all_consistent = reports.iter().all(RollPinReport::already_consistent);
+    Ok(RollAllPinsReport {
+        snapshots: reports,
+        all_consistent,
+    })
+}
+
 /// Recomputes every declared source hash from disk and rewrites the changed
 /// ones in place. Each hash is asserted to occur exactly once in the document,
 /// so a substitution can never hit an unintended site.
@@ -251,17 +310,22 @@ fn repin_declared_sources(
 }
 
 fn fixture_paths(rule_set: &JsonValue) -> Result<Vec<String>> {
-    rule_set
+    let fixtures = rule_set
         .object()
         .and_then(|rule_set| rule_set.get("fixtures"))
         .and_then(as_array)
-        .map(|fixtures| {
-            fixtures
-                .iter()
-                .filter_map(|fixture| fixture.as_str().map(str::to_owned))
-                .collect()
+        .ok_or_else(|| CodegenError::new("rule set has no fixtures array"))?;
+    fixtures
+        .iter()
+        .enumerate()
+        .map(|(index, fixture)| {
+            fixture.as_str().map(str::to_owned).ok_or_else(|| {
+                CodegenError::new(format!(
+                    "rule set fixture path at index {index} is not a string"
+                ))
+            })
         })
-        .ok_or_else(|| CodegenError::new("rule set has no fixtures array"))
+        .collect()
 }
 
 /// Replaces `from` with `to`, requiring exactly `expected` occurrences.
@@ -294,7 +358,9 @@ fn write_all_or_restore(staged: Vec<(PathBuf, String)>) -> Result<()> {
         if let Err(source) = fs::write(path, contents.as_bytes()) {
             let failure = CodegenError::io("write rolled pin", path, source);
             let mut restore_failures = Vec::new();
-            for (restore_path, original) in backups.iter().take(written) {
+            // `fs::write` may truncate the current file before returning an
+            // error. Restore that file as well as every prior successful write.
+            for (restore_path, original) in backups.iter().take(written.saturating_add(1)) {
                 if let Err(restore_error) = fs::write(restore_path, original) {
                     restore_failures.push(format!("{}: {restore_error}", restore_path.display()));
                 }
@@ -344,7 +410,7 @@ fn string_at<'a>(value: &'a JsonValue, key: &str) -> Option<&'a str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RollPinOptions, roll_pin, substitute_exact};
+    use super::{RollPinOptions, fixture_paths, roll_all_pins, roll_pin, substitute_exact};
 
     fn landed_repo_root() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -398,5 +464,23 @@ mod tests {
     fn unknown_snapshot_is_rejected() {
         let options = RollPinOptions::new(landed_repo_root(), "no-such-snapshot");
         assert!(roll_pin(&options).is_err());
+    }
+
+    #[test]
+    fn fixture_paths_reject_non_string_entries() {
+        let rule_set = serde_json::from_value(serde_json::json!({
+            "fixtures": ["valid.json", 7]
+        }))
+        .expect("fixture-path test document");
+        let error = fixture_paths(&rule_set).expect_err("non-string fixture path must fail");
+        assert!(error.message().contains("index 1 is not a string"));
+    }
+
+    #[test]
+    fn all_snapshot_dry_run_is_consistent() {
+        let report = roll_all_pins(landed_repo_root()).expect("all-snapshot dry run");
+        assert_eq!(report.snapshots.len(), 1);
+        assert!(report.all_consistent);
+        assert_eq!(report.snapshots[0].rule_set_id, "2550q-v2024-p7.9.6.0");
     }
 }

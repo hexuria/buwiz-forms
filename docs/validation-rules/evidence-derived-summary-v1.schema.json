@@ -1,0 +1,669 @@
+{
+  "$id": "urn:dev.goldcoders.bir:schema:evidence-derived-summary:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "capture_gaps": {
+      "items": {
+        "$ref": "#/$defs/gap"
+      },
+      "type": "array"
+    },
+    "capture_sessions": {
+      "items": {
+        "$ref": "#/$defs/captureSession"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "census": {
+      "$ref": "#/$defs/census"
+    },
+    "dom_inventory": {
+      "$ref": "#/$defs/inventory"
+    },
+    "form_id": {
+      "$ref": "#/$defs/portableIdentifier"
+    },
+    "format": {
+      "const": "bir-evidence-derived-summary-v1"
+    },
+    "runtime_observations": {
+      "$ref": "#/$defs/runtimeObservations"
+    },
+    "save_finalize_reopen": {
+      "$ref": "#/$defs/workflow"
+    },
+    "source_excerpts": {
+      "items": {
+        "$ref": "#/$defs/sourceExcerpt"
+      },
+      "type": "array"
+    },
+    "tracked_sources": {
+      "items": {
+        "$ref": "#/$defs/trackedSource"
+      },
+      "minItems": 7,
+      "type": "array"
+    },
+    "tracked_v1_source_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "upstream_assets": {
+      "items": {
+        "$ref": "#/$defs/upstreamAsset"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "xml_inventory": {
+      "$ref": "#/$defs/xmlInventory"
+    }
+  },
+  "required": [
+    "canonicalization",
+    "capture_gaps",
+    "capture_sessions",
+    "census",
+    "dom_inventory",
+    "form_id",
+    "format",
+    "runtime_observations",
+    "save_finalize_reopen",
+    "source_excerpts",
+    "tracked_sources",
+    "tracked_v1_source_set_sha256",
+    "upstream_assets",
+    "xml_inventory"
+  ],
+  "title": "Value-free tracked-v1 evidence summary v1",
+  "type": "object",
+  "$defs": {
+    "captureSession": {
+      "additionalProperties": false,
+      "properties": {
+        "capture_provenance_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "capture_session_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "source_map_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_verification_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "upstream_evidence_ids": {
+          "$ref": "#/$defs/sourceEvidenceIds"
+        }
+      },
+      "required": [
+        "capture_provenance_sha256",
+        "capture_session_id",
+        "source_map_sha256",
+        "source_verification_sha256",
+        "upstream_evidence_ids"
+      ],
+      "type": "object"
+    },
+    "census": {
+      "additionalProperties": false,
+      "properties": {
+        "calculations": {
+          "$ref": "#/$defs/inventory"
+        },
+        "declared_counts": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "explicit_gaps": {
+          "$ref": "#/$defs/inventory"
+        },
+        "fields": {
+          "$ref": "#/$defs/inventory"
+        },
+        "fixtures": {
+          "$ref": "#/$defs/inventory"
+        },
+        "serialization": {
+          "$ref": "#/$defs/inventory"
+        },
+        "validations": {
+          "$ref": "#/$defs/inventory"
+        },
+        "workflow": {
+          "$ref": "#/$defs/inventory"
+        }
+      },
+      "required": [
+        "calculations",
+        "declared_counts",
+        "explicit_gaps",
+        "fields",
+        "fixtures",
+        "serialization",
+        "validations",
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "gap": {
+      "additionalProperties": false,
+      "properties": {
+        "gap_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "$ref": "#/$defs/portableIdentifier"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_ref": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "gap_id",
+        "reason",
+        "source_evidence_ids",
+        "source_ref"
+      ],
+      "type": "object"
+    },
+    "inventory": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/inventoryRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "count",
+        "records"
+      ],
+      "type": "object"
+    },
+    "inventoryRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "json_pointer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "record_id": {
+          "oneOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_refs": {
+          "$ref": "#/$defs/sourceRefs"
+        }
+      },
+      "required": [
+        "json_pointer",
+        "ordinal",
+        "record_id",
+        "source_refs"
+      ],
+      "type": "object"
+    },
+    "portableIdentifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "type": "string"
+    },
+    "runtimeObservations": {
+      "additionalProperties": false,
+      "properties": {
+        "observed": {
+          "items": {
+            "$ref": "#/$defs/inventoryRecord"
+          },
+          "type": "array"
+        },
+        "observed_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_derived_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_derived_order": {
+          "items": {
+            "$ref": "#/$defs/inventoryRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "observed",
+        "observed_count",
+        "source_derived_count",
+        "source_derived_order"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sourceEvidenceIds": {
+      "items": {
+        "$ref": "#/$defs/portableIdentifier"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "sourceExcerpt": {
+      "additionalProperties": false,
+      "properties": {
+        "excerpt_end_byte": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "excerpt_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "excerpt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "excerpt_start_byte": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "full_file_path": {
+          "pattern": "^upstream/sha256/[0-9a-f]{2}/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "full_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "full_file_size_bytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "upstream_evidence_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        }
+      },
+      "required": [
+        "excerpt_end_byte",
+        "excerpt_id",
+        "excerpt_sha256",
+        "excerpt_start_byte",
+        "full_file_path",
+        "full_file_sha256",
+        "full_file_size_bytes",
+        "upstream_evidence_id"
+      ],
+      "type": "object"
+    },
+    "sourceRefs": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "trackedSource": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "type": "object"
+    },
+    "upstreamAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "disposition": {
+          "enum": [
+            "acquirable",
+            "zero-size-provenance",
+            "metadata-only-taxpayer-payload"
+          ]
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upstream_evidence_id": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/portableIdentifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "asset_id",
+        "disposition",
+        "kind",
+        "sha256",
+        "size_bytes",
+        "upstream_evidence_id"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "acquirable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "size_bytes": {
+                "minimum": 1
+              },
+              "upstream_evidence_id": {
+                "$ref": "#/$defs/portableIdentifier"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "zero-size-provenance"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "size_bytes": {
+                "const": 0
+              },
+              "upstream_evidence_id": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "disposition": {
+                "const": "metadata-only-taxpayer-payload"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "upstream_evidence_id": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "type": "object"
+    },
+    "workflow": {
+      "additionalProperties": false,
+      "properties": {
+        "gap_ids": {
+          "items": {
+            "$ref": "#/$defs/portableIdentifier"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "state_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "states": {
+          "items": {
+            "$ref": "#/$defs/workflowState"
+          },
+          "type": "array"
+        },
+        "transition_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transitions": {
+          "items": {
+            "$ref": "#/$defs/workflowTransition"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "gap_ids",
+        "state_count",
+        "states",
+        "transition_count",
+        "transitions"
+      ],
+      "type": "object"
+    },
+    "workflowState": {
+      "additionalProperties": false,
+      "properties": {
+        "json_pointer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/sourceRefs"
+        },
+        "state_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "json_pointer",
+        "ordinal",
+        "source_refs",
+        "state_id"
+      ],
+      "type": "object"
+    },
+    "workflowTransition": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "json_pointer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/sourceRefs"
+        },
+        "to_state": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "from_state",
+        "json_pointer",
+        "ordinal",
+        "source_refs",
+        "to_state"
+      ],
+      "type": "object"
+    },
+    "xmlInventory": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "enum": [
+            "explicit-serialization-binding",
+            "field-key-projection"
+          ],
+          "type": "string"
+        },
+        "declared_serializable_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "observed_occurrence_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "projected_field_key_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/xmlRecord"
+          },
+          "type": "array"
+        },
+        "unresolved_count_delta": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unresolved_occurrence_count": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "values_emitted": {
+          "const": false
+        }
+      },
+      "required": [
+        "basis",
+        "declared_serializable_count",
+        "observed_occurrence_count",
+        "projected_field_key_count",
+        "records",
+        "unresolved_count_delta",
+        "unresolved_occurrence_count",
+        "values_emitted"
+      ],
+      "type": "object"
+    },
+    "xmlRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "json_pointer": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "key": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "observed": {
+          "type": "boolean"
+        },
+        "occurrence": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "ordinal": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/sourceRefs"
+        }
+      },
+      "required": [
+        "json_pointer",
+        "key",
+        "observed",
+        "occurrence",
+        "ordinal",
+        "source_refs"
+      ],
+      "type": "object"
+    }
+  }
+}

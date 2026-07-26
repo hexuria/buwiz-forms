@@ -8,6 +8,64 @@ pub const DEFAULT_SOURCE_DIR: &str = "rules/ir/v2";
 pub const DEFAULT_SCHEMA_DIR: &str = "rules/schema/v2";
 pub const DEFAULT_OUTPUT_DIR: &str = "crates/bir-rules/src/generated";
 
+pub(crate) fn is_symlink_or_reparse_point(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+pub(crate) fn is_same_path(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        windows_comparison_path(left) == windows_comparison_path(right)
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+pub(crate) fn is_same_or_below(root: &Path, candidate: &Path) -> bool {
+    if is_same_path(root, candidate) || candidate.starts_with(root) {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        windows_comparison_path(candidate).starts_with(windows_comparison_path(root))
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+#[cfg(windows)]
+fn windows_comparison_path(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    let normalized = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        rest.to_owned()
+    } else {
+        text.into_owned()
+    };
+    PathBuf::from(normalized.to_ascii_lowercase())
+}
+
 pub fn discover_repo_root(start: &Path) -> Result<PathBuf> {
     let start = fs::canonicalize(start).map_err(|source| {
         CodegenError::io("canonicalize repository search start", start, source)
@@ -107,7 +165,7 @@ pub fn resolve_output_under(root: &Path, relative: &str, label: &str) -> Result<
 }
 
 pub fn ensure_under(root: &Path, candidate: &Path, label: &str) -> Result<()> {
-    if candidate == root || !candidate.starts_with(root) {
+    if !is_same_or_below(root, candidate) || is_same_path(root, candidate) {
         return Err(CodegenError::new(format!(
             "{label} `{}` escapes repository root `{}`",
             candidate.display(),
@@ -141,9 +199,9 @@ pub fn reject_symlink_components(root: &Path, candidate: &Path, label: &str) -> 
             }
         }
         match fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
+            Ok(metadata) if is_symlink_or_reparse_point(&metadata) => {
                 return Err(CodegenError::new(format!(
-                    "{label} `{}` traverses symlink `{}`",
+                    "{label} `{}` traverses symlink or reparse point `{}`",
                     candidate.display(),
                     current.display()
                 )));
@@ -222,5 +280,24 @@ mod tests {
                 .expect("valid path"),
             ["2550q-v2024-p7.9.6", "rule-set.json"]
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_extended_and_unc_prefixes_compare_as_the_same_path() {
+        use std::path::Path;
+
+        assert!(super::is_same_path(
+            Path::new(r"C:\Temp\Repository"),
+            Path::new(r"\\?\C:\Temp\Repository"),
+        ));
+        assert!(super::is_same_or_below(
+            Path::new(r"\\server\share\Repository"),
+            Path::new(r"\\?\UNC\server\share\Repository\rules\staging"),
+        ));
+        assert!(!super::is_same_or_below(
+            Path::new(r"C:\Temp\Repository"),
+            Path::new(r"C:\Temp\Repository-sibling"),
+        ));
     }
 }

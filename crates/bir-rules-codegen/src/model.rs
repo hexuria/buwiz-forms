@@ -470,7 +470,83 @@ pub struct LegacyV1 {
     pub form_id: String,
     pub schema_version: String,
     pub mappings: Vec<LegacyMapping>,
+    /// Record-level outcomes for legacy entries that deliberately have no v2
+    /// executable target. Entries represented by v2 entities are reconciled
+    /// through their exact legacy source locator instead.
+    #[serde(default)]
+    pub record_classifications: Vec<LegacyRecordClassification>,
     pub declared_counts: LegacyCounts,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "outcome", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum LegacyRecordClassification {
+    NonRuntime {
+        artifact: LegacyArtifact,
+        /// Stable legacy record ID for ID-bearing artifacts. Workflow phases
+        /// and transitions are ID-less in v1 and are identified only by their
+        /// canonical source locator.
+        legacy_id: Option<String>,
+        locator: String,
+        reason: LegacyNonRuntimeReason,
+        source_refs: Vec<SourceRef>,
+    },
+    Unresolved {
+        artifact: LegacyArtifact,
+        /// Stable legacy record ID for ID-bearing artifacts. Workflow phases
+        /// and transitions are ID-less in v1 and are identified only by their
+        /// canonical source locator.
+        legacy_id: Option<String>,
+        locator: String,
+        reason: String,
+        source_refs: Vec<SourceRef>,
+    },
+}
+
+impl LegacyRecordClassification {
+    pub fn artifact(&self) -> LegacyArtifact {
+        match self {
+            Self::NonRuntime { artifact, .. } | Self::Unresolved { artifact, .. } => {
+                artifact.clone()
+            }
+        }
+    }
+
+    pub fn legacy_id(&self) -> Option<&str> {
+        match self {
+            Self::NonRuntime { legacy_id, .. } | Self::Unresolved { legacy_id, .. } => {
+                legacy_id.as_deref()
+            }
+        }
+    }
+
+    pub fn locator(&self) -> &str {
+        match self {
+            Self::NonRuntime { locator, .. } | Self::Unresolved { locator, .. } => locator,
+        }
+    }
+
+    pub fn is_non_runtime(&self) -> bool {
+        matches!(self, Self::NonRuntime { .. })
+    }
+
+    pub fn source_refs(&self) -> &[SourceRef] {
+        match self {
+            Self::NonRuntime { source_refs, .. } | Self::Unresolved { source_refs, .. } => {
+                source_refs
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum LegacyNonRuntimeReason {
+    ProvenUnreachable,
+    Obsolete,
+    ExternalSubmissionOrCredential,
+    NonValidationUiBehavior,
+    EvidenceBlocked,
 }
 
 #[derive(Clone, Debug, Deserialize)]

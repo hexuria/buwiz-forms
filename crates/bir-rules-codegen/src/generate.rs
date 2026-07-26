@@ -22,6 +22,7 @@ pub const MANIFEST_FORMAT: &str = "bir-rules-generated-manifest-v1";
 pub struct GenerateOptions {
     pub audit: AuditOptions,
     pub output_dir: String,
+    pub required_rule_set_id: Option<String>,
 }
 
 impl GenerateOptions {
@@ -29,6 +30,7 @@ impl GenerateOptions {
         Self {
             audit: AuditOptions::new(repo_root),
             output_dir: DEFAULT_OUTPUT_DIR.to_owned(),
+            required_rule_set_id: None,
         }
     }
 }
@@ -45,11 +47,35 @@ pub struct GenerationReport {
 }
 
 pub fn generate(options: &GenerateOptions) -> Result<GenerationReport> {
-    let audit_report = audit(&options.audit)?;
+    let audit_report = audit_for_generation(options)?;
     let generation = build_generated_files(&audit_report)?;
     let output = resolve_generated_output(&audit_report.repo_root, &options.output_dir)?;
-    write_tree_atomically(&output, &generation.files)?;
+    let write = write_tree_atomically(&output, &generation.files)?;
+    if let Some(previous) = write.preserved_previous {
+        eprintln!(
+            "previous generated output was preserved at `{}`; review it before manual removal",
+            previous.display()
+        );
+    }
     Ok(generation)
+}
+
+/// Performs the complete aggregate audit before asserting an optional focus
+/// identity. The returned report always retains every audited snapshot.
+pub(crate) fn audit_for_generation(options: &GenerateOptions) -> Result<AuditReport> {
+    let report = audit(&options.audit)?;
+    require_generation_rule_set(&report, options.required_rule_set_id.as_deref())?;
+    Ok(report)
+}
+
+fn require_generation_rule_set(
+    report: &AuditReport,
+    required_rule_set_id: Option<&str>,
+) -> Result<()> {
+    if let Some(rule_set_id) = required_rule_set_id {
+        report.require_rule_set(rule_set_id)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn resolve_generated_output(
@@ -125,7 +151,7 @@ pub(crate) fn build_generated_files(audit: &AuditReport) -> Result<GenerationRep
     );
     files.insert(
         "registry.rs".to_owned(),
-        render_registry_rs(&reviewed_modules).into_bytes(),
+        render_registry_rs(&reviewed_modules, &candidate_modules).into_bytes(),
     );
     format_rust_files(&audit.repo_root, &mut files)?;
 
@@ -226,10 +252,21 @@ fn render_mod_rs(
          \x20   GeneratedRuleSetMetadata, REVIEWED_RULE_SET_METADATA, reviewed_rule_set_entries,\n\
          };\n",
     );
+    if !candidate_modules.is_empty() {
+        output.push_str(
+            "\n#[cfg(test)]\n\
+             pub use registry::{\n\
+             \x20   CANDIDATE_RULE_SET_METADATA, candidate_rule_set_entries,\n\
+             };\n",
+        );
+    }
     output
 }
 
-fn render_registry_rs(snapshot_modules: &[(String, &AuditedSnapshot)]) -> String {
+fn render_registry_rs(
+    snapshot_modules: &[(String, &AuditedSnapshot)],
+    candidate_modules: &[(String, &AuditedSnapshot)],
+) -> String {
     let mut output = generated_banner();
     output.push_str(
         "use crate::RuleSetRegistryEntry;\n\
@@ -287,6 +324,44 @@ fn render_registry_rs(snapshot_modules: &[(String, &AuditedSnapshot)]) -> String
          \x20   REVIEWED_RULE_SET_ENTRIES.as_slice()\n\
          }\n",
     );
+    if !candidate_modules.is_empty() {
+        output.push_str(
+            "\n// Candidate providers exist for library verification only. Both the modules and\n\
+             // this catalog are absent from non-test builds.\n\
+             #[cfg(test)]\n\
+             pub static CANDIDATE_RULE_SET_METADATA: &[GeneratedRuleSetMetadata] = &[\n",
+        );
+        for (module, _) in candidate_modules {
+            output.push_str("    GeneratedRuleSetMetadata {\n");
+            output.push_str(&format!(
+                "        rule_set_id: super::{module}::RULE_SET_ID,\n\
+                 \x20       form_code: super::{module}::FORM_CODE,\n\
+                 \x20       form_revision: super::{module}::FORM_REVISION,\n\
+                 \x20       official_package_version: super::{module}::OFFICIAL_PACKAGE_VERSION,\n\
+                 \x20       source_set_sha256: super::{module}::SOURCE_SET_SHA256,\n\
+                 \x20       canonical_rule_set_json: super::{module}::CANONICAL_RULE_SET_JSON,\n"
+            ));
+            output.push_str("    },\n");
+        }
+        output.push_str(
+            "];\n\n\
+             #[cfg(test)]\n\
+             static CANDIDATE_RULE_SET_ENTRIES: LazyLock<Vec<RuleSetRegistryEntry>> =\n\
+             \x20   LazyLock::new(|| vec![\n",
+        );
+        for (module, _) in candidate_modules {
+            output.push_str(&format!(
+                "        RuleSetRegistryEntry::new(&*super::{module}::COMPILED_RULE_SET),\n"
+            ));
+        }
+        output.push_str(
+            "    ]);\n\n\
+             #[cfg(test)]\n\
+             pub fn candidate_rule_set_entries() -> &'static [RuleSetRegistryEntry] {\n\
+             \x20   CANDIDATE_RULE_SET_ENTRIES.as_slice()\n\
+             }\n",
+        );
+    }
     output
 }
 
@@ -761,23 +836,53 @@ const GENERATOR_SOURCES: &[(&str, &[u8])] = &[
     ("Cargo.toml", include_bytes!("../Cargo.toml")),
     ("src/audit.rs", include_bytes!("audit.rs")),
     ("src/bindings.rs", include_bytes!("bindings.rs")),
+    (
+        "src/capture_metadata.rs",
+        include_bytes!("capture_metadata.rs"),
+    ),
     ("src/check.rs", include_bytes!("check.rs")),
     ("src/corpus.rs", include_bytes!("corpus.rs")),
     ("src/coverage.rs", include_bytes!("coverage.rs")),
     ("src/emit.rs", include_bytes!("emit.rs")),
     ("src/error.rs", include_bytes!("error.rs")),
+    ("src/evidence.rs", include_bytes!("evidence.rs")),
+    (
+        "src/evidence_review_scaffold.rs",
+        include_bytes!("evidence_review_scaffold.rs"),
+    ),
+    ("src/evidence_set.rs", include_bytes!("evidence_set.rs")),
     ("src/files.rs", include_bytes!("files.rs")),
+    ("src/form_factory.rs", include_bytes!("form_factory.rs")),
+    (
+        "src/form_integration.rs",
+        include_bytes!("form_integration.rs"),
+    ),
     ("src/generate.rs", include_bytes!("generate.rs")),
     ("src/hash.rs", include_bytes!("hash.rs")),
     ("src/json.rs", include_bytes!("json.rs")),
     ("src/lib.rs", include_bytes!("lib.rs")),
     ("src/main.rs", include_bytes!("main.rs")),
     ("src/model.rs", include_bytes!("model.rs")),
+    (
+        "src/operator_census.rs",
+        include_bytes!("operator_census.rs"),
+    ),
     ("src/path.rs", include_bytes!("path.rs")),
     ("src/projections.rs", include_bytes!("projections.rs")),
+    ("src/reconciliation.rs", include_bytes!("reconciliation.rs")),
     ("src/rollpin.rs", include_bytes!("rollpin.rs")),
     ("src/schema.rs", include_bytes!("schema.rs")),
+    ("src/sensitive.rs", include_bytes!("sensitive.rs")),
     ("src/status.rs", include_bytes!("status.rs")),
+    (
+        "src/vault_acquisition.rs",
+        include_bytes!("vault_acquisition.rs"),
+    ),
+    (
+        "src/vault_source_discovery.rs",
+        include_bytes!("vault_source_discovery.rs"),
+    ),
+    ("src/verified_file.rs", include_bytes!("verified_file.rs")),
 ];
 
 fn generator_source_digest() -> String {
@@ -794,7 +899,7 @@ mod tests {
     use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use super::build_generated_files;
+    use super::{GenerateOptions, audit_for_generation, build_generated_files};
     use crate::audit::{AuditOptions, AuditReport, AuditedSnapshot, audit};
     use crate::json::{JsonValue, canonical_bytes};
     use crate::model::{
@@ -802,6 +907,63 @@ mod tests {
         ReviewStatus, RuleSetDocument, SourceRef,
     };
     use serde_json::json;
+
+    const LANDED_RULE_SET_ID: &str = "2550q-v2024-p7.9.6.0";
+
+    #[test]
+    fn required_rule_set_focus_is_a_byte_neutral_presence_assertion() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let baseline_options = GenerateOptions::new(&root);
+        let baseline_audit =
+            audit_for_generation(&baseline_options).expect("audit aggregate without focus");
+        let baseline =
+            build_generated_files(&baseline_audit).expect("generate aggregate without focus");
+
+        let mut focused_options = GenerateOptions::new(&root);
+        focused_options.required_rule_set_id = Some(LANDED_RULE_SET_ID.to_owned());
+        let focused_audit =
+            audit_for_generation(&focused_options).expect("audit aggregate with focus");
+        let focused = build_generated_files(&focused_audit).expect("generate aggregate with focus");
+
+        assert_eq!(
+            focused_audit.snapshot_count(),
+            baseline_audit.snapshot_count(),
+            "focus must not narrow the audit"
+        );
+        assert_eq!(baseline.files, focused.files);
+        assert_eq!(
+            baseline.generated_output_digest,
+            focused.generated_output_digest
+        );
+        assert_eq!(baseline.manifest_digest, focused.manifest_digest);
+    }
+
+    #[test]
+    fn required_rule_set_focus_does_not_hide_unrelated_aggregate_corruption() {
+        let source_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "bir-rules-focused-full-audit-{}-{nonce}",
+            std::process::id()
+        ));
+        copy_tree(&source_root.join("rules"), &root.join("rules"));
+        fs::write(root.join("rules/ir/v2/unindexed-corruption.json"), b"{}")
+            .expect("write unrelated unindexed JSON corruption");
+
+        let mut options = GenerateOptions::new(&root);
+        options.required_rule_set_id = Some(LANDED_RULE_SET_ID.to_owned());
+        let error = audit_for_generation(&options)
+            .expect_err("full aggregate audit must reject unrelated corruption");
+        assert!(
+            error.message().contains("fixture file/list bijection"),
+            "unexpected error: {error}"
+        );
+
+        fs::remove_dir_all(&root).expect("remove focused full-audit test root");
+    }
 
     #[test]
     fn landed_candidate_is_test_only_and_generates_an_empty_reviewed_registry() {
@@ -879,8 +1041,11 @@ mod tests {
             "static REVIEWED_RULE_SET_ENTRIES: LazyLock<Vec<RuleSetRegistryEntry>> = \
              LazyLock::new(|| vec![]);"
         ));
-        assert!(!registry.contains(module_stem));
-        assert!(!registry.contains("2550q-v2024-p7.9.6.0"));
+        assert!(registry.contains("#[cfg(test)]\npub static CANDIDATE_RULE_SET_METADATA"));
+        assert!(registry.contains("#[cfg(test)]\nstatic CANDIDATE_RULE_SET_ENTRIES"));
+        assert!(registry.contains("#[cfg(test)]\npub fn candidate_rule_set_entries"));
+        assert!(registry.contains(module_stem));
+        assert!(!registry.contains("\"2550q-v2024-p7.9.6.0\""));
     }
 
     #[test]
@@ -1196,8 +1361,15 @@ mod tests {
         assert!(
             registry.contains("REVIEWED_RULE_SET_METADATA: &[GeneratedRuleSetMetadata] = &[];")
         );
-        assert!(!registry.contains(module_stem));
-        assert!(!registry.contains("test-v1-p1"));
+        let (production_catalog, candidate_catalog) = registry
+            .split_once("// Candidate providers exist for library verification only.")
+            .expect("candidate registry must have a clearly delimited test-only catalog");
+        assert!(!production_catalog.contains(module_stem));
+        assert!(!production_catalog.contains("test-v1-p1"));
+        assert!(candidate_catalog.contains("#[cfg(test)]\npub static CANDIDATE_RULE_SET_METADATA"));
+        assert!(candidate_catalog.contains("#[cfg(test)]\nstatic CANDIDATE_RULE_SET_ENTRIES"));
+        assert!(candidate_catalog.contains("#[cfg(test)]\npub fn candidate_rule_set_entries"));
+        assert!(candidate_catalog.contains(module_stem));
 
         let manifest = std::str::from_utf8(&first.files["manifest.json"]).unwrap();
         assert!(manifest.contains("\"review_status\":\"candidate\""));
@@ -1253,10 +1425,16 @@ mod tests {
         .expect("write candidate probe workspace");
 
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+        let isolated_target = root.join("target");
         let output = Command::new(cargo)
             .current_dir(&root)
             .args(["test", "--offline", "-p", "bir-rules"])
-            .env("CARGO_TARGET_DIR", root.join("target"))
+            // The parent test process is itself running under Cargo. Use an
+            // explicit, probe-local target so the nested build can never wait
+            // on the parent's target-directory lock.
+            .env_remove("CARGO_TARGET_DIR")
+            .arg("--target-dir")
+            .arg(&isolated_target)
             .output()
             .expect("run generated candidate probe tests");
         let stdout = String::from_utf8_lossy(&output.stdout);

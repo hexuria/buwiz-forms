@@ -54,6 +54,20 @@ pub struct FormCoverage {
     pub v2_fields: usize,
     pub v2_rules: usize,
     pub v2_calculations: usize,
+    pub v2_fields_executable: usize,
+    pub v2_fields_documented_only: usize,
+    pub v2_fields_unresolved: usize,
+    pub v2_rules_executable: usize,
+    pub v2_rules_documented_only: usize,
+    pub v2_rules_unresolved: usize,
+    pub v2_calculations_executable: usize,
+    pub v2_calculations_documented_only: usize,
+    pub v2_calculations_unresolved: usize,
+    /// Legacy records for which no v2 entity exists yet. This is a conservative
+    /// progress signal; exact many-to-one mappings are proved by reconciliation.
+    pub unreconciled_fields: usize,
+    pub unreconciled_rules: usize,
+    pub unreconciled_calculations: usize,
     /// True only when a snapshot is `reviewed`, which is the sole state that
     /// can be compiled into the production registry.
     pub runtime_resolvable: bool,
@@ -71,16 +85,36 @@ pub struct CoverageReport {
     pub v2_fields: usize,
     pub v2_rules: usize,
     pub v2_calculations: usize,
+    pub v2_fields_executable: usize,
+    pub v2_fields_documented_only: usize,
+    pub v2_fields_unresolved: usize,
+    pub v2_rules_executable: usize,
+    pub v2_rules_documented_only: usize,
+    pub v2_rules_unresolved: usize,
+    pub v2_calculations_executable: usize,
+    pub v2_calculations_documented_only: usize,
+    pub v2_calculations_unresolved: usize,
+    pub unreconciled_fields: usize,
+    pub unreconciled_rules: usize,
+    pub unreconciled_calculations: usize,
 }
 
 impl CoverageReport {
     /// Executable share of extracted validation rules, in percent.
     pub fn rule_coverage_percent(&self) -> f64 {
-        percent(self.v2_rules, self.v1_rules)
+        percent(self.v2_rules_executable, self.v1_rules)
     }
 
     /// Executable share of extracted calculations, in percent.
     pub fn calculation_coverage_percent(&self) -> f64 {
+        percent(self.v2_calculations_executable, self.v1_calculations)
+    }
+
+    pub fn rule_representation_percent(&self) -> f64 {
+        percent(self.v2_rules, self.v1_rules)
+    }
+
+    pub fn calculation_representation_percent(&self) -> f64 {
         percent(self.v2_calculations, self.v1_calculations)
     }
 }
@@ -124,14 +158,33 @@ pub fn coverage(options: &CoverageOptions) -> Result<CoverageReport> {
         let v1_calculations = count_in(&directory.join("calculations.json"), "calculations")?;
 
         let snapshot = snapshots.get(&form_id);
-        let (v2_review_status, v2_fields, v2_rules, v2_calculations) = match snapshot {
+        let (
+            v2_review_status,
+            v2_fields,
+            v2_rules,
+            v2_calculations,
+            field_states,
+            rule_states,
+            calculation_states,
+        ) = match snapshot {
             Some(snapshot) => (
                 Some(snapshot.review_status.clone()),
                 snapshot.fields,
                 snapshot.rules,
                 snapshot.calculations,
+                snapshot.field_states,
+                snapshot.rule_states,
+                snapshot.calculation_states,
             ),
-            None => (None, 0, 0, 0),
+            None => (
+                None,
+                0,
+                0,
+                0,
+                StateCounts::default(),
+                StateCounts::default(),
+                StateCounts::default(),
+            ),
         };
         let runtime_resolvable = v2_review_status.as_deref() == Some("reviewed");
 
@@ -145,6 +198,18 @@ pub fn coverage(options: &CoverageOptions) -> Result<CoverageReport> {
             v2_fields,
             v2_rules,
             v2_calculations,
+            v2_fields_executable: field_states.executable,
+            v2_fields_documented_only: field_states.documented_only,
+            v2_fields_unresolved: field_states.unresolved,
+            v2_rules_executable: rule_states.executable,
+            v2_rules_documented_only: rule_states.documented_only,
+            v2_rules_unresolved: rule_states.unresolved,
+            v2_calculations_executable: calculation_states.executable,
+            v2_calculations_documented_only: calculation_states.documented_only,
+            v2_calculations_unresolved: calculation_states.unresolved,
+            unreconciled_fields: v1_fields.saturating_sub(v2_fields),
+            unreconciled_rules: v1_rules.saturating_sub(v2_rules),
+            unreconciled_calculations: v1_calculations.saturating_sub(v2_calculations),
             runtime_resolvable,
         });
     }
@@ -163,8 +228,33 @@ pub fn coverage(options: &CoverageOptions) -> Result<CoverageReport> {
         v2_fields: sum(|form| form.v2_fields),
         v2_rules: sum(|form| form.v2_rules),
         v2_calculations: sum(|form| form.v2_calculations),
+        v2_fields_executable: sum(|form| form.v2_fields_executable),
+        v2_fields_documented_only: sum(|form| form.v2_fields_documented_only),
+        v2_fields_unresolved: sum(|form| form.v2_fields_unresolved),
+        v2_rules_executable: sum(|form| form.v2_rules_executable),
+        v2_rules_documented_only: sum(|form| form.v2_rules_documented_only),
+        v2_rules_unresolved: sum(|form| form.v2_rules_unresolved),
+        v2_calculations_executable: sum(|form| form.v2_calculations_executable),
+        v2_calculations_documented_only: sum(|form| form.v2_calculations_documented_only),
+        v2_calculations_unresolved: sum(|form| form.v2_calculations_unresolved),
+        unreconciled_fields: sum(|form| form.unreconciled_fields),
+        unreconciled_rules: sum(|form| form.unreconciled_rules),
+        unreconciled_calculations: sum(|form| form.unreconciled_calculations),
         forms,
     })
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct StateCounts {
+    executable: usize,
+    documented_only: usize,
+    unresolved: usize,
+}
+
+impl StateCounts {
+    fn total(self) -> usize {
+        self.executable + self.documented_only + self.unresolved
+    }
 }
 
 struct SnapshotCounts {
@@ -172,6 +262,9 @@ struct SnapshotCounts {
     fields: usize,
     rules: usize,
     calculations: usize,
+    field_states: StateCounts,
+    rule_states: StateCounts,
+    calculation_states: StateCounts,
 }
 
 /// Maps a v1 form id to its v2 snapshot counts, when one exists.
@@ -206,17 +299,61 @@ fn load_v2_snapshots(repo_root: &Path) -> Result<BTreeMap<String, SnapshotCounts
             .map(str::to_owned)
             .unwrap_or_else(|| relative.split('/').next().unwrap_or(relative).to_owned());
 
+        let field_states = count_profile_states(&rule_set, "fields", "behavior");
+        let rule_states = count_profile_states(&rule_set, "rules", "profiles");
+        let calculation_states = count_profile_states(&rule_set, "calculations", "profiles");
+        let fields = array_len(&rule_set, "fields");
+        let rules = array_len(&rule_set, "rules");
+        let calculations = array_len(&rule_set, "calculations");
+        if field_states.total() != fields
+            || rule_states.total() != rules
+            || calculation_states.total() != calculations
+        {
+            return Err(CodegenError::new(format!(
+                "snapshot `{relative}` has an entity without an explicit official profile state"
+            )));
+        }
+
         snapshots.insert(
             form_id,
             SnapshotCounts {
                 review_status: review_status.to_owned(),
-                fields: array_len(&rule_set, "fields"),
-                rules: array_len(&rule_set, "rules"),
-                calculations: array_len(&rule_set, "calculations"),
+                fields,
+                rules,
+                calculations,
+                field_states,
+                rule_states,
+                calculation_states,
             },
         );
     }
     Ok(snapshots)
+}
+
+fn count_profile_states(rule_set: &JsonValue, collection: &str, profiles_key: &str) -> StateCounts {
+    let mut counts = StateCounts::default();
+    let Some(JsonValue::Array(values)) =
+        rule_set.object().and_then(|object| object.get(collection))
+    else {
+        return counts;
+    };
+    for value in values {
+        let state = value
+            .object()
+            .and_then(|object| object.get(profiles_key))
+            .and_then(JsonValue::object)
+            .and_then(|profiles| profiles.get("official"))
+            .and_then(JsonValue::object)
+            .and_then(|official| official.get("state"))
+            .and_then(JsonValue::as_str);
+        match state {
+            Some("executable") => counts.executable += 1,
+            Some("documented_only") => counts.documented_only += 1,
+            Some("unresolved") => counts.unresolved += 1,
+            _ => {}
+        }
+    }
+    counts
 }
 
 fn read_optional(path: &Path) -> Result<Option<JsonValue>> {

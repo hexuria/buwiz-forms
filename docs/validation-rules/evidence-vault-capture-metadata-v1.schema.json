@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "capture_provenance": {
+      "$ref": "evidence-packet-v1.schema.json#/$defs/captureProvenance"
+    },
+    "capture_session_id": {
+      "$ref": "#/$defs/portableIdentifier"
+    },
+    "format": {
+      "const": "bir-evidence-vault-capture-metadata-v1"
+    },
+    "source_map_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "source_verification_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "required": [
+    "canonicalization",
+    "capture_provenance",
+    "capture_session_id",
+    "format",
+    "source_map_sha256",
+    "source_verification_sha256"
+  ],
+  "title": "External evidence vault capture metadata v1",
+  "type": "object",
+  "$defs": {
+    "portableIdentifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  }
+}

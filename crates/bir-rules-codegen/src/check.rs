@@ -3,11 +3,11 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::audit::audit;
 use crate::error::{CodegenError, Result};
 use crate::files::read_tree;
 use crate::generate::{
-    GenerateOptions, GenerationReport, build_generated_files, resolve_generated_output,
+    GenerateOptions, GenerationReport, audit_for_generation, build_generated_files,
+    resolve_generated_output,
 };
 
 #[derive(Clone, Debug)]
@@ -26,9 +26,9 @@ impl CheckOptions {
 }
 
 pub fn check(options: &CheckOptions) -> Result<GenerationReport> {
-    let first_audit = audit(&options.generate.audit)?;
+    let first_audit = audit_for_generation(&options.generate)?;
     let first = build_generated_files(&first_audit)?;
-    let second_audit = audit(&options.generate.audit)?;
+    let second_audit = audit_for_generation(&options.generate)?;
     let second = build_generated_files(&second_audit)?;
     compare_file_trees("independent generation runs", &first.files, &second.files)?;
 

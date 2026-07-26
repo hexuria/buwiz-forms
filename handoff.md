@@ -1,5 +1,15 @@
 # Validation rules integration handoff
 
+> **Historical handoff — do not use its “Exact next task” as the live queue.**
+> The 53-projection classification requested below has since landed. The
+> 2026-07-26 rebaseline recorded local HEAD and
+> `origin/codex/print-preview-parity` at
+> `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5`. The active objective is now the
+> portable, ordered 43-form candidate library in
+> `docs/validation-rules/execution-plan.md`; GPUI, filing, promotion, and new
+> worktrees remain frozen until that baseline exists. The rest of this file is
+> preserved as the prior session’s evidence and rationale.
+
 Prepared on 2026-07-25 for continuation by Claude Opus 5.
 
 This is the repository-level handoff for the validation-rules objective. The

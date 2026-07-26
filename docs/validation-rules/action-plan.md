@@ -1,5 +1,13 @@
 # Validation rules — action plan and status
 
+> **Superseded for live sequencing (2026-07-26).** This file is retained as
+> historical analysis of the earlier 2550Q promotion path. Do not execute its
+> “Next: promotion” section. The active objective is the 43-form candidate
+> library in [execution-plan.md](execution-plan.md); GPUI, filing, promotion,
+> and new worktrees are frozen until that baseline exists. The 53-projection
+> classification described here has landed, but no form is thereby reviewed,
+> promoted, or complete.
+
 Working tracker. Strategic layer above `execution-plan.md` (which covers the
 tooling consolidation) and `handoff.md` (which records the prior session).
 

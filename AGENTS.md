@@ -129,17 +129,40 @@ rtk cargo test --locked -p bir-print
 **validation-rules** subsystem. It is unrelated to the print migration above and
 has its own objective, plan and gates. Do not apply print-parity reasoning to it.
 
-- Objective and progress: `.claude/GOAL.md`. Plan:
-  `docs/validation-rules/execution-plan.md`. Prior session: `handoff.md`.
+- The live objective is **library-first**: portable evidence packets followed
+  by strict v2 candidates for all 43 forms in the exact order in
+  `docs/validation-rules/execution-plan.md`. Objective:
+  `.claude/GOAL.md`. Historical promotion analysis:
+  `docs/validation-rules/action-plan.md`. Prior session: `handoff.md`.
+- Rebaseline at local/origin `de828fd`: v1 **43 forms / 9,592 fields / 2,007
+  validations / 623 calculations**; v2 **1 candidate / 27 executable
+  validations / 1 executable calculation**. The 2550Q 53-projection
+  classification is complete, but that is not a form-completion or promotion
+  claim.
 - The single machine-checkable condition is
   `rtk cargo run -q --locked -p bir-rules-codegen -- status`. It separates
-  **boundary** criteria (a production filing path must stay closed) from
-  **slice** criteria (the current task). A boundary failure is far more serious
-  than an open slice.
+  **Boundary** criteria (a production filing path must stay closed),
+  **ActiveLibrary** criteria (the default library completion gate), and
+  **DeferredPromotion** criteria (reported but required only by
+  `status --require-promotion`). Default success does not prove promotion
+  readiness. A boundary failure is far more serious than unfinished library
+  work.
 - Corpus audit: `rtk cargo run --locked -p bir-rules-codegen -- validate-v1`.
   Baseline: 43 forms, 659 JSON (139 v2), 9,592 fields, 2,007 validations, 623
   calculations, 1,354 negative fixtures, 216 schema documents. If any count
   moves, the change is wrong — never adjust the validator to match.
+- Library coverage is reported by `coverage --json`, `operator-census --json`,
+  and `reconciliation --json`. The 43-candidate gate requires zero
+  unclassified and zero unresolved **legacy records**: every record is
+  represented by v2 or source-backed and classified intentionally non-runtime
+  under the closed reason enum. Filing-safe profile branches may remain
+  unresolved as deferred promotion work; these are different states.
+- Until the 43-form candidate library baseline exists, freeze `bir-core`,
+  `bir-desktop`, GPUI, persistence, Final Copy, filing, queue/transport,
+  registry population, and promotion work. Create no auxiliary worktrees and
+  do not move validation work into an existing one. Any later worktree cleanup
+  is a separate, explicitly authorized **macOS-only** task after the library
+  baseline; never perform it from Windows, `R:\`, or the UNC view.
 
 **Only 2550Q has a v2 rule set, it is `candidate`, and it is test-only. It must
 never be promoted.** Five guards keep production closed, each one edit away from

@@ -8,3 +8,6 @@ mod registry;
 pub use registry::{
     GeneratedRuleSetMetadata, REVIEWED_RULE_SET_METADATA, reviewed_rule_set_entries,
 };
+
+#[cfg(test)]
+pub use registry::{CANDIDATE_RULE_SET_METADATA, candidate_rule_set_entries};

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "format": {
+      "const": "bir-evidence-vault-source-map-v1"
+    }
+  },
+  "required": [
+    "canonicalization",
+    "entries",
+    "format"
+  ],
+  "title": "External evidence vault source map v1",
+  "type": "object",
+  "$defs": {
+    "entry": {
+      "additionalProperties": false,
+      "description": "Rust validation additionally enforces one entry per exact (form_id, asset_id) identity; JSON Schema has no composite unique-key keyword.",
+      "properties": {
+        "asset_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "form_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "source_path": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset_id",
+        "form_id",
+        "source_path"
+      ],
+      "type": "object"
+    },
+    "portableIdentifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "type": "string"
+    }
+  }
+}
