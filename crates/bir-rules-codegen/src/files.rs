@@ -419,11 +419,11 @@ fn stable_file_metadata(file: &File, label: &str, path: &Path) -> Result<StableF
     {
         use std::os::windows::fs::MetadataExt;
 
-        return Ok(StableFileMetadata {
+        Ok(StableFileMetadata {
             len: metadata.file_size(),
             creation_time: metadata.creation_time(),
             last_write_time: metadata.last_write_time(),
-        });
+        })
     }
     #[cfg(not(any(unix, windows)))]
     Ok(StableFileMetadata {

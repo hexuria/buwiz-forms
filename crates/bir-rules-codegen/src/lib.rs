@@ -32,16 +32,26 @@
 #![forbid(unsafe_code)]
 #![recursion_limit = "256"]
 
-/// Canonicalized process temp directory for tests.
+/// Process temp directory for tests, symlink-resolved where that is needed.
 ///
-/// On macOS `std::env::temp_dir()` returns a path under `/var`, which is itself
-/// a symlink to `/private/var`. The vault and evidence writers deliberately
-/// refuse any path that traverses a symlink, so tests that build scratch roots
-/// from the raw temp dir trip that guard on macOS while passing on Linux and
-/// Windows. Canonicalize once, here, so the guard sees a real path.
+/// On macOS `std::env::temp_dir()` returns a path under `/var`, itself a symlink
+/// to `/private/var`. The vault and evidence writers deliberately refuse any
+/// path that traverses a symlink, so tests building scratch roots from the raw
+/// temp dir trip that guard on macOS.
+///
+/// This canonicalizes on Unix only. On Windows `fs::canonicalize` returns the
+/// `\\?\` extended-length form, which is a *different* path spelling than the
+/// one under test - the path-validation suites assert on normalization and
+/// escape rejection, and handing them a pre-normalized `\\?\` path changes what
+/// they are exercising. Windows has no symlinked temp dir, so it needs no fix.
 #[cfg(test)]
 pub(crate) fn test_temp_dir() -> std::path::PathBuf {
-    std::fs::canonicalize(std::env::temp_dir()).expect("canonicalize process temp dir")
+    let raw = std::env::temp_dir();
+    if cfg!(windows) {
+        raw
+    } else {
+        std::fs::canonicalize(&raw).expect("canonicalize process temp dir")
+    }
 }
 
 /// Scratch directory *inside* the repository, under the gitignored `target/`.

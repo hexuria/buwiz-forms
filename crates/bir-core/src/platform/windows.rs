@@ -1,6 +1,5 @@
 //! Windows-specific implementations for bir-core platform services.
 
-use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 
 /// Prevents console windows from flashing on screen when spawning subprocesses.
