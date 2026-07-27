@@ -66,7 +66,18 @@ jobs:
           libgtk-3-dev \
           libwebkit2gtk-4.1-dev \
           libxdo-dev \
+          xvfb \
           mesa-vulkan-drivers
+
+    # The GTK native-print tests call `gtk::init`, which needs a display server.
+    # Hosted runners are headless, so without this they fail with
+    # "Failed to initialize GTK". A virtual framebuffer lets them run for real
+    # rather than being skipped.
+    - name: Start virtual display
+      if: runner.os == 'Linux'
+      run: |
+        Xvfb :99 -screen 0 1280x1024x24 &
+        echo "DISPLAY=:99" >> "$GITHUB_ENV"
 
     - name: Install Windows Dependencies
       if: runner.os == 'Windows'
