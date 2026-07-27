@@ -78,7 +78,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     expected_base_page_count: 2,
     schedules: &[],
     visual_fixture_file_name: "2550q-normal.json",
-    visual_fixture_sha256: "f9b13277d40b0b6b093ac4f1c93c289ff72fcc77e191a3a98d3eb27ce11176b3",
+    visual_fixture_sha256: "9869638cf5f9dd1fcb4bc83f87d1ae8adfef274905ec8e462358c238e07abf13",
     official_source: "https://bir-cdn.bir.gov.ph/BIR/pdf/2550Q%20%20April%202024%20ENCS_Final.pdf",
     official_source_sha256: "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
     reference_dpi: 144,
