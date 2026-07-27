@@ -1934,7 +1934,14 @@ mod tests {
         let manifest_dir =
             fs::canonicalize(env!("CARGO_MANIFEST_DIR")).expect("canonical manifest directory");
         let text = manifest_dir.to_string_lossy();
-        if !text.starts_with(r"\\?\UNC\") && !text.starts_with(r"\\") {
+        // `\\?\D:\...` is a *local* extended-length path, not a UNC one, but it
+        // does start with `\\` - so the old check treated every canonicalized
+        // local checkout as UNC and then asserted a UNC-only provider error
+        // against a plain disk. Only `\\?\UNC\...` and a bare `\\server\share`
+        // are actually UNC.
+        let is_unc = text.starts_with(r"\\?\UNC\")
+            || (text.starts_with(r"\\") && !text.starts_with(r"\\?\"));
+        if !is_unc {
             eprintln!("skipping actual UNC E87 check from a local checkout");
             return;
         }
