@@ -12,6 +12,9 @@
           "$ref": "#/$defs/emit_notification"
         },
         {
+          "$ref": "#/$defs/set_raw_field_value"
+        },
+        {
           "$ref": "#/$defs/set_derived"
         },
         {
@@ -109,6 +112,58 @@
         }
       },
       "additionalProperties": false
+    },
+    "set_raw_field_value": {
+      "type": "object",
+      "required": [
+        "kind",
+        "field",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "const": "set-raw-field-value"
+        },
+        "field": {
+          "$ref": "common.schema.json#/$defs/field_ref"
+        },
+        "value": {
+          "$ref": "#/$defs/static_raw_value"
+        }
+      },
+      "additionalProperties": false
+    },
+    "static_raw_value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "state": {
+              "const": "absent"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "state",
+            "text"
+          ],
+          "properties": {
+            "state": {
+              "const": "text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "normalize_field": {
       "type": "object",

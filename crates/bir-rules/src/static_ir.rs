@@ -24,15 +24,16 @@ use crate::{
     BehaviorProfile, CalculationId, CanonicalDate, CanonicalFieldValue, CanonicalValue,
     ContextValueId, DerivedOutputExpectation, DerivedValue, EvaluationError, EvaluationExpectation,
     EvaluationOutput, EvaluationRequest, EvaluationResult, ExactDecimal, FieldId, FieldInstance,
-    FormRevisionKey, IssueOrder, OutputId, RawValue, RepeatedGroupId, RepeatedGroupInstance,
-    RuleAssessment, RuleExpectation, RuleFieldRef, RuleId, RuleSeverity, RuleViolation,
-    StableInstanceId, ValidationContext, ValidationPhase, WorkflowAction, WorkflowNotification,
+    FieldValueAssignment, FieldValueAssignmentExpectation, FormRevisionKey, IssueOrder, OutputId,
+    RawValue, RepeatedGroupId, RepeatedGroupInstance, RuleAssessment, RuleExecution,
+    RuleExpectation, RuleFieldRef, RuleId, RuleSeverity, RuleViolation, StableInstanceId,
+    ValidationContext, ValidationPhase, WorkflowAction, WorkflowNotification,
     WorkflowNotificationChannel, WorkflowStateId, WorkflowTransitionId, WorkflowTransitionResult,
 };
 use num_bigint::{BigInt, Sign};
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     error::Error,
     fmt,
 };
@@ -178,6 +179,7 @@ pub enum RoundingMode {
     None,
     HalfUp,
     HalfEven,
+    HalfCeiling,
     TowardZero,
     AwayFromZero,
     Floor,
@@ -231,6 +233,14 @@ pub enum NormalizationStep {
         grouping: DecimalGrouping,
         rounding: Rounding,
     },
+    /// Exact finite behavior of the Offline eBIRForms `round(number, 2)`
+    /// helper used by editable money controls. The helper's non-finite output
+    /// strings remain evidence-blocked and therefore fail closed.
+    OfflineEbirMoneyRoundV1,
+    /// Exact finite behavior of the Offline eBIRForms
+    /// `blockletterWithout2Decimal` helper: legacy `parseFloat`, followed by
+    /// zero-decimal `toFixed`, with NaN mapped to an empty display buffer.
+    OfflineEbirParseFloatFixedZeroV1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -317,8 +327,17 @@ pub enum Coercion {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct FieldEventNormalization {
+    pub phase: ValidationPhase,
+    pub normalization: &'static [NormalizationStep],
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct FieldBehavior {
     pub normalization: &'static [NormalizationStep],
+    /// Additional normalization applied only to the exact field occurrence
+    /// named by an input/blur/change request, before calculations execute.
+    pub event_normalization: &'static [FieldEventNormalization],
     pub coercion: Coercion,
 }
 
@@ -342,6 +361,7 @@ pub struct FieldSpec {
     pub field_id: &'static str,
     pub value_type: ValueType,
     pub group_id: Option<&'static str>,
+    pub calculation_id: Option<&'static str>,
     pub behavior: Profiled<Branch<FieldBehavior>>,
 }
 
@@ -520,6 +540,26 @@ pub enum JavaScriptParseFloatOperator {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum JavaScriptNumberCompareOperator {
+    LessThan,
+    GreaterThan,
+    StrictEqual,
+}
+
+/// Closed checksum algorithms whose complete behavior is packaged into the
+/// static runtime. Adding a variant requires digest-pinned upstream evidence
+/// and conformance fixtures; generated rule sets never supply executable code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ChecksumAlgorithm {
+    /// The nine-digit helper shipped with the Offline eBIRForms package.
+    ///
+    /// This includes the helper's strict legacy adjustment interval. Form
+    /// wrappers may still add independently evidenced exceptions as ordinary
+    /// predicates (for example, a literal bypass); those do not belong here.
+    OfflineEbirTinV1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GroupQuantifier {
     Any,
     All,
@@ -561,6 +601,18 @@ pub enum Predicate {
         input: &'static Expression,
         operand: Option<DecimalLiteral>,
     },
+    JavaScriptGlobalIsNaNLogicalOr {
+        inputs: &'static [Expression],
+    },
+    JavaScriptNumberCompare {
+        operator: JavaScriptNumberCompareOperator,
+        input: &'static Expression,
+        operand: &'static Expression,
+    },
+    Checksum {
+        algorithm: ChecksumAlgorithm,
+        input: &'static Expression,
+    },
     Matches {
         value: &'static Expression,
         pattern: StaticPattern,
@@ -581,9 +633,26 @@ pub enum Predicate {
 pub enum EffectKind {
     EmitIssue,
     EmitNotification,
+    SetRawFieldValue,
     SetDerived,
     NormalizeField,
     SetWorkflowState,
+}
+
+/// Raw buffer literals admitted by event-rule mutation effects.
+#[derive(Debug, Clone, Copy)]
+pub enum StaticRawValue {
+    Absent,
+    Text(&'static str),
+}
+
+impl StaticRawValue {
+    fn to_raw_value(self) -> RawValue {
+        match self {
+            Self::Absent => RawValue::Absent,
+            Self::Text(value) => RawValue::Text(value.to_owned()),
+        }
+    }
 }
 
 /// Every effect node currently accepted by `effect.schema.json`.
@@ -600,6 +669,10 @@ pub enum Effect {
         channel: WorkflowNotificationChannel,
         message: &'static str,
         official_message: Option<&'static str>,
+    },
+    SetRawFieldValue {
+        field: FieldRef,
+        value: StaticRawValue,
     },
     SetDerived {
         output_id: &'static str,
@@ -619,6 +692,7 @@ impl Effect {
         match self {
             Self::EmitIssue { .. } => EffectKind::EmitIssue,
             Self::EmitNotification { .. } => EffectKind::EmitNotification,
+            Self::SetRawFieldValue { .. } => EffectKind::SetRawFieldValue,
             Self::SetDerived { .. } => EffectKind::SetDerived,
             Self::NormalizeField { .. } => EffectKind::NormalizeField,
             Self::SetWorkflowState { .. } => EffectKind::SetWorkflowState,
@@ -630,7 +704,19 @@ impl Effect {
 pub struct CalculationOutput {
     pub output_id: &'static str,
     pub value: &'static Expression,
-    pub rounding: Option<Rounding>,
+    pub rounding: Option<&'static [Rounding]>,
+    pub writeback: Option<CalculationWriteback>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CalculationWriteFormat {
+    OfflineEbirFormatCurrencyV1,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CalculationWriteback {
+    pub field: FieldRef,
+    pub format: CalculationWriteFormat,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -645,6 +731,7 @@ pub struct CalculationSpec {
     pub scope: EvaluationScope,
     pub depends_on: &'static [&'static str],
     pub phases: &'static [ValidationPhase],
+    pub trigger_field_ids: &'static [&'static str],
     pub profiles: Profiled<Branch<CalculationBranch>>,
 }
 
@@ -660,7 +747,38 @@ pub struct RuleSpec {
     pub scope: EvaluationScope,
     pub order: u32,
     pub phases: &'static [ValidationPhase],
+    pub trigger_field_ids: &'static [&'static str],
     pub profiles: Profiled<Branch<RuleBranch>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ScheduledOutputWriteMode {
+    Insert,
+    Replace,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FieldEventStep {
+    Calculation {
+        calculation_id: &'static str,
+        output_ids: &'static [&'static str],
+        write_mode: ScheduledOutputWriteMode,
+    },
+    Rule {
+        rule_id: &'static str,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FieldEventProgram {
+    pub steps: &'static [FieldEventStep],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FieldEventProgramSpec {
+    pub phase: ValidationPhase,
+    pub trigger_field_id: &'static str,
+    pub profiles: Profiled<Branch<FieldEventProgram>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -711,6 +829,7 @@ pub struct StaticRuleSetSpec {
     pub context_values: &'static [ContextValueSpec],
     pub field_groups: &'static [FieldGroupSpec],
     pub fields: &'static [FieldSpec],
+    pub field_event_programs: &'static [FieldEventProgramSpec],
     pub evaluation_order: &'static [&'static str],
     pub calculations: &'static [CalculationSpec],
     pub rules: &'static [RuleSpec],
@@ -724,6 +843,7 @@ pub enum SpecItemKind {
     ContextValue,
     FieldGroup,
     Field,
+    FieldEventProgram,
     Calculation,
     Output,
     Rule,
@@ -751,6 +871,10 @@ pub enum StaticSpecError {
         kind: SpecItemKind,
         value: &'static str,
         phase: ValidationPhase,
+    },
+    InvalidEventBinding {
+        kind: SpecItemKind,
+        value: &'static str,
     },
     InvalidReference {
         kind: SpecItemKind,
@@ -839,6 +963,10 @@ impl fmt::Display for StaticSpecError {
             Self::DuplicatePhase { kind, value, phase } => {
                 write!(formatter, "static {kind:?} {value} repeats phase {phase:?}")
             }
+            Self::InvalidEventBinding { kind, value } => write!(
+                formatter,
+                "static {kind:?} {value} has an invalid field-event phase/trigger binding"
+            ),
             Self::InvalidReference {
                 kind,
                 value,
@@ -975,9 +1103,14 @@ pub enum ExecutionOperation {
     SplitComponent,
     JavaScriptParseIntRadix10,
     JavaScriptParseFloat,
+    JavaScriptGlobalIsNaNLogicalOr,
+    JavaScriptNumberCompare,
+    Checksum,
     JavaScriptDateLocalDay,
     CanonicalLocalDateDay,
     NormalizeField,
+    SetRawFieldValue,
+    CalculationWriteback,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1025,6 +1158,15 @@ pub enum InterpreterError {
     },
     AmbiguousDerivedOutput {
         output_id: OutputId,
+    },
+    MissingFieldEventProgram {
+        phase: ValidationPhase,
+        field: FieldInstance,
+    },
+    InvalidScheduledOutputWrite {
+        calculation_id: CalculationId,
+        output_id: OutputId,
+        mode: ScheduledOutputWriteMode,
     },
     TypeMismatch {
         operation: ExecutionOperation,
@@ -1109,6 +1251,19 @@ impl fmt::Display for InterpreterError {
             Self::AmbiguousDerivedOutput { output_id } => {
                 write!(formatter, "derived output ID {output_id} is ambiguous")
             }
+            Self::MissingFieldEventProgram { phase, field } => write!(
+                formatter,
+                "missing exact {phase:?} event program for {}",
+                field.field_id()
+            ),
+            Self::InvalidScheduledOutputWrite {
+                calculation_id,
+                output_id,
+                mode,
+            } => write!(
+                formatter,
+                "scheduled {mode:?} is invalid for {calculation_id}:{output_id}"
+            ),
             Self::TypeMismatch {
                 operation,
                 expected,
@@ -1911,6 +2066,7 @@ fn validate_materialization_plan(
         owner_id: artifact_id,
         calculation: None,
         current_group: None,
+        trigger_field_ids: &[],
     };
     let mut expected_ordinal = 1_u32;
     validate_materialization_nodes_static(plan.nodes, scope, None, &mut expected_ordinal)
@@ -2614,6 +2770,8 @@ struct SelectedCalculation {
     spec: &'static CalculationSpec,
     branch: CalculationBranch,
     instance: Option<RepeatedGroupInstance>,
+    outputs: Vec<&'static CalculationOutput>,
+    write_mode: ScheduledOutputWriteMode,
 }
 
 #[derive(Clone)]
@@ -2623,10 +2781,25 @@ struct SelectedRule {
     instance: Option<RepeatedGroupInstance>,
 }
 
+#[derive(Clone)]
+enum SelectedFieldEventStep {
+    Calculation(SelectedCalculation),
+    Rule(SelectedRule),
+}
+
+enum ExecutionPlan {
+    Batched {
+        calculations: Vec<SelectedCalculation>,
+        rules: Vec<SelectedRule>,
+    },
+    FieldEvent {
+        steps: Vec<SelectedFieldEventStep>,
+    },
+}
+
 struct Inventory {
     expectation: EvaluationExpectation,
-    calculations: Vec<SelectedCalculation>,
-    rules: Vec<SelectedRule>,
+    plan: ExecutionPlan,
     effect_mode: EffectEvaluationMode,
 }
 
@@ -2643,69 +2816,174 @@ fn inventory(
         context,
     )?;
 
-    let mut calculations = Vec::new();
     let mut expected_outputs = Vec::new();
-    for calculation_id in spec.evaluation_order {
-        let calculation = spec
-            .calculations
+    let (plan, rules) = if let Some(event_field) = request.event_field() {
+        let program = spec
+            .field_event_programs
             .iter()
-            .find(|candidate| candidate.calculation_id == *calculation_id)
-            .expect("validated evaluation order reference");
-        if !calculation.phases.contains(&context.phase()) {
-            continue;
-        }
+            .find(|candidate| {
+                candidate.phase == context.phase()
+                    && candidate.trigger_field_id == event_field.field_id().as_str()
+            })
+            .ok_or_else(|| InterpreterError::MissingFieldEventProgram {
+                phase: context.phase(),
+                field: event_field.clone(),
+            })?;
         let branch = select_branch(
-            calculation.profiles.select(context.profile()),
-            SpecItemKind::Calculation,
-            calculation.calculation_id,
+            program.profiles.select(context.profile()),
+            SpecItemKind::FieldEventProgram,
+            program.trigger_field_id,
             context,
         )?;
-        let parsed_calculation_id = parse_calculation_id(calculation.calculation_id)?;
-        for instance in execution_instances(calculation.scope, request) {
-            for output in branch.outputs {
-                expected_outputs.push(DerivedOutputExpectation::new(
-                    parsed_calculation_id.clone(),
-                    parse_output_id(output.output_id)?,
-                    instance.clone(),
-                ));
+        let mut steps = Vec::new();
+        let mut selected_rules = Vec::new();
+        for step in branch.steps {
+            match step {
+                FieldEventStep::Calculation {
+                    calculation_id,
+                    output_ids,
+                    write_mode,
+                } => {
+                    let calculation = spec
+                        .calculations
+                        .iter()
+                        .find(|candidate| candidate.calculation_id == *calculation_id)
+                        .expect("validated field-event calculation reference");
+                    let calculation_branch = select_branch(
+                        calculation.profiles.select(context.profile()),
+                        SpecItemKind::Calculation,
+                        calculation.calculation_id,
+                        context,
+                    )?;
+                    let outputs = output_ids
+                        .iter()
+                        .map(|output_id| {
+                            calculation_branch
+                                .outputs
+                                .iter()
+                                .find(|output| output.output_id == *output_id)
+                                .expect("validated scheduled output reference")
+                        })
+                        .collect::<Vec<_>>();
+                    let parsed_calculation_id = parse_calculation_id(calculation.calculation_id)?;
+                    for instance in execution_instances(calculation.scope, request) {
+                        if *write_mode == ScheduledOutputWriteMode::Insert {
+                            for output in &outputs {
+                                expected_outputs.push(DerivedOutputExpectation::new(
+                                    parsed_calculation_id.clone(),
+                                    parse_output_id(output.output_id)?,
+                                    instance.clone(),
+                                ));
+                            }
+                        }
+                        let selected = SelectedCalculation {
+                            spec: calculation,
+                            branch: calculation_branch,
+                            instance,
+                            outputs: outputs.clone(),
+                            write_mode: *write_mode,
+                        };
+                        steps.push(SelectedFieldEventStep::Calculation(selected));
+                    }
+                }
+                FieldEventStep::Rule { rule_id } => {
+                    let rule = spec
+                        .rules
+                        .iter()
+                        .find(|candidate| candidate.rule_id == *rule_id)
+                        .expect("validated field-event rule reference");
+                    let rule_branch = select_branch(
+                        rule.profiles.select(context.profile()),
+                        SpecItemKind::Rule,
+                        rule.rule_id,
+                        context,
+                    )?;
+                    for instance in execution_instances(rule.scope, request) {
+                        let selected = SelectedRule {
+                            spec: rule,
+                            branch: rule_branch,
+                            instance,
+                        };
+                        selected_rules.push(selected.clone());
+                        steps.push(SelectedFieldEventStep::Rule(selected));
+                    }
+                }
             }
-            calculations.push(SelectedCalculation {
-                spec: calculation,
-                branch,
-                instance,
-            });
         }
-    }
+        (ExecutionPlan::FieldEvent { steps }, selected_rules)
+    } else {
+        let mut calculations = Vec::new();
+        for calculation_id in spec.evaluation_order {
+            let calculation = spec
+                .calculations
+                .iter()
+                .find(|candidate| candidate.calculation_id == *calculation_id)
+                .expect("validated evaluation order reference");
+            if !entry_applies(calculation.phases, calculation.trigger_field_ids, request) {
+                continue;
+            }
+            let branch = select_branch(
+                calculation.profiles.select(context.profile()),
+                SpecItemKind::Calculation,
+                calculation.calculation_id,
+                context,
+            )?;
+            let parsed_calculation_id = parse_calculation_id(calculation.calculation_id)?;
+            for instance in execution_instances(calculation.scope, request) {
+                for output in branch.outputs {
+                    expected_outputs.push(DerivedOutputExpectation::new(
+                        parsed_calculation_id.clone(),
+                        parse_output_id(output.output_id)?,
+                        instance.clone(),
+                    ));
+                }
+                calculations.push(SelectedCalculation {
+                    spec: calculation,
+                    branch,
+                    instance,
+                    outputs: branch.outputs.iter().collect(),
+                    write_mode: ScheduledOutputWriteMode::Insert,
+                });
+            }
+        }
 
-    let mut applicable_rules: Vec<_> = spec
-        .rules
-        .iter()
-        .filter(|rule| rule.phases.contains(&context.phase()))
-        .collect();
-    applicable_rules.sort_by_key(|rule| (rule.order, rule.rule_id));
-    let mut rules = Vec::new();
-    for rule in applicable_rules {
-        let branch = select_branch(
-            rule.profiles.select(context.profile()),
-            SpecItemKind::Rule,
-            rule.rule_id,
-            context,
-        )?;
-        for instance in execution_instances(rule.scope, request) {
-            rules.push(SelectedRule {
-                spec: rule,
-                branch,
-                instance,
-            });
+        let mut applicable_rules: Vec<_> = spec
+            .rules
+            .iter()
+            .filter(|rule| entry_applies(rule.phases, rule.trigger_field_ids, request))
+            .collect();
+        applicable_rules.sort_by_key(|rule| (rule.order, rule.rule_id));
+        let mut selected_rules = Vec::new();
+        for rule in applicable_rules {
+            let branch = select_branch(
+                rule.profiles.select(context.profile()),
+                SpecItemKind::Rule,
+                rule.rule_id,
+                context,
+            )?;
+            for instance in execution_instances(rule.scope, request) {
+                selected_rules.push(SelectedRule {
+                    spec: rule,
+                    branch,
+                    instance,
+                });
+            }
         }
-    }
-    rules.sort_by(|left, right| {
-        (left.spec.order, left.spec.rule_id, left.instance.as_ref()).cmp(&(
-            right.spec.order,
-            right.spec.rule_id,
-            right.instance.as_ref(),
-        ))
-    });
+        selected_rules.sort_by(|left, right| {
+            (left.spec.order, left.spec.rule_id, left.instance.as_ref()).cmp(&(
+                right.spec.order,
+                right.spec.rule_id,
+                right.instance.as_ref(),
+            ))
+        });
+        (
+            ExecutionPlan::Batched {
+                calculations,
+                rules: selected_rules.clone(),
+            },
+            selected_rules,
+        )
+    };
 
     let expected_rules = rules
         .iter()
@@ -2717,24 +2995,51 @@ fn inventory(
             ))
         })
         .collect::<Result<Vec<_>, InterpreterError>>()?;
-    let expectation =
-        EvaluationExpectation::try_new(expected_rules, expected_outputs).map_err(|error| {
-            InterpreterError::InvalidStaticSpec(StaticSpecError::InvalidReference {
-                kind: SpecItemKind::RuleSet,
-                value: "expectation",
-                target: match error {
-                    EvaluationError::DuplicateExpectedRule { .. } => "duplicate-rule",
-                    EvaluationError::ExpectedRuleOrderNotStrict { .. } => "rule-order",
-                    EvaluationError::DuplicateExpectedOutput { .. } => "duplicate-output",
-                    _ => "invalid-expectation",
-                },
-            })
-        })?;
+    let mut expected_field_value_assignments = Vec::new();
+    for rule in &rules {
+        let execution =
+            RuleExecution::new(parse_rule_id(rule.spec.rule_id)?, rule.instance.clone());
+        for (effect_index, effect) in rule.branch.effects.iter().enumerate() {
+            let Effect::SetRawFieldValue { field, value } = effect else {
+                continue;
+            };
+            let target =
+                resolve_field_ref_for_instance(*field, spec, request, rule.instance.as_ref())?;
+            if request.raw_inputs().raw_value(&target).is_none() {
+                return Err(InterpreterError::MissingInput { field: target });
+            }
+            expected_field_value_assignments.push(FieldValueAssignmentExpectation::new(
+                execution.clone(),
+                u32::try_from(effect_index).map_err(|_| InterpreterError::Overflow {
+                    operation: ExecutionOperation::SetRawFieldValue,
+                })?,
+                target,
+                (*value).to_raw_value(),
+            ));
+        }
+    }
+    let expectation = EvaluationExpectation::try_new_with_field_value_assignments(
+        expected_rules,
+        expected_outputs,
+        expected_field_value_assignments,
+    )
+    .map_err(|error| {
+        InterpreterError::InvalidStaticSpec(StaticSpecError::InvalidReference {
+            kind: SpecItemKind::RuleSet,
+            value: "expectation",
+            target: match error {
+                EvaluationError::DuplicateExpectedRule { .. } => "duplicate-rule",
+                EvaluationError::ExpectedRuleOrderNotStrict { .. } => "rule-order",
+                EvaluationError::DuplicateExpectedOutput { .. } => "duplicate-output",
+                EvaluationError::DuplicateAssignmentEffect { .. } => "duplicate-assignment-effect",
+                _ => "invalid-expectation",
+            },
+        })
+    })?;
 
     Ok(Inventory {
         expectation,
-        calculations,
-        rules,
+        plan,
         effect_mode: select_branch(
             spec.effect_mode.select(context.profile()),
             SpecItemKind::EvaluationPolicy,
@@ -2744,20 +3049,46 @@ fn inventory(
     })
 }
 
+fn entry_applies(
+    phases: &[ValidationPhase],
+    trigger_field_ids: &[&str],
+    request: &EvaluationRequest,
+) -> bool {
+    if !phases.contains(&request.context().phase()) {
+        return false;
+    }
+    request
+        .event_field()
+        .is_none_or(|field| trigger_field_ids.contains(&field.field_id().as_str()))
+}
+
 fn execution_instances(
     scope: EvaluationScope,
     request: &EvaluationRequest,
 ) -> Vec<Option<RepeatedGroupInstance>> {
     match scope {
         EvaluationScope::Singleton => vec![None],
-        EvaluationScope::EachGroup(group_id) => request
-            .raw_inputs()
-            .repeated_group_instances()
-            .iter()
-            .filter(|instance| instance.group_id().as_str() == group_id)
-            .cloned()
-            .map(Some)
-            .collect(),
+        EvaluationScope::EachGroup(group_id) => {
+            if let Some(event_field) = request.event_field() {
+                event_field
+                    .group_path()
+                    .iter()
+                    .find(|instance| instance.group_id().as_str() == group_id)
+                    .cloned()
+                    .map(Some)
+                    .into_iter()
+                    .collect()
+            } else {
+                request
+                    .raw_inputs()
+                    .repeated_group_instances()
+                    .iter()
+                    .filter(|instance| instance.group_id().as_str() == group_id)
+                    .cloned()
+                    .map(Some)
+                    .collect()
+            }
+        }
     }
 }
 
@@ -2801,83 +3132,198 @@ fn execute(
         current_group: None,
     };
 
-    for calculation in &inventory.calculations {
-        environment.current_group = calculation.instance.clone();
-        let condition = evaluate_predicate(calculation.branch.condition, &mut environment)?;
-        let calculation_id = parse_calculation_id(calculation.spec.calculation_id)?;
-        for output in calculation.branch.outputs {
-            let mut value = if condition {
-                evaluate_expression(output.value, &mut environment)?
-            } else {
-                CanonicalValue::Absent
-            };
-            if let Some(rounding) = output.rounding {
-                value = apply_output_rounding(value, rounding)?;
+    let mut rule_state = RuleExecutionState::default();
+    match &inventory.plan {
+        ExecutionPlan::Batched {
+            calculations,
+            rules,
+        } => {
+            for calculation in calculations {
+                execute_selected_calculation(calculation, false, &mut environment)?;
             }
-            environment.derived_outputs.push(DerivedValue::new(
-                calculation_id.clone(),
-                parse_output_id(output.output_id)?,
-                calculation.instance.clone(),
-                value,
-            ));
-        }
-    }
-    environment.current_group = None;
-
-    let mut evaluated_rules = Vec::with_capacity(inventory.rules.len());
-    let mut violations = Vec::new();
-    let mut effects_stopped = false;
-    let mut current_rule = None;
-    let mut occurrence = 0_u32;
-    for selected in &inventory.rules {
-        let rule_id = parse_rule_id(selected.spec.rule_id)?;
-        if current_rule.as_ref() != Some(&rule_id) {
-            current_rule = Some(rule_id.clone());
-            occurrence = 0;
-        }
-        environment.current_group = selected.instance.clone();
-        let matched = evaluate_predicate(selected.branch.predicate, &mut environment)?;
-        evaluated_rules.push(crate::RuleExecution::new(
-            rule_id.clone(),
-            selected.instance.clone(),
-        ));
-        if !matched || effects_stopped {
-            continue;
-        }
-
-        for effect in selected.branch.effects {
-            let emitted_blocking = apply_effect(
-                effect,
-                selected.spec,
-                &rule_id,
-                occurrence,
-                &mut environment,
-                &mut violations,
-            )?;
-            if matches!(effect, Effect::EmitIssue { .. }) {
-                occurrence = occurrence
-                    .checked_add(1)
-                    .ok_or(InterpreterError::Overflow {
-                        operation: ExecutionOperation::NormalizeField,
-                    })?;
+            for rule in rules {
+                execute_selected_rule(
+                    rule,
+                    false,
+                    inventory.effect_mode,
+                    &mut environment,
+                    &mut rule_state,
+                )?;
             }
-            if emitted_blocking
-                && inventory.effect_mode == EffectEvaluationMode::StopEffectsAfterFirstBlockingIssue
-            {
-                effects_stopped = true;
-                break;
+        }
+        ExecutionPlan::FieldEvent { steps } => {
+            for step in steps {
+                match step {
+                    SelectedFieldEventStep::Calculation(calculation) => {
+                        execute_selected_calculation(calculation, true, &mut environment)?;
+                    }
+                    SelectedFieldEventStep::Rule(rule) => {
+                        execute_selected_rule(
+                            rule,
+                            true,
+                            inventory.effect_mode,
+                            &mut environment,
+                            &mut rule_state,
+                        )?;
+                    }
+                }
             }
         }
     }
     environment.current_group = None;
 
     drop(environment);
-    Ok(EvaluationOutput::new(
+    Ok(EvaluationOutput::new_with_field_value_assignments(
         canonical_inputs,
         derived_outputs,
-        evaluated_rules,
-        violations,
+        rule_state.evaluated_rules,
+        rule_state.violations,
+        rule_state.field_value_assignments,
     ))
+}
+
+#[derive(Default)]
+struct RuleExecutionState {
+    evaluated_rules: Vec<RuleExecution>,
+    violations: Vec<RuleViolation>,
+    field_value_assignments: Vec<FieldValueAssignment>,
+    effects_stopped: bool,
+    current_rule: Option<RuleId>,
+    occurrence: u32,
+}
+
+fn execute_selected_calculation(
+    calculation: &SelectedCalculation,
+    apply_writeback: bool,
+    environment: &mut Environment<'_>,
+) -> Result<(), InterpreterError> {
+    environment.current_group = calculation.instance.clone();
+    let condition = evaluate_predicate(calculation.branch.condition, environment)?;
+    let calculation_id = parse_calculation_id(calculation.spec.calculation_id)?;
+    for output in &calculation.outputs {
+        let mut value = if condition {
+            evaluate_expression(output.value, environment)?
+        } else {
+            CanonicalValue::Absent
+        };
+        if let Some(rounding) = output.rounding {
+            for step in rounding {
+                value = apply_output_rounding(value, *step)?;
+            }
+        }
+        let output_id = parse_output_id(output.output_id)?;
+        let derived = DerivedValue::new(
+            calculation_id.clone(),
+            output_id.clone(),
+            calculation.instance.clone(),
+            value.clone(),
+        );
+        match calculation.write_mode {
+            ScheduledOutputWriteMode::Insert => {
+                if environment.derived_outputs.iter().any(|candidate| {
+                    candidate.calculation_id() == &calculation_id
+                        && candidate.output_id() == &output_id
+                        && candidate.instance() == calculation.instance.as_ref()
+                }) {
+                    return Err(InterpreterError::InvalidScheduledOutputWrite {
+                        calculation_id: calculation_id.clone(),
+                        output_id,
+                        mode: calculation.write_mode,
+                    });
+                }
+                environment.derived_outputs.push(derived);
+            }
+            ScheduledOutputWriteMode::Replace => {
+                let Some(slot) = environment.derived_outputs.iter_mut().find(|candidate| {
+                    candidate.calculation_id() == &calculation_id
+                        && candidate.output_id() == &output_id
+                        && candidate.instance() == calculation.instance.as_ref()
+                }) else {
+                    return Err(InterpreterError::InvalidScheduledOutputWrite {
+                        calculation_id: calculation_id.clone(),
+                        output_id,
+                        mode: calculation.write_mode,
+                    });
+                };
+                *slot = derived;
+            }
+        }
+        // A false calculation condition is the reviewed source no-write path.
+        // It still materializes the absent derived slot, but it must not route
+        // that sentinel through a terminal formatter. An evaluated output that
+        // becomes absent is different: the formatter rejects it below so
+        // blank/NaN-producing expression paths cannot masquerade as no-write.
+        if apply_writeback && condition {
+            if let Some(writeback) = output.writeback {
+                apply_calculation_writeback(writeback, &value, environment)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn execute_selected_rule(
+    selected: &SelectedRule,
+    mutate_working_fields: bool,
+    effect_mode: EffectEvaluationMode,
+    environment: &mut Environment<'_>,
+    state: &mut RuleExecutionState,
+) -> Result<(), InterpreterError> {
+    let rule_id = parse_rule_id(selected.spec.rule_id)?;
+    if state.current_rule.as_ref() != Some(&rule_id) {
+        state.current_rule = Some(rule_id.clone());
+        state.occurrence = 0;
+    }
+    environment.current_group = selected.instance.clone();
+    let matched = evaluate_predicate(selected.branch.predicate, environment)?;
+    state.evaluated_rules.push(RuleExecution::new(
+        rule_id.clone(),
+        selected.instance.clone(),
+    ));
+    if !matched || state.effects_stopped {
+        return Ok(());
+    }
+
+    let mut current_rule_blocked = false;
+    for (effect_index, effect) in selected.branch.effects.iter().enumerate() {
+        if current_rule_blocked
+            && matches!(
+                effect,
+                Effect::EmitIssue { .. } | Effect::EmitNotification { .. }
+            )
+        {
+            continue;
+        }
+        let emitted_blocking = apply_effect(
+            effect,
+            selected.spec,
+            &rule_id,
+            state.occurrence,
+            u32::try_from(effect_index).map_err(|_| InterpreterError::Overflow {
+                operation: ExecutionOperation::SetRawFieldValue,
+            })?,
+            mutate_working_fields,
+            environment,
+            &mut state.violations,
+            &mut state.field_value_assignments,
+        )?;
+        if matches!(effect, Effect::EmitIssue { .. }) {
+            state.occurrence =
+                state
+                    .occurrence
+                    .checked_add(1)
+                    .ok_or(InterpreterError::Overflow {
+                        operation: ExecutionOperation::NormalizeField,
+                    })?;
+        }
+        if emitted_blocking
+            && effect_mode == EffectEvaluationMode::StopEffectsAfterFirstBlockingIssue
+        {
+            state.effects_stopped = true;
+            current_rule_blocked = true;
+        }
+    }
+    Ok(())
 }
 
 struct Environment<'request> {
@@ -3033,7 +3479,27 @@ fn canonicalize_inputs(
                 field.field_id,
                 request.context(),
             )?;
-            let normalized = normalize_raw(raw.value(), behavior.normalization)?;
+            let mut normalized = normalize_raw(raw.value(), behavior.normalization)?;
+            if request.event_field() == Some(raw.field()) {
+                let matching_events = behavior
+                    .event_normalization
+                    .iter()
+                    .filter(|event| event.phase == request.context().phase())
+                    .collect::<Vec<_>>();
+                if !matching_events.is_empty() && matches!(normalized, OwnedNormalizedInput::Absent)
+                {
+                    // A missing raw control cannot dispatch a DOM field event.
+                    // Reject it before an empty-value coercion can silently
+                    // turn the impossible event into a usable value.
+                    return Err(InterpreterError::InvalidCoercion {
+                        target: field.value_type,
+                        reason: CoercionFailure::Empty,
+                    });
+                }
+                for event in matching_events {
+                    normalized = normalize_owned(normalized, event.normalization)?;
+                }
+            }
             let canonical = coerce_normalized(normalized, behavior.coercion)?;
             Ok(CanonicalFieldValue::new(
                 raw.field().clone(),
@@ -3070,6 +3536,18 @@ impl OwnedNormalizedInput {
         match self {
             Self::Absent => NormalizedInput::Absent,
             Self::Text(value) => NormalizedInput::Text(value),
+        }
+    }
+}
+
+fn normalize_owned(
+    normalized: OwnedNormalizedInput,
+    pipeline: &[NormalizationStep],
+) -> Result<OwnedNormalizedInput, InterpreterError> {
+    match normalized {
+        OwnedNormalizedInput::Absent => Ok(OwnedNormalizedInput::Absent),
+        OwnedNormalizedInput::Text(value) => {
+            normalize_text(&value, pipeline).map(OwnedNormalizedInput::Text)
         }
     }
 }
@@ -3121,6 +3599,10 @@ fn normalize_text(
                     }
                     Err(_) => value,
                 }
+            }
+            NormalizationStep::OfflineEbirMoneyRoundV1 => offline_ebir_money_round_v1(&value)?,
+            NormalizationStep::OfflineEbirParseFloatFixedZeroV1 => {
+                offline_ebir_parse_float_fixed_zero_v1(&value)?
             }
         };
     }
@@ -3587,6 +4069,645 @@ fn evaluate_javascript_parse_int_radix10(
     Ok(CanonicalValue::Integer(number as i128))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LegacyJavaScriptNumber {
+    NaN,
+    NegativeInfinity,
+    Finite {
+        coefficient: BigInt,
+        decimal_exponent: BigInt,
+    },
+    PositiveInfinity,
+}
+
+impl LegacyJavaScriptNumber {
+    fn zero() -> Self {
+        Self::Finite {
+            coefficient: BigInt::from(0_u8),
+            decimal_exponent: BigInt::from(0_u8),
+        }
+    }
+
+    fn compare(&self, other: &Self) -> Option<Ordering> {
+        use LegacyJavaScriptNumber::{Finite, NaN, NegativeInfinity, PositiveInfinity};
+
+        Some(match (self, other) {
+            (NaN, _) | (_, NaN) => return None,
+            (NegativeInfinity, NegativeInfinity) => Ordering::Equal,
+            (NegativeInfinity, _) => Ordering::Less,
+            (_, NegativeInfinity) => Ordering::Greater,
+            (PositiveInfinity, PositiveInfinity) => Ordering::Equal,
+            (PositiveInfinity, _) => Ordering::Greater,
+            (_, PositiveInfinity) => Ordering::Less,
+            (
+                Finite {
+                    coefficient: left,
+                    decimal_exponent: left_exponent,
+                },
+                Finite {
+                    coefficient: right,
+                    decimal_exponent: right_exponent,
+                },
+            ) => compare_exact_javascript_finite(left, left_exponent, right, right_exponent),
+        })
+    }
+}
+
+fn compare_exact_javascript_finite(
+    left: &BigInt,
+    left_exponent: &BigInt,
+    right: &BigInt,
+    right_exponent: &BigInt,
+) -> Ordering {
+    let left_sign = left.sign();
+    let right_sign = right.sign();
+    match (left_sign, right_sign) {
+        (Sign::Minus, Sign::Minus) => {
+            compare_exact_javascript_magnitude(left, left_exponent, right, right_exponent).reverse()
+        }
+        (Sign::Minus, _) => Ordering::Less,
+        (_, Sign::Minus) => Ordering::Greater,
+        (Sign::NoSign, Sign::NoSign) => Ordering::Equal,
+        (Sign::NoSign, Sign::Plus) => Ordering::Less,
+        (Sign::Plus, Sign::NoSign) => Ordering::Greater,
+        (Sign::Plus, Sign::Plus) => {
+            compare_exact_javascript_magnitude(left, left_exponent, right, right_exponent)
+        }
+    }
+}
+
+fn compare_exact_javascript_magnitude(
+    left: &BigInt,
+    left_exponent: &BigInt,
+    right: &BigInt,
+    right_exponent: &BigInt,
+) -> Ordering {
+    let left_text = left.to_str_radix(10);
+    let right_text = right.to_str_radix(10);
+    let left_digits = left_text.strip_prefix('-').unwrap_or(&left_text);
+    let right_digits = right_text.strip_prefix('-').unwrap_or(&right_text);
+    let left_order = left_exponent.clone() + BigInt::from(left_digits.len());
+    let right_order = right_exponent.clone() + BigInt::from(right_digits.len());
+    match left_order.cmp(&right_order) {
+        Ordering::Equal => {
+            let width = left_digits.len().max(right_digits.len());
+            for index in 0..width {
+                let left_digit = left_digits.as_bytes().get(index).copied().unwrap_or(b'0');
+                let right_digit = right_digits.as_bytes().get(index).copied().unwrap_or(b'0');
+                match left_digit.cmp(&right_digit) {
+                    Ordering::Equal => {}
+                    ordering => return ordering,
+                }
+            }
+            Ordering::Equal
+        }
+        ordering => ordering,
+    }
+}
+
+fn legacy_javascript_number(input: &str) -> LegacyJavaScriptNumber {
+    let input = input.trim_matches(is_ecmascript_string_whitespace);
+    if input.is_empty() {
+        return LegacyJavaScriptNumber::zero();
+    }
+    match input {
+        "Infinity" | "+Infinity" => return LegacyJavaScriptNumber::PositiveInfinity,
+        "-Infinity" => return LegacyJavaScriptNumber::NegativeInfinity,
+        _ => {}
+    }
+
+    if let Some(hexadecimal) = input
+        .strip_prefix("0x")
+        .or_else(|| input.strip_prefix("0X"))
+    {
+        if hexadecimal.is_empty() || !hexadecimal.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return LegacyJavaScriptNumber::NaN;
+        }
+        return BigInt::parse_bytes(hexadecimal.as_bytes(), 16).map_or(
+            LegacyJavaScriptNumber::NaN,
+            |coefficient| LegacyJavaScriptNumber::Finite {
+                coefficient,
+                decimal_exponent: BigInt::from(0_u8),
+            },
+        );
+    }
+
+    let bytes = input.as_bytes();
+    let mut cursor = 0;
+    let negative = match bytes.first() {
+        Some(b'+') => {
+            cursor = 1;
+            false
+        }
+        Some(b'-') => {
+            cursor = 1;
+            true
+        }
+        _ => false,
+    };
+    let integer_start = cursor;
+    while bytes.get(cursor).is_some_and(u8::is_ascii_digit) {
+        cursor += 1;
+    }
+    let integer_end = cursor;
+    let mut fraction_start = cursor;
+    let mut fraction_end = cursor;
+    if bytes.get(cursor) == Some(&b'.') {
+        cursor += 1;
+        fraction_start = cursor;
+        while bytes.get(cursor).is_some_and(u8::is_ascii_digit) {
+            cursor += 1;
+        }
+        fraction_end = cursor;
+    }
+    if integer_start == integer_end && fraction_start == fraction_end {
+        return LegacyJavaScriptNumber::NaN;
+    }
+
+    let mut exponent = BigInt::from(0_u8);
+    if matches!(bytes.get(cursor), Some(b'e') | Some(b'E')) {
+        cursor += 1;
+        let exponent_negative = match bytes.get(cursor) {
+            Some(b'+') => {
+                cursor += 1;
+                false
+            }
+            Some(b'-') => {
+                cursor += 1;
+                true
+            }
+            _ => false,
+        };
+        let exponent_start = cursor;
+        while bytes.get(cursor).is_some_and(u8::is_ascii_digit) {
+            cursor += 1;
+        }
+        if exponent_start == cursor {
+            return LegacyJavaScriptNumber::NaN;
+        }
+        let Some(parsed_exponent) = BigInt::parse_bytes(&bytes[exponent_start..cursor], 10) else {
+            return LegacyJavaScriptNumber::NaN;
+        };
+        exponent = if exponent_negative {
+            -parsed_exponent
+        } else {
+            parsed_exponent
+        };
+    }
+    if cursor != bytes.len() {
+        return LegacyJavaScriptNumber::NaN;
+    }
+
+    let mut digits =
+        String::with_capacity((integer_end - integer_start) + (fraction_end - fraction_start));
+    digits.push_str(&input[integer_start..integer_end]);
+    digits.push_str(&input[fraction_start..fraction_end]);
+    let Some(mut coefficient) = BigInt::parse_bytes(digits.as_bytes(), 10) else {
+        return LegacyJavaScriptNumber::NaN;
+    };
+    if negative {
+        coefficient = -coefficient;
+    }
+    LegacyJavaScriptNumber::Finite {
+        coefficient,
+        decimal_exponent: exponent - BigInt::from(fraction_end - fraction_start),
+    }
+}
+
+/// Reproduces the finite behavior of the hash-pinned Offline eBIRForms
+/// `round(number, 2)` helper at its legacy JavaScript binary64 boundary.
+///
+/// The resource guard is deliberately separate from the official helper's
+/// lexical-width test. It bounds hostile non-DOM inputs without changing any
+/// reviewed form control limit. The official helper emits malformed strings
+/// after non-finite arithmetic or exponential `Number#toString` output. Those
+/// strings are deliberately rejected at the typed IR boundary.
+fn offline_ebir_money_round_v1(source: &str) -> Result<String, InterpreterError> {
+    if source.encode_utf16().count() > 4_096 {
+        return Err(InterpreterError::Overflow {
+            operation: ExecutionOperation::NormalizeField,
+        });
+    }
+
+    let cleaned = source
+        .chars()
+        .filter(|character| !matches!(character, '$' | ','))
+        .collect::<String>();
+    let permitted_width = match cleaned.find('.') {
+        Some(index) if index > 0 => cleaned[..index].encode_utf16().count() <= 12,
+        _ => cleaned.encode_utf16().count() <= 12,
+    };
+    if !permitted_width {
+        return Ok("0.00".to_owned());
+    }
+
+    offline_ebir_format_numeric_string(&cleaned, ExecutionOperation::NormalizeField)
+}
+
+fn offline_ebir_format_numeric_string(
+    cleaned: &str,
+    operation: ExecutionOperation,
+) -> Result<String, InterpreterError> {
+    let number = match legacy_javascript_number(&cleaned) {
+        LegacyJavaScriptNumber::NaN => 0.0,
+        LegacyJavaScriptNumber::NegativeInfinity | LegacyJavaScriptNumber::PositiveInfinity => {
+            return Err(InterpreterError::Overflow { operation });
+        }
+        LegacyJavaScriptNumber::Finite { .. } => {
+            let input = cleaned.trim_matches(is_ecmascript_string_whitespace);
+            if input.is_empty() {
+                0.0
+            } else if let Some(hexadecimal) = input
+                .strip_prefix("0x")
+                .or_else(|| input.strip_prefix("0X"))
+            {
+                u64::from_str_radix(hexadecimal, 16)
+                    .expect("the legacy-number grammar and lexical-width gate bound valid hex")
+                    as f64
+            } else {
+                input
+                    .parse::<f64>()
+                    .expect("the legacy-number grammar accepts a decimal Rust also parses")
+            }
+        }
+    };
+    if !number.is_finite() {
+        return Err(InterpreterError::Overflow { operation });
+    }
+
+    // The source compares the original value with `Math.abs` using abstract
+    // equality. Negative zero therefore remains unsigned, while any other
+    // finite negative value retains its sign even when it rounds to zero.
+    let negative = number.is_sign_negative() && number != 0.0;
+    let scaled = number.abs() * 100.0;
+    let rounded = (scaled + 0.50000000001).floor();
+    if !rounded.is_finite() {
+        return Err(InterpreterError::Overflow { operation });
+    }
+
+    let cents = rounded % 100.0;
+    let whole = (rounded / 100.0).floor();
+    if !cents.is_finite()
+        || cents.fract() != 0.0
+        || !(0.0..100.0).contains(&cents)
+        || !whole.is_finite()
+    {
+        return Err(InterpreterError::Overflow { operation });
+    }
+
+    let whole = javascript_finite_number_to_string(whole);
+    if whole.is_empty() || !whole.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(InterpreterError::Overflow { operation });
+    }
+    Ok(format_offline_ebir_money_cents(
+        &whole,
+        cents as u8,
+        negative,
+    ))
+}
+
+/// Reproduces the reviewed `formatCurrency` calculation-write path for values
+/// representable by the reviewed finite, non-exponential numeric IR domain,
+/// including source-order truncation, binary64 rounding, and signed-zero
+/// behavior.
+///
+/// The official helper also maps blank/NaN tokens to zero and emits malformed
+/// `In,fin,ity.NaN` strings for infinities. Those observations are
+/// recorded-only: textual, blank, and non-finite calculation outputs fail
+/// closed until their external-DOM or save/reopen reachability is independently
+/// reviewed. Magnitudes whose binary64 representation reaches `1e21` also fail
+/// closed: legacy `Number#toString` switches to exponent notation there, and
+/// that path is outside the reviewed canonical output shape.
+fn offline_ebir_format_currency_v1(value: &CanonicalValue) -> Result<String, InterpreterError> {
+    let source = match value {
+        CanonicalValue::Integer(value) => value.to_string(),
+        CanonicalValue::Decimal(value) => value.to_string(),
+        actual => {
+            return Err(InterpreterError::TypeMismatch {
+                operation: ExecutionOperation::CalculationWriteback,
+                expected: ValueType::Decimal,
+                actual: ValueKind::of(actual),
+            });
+        }
+    };
+    let binary64 = source
+        .parse::<f64>()
+        .map_err(|_| InterpreterError::Overflow {
+            operation: ExecutionOperation::CalculationWriteback,
+        })?;
+    if !binary64.is_finite() || binary64.abs() >= 1e21 {
+        return Err(InterpreterError::Overflow {
+            operation: ExecutionOperation::CalculationWriteback,
+        });
+    }
+    if source.encode_utf16().count() > 4_096 {
+        return Err(InterpreterError::Overflow {
+            operation: ExecutionOperation::CalculationWriteback,
+        });
+    }
+
+    let mut cleaned = source
+        .chars()
+        .filter(|character| !matches!(character, '$' | ','))
+        .collect::<String>();
+    let comparison = legacy_javascript_number(&cleaned).compare(&LegacyJavaScriptNumber::zero());
+
+    if let Some(dot) = cleaned.find('.') {
+        if dot > 0 && comparison == Some(Ordering::Greater) {
+            let integer = &cleaned[..dot];
+            if integer.encode_utf16().count() > 15 {
+                let fraction = cleaned[dot + 1..].split('.').next().unwrap_or_default();
+                cleaned = format!("{}.{}", utf16_prefix(integer, 15), fraction);
+            }
+        } else if dot > 0 && comparison == Some(Ordering::Less) {
+            let integer = &cleaned[..dot];
+            if integer.encode_utf16().count() > 13 {
+                let fraction = cleaned[dot + 1..].split('.').next().unwrap_or_default();
+                cleaned = format!("{}.{}", utf16_prefix(integer, 15), fraction);
+            }
+        }
+    } else if comparison == Some(Ordering::Greater) && cleaned.encode_utf16().count() > 15 {
+        cleaned = utf16_prefix(&cleaned, 15);
+    }
+
+    offline_ebir_format_numeric_string(&cleaned, ExecutionOperation::CalculationWriteback)
+}
+
+fn utf16_prefix(value: &str, maximum_units: usize) -> String {
+    value
+        .chars()
+        .scan(0_usize, |units, character| {
+            let next = units.saturating_add(character.len_utf16());
+            if next > maximum_units {
+                None
+            } else {
+                *units = next;
+                Some(character)
+            }
+        })
+        .collect()
+}
+
+fn format_offline_ebir_money_cents(whole: &str, cents: u8, negative: bool) -> String {
+    let mut grouped = String::with_capacity(whole.len() + whole.len() / 3);
+    let first_group = whole.len() % 3;
+    if first_group != 0 {
+        grouped.push_str(&whole[..first_group]);
+    }
+    for chunk in whole.as_bytes()[first_group..].chunks(3) {
+        if !grouped.is_empty() {
+            grouped.push(',');
+        }
+        grouped.push_str(std::str::from_utf8(chunk).expect("decimal digits are UTF-8"));
+    }
+    if grouped.is_empty() {
+        grouped.push('0');
+    }
+
+    format!("{}{grouped}.{cents:02}", if negative { "-" } else { "" })
+}
+
+/// Formats a finite non-negative IEEE-754 value using the decimal-placement
+/// rules used by ECMAScript `Number#toString`. Rust's formatter supplies the
+/// deterministic shortest round-tripping digits; this function applies the
+/// legacy fixed-versus-exponential thresholds.
+fn javascript_finite_number_to_string(value: f64) -> String {
+    debug_assert!(value.is_finite() && value >= 0.0);
+    if value == 0.0 {
+        return "0".to_owned();
+    }
+
+    let rendered = value.to_string();
+    let (mantissa, explicit_exponent) = rendered.split_once(['e', 'E']).map_or(
+        (rendered.as_str(), 0_i32),
+        |(mantissa, exponent)| {
+            (
+                mantissa,
+                exponent
+                    .parse::<i32>()
+                    .expect("Rust formats a finite f64 with a bounded exponent"),
+            )
+        },
+    );
+    let fractional_digits = mantissa
+        .split_once('.')
+        .map_or(0_i32, |(_, fraction)| fraction.len() as i32);
+    let mut digits = mantissa
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(char::from)
+        .collect::<String>();
+    let leading_zeroes = digits.bytes().take_while(|byte| *byte == b'0').count();
+    digits.drain(..leading_zeroes);
+    let trailing_zeroes = digits
+        .bytes()
+        .rev()
+        .take_while(|byte| *byte == b'0')
+        .count();
+    digits.truncate(digits.len() - trailing_zeroes);
+    let decimal_exponent = explicit_exponent - fractional_digits + trailing_zeroes as i32;
+    let decimal_position = digits.len() as i32 + decimal_exponent;
+
+    if decimal_position > 0 && decimal_position <= 21 {
+        if decimal_position as usize >= digits.len() {
+            digits.extend(std::iter::repeat_n(
+                '0',
+                decimal_position as usize - digits.len(),
+            ));
+            digits
+        } else {
+            digits.insert(decimal_position as usize, '.');
+            digits
+        }
+    } else if decimal_position <= 0 && decimal_position > -6 {
+        format!("0.{}{}", "0".repeat((-decimal_position) as usize), digits)
+    } else {
+        let exponent = decimal_position - 1;
+        let mut characters = digits.chars();
+        let first = characters
+            .next()
+            .expect("a finite nonzero number has significant digits");
+        let remainder = characters.collect::<String>();
+        let coefficient = if remainder.is_empty() {
+            first.to_string()
+        } else {
+            format!("{first}.{remainder}")
+        };
+        format!(
+            "{coefficient}e{}{exponent}",
+            if exponent >= 0 { "+" } else { "" }
+        )
+    }
+}
+
+/// Reproduces the hash-pinned `blockletterWithout2Decimal` helper used by
+/// whole-number text controls. The legacy helper parses a numeric prefix,
+/// clears NaN, and renders a zero-decimal fixed string.
+fn offline_ebir_parse_float_fixed_zero_v1(source: &str) -> Result<String, InterpreterError> {
+    if source.encode_utf16().count() > 4_096 {
+        return Err(InterpreterError::Overflow {
+            operation: ExecutionOperation::NormalizeField,
+        });
+    }
+
+    let number = javascript_parse_float(source);
+    if number.is_nan() {
+        return Ok(String::new());
+    }
+    if !number.is_finite() {
+        return Err(InterpreterError::Overflow {
+            operation: ExecutionOperation::NormalizeField,
+        });
+    }
+    if number == 0.0 {
+        return Ok("0".to_owned());
+    }
+
+    // Rust and legacy JavaScript both expose the shortest round-tripping
+    // binary64 decimal. Rounding that decimal to an integer reproduces the
+    // source-observed fixed-zero behavior, including full expansion of values
+    // such as 1e99 rather than an exponent-form display.
+    let rendered = number.abs().to_string();
+    let (mantissa, explicit_exponent) = rendered.split_once(['e', 'E']).map_or(
+        (rendered.as_str(), 0_i32),
+        |(mantissa, exponent)| {
+            (
+                mantissa,
+                exponent
+                    .parse::<i32>()
+                    .expect("Rust formats a finite f64 with a bounded exponent"),
+            )
+        },
+    );
+    let fractional_digits = mantissa
+        .split_once('.')
+        .map_or(0_i32, |(_, fraction)| fraction.len() as i32);
+    let digits = mantissa
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .collect::<Vec<_>>();
+    let coefficient = BigInt::parse_bytes(&digits, 10)
+        .expect("a finite nonzero f64 formatter emits decimal digits");
+    let decimal_exponent = explicit_exponent - fractional_digits;
+    let rounded = if decimal_exponent >= 0 {
+        coefficient
+            * BigInt::from(10_u8)
+                .pow(u32::try_from(decimal_exponent).expect("finite f64 exponent is nonnegative"))
+    } else {
+        let denominator = BigInt::from(10_u8).pow(
+            u32::try_from(-decimal_exponent).expect("finite f64 exponent magnitude is bounded"),
+        );
+        let quotient = &coefficient / &denominator;
+        let remainder = &coefficient % &denominator;
+        if remainder * BigInt::from(2_u8) >= denominator {
+            quotient + BigInt::from(1_u8)
+        } else {
+            quotient
+        }
+    };
+    Ok(format!(
+        "{}{}",
+        if number.is_sign_negative() { "-" } else { "" },
+        rounded.to_str_radix(10)
+    ))
+}
+
+fn javascript_string_or_null_truthy(
+    value: &CanonicalValue,
+    operation: ExecutionOperation,
+) -> Result<bool, InterpreterError> {
+    match value {
+        CanonicalValue::Absent | CanonicalValue::Blank => Ok(false),
+        CanonicalValue::Text(value) => Ok(!value.is_empty()),
+        actual => Err(InterpreterError::TypeMismatch {
+            operation,
+            expected: ValueType::String,
+            actual: ValueKind::of(actual),
+        }),
+    }
+}
+
+fn select_javascript_logical_or_value(
+    values: &[CanonicalValue],
+    operation: ExecutionOperation,
+) -> Result<&CanonicalValue, InterpreterError> {
+    let Some(final_value) = values.last() else {
+        return Err(InterpreterError::InvalidStaticSpec(
+            StaticSpecError::EmptyRequiredList {
+                kind: SpecItemKind::Rule,
+                value: "javascript-global-is-nan-logical-or",
+            },
+        ));
+    };
+    for value in values {
+        if javascript_string_or_null_truthy(value, operation)? {
+            return Ok(value);
+        }
+    }
+    Ok(final_value)
+}
+
+fn legacy_javascript_number_from_string_or_null(
+    value: CanonicalValue,
+    operation: ExecutionOperation,
+) -> Result<LegacyJavaScriptNumber, InterpreterError> {
+    match value {
+        CanonicalValue::Absent | CanonicalValue::Blank => Ok(LegacyJavaScriptNumber::zero()),
+        CanonicalValue::Text(value) => Ok(legacy_javascript_number(&value)),
+        actual => Err(InterpreterError::TypeMismatch {
+            operation,
+            expected: ValueType::String,
+            actual: ValueKind::of(&actual),
+        }),
+    }
+}
+
+fn exact_javascript_number_operand(
+    value: CanonicalValue,
+) -> Result<Option<LegacyJavaScriptNumber>, InterpreterError> {
+    let number = match value {
+        CanonicalValue::Absent | CanonicalValue::Blank => return Ok(None),
+        CanonicalValue::Integer(value) => LegacyJavaScriptNumber::Finite {
+            coefficient: BigInt::from(value),
+            decimal_exponent: BigInt::from(0_u8),
+        },
+        CanonicalValue::Decimal(value) => LegacyJavaScriptNumber::Finite {
+            coefficient: BigInt::from(value.coefficient()),
+            decimal_exponent: -BigInt::from(value.scale()),
+        },
+        actual => {
+            return Err(InterpreterError::TypeMismatch {
+                operation: ExecutionOperation::JavaScriptNumberCompare,
+                expected: ValueType::Decimal,
+                actual: ValueKind::of(&actual),
+            });
+        }
+    };
+    Ok(Some(number))
+}
+
+fn evaluate_javascript_number_compare(
+    operator: JavaScriptNumberCompareOperator,
+    input: CanonicalValue,
+    operand: CanonicalValue,
+) -> Result<bool, InterpreterError> {
+    let input = legacy_javascript_number_from_string_or_null(
+        input,
+        ExecutionOperation::JavaScriptNumberCompare,
+    )?;
+    let Some(operand) = exact_javascript_number_operand(operand)? else {
+        return Ok(false);
+    };
+    let Some(ordering) = input.compare(&operand) else {
+        return Ok(false);
+    };
+    Ok(match operator {
+        JavaScriptNumberCompareOperator::LessThan => ordering == Ordering::Less,
+        JavaScriptNumberCompareOperator::GreaterThan => ordering == Ordering::Greater,
+        JavaScriptNumberCompareOperator::StrictEqual => ordering == Ordering::Equal,
+    })
+}
+
 fn evaluate_javascript_parse_float_predicate(
     operator: JavaScriptParseFloatOperator,
     input: CanonicalValue,
@@ -3897,19 +5018,30 @@ fn resolve_field_ref(
     field: FieldRef,
     environment: &Environment<'_>,
 ) -> Result<FieldInstance, InterpreterError> {
+    resolve_field_ref_for_instance(
+        field,
+        environment.spec,
+        environment.request,
+        environment.current_group.as_ref(),
+    )
+}
+
+fn resolve_field_ref_for_instance(
+    field: FieldRef,
+    rule_set: &StaticRuleSetSpec,
+    request: &EvaluationRequest,
+    current_group: Option<&RepeatedGroupInstance>,
+) -> Result<FieldInstance, InterpreterError> {
     let field_id = parse_field_id(field.field_id)?;
-    let spec = find_field(environment.spec, field.field_id).ok_or_else(|| {
-        InterpreterError::MissingInput {
+    let spec =
+        find_field(rule_set, field.field_id).ok_or_else(|| InterpreterError::MissingInput {
             field: FieldInstance::singleton(field_id.clone()),
-        }
-    })?;
+        })?;
     match (field.instance, spec.group_id) {
         (FieldInstanceSelector::Singleton, None) => Ok(FieldInstance::singleton(field_id)),
         (FieldInstanceSelector::CurrentGroupInstance, Some(group_id)) => {
-            let current = environment.current_group.as_ref().ok_or_else(|| {
-                InterpreterError::MissingCurrentGroup {
-                    field_id: field_id.clone(),
-                }
+            let current = current_group.ok_or_else(|| InterpreterError::MissingCurrentGroup {
+                field_id: field_id.clone(),
             })?;
             if current.group_id().as_str() != group_id {
                 return Err(InterpreterError::FieldScopeMismatch { field_id });
@@ -3925,8 +5057,7 @@ fn resolve_field_ref(
                 parse_group_id(group_id)?,
                 parse_instance_id(instance_id)?,
             );
-            if !environment
-                .request
+            if !request
                 .raw_inputs()
                 .repeated_group_instances()
                 .contains(&group)
@@ -4323,6 +5454,44 @@ fn evaluate_predicate(
             evaluate_expression(input, environment)?,
             *operand,
         ),
+        Predicate::JavaScriptGlobalIsNaNLogicalOr { inputs } => {
+            let mut evaluated_inputs = Vec::new();
+            for input in *inputs {
+                let candidate = evaluate_expression(input, environment)?;
+                let truthy = javascript_string_or_null_truthy(
+                    &candidate,
+                    ExecutionOperation::JavaScriptGlobalIsNaNLogicalOr,
+                )?;
+                evaluated_inputs.push(candidate);
+                if truthy {
+                    break;
+                }
+            }
+            let selected = select_javascript_logical_or_value(
+                &evaluated_inputs,
+                ExecutionOperation::JavaScriptGlobalIsNaNLogicalOr,
+            )?
+            .clone();
+            Ok(matches!(
+                legacy_javascript_number_from_string_or_null(
+                    selected,
+                    ExecutionOperation::JavaScriptGlobalIsNaNLogicalOr,
+                )?,
+                LegacyJavaScriptNumber::NaN
+            ))
+        }
+        Predicate::JavaScriptNumberCompare {
+            operator,
+            input,
+            operand,
+        } => {
+            let input = evaluate_expression(input, environment)?;
+            let operand = evaluate_expression(operand, environment)?;
+            evaluate_javascript_number_compare(*operator, input, operand)
+        }
+        Predicate::Checksum { algorithm, input } => {
+            evaluate_checksum_predicate(*algorithm, evaluate_expression(input, environment)?)
+        }
         Predicate::Matches {
             value,
             pattern,
@@ -4382,6 +5551,114 @@ fn evaluate_predicate(
     }
 }
 
+fn evaluate_checksum_predicate(
+    algorithm: ChecksumAlgorithm,
+    input: CanonicalValue,
+) -> Result<bool, InterpreterError> {
+    let input = match input {
+        CanonicalValue::Absent | CanonicalValue::Blank => return Ok(false),
+        CanonicalValue::Text(value) => value,
+        actual => {
+            return Err(InterpreterError::TypeMismatch {
+                operation: ExecutionOperation::Checksum,
+                expected: ValueType::String,
+                actual: ValueKind::of(&actual),
+            });
+        }
+    };
+    Ok(match algorithm {
+        ChecksumAlgorithm::OfflineEbirTinV1 => offline_ebir_tin_v1_is_valid(&input),
+    })
+}
+
+fn offline_ebir_tin_v1_is_valid(input: &str) -> bool {
+    let Some((digits, unsigned_number)) = offline_ebir_tin_v1_input(input) else {
+        return false;
+    };
+    if offline_ebir_tin_v1_check_digit(&digits[..8]) == digits[8] {
+        return true;
+    }
+
+    // The shipped helper has a second, numeric retry path. It is entered only
+    // for unsigned values beginning with 9 inside this strict interval. A
+    // nonzero final digit is decremented; a final zero is replaced with 9.
+    // Signed nine-character inputs pass the helper's integer gate, but their
+    // leading sign is converted to the helper's error-position value 1 and
+    // prevents this retry because the first character is not 9.
+    let Some(number) = unsigned_number else {
+        return false;
+    };
+    if digits[0] != 9 || number <= 900_000_004 || number >= 905_180_009 {
+        return false;
+    }
+    let adjusted = if digits[8] == 0 {
+        number + 9
+    } else {
+        number - 1
+    };
+    let mut adjusted_digits = [0_u8; 9];
+    let mut remaining = adjusted;
+    for slot in adjusted_digits.iter_mut().rev() {
+        *slot = (remaining % 10) as u8;
+        remaining /= 10;
+    }
+    offline_ebir_tin_v1_check_digit(&adjusted_digits[..8]) == adjusted_digits[8]
+}
+
+fn offline_ebir_tin_v1_input(input: &str) -> Option<([u8; 9], Option<u32>)> {
+    let bytes = input.as_bytes();
+    if bytes.len() != 9 {
+        return None;
+    }
+
+    let mut digits = [0_u8; 9];
+    if bytes.iter().all(u8::is_ascii_digit) {
+        for (target, source) in digits.iter_mut().zip(bytes) {
+            *target = *source - b'0';
+        }
+        let number = digits
+            .iter()
+            .fold(0_u32, |value, digit| value * 10 + u32::from(*digit));
+        return Some((digits, Some(number)));
+    }
+
+    if matches!(bytes[0], b'+' | b'-') && bytes[1..].iter().all(u8::is_ascii_digit) {
+        // The Pascal helper's character conversion reports error position one
+        // for either sign; its caller stores that numeric value as digit one.
+        digits[0] = 1;
+        for (target, source) in digits[1..].iter_mut().zip(&bytes[1..]) {
+            *target = *source - b'0';
+        }
+        return Some((digits, None));
+    }
+
+    None
+}
+
+fn offline_ebir_tin_v1_check_digit(prefix: &[u8]) -> u8 {
+    debug_assert_eq!(prefix.len(), 8);
+    let sum = prefix
+        .iter()
+        .enumerate()
+        .map(|(index, digit)| {
+            let offset = 8_u32 - index as u32;
+            let shifted = (u32::from(*digit) + offset) % 10;
+            let weighted = shifted * (1_u32 << offset);
+            decimal_digital_root(weighted)
+        })
+        .sum::<u32>();
+    let remainder = sum % 10;
+    if remainder == 0 {
+        0
+    } else {
+        (10 - remainder) as u8
+    }
+}
+
+fn decimal_digital_root(value: u32) -> u32 {
+    if value == 0 { 0 } else { 1 + (value - 1) % 9 }
+}
+
 fn evaluate_compare(
     operator: CompareOperator,
     left: &CanonicalValue,
@@ -4432,8 +5709,11 @@ fn apply_effect(
     rule: &RuleSpec,
     rule_id: &RuleId,
     occurrence: u32,
+    effect_index: u32,
+    mutate_working_fields: bool,
     environment: &mut Environment<'_>,
     violations: &mut Vec<RuleViolation>,
+    field_value_assignments: &mut Vec<FieldValueAssignment>,
 ) -> Result<bool, InterpreterError> {
     match effect {
         Effect::EmitIssue {
@@ -4461,6 +5741,23 @@ fn apply_effect(
             ));
             Ok(*severity == RuleSeverity::Blocking)
         }
+        Effect::SetRawFieldValue { field, value } => {
+            let field = resolve_field_ref(*field, environment)?;
+            if environment.request.raw_inputs().raw_value(&field).is_none() {
+                return Err(InterpreterError::MissingInput { field });
+            }
+            let value = (*value).to_raw_value();
+            field_value_assignments.push(FieldValueAssignment::new(
+                RuleExecution::new(rule_id.clone(), environment.current_group.clone()),
+                effect_index,
+                field.clone(),
+                value.clone(),
+            ));
+            if mutate_working_fields {
+                recanonicalize_working_field(&field, value, environment)?;
+            }
+            Ok(false)
+        }
         Effect::EmitNotification { .. }
         | Effect::SetDerived { .. }
         | Effect::NormalizeField { .. }
@@ -4469,6 +5766,55 @@ fn apply_effect(
             kind: effect.kind(),
         }),
     }
+}
+
+fn apply_calculation_writeback(
+    writeback: CalculationWriteback,
+    value: &CanonicalValue,
+    environment: &mut Environment<'_>,
+) -> Result<(), InterpreterError> {
+    let field = resolve_field_ref(writeback.field, environment)?;
+    let formatted = match writeback.format {
+        CalculationWriteFormat::OfflineEbirFormatCurrencyV1 => {
+            offline_ebir_format_currency_v1(value)?
+        }
+    };
+    recanonicalize_working_field(&field, RawValue::Text(formatted), environment)?;
+    Ok(())
+}
+
+fn recanonicalize_working_field(
+    field: &FieldInstance,
+    working_raw: RawValue,
+    environment: &mut Environment<'_>,
+) -> Result<(), InterpreterError> {
+    let field_spec = find_field(environment.spec, field.field_id().as_str()).ok_or_else(|| {
+        InterpreterError::UnexpectedInput {
+            field: field.clone(),
+        }
+    })?;
+    let behavior = select_branch(
+        field_spec
+            .behavior
+            .select(environment.request.context().profile()),
+        SpecItemKind::Field,
+        field_spec.field_id,
+        environment.request.context(),
+    )?;
+    let normalized = normalize_raw(&working_raw, behavior.normalization)?;
+    let canonical = coerce_normalized(normalized, behavior.coercion)?;
+    let Some(slot) = environment
+        .canonical_inputs
+        .iter_mut()
+        .find(|candidate| candidate.field() == field)
+    else {
+        return Err(InterpreterError::MissingInput {
+            field: field.clone(),
+        });
+    };
+    let original_raw = slot.raw().clone();
+    *slot = CanonicalFieldValue::new(field.clone(), original_raw, canonical);
+    Ok(())
 }
 
 fn ensure_type(
@@ -4722,6 +6068,10 @@ fn round_exact_quotient(
         RoundingMode::HalfEven => {
             halfway_ordering == Ordering::Greater
                 || (halfway_ordering == Ordering::Equal && quotient.magnitude().bit(0))
+        }
+        RoundingMode::HalfCeiling => {
+            halfway_ordering == Ordering::Greater
+                || (halfway_ordering == Ordering::Equal && remainder.sign() == Sign::Plus)
         }
     };
     if adjust {
@@ -4999,6 +6349,7 @@ struct StaticValidationScope<'spec> {
     owner_id: &'static str,
     calculation: Option<&'spec CalculationSpec>,
     current_group: Option<&'static str>,
+    trigger_field_ids: &'static [&'static str],
 }
 
 impl StaticValidationScope<'_> {
@@ -5104,10 +6455,85 @@ fn validate_static_spec(spec: &StaticRuleSetSpec) -> Result<(), InterpreterError
                 .into());
             }
         }
+        if let Some(calculation_id) = field.calculation_id {
+            parse_calculation_id(calculation_id)?;
+            if !spec
+                .calculations
+                .iter()
+                .any(|calculation| calculation.calculation_id == calculation_id)
+            {
+                return Err(StaticSpecError::InvalidReference {
+                    kind: SpecItemKind::Field,
+                    value: field.field_id,
+                    target: calculation_id,
+                }
+                .into());
+            }
+        }
         for branch in [field.behavior.official, field.behavior.filing_safe] {
             if let Branch::Executable(behavior) = branch {
                 validate_coercion(behavior.coercion)?;
                 validate_normalization(behavior.normalization)?;
+                if behavior.normalization.iter().any(|step| {
+                    matches!(
+                        step,
+                        NormalizationStep::OfflineEbirMoneyRoundV1
+                            | NormalizationStep::OfflineEbirParseFloatFixedZeroV1
+                    )
+                }) {
+                    return Err(StaticSpecError::InvalidEventBinding {
+                        kind: SpecItemKind::Field,
+                        value: field.field_id,
+                    }
+                    .into());
+                }
+                let mut event_phases = Vec::new();
+                for event in behavior.event_normalization {
+                    if !event.phase.is_field_event() {
+                        return Err(StaticSpecError::InvalidEventBinding {
+                            kind: SpecItemKind::Field,
+                            value: field.field_id,
+                        }
+                        .into());
+                    }
+                    if event_phases.contains(&event.phase) {
+                        return Err(StaticSpecError::DuplicatePhase {
+                            kind: SpecItemKind::Field,
+                            value: field.field_id,
+                            phase: event.phase,
+                        }
+                        .into());
+                    }
+                    if event.normalization.is_empty() {
+                        return Err(StaticSpecError::EmptyRequiredList {
+                            kind: SpecItemKind::Field,
+                            value: field.field_id,
+                        }
+                        .into());
+                    }
+                    let has_exact_offline_event_helper = event.normalization.iter().any(|step| {
+                        matches!(
+                            step,
+                            NormalizationStep::OfflineEbirMoneyRoundV1
+                                | NormalizationStep::OfflineEbirParseFloatFixedZeroV1
+                        )
+                    });
+                    if has_exact_offline_event_helper
+                        && (event.phase != ValidationPhase::Blur
+                            || event.normalization.len() != 1
+                            || !behavior.normalization.is_empty()
+                            || field.value_type != ValueType::String
+                            || !matches!(behavior.coercion, Coercion::String { .. }))
+                    {
+                        return Err(StaticSpecError::InvalidEventBinding {
+                            kind: SpecItemKind::Field,
+                            value: field.field_id,
+                        }
+                        .into());
+                    }
+                    event_phases.push(event.phase);
+                    validate_normalization(event.normalization)?;
+                }
                 require_static_type(
                     field.value_type,
                     coercion_result_type(behavior.coercion),
@@ -5124,6 +6550,14 @@ fn validate_static_spec(spec: &StaticRuleSetSpec) -> Result<(), InterpreterError
         parse_rule_id(rule.rule_id)?;
         validate_evaluation_scope(spec, SpecItemKind::Rule, rule.rule_id, rule.scope)?;
         validate_phases(SpecItemKind::Rule, rule.rule_id, rule.phases)?;
+        validate_event_binding(
+            spec,
+            SpecItemKind::Rule,
+            rule.rule_id,
+            rule.scope,
+            rule.phases,
+            rule.trigger_field_ids,
+        )?;
         if rule.order == 0 {
             return Err(StaticSpecError::InvalidRuleOrder {
                 rule_id: rule.rule_id,
@@ -5159,6 +6593,7 @@ fn validate_static_spec(spec: &StaticRuleSetSpec) -> Result<(), InterpreterError
                         owner_id: rule.rule_id,
                         calculation: None,
                         current_group: evaluation_scope_group(rule.scope),
+                        trigger_field_ids: rule.trigger_field_ids,
                     };
                     validate_predicate(branch.predicate, scope)?;
                     for effect in branch.effects {
@@ -5168,7 +6603,312 @@ fn validate_static_spec(spec: &StaticRuleSetSpec) -> Result<(), InterpreterError
             }
         }
     }
+    validate_field_event_programs(spec)?;
     validate_workflow(spec)?;
+    Ok(())
+}
+
+fn validate_field_event_programs(spec: &StaticRuleSetSpec) -> Result<(), InterpreterError> {
+    let mut bindings = HashSet::new();
+    for program in spec.field_event_programs {
+        if !program.phase.is_field_event()
+            || find_field(spec, program.trigger_field_id).is_none()
+            || !bindings.insert((program.phase, program.trigger_field_id))
+        {
+            return Err(StaticSpecError::InvalidEventBinding {
+                kind: SpecItemKind::FieldEventProgram,
+                value: program.trigger_field_id,
+            }
+            .into());
+        }
+
+        for profile in BEHAVIOR_PROFILES {
+            let Branch::Executable(branch) = program.profiles.select(profile) else {
+                continue;
+            };
+            let mut output_slots = BTreeSet::new();
+            let mut seen_rules = BTreeSet::new();
+            let mut previous_rule = None;
+            for step in branch.steps {
+                match step {
+                    FieldEventStep::Calculation {
+                        calculation_id,
+                        output_ids,
+                        write_mode,
+                    } => {
+                        let Some(calculation) = spec
+                            .calculations
+                            .iter()
+                            .find(|candidate| candidate.calculation_id == *calculation_id)
+                        else {
+                            return Err(StaticSpecError::InvalidReference {
+                                kind: SpecItemKind::FieldEventProgram,
+                                value: program.trigger_field_id,
+                                target: calculation_id,
+                            }
+                            .into());
+                        };
+                        if !calculation.phases.contains(&program.phase)
+                            || !calculation
+                                .trigger_field_ids
+                                .contains(&program.trigger_field_id)
+                            || output_ids.is_empty()
+                        {
+                            return Err(StaticSpecError::InvalidEventBinding {
+                                kind: SpecItemKind::Calculation,
+                                value: calculation.calculation_id,
+                            }
+                            .into());
+                        }
+                        let Branch::Executable(calculation_branch) =
+                            calculation.profiles.select(profile)
+                        else {
+                            return Err(StaticSpecError::InvalidReference {
+                                kind: SpecItemKind::FieldEventProgram,
+                                value: program.trigger_field_id,
+                                target: calculation.calculation_id,
+                            }
+                            .into());
+                        };
+                        let scope = StaticValidationScope {
+                            spec,
+                            profile,
+                            phase: program.phase,
+                            owner_kind: SpecItemKind::Calculation,
+                            owner_id: calculation.calculation_id,
+                            calculation: Some(calculation),
+                            current_group: evaluation_scope_group(calculation.scope),
+                            trigger_field_ids: calculation.trigger_field_ids,
+                        };
+                        let mut previous_position = None;
+                        let mut selected = BTreeSet::new();
+                        for output_id in *output_ids {
+                            if !selected.insert(*output_id) {
+                                return Err(StaticSpecError::DuplicateIdentifier {
+                                    kind: SpecItemKind::Output,
+                                    value: output_id,
+                                }
+                                .into());
+                            }
+                            let Some(position) = calculation_branch
+                                .outputs
+                                .iter()
+                                .position(|output| output.output_id == *output_id)
+                            else {
+                                return Err(StaticSpecError::InvalidReference {
+                                    kind: SpecItemKind::FieldEventProgram,
+                                    value: program.trigger_field_id,
+                                    target: output_id,
+                                }
+                                .into());
+                            };
+                            if previous_position.is_some_and(|previous| position <= previous) {
+                                return Err(StaticSpecError::InvalidReference {
+                                    kind: SpecItemKind::FieldEventProgram,
+                                    value: program.trigger_field_id,
+                                    target: output_id,
+                                }
+                                .into());
+                            }
+                            previous_position = Some(position);
+                            let output = &calculation_branch.outputs[position];
+                            let Some(writeback) = output.writeback else {
+                                return Err(StaticSpecError::InvalidReference {
+                                    kind: SpecItemKind::Output,
+                                    value: output.output_id,
+                                    target: "writeback",
+                                }
+                                .into());
+                            };
+                            let output_type = expression_result_type(output.value);
+                            if !matches!(output_type, ValueType::Integer | ValueType::Decimal) {
+                                return Err(StaticSpecError::TypeMismatch {
+                                    operation: ExecutionOperation::CalculationWriteback,
+                                    expected: ValueType::Decimal,
+                                    actual: output_type,
+                                }
+                                .into());
+                            }
+                            let target = validate_field_ref(writeback.field, scope)?;
+                            if target.value_type != ValueType::String
+                                || target.calculation_id != Some(calculation.calculation_id)
+                            {
+                                return Err(StaticSpecError::InvalidReference {
+                                    kind: SpecItemKind::Output,
+                                    value: output.output_id,
+                                    target: target.field_id,
+                                }
+                                .into());
+                            }
+                            let slot = (calculation.calculation_id, output.output_id);
+                            let valid_write = match write_mode {
+                                ScheduledOutputWriteMode::Insert => output_slots.insert(slot),
+                                ScheduledOutputWriteMode::Replace => output_slots.contains(&slot),
+                            };
+                            if !valid_write {
+                                return Err(StaticSpecError::InvalidReference {
+                                    kind: SpecItemKind::Output,
+                                    value: output.output_id,
+                                    target: "scheduled-write-mode",
+                                }
+                                .into());
+                            }
+                        }
+                    }
+                    FieldEventStep::Rule { rule_id } => {
+                        let Some(rule) = spec
+                            .rules
+                            .iter()
+                            .find(|candidate| candidate.rule_id == *rule_id)
+                        else {
+                            return Err(StaticSpecError::InvalidReference {
+                                kind: SpecItemKind::FieldEventProgram,
+                                value: program.trigger_field_id,
+                                target: rule_id,
+                            }
+                            .into());
+                        };
+                        if !rule.phases.contains(&program.phase)
+                            || !rule.trigger_field_ids.contains(&program.trigger_field_id)
+                            || !seen_rules.insert(rule.rule_id)
+                            || previous_rule
+                                .is_some_and(|previous| (rule.order, rule.rule_id) <= previous)
+                            || !matches!(rule.profiles.select(profile), Branch::Executable(_))
+                        {
+                            return Err(StaticSpecError::InvalidEventBinding {
+                                kind: SpecItemKind::Rule,
+                                value: rule.rule_id,
+                            }
+                            .into());
+                        }
+                        previous_rule = Some((rule.order, rule.rule_id));
+                    }
+                }
+            }
+        }
+    }
+
+    for profile in BEHAVIOR_PROFILES {
+        for field in spec.fields {
+            let Branch::Executable(behavior) = field.behavior.select(profile) else {
+                continue;
+            };
+            for normalization in behavior.event_normalization {
+                if !spec.field_event_programs.iter().any(|program| {
+                    program.phase == normalization.phase
+                        && program.trigger_field_id == field.field_id
+                        && matches!(program.profiles.select(profile), Branch::Executable(_))
+                }) {
+                    return Err(StaticSpecError::InvalidEventBinding {
+                        kind: SpecItemKind::Field,
+                        value: field.field_id,
+                    }
+                    .into());
+                }
+            }
+        }
+        for calculation in spec.calculations {
+            let Branch::Executable(calculation_branch) = calculation.profiles.select(profile)
+            else {
+                continue;
+            };
+            let declared_event_phases = calculation
+                .phases
+                .iter()
+                .copied()
+                .filter(|phase| phase.is_field_event())
+                .collect::<HashSet<_>>();
+            let declared_triggers = calculation
+                .trigger_field_ids
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>();
+            let mut scheduled_event_phases = HashSet::new();
+            let mut scheduled_triggers = HashSet::new();
+            for program in spec.field_event_programs {
+                if matches!(program.profiles.select(profile), Branch::Executable(branch)
+                if branch.steps.iter().any(|step| matches!(
+                    step,
+                    FieldEventStep::Calculation { calculation_id, .. }
+                        if *calculation_id == calculation.calculation_id
+                ))) {
+                    scheduled_event_phases.insert(program.phase);
+                    scheduled_triggers.insert(program.trigger_field_id);
+                }
+            }
+            if scheduled_event_phases != declared_event_phases
+                || scheduled_triggers != declared_triggers
+            {
+                return Err(StaticSpecError::InvalidEventBinding {
+                    kind: SpecItemKind::Calculation,
+                    value: calculation.calculation_id,
+                }
+                .into());
+            }
+            for output in calculation_branch
+                .outputs
+                .iter()
+                .filter(|output| output.writeback.is_some())
+            {
+                let output_is_scheduled = spec.field_event_programs.iter().any(|program| {
+                    matches!(program.profiles.select(profile), Branch::Executable(branch)
+                    if branch.steps.iter().any(|step| matches!(
+                        step,
+                        FieldEventStep::Calculation {
+                            calculation_id,
+                            output_ids,
+                            ..
+                        } if *calculation_id == calculation.calculation_id
+                            && output_ids.contains(&output.output_id)
+                    )))
+                });
+                if declared_event_phases.is_empty() || !output_is_scheduled {
+                    return Err(StaticSpecError::InvalidEventBinding {
+                        kind: SpecItemKind::Output,
+                        value: output.output_id,
+                    }
+                    .into());
+                }
+            }
+        }
+        for rule in spec.rules {
+            if !matches!(rule.profiles.select(profile), Branch::Executable(_)) {
+                continue;
+            }
+            let declared_event_phases = rule
+                .phases
+                .iter()
+                .copied()
+                .filter(|phase| phase.is_field_event())
+                .collect::<HashSet<_>>();
+            let declared_triggers = rule
+                .trigger_field_ids
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>();
+            let mut scheduled_event_phases = HashSet::new();
+            let mut scheduled_triggers = HashSet::new();
+            for program in spec.field_event_programs {
+                if matches!(program.profiles.select(profile), Branch::Executable(branch)
+                if branch.steps.iter().any(|step| matches!(
+                    step,
+                    FieldEventStep::Rule { rule_id } if *rule_id == rule.rule_id
+                ))) {
+                    scheduled_event_phases.insert(program.phase);
+                    scheduled_triggers.insert(program.trigger_field_id);
+                }
+            }
+            if scheduled_event_phases != declared_event_phases
+                || scheduled_triggers != declared_triggers
+            {
+                return Err(StaticSpecError::InvalidEventBinding {
+                    kind: SpecItemKind::Rule,
+                    value: rule.rule_id,
+                }
+                .into());
+            }
+        }
+    }
     Ok(())
 }
 
@@ -5232,6 +6972,7 @@ fn validate_workflow(spec: &StaticRuleSetSpec) -> Result<(), InterpreterError> {
                 owner_id: transition.transition_id,
                 calculation: None,
                 current_group: None,
+                trigger_field_ids: &[],
             };
             validate_predicate(branch.guard, scope)?;
             let mut state_effects = 0;
@@ -5307,6 +7048,14 @@ fn validate_evaluation_order(spec: &StaticRuleSetSpec) -> Result<(), Interpreter
             calculation.calculation_id,
             calculation.phases,
         )?;
+        validate_event_binding(
+            spec,
+            SpecItemKind::Calculation,
+            calculation.calculation_id,
+            calculation.scope,
+            calculation.phases,
+            calculation.trigger_field_ids,
+        )?;
         let Some(position) = spec
             .evaluation_order
             .iter()
@@ -5357,7 +7106,16 @@ fn validate_evaluation_order(spec: &StaticRuleSetSpec) -> Result<(), Interpreter
                 for output in branch.outputs {
                     parse_output_id(output.output_id)?;
                     if let Some(rounding) = output.rounding {
-                        validate_rounding(rounding)?;
+                        if rounding.is_empty() {
+                            return Err(StaticSpecError::EmptyRequiredList {
+                                kind: SpecItemKind::Output,
+                                value: output.output_id,
+                            }
+                            .into());
+                        }
+                        for step in rounding {
+                            validate_rounding(*step)?;
+                        }
                     }
                 }
                 for phase in calculation.phases {
@@ -5370,6 +7128,7 @@ fn validate_evaluation_order(spec: &StaticRuleSetSpec) -> Result<(), Interpreter
                         owner_id: calculation.calculation_id,
                         calculation: Some(calculation),
                         current_group: evaluation_scope_group(calculation.scope),
+                        trigger_field_ids: calculation.trigger_field_ids,
                     };
                     validate_predicate(branch.condition, scope)?;
                     for output in branch.outputs {
@@ -5432,6 +7191,50 @@ fn validate_phases(
                 kind,
                 value,
                 phase: *phase,
+            }
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_event_binding(
+    spec: &StaticRuleSetSpec,
+    kind: SpecItemKind,
+    value: &'static str,
+    scope: EvaluationScope,
+    phases: &[ValidationPhase],
+    trigger_field_ids: &[&'static str],
+) -> Result<(), InterpreterError> {
+    let event_phase = phases.iter().any(|phase| phase.is_field_event());
+    if event_phase != !trigger_field_ids.is_empty() {
+        return Err(if event_phase {
+            StaticSpecError::EmptyRequiredList { kind, value }
+        } else {
+            StaticSpecError::InvalidEventBinding { kind, value }
+        }
+        .into());
+    }
+    validate_unique_ids(SpecItemKind::Field, trigger_field_ids.iter().copied())?;
+    for trigger_field_id in trigger_field_ids {
+        parse_field_id(trigger_field_id)?;
+        let Some(field) = find_field(spec, trigger_field_id) else {
+            return Err(StaticSpecError::InvalidReference {
+                kind,
+                value,
+                target: trigger_field_id,
+            }
+            .into());
+        };
+        let matches_scope = match scope {
+            EvaluationScope::Singleton => field.group_id.is_none(),
+            EvaluationScope::EachGroup(group_id) => field.group_id == Some(group_id),
+        };
+        if !matches_scope {
+            return Err(StaticSpecError::InvalidReference {
+                kind,
+                value,
+                target: trigger_field_id,
             }
             .into());
         }
@@ -5950,6 +7753,39 @@ fn validate_predicate(
                 })?;
             }
         }
+        Predicate::JavaScriptGlobalIsNaNLogicalOr { inputs } => {
+            if inputs.is_empty() {
+                return Err(StaticSpecError::EmptyRequiredList {
+                    kind: SpecItemKind::Rule,
+                    value: "javascript-global-is-nan-logical-or",
+                }
+                .into());
+            }
+            for input in *inputs {
+                let input = validate_expression(input, scope)?;
+                require_static_type(
+                    ValueType::String,
+                    input,
+                    ExecutionOperation::JavaScriptGlobalIsNaNLogicalOr,
+                    true,
+                )?;
+            }
+        }
+        Predicate::JavaScriptNumberCompare { input, operand, .. } => {
+            let input = validate_expression(input, scope)?;
+            require_static_type(
+                ValueType::String,
+                input,
+                ExecutionOperation::JavaScriptNumberCompare,
+                true,
+            )?;
+            let operand = validate_expression(operand, scope)?;
+            require_numeric_type(operand, ExecutionOperation::JavaScriptNumberCompare)?;
+        }
+        Predicate::Checksum { input, .. } => {
+            let input = validate_expression(input, scope)?;
+            require_static_type(ValueType::String, input, ExecutionOperation::Checksum, true)?;
+        }
         Predicate::Matches { value, pattern, .. } => {
             let value = validate_expression(value, scope)?;
             require_static_type(ValueType::String, value, ExecutionOperation::Matches, false)?;
@@ -6021,6 +7857,17 @@ fn validate_effect(
             Ok(())
         }
         Effect::EmitNotification { .. } => unsupported_static_effect(scope, effect.kind()),
+        Effect::SetRawFieldValue { field, .. } => {
+            if !scope.phase.is_field_event() || scope.owner_kind != SpecItemKind::Rule {
+                return Err(StaticSpecError::InvalidEventBinding {
+                    kind: scope.owner_kind,
+                    value: scope.owner_id,
+                }
+                .into());
+            }
+            validate_field_ref(*field, scope)?;
+            Ok(())
+        }
         Effect::SetDerived { output_id, value } => {
             parse_output_id(output_id)?;
             let target = resolve_unique_output_target(scope, output_id)?;
@@ -6088,6 +7935,7 @@ fn validate_dependency_availability(
         owner_id: calculation.calculation_id,
         calculation: Some(calculation),
         current_group: evaluation_scope_group(calculation.scope),
+        trigger_field_ids: calculation.trigger_field_ids,
     };
     for dependency_id in calculation.depends_on {
         let Some(dependency) = find_calculation(spec, dependency_id) else {
@@ -6095,6 +7943,11 @@ fn validate_dependency_availability(
         };
         if !dependency.phases.contains(&phase)
             || !matches!(dependency.profiles.select(profile), Branch::Executable(_))
+            || (phase.is_field_event()
+                && calculation
+                    .trigger_field_ids
+                    .iter()
+                    .any(|trigger| !dependency.trigger_field_ids.contains(trigger)))
         {
             return Err(invalid_static_reference(scope, dependency_id));
         }
@@ -6144,6 +7997,14 @@ fn resolve_derived_output(
         }
     }
     if !calculation.phases.contains(&scope.phase) {
+        return Err(invalid_static_reference(scope, calculation_id));
+    }
+    if scope.phase.is_field_event()
+        && scope
+            .trigger_field_ids
+            .iter()
+            .any(|trigger| !calculation.trigger_field_ids.contains(trigger))
+    {
         return Err(invalid_static_reference(scope, calculation_id));
     }
     let Branch::Executable(branch) = calculation.profiles.select(scope.profile) else {

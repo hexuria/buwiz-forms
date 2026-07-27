@@ -15,6 +15,7 @@
             "none",
             "half-up",
             "half-even",
+            "half-ceiling",
             "toward-zero",
             "away-from-zero",
             "floor",

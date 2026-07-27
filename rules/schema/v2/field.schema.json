@@ -94,6 +94,59 @@
       },
       "additionalProperties": false
     },
+    "field_event_normalization": {
+      "type": "object",
+      "required": [
+        "phase",
+        "normalization"
+      ],
+      "properties": {
+        "phase": {
+          "enum": [
+            "input",
+            "blur",
+            "change"
+          ]
+        },
+        "normalization": {
+          "$ref": "normalization.schema.json#/$defs/pipeline",
+          "minItems": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "normalization": {
+                "contains": {
+                  "$ref": "normalization.schema.json#/$defs/exact_offline_event_helper"
+                }
+              }
+            },
+            "required": [
+              "normalization"
+            ]
+          },
+          "then": {
+            "properties": {
+              "phase": {
+                "const": "blur"
+              },
+              "normalization": {
+                "prefixItems": [
+                  {
+                    "$ref": "normalization.schema.json#/$defs/exact_offline_event_helper"
+                  }
+                ],
+                "minItems": 1,
+                "maxItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
     "field_behavior_executable": {
       "type": "object",
       "required": [
@@ -110,6 +163,13 @@
         "normalization": {
           "$ref": "normalization.schema.json#/$defs/pipeline"
         },
+        "event_normalization": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field_event_normalization"
+          },
+          "uniqueItems": true
+        },
         "coercion": {
           "$ref": "coercion.schema.json#/$defs/coercion"
         },
@@ -120,6 +180,48 @@
           "$ref": "common.schema.json#/$defs/source_refs"
         }
       },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event_normalization": {
+                "contains": {
+                  "properties": {
+                    "normalization": {
+                      "contains": {
+                        "$ref": "normalization.schema.json#/$defs/exact_offline_event_helper"
+                      }
+                    }
+                  },
+                  "required": [
+                    "normalization"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "event_normalization"
+            ]
+          },
+          "then": {
+            "properties": {
+              "normalization": {
+                "maxItems": 0
+              },
+              "coercion": {
+                "properties": {
+                  "kind": {
+                    "const": "string"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "field_behavior_branch": {

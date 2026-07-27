@@ -36,7 +36,7 @@ use serde::Serialize;
 use serde_json::Number;
 
 use crate::error::{CodegenError, Result};
-use crate::files::read_bytes;
+use crate::files::read_tracked_bytes;
 use crate::hash::sha256_hex;
 use crate::json::{JsonValue, parse_strict};
 use crate::path::{canonical_repo_root, resolve_existing_under, resolve_output_under};
@@ -1232,7 +1232,7 @@ fn resolve_input(repo_root: &Path, relative: &str) -> Result<PathBuf> {
 }
 
 fn read_pinned(path: &Path, name: &str, expected: &str) -> Result<JsonValue> {
-    let bytes = read_bytes(path)?;
+    let bytes = read_tracked_bytes(path)?;
     let actual = sha256_hex(&bytes);
     if actual != expected {
         return Err(CodegenError::new(format!(
@@ -1243,7 +1243,7 @@ fn read_pinned(path: &Path, name: &str, expected: &str) -> Result<JsonValue> {
 }
 
 fn read_json(path: &Path) -> Result<JsonValue> {
-    let bytes = read_bytes(path)?;
+    let bytes = read_tracked_bytes(path)?;
     parse_strict(&bytes, path)
 }
 

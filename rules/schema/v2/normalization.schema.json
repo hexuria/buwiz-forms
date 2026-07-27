@@ -34,6 +34,12 @@
         },
         {
           "$ref": "#/$defs/decimal_format"
+        },
+        {
+          "$ref": "#/$defs/offline_ebir_money_round_v1"
+        },
+        {
+          "$ref": "#/$defs/offline_ebir_parse_float_fixed_zero_v1"
         }
       ]
     },
@@ -187,6 +193,40 @@
         }
       },
       "additionalProperties": false
+    },
+    "offline_ebir_money_round_v1": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "offline-ebir-money-round-v1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "offline_ebir_parse_float_fixed_zero_v1": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "offline-ebir-parse-float-fixed-zero-v1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "exact_offline_event_helper": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/offline_ebir_money_round_v1"
+        },
+        {
+          "$ref": "#/$defs/offline_ebir_parse_float_fixed_zero_v1"
+        }
+      ]
     }
   },
   "$ref": "#/$defs/pipeline"

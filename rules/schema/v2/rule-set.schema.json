@@ -73,6 +73,14 @@
       },
       "uniqueItems": true
     },
+    "field_event_programs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/field_event_program"
+      },
+      "default": [],
+      "uniqueItems": true
+    },
     "evaluation_order": {
       "type": "array",
       "items": {
@@ -377,6 +385,39 @@
           ],
           "properties": {
             "outcome": {
+              "const": "non-runtime"
+            },
+            "artifact": {
+              "const": "validations"
+            },
+            "legacy_id": {
+              "$ref": "common.schema.json#/$defs/identifier"
+            },
+            "locator": {
+              "type": "string",
+              "pattern": "^#/rules/[0-9]+$"
+            },
+            "reason": {
+              "const": "documented-official-no-op"
+            },
+            "source_refs": {
+              "$ref": "common.schema.json#/$defs/source_refs"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "outcome",
+            "artifact",
+            "legacy_id",
+            "locator",
+            "reason",
+            "source_refs"
+          ],
+          "properties": {
+            "outcome": {
               "const": "unresolved"
             },
             "artifact": {
@@ -649,6 +690,184 @@
       },
       "additionalProperties": false
     },
+    "field_event_rule_step": {
+      "type": "object",
+      "required": [
+        "kind",
+        "rule_id"
+      ],
+      "properties": {
+        "kind": {
+          "const": "rule"
+        },
+        "rule_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_event_calculation_step": {
+      "type": "object",
+      "required": [
+        "kind",
+        "calculation_id",
+        "output_ids",
+        "write_mode"
+      ],
+      "properties": {
+        "kind": {
+          "const": "calculation"
+        },
+        "calculation_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "output_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/identifier"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "write_mode": {
+          "enum": [
+            "insert",
+            "replace"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_event_step": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/field_event_rule_step"
+        },
+        {
+          "$ref": "#/$defs/field_event_calculation_step"
+        }
+      ]
+    },
+    "field_event_program_executable": {
+      "type": "object",
+      "required": [
+        "state",
+        "steps",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "state": {
+          "const": "executable"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field_event_step"
+          }
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_event_program_branch": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/field_event_program_executable"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/documented_branch"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/unresolved_branch"
+        }
+      ]
+    },
+    "field_event_program_profiles": {
+      "type": "object",
+      "required": [
+        "official",
+        "filing_safe"
+      ],
+      "properties": {
+        "official": {
+          "$ref": "#/$defs/field_event_program_branch"
+        },
+        "filing_safe": {
+          "$ref": "#/$defs/field_event_program_branch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_event_program": {
+      "type": "object",
+      "required": [
+        "phase",
+        "trigger_field_id",
+        "profiles",
+        "source_refs"
+      ],
+      "properties": {
+        "phase": {
+          "enum": [
+            "input",
+            "blur",
+            "change"
+          ]
+        },
+        "trigger_field_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "profiles": {
+          "$ref": "#/$defs/field_event_program_profiles"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "calculation_write_format": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "offline-ebir-format-currency-v1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "calculation_writeback": {
+      "type": "object",
+      "required": [
+        "field",
+        "format",
+        "review_decision",
+        "source_refs"
+      ],
+      "properties": {
+        "field": {
+          "$ref": "common.schema.json#/$defs/field_ref"
+        },
+        "format": {
+          "$ref": "#/$defs/calculation_write_format"
+        },
+        "review_decision": {
+          "$ref": "common.schema.json#/$defs/source_ref"
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        }
+      },
+      "additionalProperties": false
+    },
     "calculation_output": {
       "type": "object",
       "required": [
@@ -669,9 +888,27 @@
               "$ref": "rounding.schema.json#/$defs/rounding"
             },
             {
+              "type": "array",
+              "items": {
+                "$ref": "rounding.schema.json#/$defs/rounding"
+              },
+              "minItems": 1
+            },
+            {
               "type": "null"
             }
           ]
+        },
+        "writeback": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/calculation_writeback"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -772,12 +1009,10 @@
           "uniqueItems": true
         },
         "phases": {
-          "type": "array",
-          "items": {
-            "$ref": "common.schema.json#/$defs/validation_phase"
-          },
-          "minItems": 1,
-          "uniqueItems": true
+          "$ref": "#/$defs/entry_phases"
+        },
+        "trigger_field_ids": {
+          "$ref": "#/$defs/optional_trigger_field_ids"
         },
         "profiles": {
           "$ref": "#/$defs/calculation_profiles"
@@ -786,7 +1021,12 @@
           "$ref": "common.schema.json#/$defs/source_refs"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/event_trigger_binding"
+        }
+      ]
     },
     "rule_executable": {
       "type": "object",
@@ -872,12 +1112,10 @@
           "minimum": 1
         },
         "phases": {
-          "type": "array",
-          "items": {
-            "$ref": "common.schema.json#/$defs/validation_phase"
-          },
-          "minItems": 1,
-          "uniqueItems": true
+          "$ref": "#/$defs/entry_phases"
+        },
+        "trigger_field_ids": {
+          "$ref": "#/$defs/optional_trigger_field_ids"
         },
         "field_ids": {
           "type": "array",
@@ -893,7 +1131,73 @@
           "$ref": "common.schema.json#/$defs/source_refs"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/event_trigger_binding"
+        }
+      ]
+    },
+    "entry_phases": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/validation_phase"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "trigger_field_ids": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/identifier"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "optional_trigger_field_ids": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/trigger_field_ids"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "event_trigger_binding": {
+      "if": {
+        "properties": {
+          "phases": {
+            "contains": {
+              "enum": [
+                "input",
+                "blur",
+                "change"
+              ]
+            }
+          }
+        },
+        "required": [
+          "phases"
+        ]
+      },
+      "then": {
+        "required": [
+          "trigger_field_ids"
+        ],
+        "properties": {
+          "trigger_field_ids": {
+            "$ref": "#/$defs/trigger_field_ids"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "trigger_field_ids": {
+            "type": "null"
+          }
+        }
+      }
     },
     "workflow_snapshot": {
       "oneOf": [

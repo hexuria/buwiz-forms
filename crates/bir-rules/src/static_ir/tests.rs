@@ -36,6 +36,7 @@ fn blocking_rule(
         scope: EvaluationScope::Singleton,
         order,
         phases,
+        trigger_field_ids: &[],
         profiles: executable(RuleBranch {
             predicate: &TRUE,
             effects,
@@ -145,6 +146,550 @@ fn javascript_parse_float_predicate_preserves_nan_zero_and_infinity_comparisons(
 }
 
 #[test]
+fn javascript_global_number_grammar_is_closed_and_exact() {
+    let exact_integer = |value: i128| LegacyJavaScriptNumber::Finite {
+        coefficient: BigInt::from(value),
+        decimal_exponent: BigInt::from(0_u8),
+    };
+    let compare = |input: &str, expected: LegacyJavaScriptNumber| {
+        legacy_javascript_number(input).compare(&expected)
+    };
+
+    for input in [
+        "+0x10",
+        "-0x10",
+        "0x",
+        "0xg",
+        "0b10",
+        "0o10",
+        "1suffix",
+        "1e",
+        "NaN",
+        "\u{180e}1",
+    ] {
+        assert!(
+            matches!(legacy_javascript_number(input), LegacyJavaScriptNumber::NaN),
+            "{input:?} must be NaN"
+        );
+    }
+    assert_eq!(compare("0x10", exact_integer(16)), Some(Ordering::Equal));
+    assert_eq!(compare("0Xff", exact_integer(255)), Some(Ordering::Equal));
+    assert_eq!(
+        compare("\u{feff} +2.5e2 \u{3000}", exact_integer(250)),
+        Some(Ordering::Equal)
+    );
+    assert_eq!(
+        compare("9007199254740993", exact_integer(9_007_199_254_740_993)),
+        Some(Ordering::Equal),
+        "the reviewed abstraction must not round through binary64"
+    );
+    assert_eq!(
+        compare("1e-100000000000000000000", exact_integer(0)),
+        Some(Ordering::Greater)
+    );
+    assert_eq!(
+        legacy_javascript_number("-Infinity").compare(&exact_integer(-1)),
+        Some(Ordering::Less)
+    );
+    assert_eq!(
+        legacy_javascript_number("+Infinity").compare(&exact_integer(1)),
+        Some(Ordering::Greater)
+    );
+    assert_eq!(
+        legacy_javascript_number("not-a-number").compare(&exact_integer(0)),
+        None
+    );
+}
+
+#[test]
+fn offline_ebir_money_round_v1_matches_hash_pinned_finite_observations() {
+    let cases = [
+        ("", "0.00"),
+        (" ", "0.00"),
+        ("0", "0.00"),
+        ("0.00", "0.00"),
+        ("12x", "0.00"),
+        ("1,234.50", "1,234.50"),
+        ("$1,234.50", "1,234.50"),
+        ("1,,2", "12.00"),
+        (",0", "0.00"),
+        ("1e3", "1,000.00"),
+        ("1e12", "1,000,000,000,000.00"),
+        ("1e20", "100,000,000,000,000,000,000.00"),
+        ("1e21", "999,999,999,999,999,900,000.92"),
+        ("1e", "0.00"),
+        ("0x10", "16.00"),
+        ("123456789012", "123,456,789,012.00"),
+        ("1234567890123", "0.00"),
+        ("-12345678901", "-12,345,678,901.00"),
+        ("-123456789012", "0.00"),
+        (".495", "0.50"),
+        ("-.495", "-0.50"),
+        ("0.0049999999998999999999", "0.01"),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(
+            offline_ebir_money_round_v1(input).unwrap(),
+            expected,
+            "input {input:?}"
+        );
+    }
+
+    for input in [
+        "Infinity",
+        "-Infinity",
+        "+Infinity",
+        "1e37",
+        "9e99",
+        "1e308",
+    ] {
+        assert!(matches!(
+            offline_ebir_money_round_v1(input),
+            Err(InterpreterError::Overflow {
+                operation: ExecutionOperation::NormalizeField,
+            })
+        ));
+    }
+    assert_eq!(
+        offline_ebir_money_round_v1(&"1".repeat(26)).unwrap(),
+        "0.00"
+    );
+    assert!(matches!(
+        offline_ebir_money_round_v1(&"1".repeat(4_097)),
+        Err(InterpreterError::Overflow {
+            operation: ExecutionOperation::NormalizeField,
+        })
+    ));
+}
+
+#[test]
+fn offline_ebir_parse_float_fixed_zero_v1_matches_hash_pinned_observations() {
+    let hundred_digits = format!("1{}", "0".repeat(99));
+    let cases = [
+        ("", ""),
+        (" ", ""),
+        ("not-a-number", ""),
+        ("12x", "12"),
+        ("1e3", "1000"),
+        ("0x10", "0"),
+        (".5", "1"),
+        ("-.5", "-1"),
+        ("-0.1", "-0"),
+        ("0.49999999999999994", "0"),
+        ("0.49999999999999999", "1"),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(
+            offline_ebir_parse_float_fixed_zero_v1(input).unwrap(),
+            expected,
+            "input {input:?}"
+        );
+    }
+    assert_eq!(
+        offline_ebir_parse_float_fixed_zero_v1("1e99").unwrap(),
+        hundred_digits
+    );
+    for input in ["Infinity", "-Infinity", "+Infinity", "1e999"] {
+        assert!(matches!(
+            offline_ebir_parse_float_fixed_zero_v1(input),
+            Err(InterpreterError::Overflow {
+                operation: ExecutionOperation::NormalizeField,
+            })
+        ));
+    }
+    assert!(matches!(
+        offline_ebir_parse_float_fixed_zero_v1(&"1".repeat(4_097)),
+        Err(InterpreterError::Overflow {
+            operation: ExecutionOperation::NormalizeField,
+        })
+    ));
+}
+
+#[test]
+fn javascript_global_is_nan_logical_or_uses_javascript_truthiness_and_final_falsy_value() {
+    let selected = |values: Vec<CanonicalValue>| {
+        select_javascript_logical_or_value(
+            &values,
+            ExecutionOperation::JavaScriptGlobalIsNaNLogicalOr,
+        )
+        .expect("string/null logical-or inputs")
+        .clone()
+    };
+
+    assert_eq!(
+        selected(vec![
+            CanonicalValue::Text(String::new()),
+            CanonicalValue::Absent,
+            CanonicalValue::Text("bad".to_owned()),
+            CanonicalValue::Text("10".to_owned()),
+        ]),
+        CanonicalValue::Text("bad".to_owned())
+    );
+    assert_eq!(
+        selected(vec![
+            CanonicalValue::Text(String::new()),
+            CanonicalValue::Text("   ".to_owned()),
+            CanonicalValue::Text("bad".to_owned()),
+        ]),
+        CanonicalValue::Text("   ".to_owned()),
+        "a nonempty whitespace string is truthy even though Number(string) is zero"
+    );
+    assert_eq!(
+        selected(vec![
+            CanonicalValue::Text(String::new()),
+            CanonicalValue::Blank,
+            CanonicalValue::Absent,
+        ]),
+        CanonicalValue::Absent
+    );
+}
+
+#[test]
+fn javascript_number_compare_orders_exact_values_and_rejects_nan() {
+    let evaluate = |operator, input: CanonicalValue, operand: CanonicalValue| {
+        evaluate_javascript_number_compare(operator, input, operand)
+            .expect("well-typed JavaScript Number comparison")
+    };
+
+    assert!(evaluate(
+        JavaScriptNumberCompareOperator::StrictEqual,
+        CanonicalValue::Text("2.5e2".to_owned()),
+        CanonicalValue::Integer(250),
+    ));
+    assert!(evaluate(
+        JavaScriptNumberCompareOperator::LessThan,
+        CanonicalValue::Text("2024".to_owned()),
+        CanonicalValue::Integer(2025),
+    ));
+    assert!(evaluate(
+        JavaScriptNumberCompareOperator::GreaterThan,
+        CanonicalValue::Text("Infinity".to_owned()),
+        CanonicalValue::Decimal("999999999.99".parse().unwrap()),
+    ));
+    assert!(evaluate(
+        JavaScriptNumberCompareOperator::StrictEqual,
+        CanonicalValue::Absent,
+        CanonicalValue::Integer(0),
+    ));
+    for operator in [
+        JavaScriptNumberCompareOperator::LessThan,
+        JavaScriptNumberCompareOperator::GreaterThan,
+        JavaScriptNumberCompareOperator::StrictEqual,
+    ] {
+        assert!(!evaluate(
+            operator,
+            CanonicalValue::Text("0b10".to_owned()),
+            CanonicalValue::Integer(2),
+        ));
+    }
+}
+
+#[test]
+fn javascript_number_predicates_execute_with_string_fields_and_integer_context() {
+    let logical_inputs = leaked_slice(vec![
+        Expression::Field {
+            result_type: ValueType::String,
+            field: FieldRef {
+                field_id: "first",
+                instance: FieldInstanceSelector::Singleton,
+            },
+        },
+        Expression::Field {
+            result_type: ValueType::String,
+            field: FieldRef {
+                field_id: "second",
+                instance: FieldInstanceSelector::Singleton,
+            },
+        },
+    ]);
+    let year_input = leaked(Expression::Field {
+        result_type: ValueType::String,
+        field: FieldRef {
+            field_id: "year-text",
+            instance: FieldInstanceSelector::Singleton,
+        },
+    });
+    let current_year = leaked(Expression::Context {
+        result_type: ValueType::Integer,
+        context_value_id: "current-calendar-year",
+    });
+    let issue = |message: &'static str| {
+        leaked_slice(vec![Effect::EmitIssue {
+            severity: RuleSeverity::Advisory,
+            message,
+            official_message: Some(message),
+            assessment: RuleAssessment::VerifiedCorrect,
+            fields: &[],
+        }])
+    };
+    let rules = leaked_slice(vec![
+        RuleSpec {
+            rule_id: "logical-or-is-nan",
+            scope: EvaluationScope::Singleton,
+            order: 1,
+            phases: VALIDATE,
+            trigger_field_ids: &[],
+            profiles: executable(RuleBranch {
+                predicate: leaked(Predicate::JavaScriptGlobalIsNaNLogicalOr {
+                    inputs: logical_inputs,
+                }),
+                effects: issue("logical-or selected invalid number"),
+            }),
+        },
+        RuleSpec {
+            rule_id: "year-before-current",
+            scope: EvaluationScope::Singleton,
+            order: 2,
+            phases: VALIDATE,
+            trigger_field_ids: &[],
+            profiles: executable(RuleBranch {
+                predicate: leaked(Predicate::JavaScriptNumberCompare {
+                    operator: JavaScriptNumberCompareOperator::LessThan,
+                    input: year_input,
+                    operand: current_year,
+                }),
+                effects: issue("year is before current year"),
+            }),
+        },
+    ]);
+    let specification = spec(
+        leaked_slice(vec![ContextValueSpec {
+            context_value_id: "current-calendar-year",
+            value_type: ValueType::Integer,
+            required: true,
+        }]),
+        &[],
+        leaked_slice(vec![
+            string_field("first"),
+            string_field("second"),
+            string_field("year-text"),
+        ]),
+        &[],
+        &[],
+        rules,
+        all_effects(),
+    );
+    let result = evaluator(specification)
+        .evaluate(&request(
+            ValidationContext::new(
+                ValidationPhase::Validate,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            vec![ContextValue::new(
+                ContextValueId::parse("current-calendar-year").unwrap(),
+                CanonicalValue::Integer(2025),
+            )],
+            vec![],
+            vec![
+                raw_singleton("first", RawValue::Text(String::new())),
+                raw_singleton("second", RawValue::Text("invalid".to_owned())),
+                raw_singleton("year-text", RawValue::Text("2024".to_owned())),
+            ],
+        ))
+        .unwrap();
+
+    assert_eq!(result.report().violations().len(), 2);
+    assert_eq!(
+        result.report().violations()[0].message(),
+        "logical-or selected invalid number"
+    );
+    assert_eq!(
+        result.report().violations()[1].message(),
+        "year is before current year"
+    );
+}
+
+#[test]
+fn javascript_number_predicates_reject_non_string_inputs_and_non_numeric_operands() {
+    let invalid_predicate = leaked(Predicate::JavaScriptNumberCompare {
+        operator: JavaScriptNumberCompareOperator::StrictEqual,
+        input: leaked(Expression::Literal(TypedValue::String("2025"))),
+        operand: leaked(Expression::Literal(TypedValue::String("2025"))),
+    });
+    let invalid_rule = RuleSpec {
+        rule_id: "invalid-number-operand",
+        scope: EvaluationScope::Singleton,
+        order: 1,
+        phases: VALIDATE,
+        trigger_field_ids: &[],
+        profiles: executable(RuleBranch {
+            predicate: invalid_predicate,
+            effects: leaked_slice(vec![Effect::EmitIssue {
+                severity: RuleSeverity::Advisory,
+                message: "invalid",
+                official_message: None,
+                assessment: RuleAssessment::VerifiedCorrect,
+                fields: &[],
+            }]),
+        }),
+    };
+    let specification = spec(
+        &[],
+        &[],
+        &[],
+        &[],
+        &[],
+        leaked_slice(vec![invalid_rule]),
+        all_effects(),
+    );
+
+    assert!(matches!(
+        validate_static_spec(specification),
+        Err(InterpreterError::InvalidStaticSpec(
+            StaticSpecError::TypeMismatch {
+                operation: ExecutionOperation::JavaScriptNumberCompare,
+                ..
+            }
+        ))
+    ));
+
+    for (predicate, expected_empty) in [
+        (
+            Predicate::JavaScriptGlobalIsNaNLogicalOr { inputs: &[] },
+            true,
+        ),
+        (
+            Predicate::JavaScriptGlobalIsNaNLogicalOr {
+                inputs: leaked_slice(vec![Expression::Literal(TypedValue::Integer(1))]),
+            },
+            false,
+        ),
+    ] {
+        let rule = RuleSpec {
+            rule_id: if expected_empty {
+                "empty-logical-or"
+            } else {
+                "numeric-logical-or"
+            },
+            scope: EvaluationScope::Singleton,
+            order: 1,
+            phases: VALIDATE,
+            trigger_field_ids: &[],
+            profiles: executable(RuleBranch {
+                predicate: leaked(predicate),
+                effects: leaked_slice(vec![Effect::EmitIssue {
+                    severity: RuleSeverity::Advisory,
+                    message: "invalid",
+                    official_message: None,
+                    assessment: RuleAssessment::VerifiedCorrect,
+                    fields: &[],
+                }]),
+            }),
+        };
+        let specification = spec(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            leaked_slice(vec![rule]),
+            all_effects(),
+        );
+        let error = validate_static_spec(specification)
+            .expect_err("invalid JavaScript logical-or shape must fail");
+        if expected_empty {
+            assert!(matches!(
+                error,
+                InterpreterError::InvalidStaticSpec(StaticSpecError::EmptyRequiredList {
+                    value: "javascript-global-is-nan-logical-or",
+                    ..
+                })
+            ));
+        } else {
+            assert!(matches!(
+                error,
+                InterpreterError::InvalidStaticSpec(StaticSpecError::TypeMismatch {
+                    operation: ExecutionOperation::JavaScriptGlobalIsNaNLogicalOr,
+                    ..
+                })
+            ));
+        }
+    }
+}
+
+#[test]
+fn offline_ebir_tin_v1_matches_pinned_helper_cases_and_legacy_interval() {
+    let valid = |value: &str| {
+        evaluate_checksum_predicate(
+            ChecksumAlgorithm::OfflineEbirTinV1,
+            CanonicalValue::Text(value.to_owned()),
+        )
+        .expect("string checksum input")
+    };
+
+    for value in [
+        "000000000",
+        "100000006",
+        "010000008",
+        "001000009",
+        "000100004",
+        "000010003",
+        "000001001",
+        "000000105",
+        "000000018",
+        "123456788",
+    ] {
+        assert!(valid(value), "expected helper-compatible TIN {value}");
+    }
+    for value in [
+        "",
+        "12345678",
+        "12345678x",
+        "123456787",
+        "999999999",
+        "900000009",
+        "900000019",
+        "900000080",
+        "905179999",
+        "905180008",
+        "+00000005",
+        "-00000005",
+    ] {
+        assert!(!valid(value), "expected rejected TIN {value}");
+    }
+
+    // After a direct mismatch, unsigned values beginning with 9 inside the
+    // strict legacy interval retry n - 1 for a nonzero suffix and n + 9 for a
+    // zero suffix. The endpoints still use only the direct path.
+    for value in [
+        "900000005",
+        "900000070",
+        "900000100",
+        "904999999",
+        "905180000",
+    ] {
+        assert!(valid(value), "expected legacy-retry TIN {value}");
+    }
+    assert!(valid("900000004"));
+    assert!(valid("905180009"));
+
+    // The helper's integer gate accepts a sign plus eight digits. Its
+    // per-character conversion turns either sign into digit one; signed
+    // inputs never enter the unsigned retry branch.
+    assert!(valid("+00000006"));
+    assert!(valid("-00000006"));
+}
+
+#[test]
+fn checksum_predicate_is_typed_and_treats_absence_as_not_valid() {
+    assert!(
+        !evaluate_checksum_predicate(ChecksumAlgorithm::OfflineEbirTinV1, CanonicalValue::Absent,)
+            .expect("absence is an invalid checksum value, not an interpreter failure")
+    );
+    assert!(matches!(
+        evaluate_checksum_predicate(
+            ChecksumAlgorithm::OfflineEbirTinV1,
+            CanonicalValue::Integer(123456788),
+        ),
+        Err(InterpreterError::TypeMismatch {
+            operation: ExecutionOperation::Checksum,
+            expected: ValueType::String,
+            actual: ValueKind::Integer,
+        })
+    ));
+}
+
+#[test]
 fn split_component_preserves_empty_parts_and_marks_missing_parts_absent() {
     let split = |value: CanonicalValue, index| {
         evaluate_split_component(value, "/", index).expect("string split")
@@ -210,8 +755,10 @@ fn string_field(field_id: &'static str) -> FieldSpec {
         field_id,
         value_type: ValueType::String,
         group_id: None,
+        calculation_id: None,
         behavior: executable(FieldBehavior {
             normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
             coercion: Coercion::String {
                 on_empty: StringEmptyPolicy::Null,
             },
@@ -224,8 +771,10 @@ fn grouped_string_field(field_id: &'static str, group_id: &'static str) -> Field
         field_id,
         value_type: ValueType::String,
         group_id: Some(group_id),
+        calculation_id: None,
         behavior: executable(FieldBehavior {
             normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
             coercion: Coercion::String {
                 on_empty: StringEmptyPolicy::Null,
             },
@@ -262,8 +811,10 @@ fn decimal_field(field_id: &'static str, group_id: Option<&'static str>) -> Fiel
         field_id,
         value_type: ValueType::Decimal,
         group_id,
+        calculation_id: None,
         behavior: executable(FieldBehavior {
             normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
             coercion: Coercion::Decimal {
                 decimal: decimal_policy(),
                 grouping: InputGrouping::Forbidden,
@@ -279,8 +830,10 @@ fn integer_field(field_id: &'static str, group_id: Option<&'static str>) -> Fiel
         field_id,
         value_type: ValueType::Integer,
         group_id,
+        calculation_id: None,
         behavior: executable(FieldBehavior {
             normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
             coercion: Coercion::Integer {
                 on_empty: NumericEmptyPolicy::Null,
                 on_invalid: InvalidValuePolicy::Error,
@@ -305,6 +858,31 @@ fn spec(
         context_values,
         field_groups,
         fields,
+        field_event_programs: &[],
+        evaluation_order,
+        calculations,
+        rules,
+        workflow: Branch::Unresolved,
+    })
+}
+
+fn spec_with_field_event_programs(
+    field_groups: &'static [FieldGroupSpec],
+    fields: &'static [FieldSpec],
+    evaluation_order: &'static [&'static str],
+    calculations: &'static [CalculationSpec],
+    rules: &'static [RuleSpec],
+    field_event_programs: &'static [FieldEventProgramSpec],
+    effect_mode: Profiled<Branch<EffectEvaluationMode>>,
+) -> &'static StaticRuleSetSpec {
+    leaked(StaticRuleSetSpec {
+        profile_status: profile_status(),
+        effect_mode,
+        serialization: &crate::StaticSerializationContract::EMPTY_V1,
+        context_values: &[],
+        field_groups,
+        fields,
+        field_event_programs,
         evaluation_order,
         calculations,
         rules,
@@ -362,6 +940,24 @@ fn request(
     .unwrap()
 }
 
+fn field_event_request(
+    context: ValidationContext,
+    event_field: FieldInstance,
+    groups: Vec<RepeatedGroupInstance>,
+    fields: Vec<RawFieldValue>,
+) -> EvaluationRequest {
+    EvaluationRequest::try_new_for_field_event(
+        identity(),
+        context,
+        InputRevision::new(1),
+        event_field,
+        Vec::new(),
+        groups,
+        fields,
+    )
+    .unwrap()
+}
+
 fn raw_singleton(field_id: &str, value: RawValue) -> RawFieldValue {
     RawFieldValue::new(
         FieldInstance::singleton(FieldId::parse(field_id).unwrap()),
@@ -385,6 +981,7 @@ fn spec_with_serialization(
         context_values: &[],
         field_groups,
         fields,
+        field_event_programs: &[],
         evaluation_order: &[],
         calculations: &[],
         rules: &[],
@@ -554,12 +1151,14 @@ fn materialization_projects_group_scoped_derived_values_by_exact_instance() {
         scope: EvaluationScope::EachGroup("rows"),
         depends_on: &[],
         phases: &[ValidationPhase::Save],
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "row-output",
                 value: row_expression,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -613,13 +1212,16 @@ fn materialization_projects_group_scoped_derived_values_by_exact_instance() {
             field_id: "row-value",
             value_type: ValueType::String,
             group_id: Some("rows"),
+            calculation_id: None,
             behavior: executable(FieldBehavior {
                 normalization: EMPTY_NORMALIZATION,
+                event_normalization: &[],
                 coercion: Coercion::String {
                     on_empty: StringEmptyPolicy::Null,
                 },
             }),
         }]),
+        field_event_programs: &[],
         evaluation_order: &["row-calculation"],
         calculations: leaked_slice(vec![calculation]),
         rules: &[],
@@ -695,12 +1297,14 @@ fn serialization_inspector_evaluates_each_row_and_resolves_full_group_identity()
         scope: EvaluationScope::EachGroup("rows-a"),
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "row-output",
                 value: current_value,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -1131,8 +1735,10 @@ fn materialization_accounts_for_zero_and_stably_ordered_group_instances() {
         field_id: "row-value",
         value_type: ValueType::String,
         group_id: Some("rows"),
+        calculation_id: None,
         behavior: executable(FieldBehavior {
             normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
             coercion: Coercion::String {
                 on_empty: StringEmptyPolicy::Null,
             },
@@ -1257,14 +1863,703 @@ fn canonicalization_preserves_absent_and_present_blank() {
 }
 
 #[test]
+fn exact_blur_normalization_precedes_calculations_and_is_event_scoped() {
+    let blur_pipeline = leaked_slice(vec![NormalizationStep::OfflineEbirMoneyRoundV1]);
+    let field = FieldSpec {
+        field_id: "amount",
+        value_type: ValueType::String,
+        group_id: None,
+        calculation_id: Some("normalized-amount"),
+        behavior: executable(FieldBehavior {
+            normalization: EMPTY_NORMALIZATION,
+            event_normalization: leaked_slice(vec![FieldEventNormalization {
+                phase: ValidationPhase::Blur,
+                normalization: blur_pipeline,
+            }]),
+            coercion: Coercion::String {
+                on_empty: StringEmptyPolicy::Null,
+            },
+        }),
+    };
+    let field_expression = leaked(Expression::Field {
+        result_type: ValueType::String,
+        field: FieldRef {
+            field_id: "amount",
+            instance: FieldInstanceSelector::Singleton,
+        },
+    });
+    let decimal_expression = leaked(Expression::Coerce {
+        result_type: ValueType::Decimal,
+        input: field_expression,
+        coercion: Coercion::Decimal {
+            decimal: DecimalPolicy {
+                precision: 38,
+                scale: 2,
+                division_scale: 18,
+                rounding: Rounding {
+                    mode: RoundingMode::None,
+                    scale: 2,
+                },
+                overflow: OverflowPolicy::Error,
+            },
+            grouping: InputGrouping::Comma,
+            on_empty: NumericEmptyPolicy::Zero,
+            on_invalid: InvalidValuePolicy::Error,
+        },
+    });
+    let blur = leaked_slice(vec![ValidationPhase::Blur]);
+    let calculation = CalculationSpec {
+        calculation_id: "normalized-amount",
+        scope: EvaluationScope::Singleton,
+        depends_on: &[],
+        phases: blur,
+        trigger_field_ids: &["amount"],
+        profiles: executable(CalculationBranch {
+            condition: &TRUE,
+            outputs: leaked_slice(vec![CalculationOutput {
+                output_id: "amount-decimal",
+                value: decimal_expression,
+                rounding: None,
+                writeback: Some(CalculationWriteback {
+                    field: FieldRef {
+                        field_id: "amount",
+                        instance: FieldInstanceSelector::Singleton,
+                    },
+                    format: CalculationWriteFormat::OfflineEbirFormatCurrencyV1,
+                }),
+            }]),
+        }),
+    };
+    let programs = leaked_slice(vec![
+        FieldEventProgramSpec {
+            phase: ValidationPhase::Blur,
+            trigger_field_id: "amount",
+            profiles: executable(FieldEventProgram {
+                steps: leaked_slice(vec![FieldEventStep::Calculation {
+                    calculation_id: "normalized-amount",
+                    output_ids: &["amount-decimal"],
+                    write_mode: ScheduledOutputWriteMode::Insert,
+                }]),
+            }),
+        },
+        FieldEventProgramSpec {
+            phase: ValidationPhase::Change,
+            trigger_field_id: "amount",
+            profiles: executable(FieldEventProgram { steps: &[] }),
+        },
+    ]);
+    let evaluator = evaluator(spec_with_field_event_programs(
+        &[],
+        leaked_slice(vec![field]),
+        &["normalized-amount"],
+        leaked_slice(vec![calculation]),
+        &[],
+        programs,
+        all_effects(),
+    ));
+    let amount = FieldInstance::singleton(FieldId::parse("amount").unwrap());
+
+    for (raw, normalized, expected_decimal) in [
+        ("1234567890123", "0.00", "0.00"),
+        ("1e3", "1,000.00", "1000.00"),
+    ] {
+        let result = evaluator
+            .evaluate(&field_event_request(
+                ValidationContext::new(
+                    ValidationPhase::Blur,
+                    BehaviorProfile::OfficialCompatibility,
+                ),
+                amount.clone(),
+                vec![],
+                vec![raw_singleton("amount", RawValue::Text(raw.to_owned()))],
+            ))
+            .unwrap();
+        assert_eq!(
+            result.canonical_inputs()[0].raw(),
+            &RawValue::Text(raw.to_owned())
+        );
+        assert_eq!(
+            result.canonical_inputs()[0].canonical(),
+            &CanonicalValue::Text(normalized.to_owned())
+        );
+        assert_eq!(
+            result.derived_outputs()[0].value(),
+            &CanonicalValue::Decimal(expected_decimal.parse().unwrap())
+        );
+    }
+
+    let change = evaluator
+        .evaluate(&field_event_request(
+            ValidationContext::new(
+                ValidationPhase::Change,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            amount,
+            vec![],
+            vec![raw_singleton("amount", RawValue::Text("1e3".to_owned()))],
+        ))
+        .unwrap();
+    assert_eq!(
+        change.canonical_inputs()[0].canonical(),
+        &CanonicalValue::Text("1e3".to_owned())
+    );
+    assert!(change.derived_outputs().is_empty());
+
+    let absent = evaluator.evaluate(&field_event_request(
+        ValidationContext::new(
+            ValidationPhase::Blur,
+            BehaviorProfile::OfficialCompatibility,
+        ),
+        FieldInstance::singleton(FieldId::parse("amount").unwrap()),
+        vec![],
+        vec![raw_singleton("amount", RawValue::Absent)],
+    ));
+    assert!(matches!(
+        absent,
+        Err(EvaluationError::Interpreter(
+            InterpreterError::InvalidCoercion {
+                target: ValueType::String,
+                reason: CoercionFailure::Empty,
+            }
+        ))
+    ));
+}
+
+#[test]
+fn exact_field_event_program_interleaves_writeback_reset_and_recalculation() {
+    let decimal_coercion = Coercion::Decimal {
+        decimal: DecimalPolicy {
+            precision: 38,
+            scale: 2,
+            division_scale: 18,
+            rounding: Rounding {
+                mode: RoundingMode::None,
+                scale: 2,
+            },
+            overflow: OverflowPolicy::Error,
+        },
+        grouping: InputGrouping::Comma,
+        on_empty: NumericEmptyPolicy::Zero,
+        on_invalid: InvalidValuePolicy::Error,
+    };
+    let amount = FieldSpec {
+        field_id: "amount",
+        value_type: ValueType::String,
+        group_id: None,
+        calculation_id: None,
+        behavior: executable(FieldBehavior {
+            normalization: EMPTY_NORMALIZATION,
+            event_normalization: leaked_slice(vec![FieldEventNormalization {
+                phase: ValidationPhase::Blur,
+                normalization: leaked_slice(vec![NormalizationStep::OfflineEbirMoneyRoundV1]),
+            }]),
+            coercion: Coercion::String {
+                on_empty: StringEmptyPolicy::Null,
+            },
+        }),
+    };
+    let mirror = FieldSpec {
+        field_id: "mirror",
+        value_type: ValueType::String,
+        group_id: None,
+        calculation_id: Some("snapshot"),
+        behavior: executable(FieldBehavior {
+            normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
+            coercion: Coercion::String {
+                on_empty: StringEmptyPolicy::Null,
+            },
+        }),
+    };
+    let amount_text = leaked(Expression::Field {
+        result_type: ValueType::String,
+        field: FieldRef {
+            field_id: "amount",
+            instance: FieldInstanceSelector::Singleton,
+        },
+    });
+    let amount_decimal = leaked(Expression::Coerce {
+        result_type: ValueType::Decimal,
+        input: amount_text,
+        coercion: decimal_coercion,
+    });
+    let mirror_text = leaked(Expression::Field {
+        result_type: ValueType::String,
+        field: FieldRef {
+            field_id: "mirror",
+            instance: FieldInstanceSelector::Singleton,
+        },
+    });
+    let mirror_decimal = leaked(Expression::Coerce {
+        result_type: ValueType::Decimal,
+        input: mirror_text,
+        coercion: decimal_coercion,
+    });
+    let calculation = CalculationSpec {
+        calculation_id: "snapshot",
+        scope: EvaluationScope::Singleton,
+        depends_on: &[],
+        phases: &[ValidationPhase::Blur],
+        trigger_field_ids: &["amount"],
+        profiles: executable(CalculationBranch {
+            condition: &TRUE,
+            outputs: leaked_slice(vec![CalculationOutput {
+                output_id: "working",
+                value: amount_decimal,
+                rounding: None,
+                writeback: Some(CalculationWriteback {
+                    field: FieldRef {
+                        field_id: "mirror",
+                        instance: FieldInstanceSelector::Singleton,
+                    },
+                    format: CalculationWriteFormat::OfflineEbirFormatCurrencyV1,
+                }),
+            }]),
+        }),
+    };
+    let cap_rule = RuleSpec {
+        rule_id: "cap-reset",
+        scope: EvaluationScope::Singleton,
+        order: 10,
+        phases: &[ValidationPhase::Blur],
+        trigger_field_ids: &["amount"],
+        profiles: executable(RuleBranch {
+            predicate: leaked(Predicate::Compare {
+                operator: CompareOperator::GreaterThan,
+                left: mirror_decimal,
+                right: decimal_literal(250_000, 0),
+            }),
+            effects: leaked_slice(vec![
+                Effect::EmitIssue {
+                    severity: RuleSeverity::Blocking,
+                    message: "amount exceeds cap",
+                    official_message: Some("amount exceeds cap"),
+                    assessment: RuleAssessment::VerifiedCorrect,
+                    fields: &[],
+                },
+                Effect::SetRawFieldValue {
+                    field: FieldRef {
+                        field_id: "amount",
+                        instance: FieldInstanceSelector::Singleton,
+                    },
+                    value: StaticRawValue::Text("0.00"),
+                },
+            ]),
+        }),
+    };
+    let program = FieldEventProgramSpec {
+        phase: ValidationPhase::Blur,
+        trigger_field_id: "amount",
+        profiles: executable(FieldEventProgram {
+            steps: leaked_slice(vec![
+                FieldEventStep::Calculation {
+                    calculation_id: "snapshot",
+                    output_ids: &["working"],
+                    write_mode: ScheduledOutputWriteMode::Insert,
+                },
+                FieldEventStep::Rule {
+                    rule_id: "cap-reset",
+                },
+                FieldEventStep::Calculation {
+                    calculation_id: "snapshot",
+                    output_ids: &["working"],
+                    write_mode: ScheduledOutputWriteMode::Replace,
+                },
+            ]),
+        }),
+    };
+    let evaluator = evaluator(spec_with_field_event_programs(
+        &[],
+        leaked_slice(vec![amount, mirror]),
+        &["snapshot"],
+        leaked_slice(vec![calculation]),
+        leaked_slice(vec![cap_rule]),
+        leaked_slice(vec![program]),
+        executable(EffectEvaluationMode::StopEffectsAfterFirstBlockingIssue),
+    ));
+    let result = evaluator
+        .evaluate(&field_event_request(
+            ValidationContext::new(
+                ValidationPhase::Blur,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            FieldInstance::singleton(FieldId::parse("amount").unwrap()),
+            vec![],
+            vec![
+                raw_singleton("amount", RawValue::Text("300001".into())),
+                raw_singleton("mirror", RawValue::Text("1.00".into())),
+            ],
+        ))
+        .unwrap();
+
+    assert_eq!(result.report().violations().len(), 1);
+    assert_eq!(result.field_value_assignments().len(), 1);
+    assert_eq!(result.expected_outputs().len(), 1);
+    assert_eq!(result.derived_outputs().len(), 1);
+    assert_eq!(
+        result.derived_outputs()[0].value(),
+        &CanonicalValue::Decimal("0.00".parse().unwrap())
+    );
+    let final_value = |field_id| {
+        result
+            .canonical_inputs()
+            .iter()
+            .find(|input| input.field().field_id().as_str() == field_id)
+            .unwrap()
+    };
+    assert_eq!(
+        final_value("amount").raw(),
+        &RawValue::Text("300001".into())
+    );
+    assert_eq!(final_value("mirror").raw(), &RawValue::Text("1.00".into()));
+    assert_eq!(
+        final_value("amount").canonical(),
+        &CanonicalValue::Text("0.00".into())
+    );
+    assert_eq!(
+        final_value("mirror").canonical(),
+        &CanonicalValue::Text("0.00".into())
+    );
+}
+
+#[test]
+fn offline_ebir_currency_writeback_matches_the_finite_source_matrix_and_fails_closed() {
+    for (value, expected) in [
+        (CanonicalValue::Integer(1_234), "1,234.00"),
+        (
+            CanonicalValue::Decimal("1234.50".parse().unwrap()),
+            "1,234.50",
+        ),
+        (
+            CanonicalValue::Decimal("-1234.50".parse().unwrap()),
+            "-1,234.50",
+        ),
+        (CanonicalValue::Integer(0), "0.00"),
+        (
+            CanonicalValue::Integer(1_234_567_890_123_456),
+            "123,456,789,012,345.00",
+        ),
+        (
+            CanonicalValue::Decimal("1234567890123456.50".parse().unwrap()),
+            "123,456,789,012,345.50",
+        ),
+        (
+            CanonicalValue::Decimal("-1234567890123456.50".parse().unwrap()),
+            "-12,345,678,901,234.50",
+        ),
+        (
+            CanonicalValue::Integer(-1_234_567_890_123_456),
+            "-1,234,567,890,123,456.00",
+        ),
+        (
+            CanonicalValue::Decimal("0.0049999999999".parse().unwrap()),
+            "0.01",
+        ),
+        (
+            CanonicalValue::Decimal("-0.0049999999999".parse().unwrap()),
+            "-0.01",
+        ),
+    ] {
+        assert_eq!(
+            offline_ebir_format_currency_v1(&value).unwrap(),
+            expected,
+            "source value {value:?}"
+        );
+    }
+    for (value, expected_kind) in [
+        (CanonicalValue::Absent, ValueKind::Absent),
+        (CanonicalValue::Blank, ValueKind::Blank),
+        (CanonicalValue::Text(String::new()), ValueKind::String),
+        (CanonicalValue::Text("NaN".into()), ValueKind::String),
+        (CanonicalValue::Text("Infinity".into()), ValueKind::String),
+        (CanonicalValue::Boolean(true), ValueKind::Boolean),
+    ] {
+        assert!(matches!(
+            offline_ebir_format_currency_v1(&value),
+            Err(InterpreterError::TypeMismatch {
+                operation: ExecutionOperation::CalculationWriteback,
+                expected: ValueType::Decimal,
+                actual,
+            }) if actual == expected_kind
+        ));
+    }
+    for value in [
+        CanonicalValue::Integer(1_000_000_000_000_000_000_000),
+        CanonicalValue::Integer(-1_000_000_000_000_000_000_000),
+        CanonicalValue::Decimal("1000000000000000000000.00".parse().unwrap()),
+        CanonicalValue::Decimal("-1000000000000000000000.00".parse().unwrap()),
+    ] {
+        assert!(matches!(
+            offline_ebir_format_currency_v1(&value),
+            Err(InterpreterError::Overflow {
+                operation: ExecutionOperation::CalculationWriteback,
+            })
+        ));
+    }
+}
+
+#[test]
+fn calculation_writeback_distinguishes_source_no_write_from_evaluated_absence() {
+    let build_evaluator = |condition: &'static Predicate| {
+        let field = FieldSpec {
+            field_id: "amount",
+            value_type: ValueType::String,
+            group_id: None,
+            calculation_id: Some("parse-amount"),
+            behavior: executable(FieldBehavior {
+                normalization: EMPTY_NORMALIZATION,
+                event_normalization: &[],
+                coercion: Coercion::String {
+                    on_empty: StringEmptyPolicy::Null,
+                },
+            }),
+        };
+        let raw_amount = leaked(Expression::Field {
+            result_type: ValueType::String,
+            field: FieldRef {
+                field_id: "amount",
+                instance: FieldInstanceSelector::Singleton,
+            },
+        });
+        let parsed_amount = leaked(Expression::JavaScriptParseIntRadix10 {
+            result_type: ValueType::Integer,
+            input: raw_amount,
+        });
+        let calculation = CalculationSpec {
+            calculation_id: "parse-amount",
+            scope: EvaluationScope::Singleton,
+            depends_on: &[],
+            phases: &[ValidationPhase::Blur],
+            trigger_field_ids: &["amount"],
+            profiles: executable(CalculationBranch {
+                condition,
+                outputs: leaked_slice(vec![CalculationOutput {
+                    output_id: "parsed",
+                    value: parsed_amount,
+                    rounding: None,
+                    writeback: Some(CalculationWriteback {
+                        field: FieldRef {
+                            field_id: "amount",
+                            instance: FieldInstanceSelector::Singleton,
+                        },
+                        format: CalculationWriteFormat::OfflineEbirFormatCurrencyV1,
+                    }),
+                }]),
+            }),
+        };
+        let programs = leaked_slice(vec![FieldEventProgramSpec {
+            phase: ValidationPhase::Blur,
+            trigger_field_id: "amount",
+            profiles: executable(FieldEventProgram {
+                steps: leaked_slice(vec![FieldEventStep::Calculation {
+                    calculation_id: "parse-amount",
+                    output_ids: &["parsed"],
+                    write_mode: ScheduledOutputWriteMode::Insert,
+                }]),
+            }),
+        }]);
+        evaluator(spec_with_field_event_programs(
+            &[],
+            leaked_slice(vec![field]),
+            &["parse-amount"],
+            leaked_slice(vec![calculation]),
+            &[],
+            programs,
+            all_effects(),
+        ))
+    };
+    let request_with = |value: &str| {
+        field_event_request(
+            ValidationContext::new(
+                ValidationPhase::Blur,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            FieldInstance::singleton(FieldId::parse("amount").unwrap()),
+            vec![],
+            vec![raw_singleton("amount", RawValue::Text(value.to_owned()))],
+        )
+    };
+
+    for invalid in ["", "NaN", "Infinity"] {
+        assert!(matches!(
+            build_evaluator(&TRUE).evaluate(&request_with(invalid)),
+            Err(EvaluationError::Interpreter(
+                InterpreterError::TypeMismatch {
+                    operation: ExecutionOperation::CalculationWriteback,
+                    expected: ValueType::Decimal,
+                    actual: ValueKind::Absent,
+                }
+            ))
+        ));
+    }
+
+    let false_condition = leaked(Predicate::Constant(false));
+    let no_write = build_evaluator(false_condition)
+        .evaluate(&request_with("NaN"))
+        .expect("a reviewed false condition is a source no-write");
+    assert_eq!(
+        no_write.canonical_inputs()[0].canonical(),
+        &CanonicalValue::Text("NaN".to_owned())
+    );
+    assert_eq!(
+        no_write.derived_outputs()[0].value(),
+        &CanonicalValue::Absent
+    );
+}
+
+#[test]
+fn static_validation_rejects_an_unscheduled_calculation_writeback_output() {
+    let target_field = |field_id| FieldSpec {
+        field_id,
+        value_type: ValueType::String,
+        group_id: None,
+        calculation_id: Some("two-output-calc"),
+        behavior: executable(FieldBehavior {
+            normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
+            coercion: Coercion::String {
+                on_empty: StringEmptyPolicy::Null,
+            },
+        }),
+    };
+    let writeback = |field_id| {
+        Some(CalculationWriteback {
+            field: FieldRef {
+                field_id,
+                instance: FieldInstanceSelector::Singleton,
+            },
+            format: CalculationWriteFormat::OfflineEbirFormatCurrencyV1,
+        })
+    };
+    let calculation = CalculationSpec {
+        calculation_id: "two-output-calc",
+        scope: EvaluationScope::Singleton,
+        depends_on: &[],
+        phases: &[ValidationPhase::Blur],
+        trigger_field_ids: &["trigger"],
+        profiles: executable(CalculationBranch {
+            condition: &TRUE,
+            outputs: leaked_slice(vec![
+                CalculationOutput {
+                    output_id: "scheduled",
+                    value: decimal_literal(1, 0),
+                    rounding: None,
+                    writeback: writeback("target-a"),
+                },
+                CalculationOutput {
+                    output_id: "silently-omitted",
+                    value: decimal_literal(2, 0),
+                    rounding: None,
+                    writeback: writeback("target-b"),
+                },
+            ]),
+        }),
+    };
+    let program = FieldEventProgramSpec {
+        phase: ValidationPhase::Blur,
+        trigger_field_id: "trigger",
+        profiles: executable(FieldEventProgram {
+            steps: leaked_slice(vec![FieldEventStep::Calculation {
+                calculation_id: "two-output-calc",
+                output_ids: &["scheduled"],
+                write_mode: ScheduledOutputWriteMode::Insert,
+            }]),
+        }),
+    };
+    let specification = spec_with_field_event_programs(
+        &[],
+        leaked_slice(vec![
+            string_field("trigger"),
+            target_field("target-a"),
+            target_field("target-b"),
+        ]),
+        &["two-output-calc"],
+        leaked_slice(vec![calculation]),
+        &[],
+        leaked_slice(vec![program]),
+        all_effects(),
+    );
+
+    assert!(matches!(
+        validate_static_spec(specification),
+        Err(InterpreterError::InvalidStaticSpec(
+            StaticSpecError::InvalidEventBinding {
+                kind: SpecItemKind::Output,
+                value: "silently-omitted",
+            }
+        ))
+    ));
+}
+
+#[test]
+fn static_validation_rejects_writeback_on_a_non_event_calculation() {
+    let target = FieldSpec {
+        field_id: "batch-target",
+        value_type: ValueType::String,
+        group_id: None,
+        calculation_id: Some("batch-calc"),
+        behavior: executable(FieldBehavior {
+            normalization: EMPTY_NORMALIZATION,
+            event_normalization: &[],
+            coercion: Coercion::String {
+                on_empty: StringEmptyPolicy::Null,
+            },
+        }),
+    };
+    let calculation = CalculationSpec {
+        calculation_id: "batch-calc",
+        scope: EvaluationScope::Singleton,
+        depends_on: &[],
+        phases: VALIDATE,
+        trigger_field_ids: &[],
+        profiles: executable(CalculationBranch {
+            condition: &TRUE,
+            outputs: leaked_slice(vec![CalculationOutput {
+                output_id: "batch-output",
+                value: decimal_literal(1, 0),
+                rounding: None,
+                writeback: Some(CalculationWriteback {
+                    field: FieldRef {
+                        field_id: "batch-target",
+                        instance: FieldInstanceSelector::Singleton,
+                    },
+                    format: CalculationWriteFormat::OfflineEbirFormatCurrencyV1,
+                }),
+            }]),
+        }),
+    };
+    let specification = spec(
+        &[],
+        &[],
+        leaked_slice(vec![target]),
+        &["batch-calc"],
+        leaked_slice(vec![calculation]),
+        &[],
+        all_effects(),
+    );
+
+    assert!(matches!(
+        validate_static_spec(specification),
+        Err(InterpreterError::InvalidStaticSpec(
+            StaticSpecError::InvalidEventBinding {
+                kind: SpecItemKind::Output,
+                value: "batch-output",
+            }
+        ))
+    ));
+}
+
+#[test]
 fn coercion_failed_predicate_only_matches_preserved_invalid_input() {
     fn matched(value_type: ValueType, coercion: Coercion, raw: RawValue) -> bool {
         let field = FieldSpec {
             field_id: "value",
             value_type,
             group_id: None,
+            calculation_id: None,
             behavior: executable(FieldBehavior {
                 normalization: EMPTY_NORMALIZATION,
+                event_normalization: &[],
                 coercion,
             }),
         };
@@ -1279,6 +2574,7 @@ fn coercion_failed_predicate_only_matches_preserved_invalid_input() {
             scope: EvaluationScope::Singleton,
             order: 1,
             phases: VALIDATE,
+            trigger_field_ids: &[],
             profiles: executable(RuleBranch {
                 predicate,
                 effects: leaked_slice(vec![Effect::EmitIssue {
@@ -1511,6 +2807,7 @@ fn first_error_mode_still_reports_complete_rule_coverage_in_reviewed_order() {
             scope: EvaluationScope::Singleton,
             order: 20,
             phases: VALIDATE,
+            trigger_field_ids: &[],
             profiles: executable(RuleBranch {
                 predicate: &TRUE,
                 effects: second_effects,
@@ -1521,6 +2818,7 @@ fn first_error_mode_still_reports_complete_rule_coverage_in_reviewed_order() {
             scope: EvaluationScope::Singleton,
             order: 10,
             phases: VALIDATE,
+            trigger_field_ids: &[],
             profiles: executable(RuleBranch {
                 predicate: &TRUE,
                 effects: first_effects,
@@ -1560,6 +2858,446 @@ fn first_error_mode_still_reports_complete_rule_coverage_in_reviewed_order() {
     );
     assert_eq!(result.report().violations().len(), 1);
     assert_eq!(result.report().violations()[0].rule_id().as_str(), "first");
+}
+
+#[test]
+fn exact_field_event_inventory_isolates_singleton_triggers() {
+    let issue = |message| {
+        leaked_slice(vec![Effect::EmitIssue {
+            severity: RuleSeverity::Advisory,
+            message,
+            official_message: None,
+            assessment: RuleAssessment::VerifiedCorrect,
+            fields: &[],
+        }])
+    };
+    let rules = leaked_slice(vec![
+        RuleSpec {
+            rule_id: "alpha-blur",
+            scope: EvaluationScope::Singleton,
+            order: 10,
+            phases: &[ValidationPhase::Blur],
+            trigger_field_ids: &["alpha"],
+            profiles: executable(RuleBranch {
+                predicate: &TRUE,
+                effects: issue("alpha"),
+            }),
+        },
+        RuleSpec {
+            rule_id: "beta-blur",
+            scope: EvaluationScope::Singleton,
+            order: 20,
+            phases: &[ValidationPhase::Blur],
+            trigger_field_ids: &["beta"],
+            profiles: executable(RuleBranch {
+                predicate: &TRUE,
+                effects: issue("beta"),
+            }),
+        },
+    ]);
+    let programs = leaked_slice(vec![
+        FieldEventProgramSpec {
+            phase: ValidationPhase::Blur,
+            trigger_field_id: "alpha",
+            profiles: executable(FieldEventProgram {
+                steps: leaked_slice(vec![FieldEventStep::Rule {
+                    rule_id: "alpha-blur",
+                }]),
+            }),
+        },
+        FieldEventProgramSpec {
+            phase: ValidationPhase::Blur,
+            trigger_field_id: "beta",
+            profiles: executable(FieldEventProgram {
+                steps: leaked_slice(vec![FieldEventStep::Rule {
+                    rule_id: "beta-blur",
+                }]),
+            }),
+        },
+    ]);
+    let spec = spec_with_field_event_programs(
+        &[],
+        leaked_slice(vec![string_field("alpha"), string_field("beta")]),
+        &[],
+        &[],
+        rules,
+        programs,
+        all_effects(),
+    );
+    let event_field = FieldInstance::singleton(FieldId::parse("alpha").unwrap());
+    let result = evaluator(spec)
+        .evaluate(&field_event_request(
+            ValidationContext::new(
+                ValidationPhase::Blur,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            event_field.clone(),
+            Vec::new(),
+            vec![
+                raw_singleton("alpha", RawValue::Text("a".into())),
+                raw_singleton("beta", RawValue::Text("b".into())),
+            ],
+        ))
+        .unwrap();
+
+    assert_eq!(result.event_field(), Some(&event_field));
+    assert_eq!(result.report().expected_rules().len(), 1);
+    assert_eq!(
+        result.report().expected_rules()[0].rule_id().as_str(),
+        "alpha-blur"
+    );
+    assert_eq!(result.report().violations()[0].message(), "alpha");
+}
+
+#[test]
+fn event_program_pairs_are_authoritative_without_inventing_a_cross_product() {
+    let rule = RuleSpec {
+        rule_id: "sparse-pairs",
+        scope: EvaluationScope::Singleton,
+        order: 10,
+        phases: &[
+            ValidationPhase::Blur,
+            ValidationPhase::Change,
+            ValidationPhase::Validate,
+        ],
+        trigger_field_ids: &["alpha", "beta"],
+        profiles: executable(RuleBranch {
+            predicate: &TRUE,
+            effects: leaked_slice(vec![Effect::EmitIssue {
+                severity: RuleSeverity::Advisory,
+                message: "matched",
+                official_message: None,
+                assessment: RuleAssessment::VerifiedCorrect,
+                fields: &[],
+            }]),
+        }),
+    };
+    let blur_alpha = FieldEventProgramSpec {
+        phase: ValidationPhase::Blur,
+        trigger_field_id: "alpha",
+        profiles: executable(FieldEventProgram {
+            steps: leaked_slice(vec![FieldEventStep::Rule {
+                rule_id: "sparse-pairs",
+            }]),
+        }),
+    };
+    let change_beta = FieldEventProgramSpec {
+        phase: ValidationPhase::Change,
+        trigger_field_id: "beta",
+        profiles: executable(FieldEventProgram {
+            steps: leaked_slice(vec![FieldEventStep::Rule {
+                rule_id: "sparse-pairs",
+            }]),
+        }),
+    };
+    let fields = leaked_slice(vec![string_field("alpha"), string_field("beta")]);
+    let rules = leaked_slice(vec![rule]);
+    let specification = spec_with_field_event_programs(
+        &[],
+        fields,
+        &[],
+        &[],
+        rules,
+        leaked_slice(vec![blur_alpha, change_beta]),
+        all_effects(),
+    );
+    validate_static_spec(specification).unwrap();
+
+    let values = || {
+        vec![
+            raw_singleton("alpha", RawValue::Text("a".into())),
+            raw_singleton("beta", RawValue::Text("b".into())),
+        ]
+    };
+    let exact = evaluator(specification)
+        .evaluate(&field_event_request(
+            ValidationContext::new(
+                ValidationPhase::Blur,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            FieldInstance::singleton(FieldId::parse("alpha").unwrap()),
+            vec![],
+            values(),
+        ))
+        .unwrap();
+    assert_eq!(exact.report().violations()[0].message(), "matched");
+
+    let missing_cross_product = evaluator(specification).evaluate(&field_event_request(
+        ValidationContext::new(
+            ValidationPhase::Blur,
+            BehaviorProfile::OfficialCompatibility,
+        ),
+        FieldInstance::singleton(FieldId::parse("beta").unwrap()),
+        vec![],
+        values(),
+    ));
+    assert!(matches!(
+        missing_cross_product,
+        Err(EvaluationError::Interpreter(
+            InterpreterError::MissingFieldEventProgram {
+                phase: ValidationPhase::Blur,
+                ..
+            }
+        ))
+    ));
+
+    let batch = evaluator(specification)
+        .evaluate(&request(
+            ValidationContext::new(
+                ValidationPhase::Validate,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            vec![],
+            vec![],
+            values(),
+        ))
+        .unwrap();
+    assert_eq!(batch.report().violations()[0].message(), "matched");
+
+    let missing_projection = spec_with_field_event_programs(
+        &[],
+        fields,
+        &[],
+        &[],
+        rules,
+        leaked_slice(vec![blur_alpha]),
+        all_effects(),
+    );
+    assert!(matches!(
+        validate_static_spec(missing_projection),
+        Err(InterpreterError::InvalidStaticSpec(
+            StaticSpecError::InvalidEventBinding {
+                kind: SpecItemKind::Rule,
+                value: "sparse-pairs",
+            }
+        ))
+    ));
+}
+
+#[test]
+fn exact_group_field_event_executes_only_the_matching_stable_instance() {
+    let group = FieldGroupSpec {
+        group_id: "rows",
+        min_occurs: 2,
+        max_occurs: Some(2),
+        members: &["row-value"],
+    };
+    let effects = leaked_slice(vec![Effect::EmitIssue {
+        severity: RuleSeverity::Advisory,
+        message: "row",
+        official_message: None,
+        assessment: RuleAssessment::VerifiedCorrect,
+        fields: &[],
+    }]);
+    let rule = RuleSpec {
+        rule_id: "row-change",
+        scope: EvaluationScope::EachGroup("rows"),
+        order: 10,
+        phases: &[ValidationPhase::Change],
+        trigger_field_ids: &["row-value"],
+        profiles: executable(RuleBranch {
+            predicate: &TRUE,
+            effects,
+        }),
+    };
+    let programs = leaked_slice(vec![FieldEventProgramSpec {
+        phase: ValidationPhase::Change,
+        trigger_field_id: "row-value",
+        profiles: executable(FieldEventProgram {
+            steps: leaked_slice(vec![FieldEventStep::Rule {
+                rule_id: "row-change",
+            }]),
+        }),
+    }]);
+    let spec = spec_with_field_event_programs(
+        leaked_slice(vec![group]),
+        leaked_slice(vec![grouped_string_field("row-value", "rows")]),
+        &[],
+        &[],
+        leaked_slice(vec![rule]),
+        programs,
+        all_effects(),
+    );
+    let row_a = RepeatedGroupInstance::new(
+        RepeatedGroupId::parse("rows").unwrap(),
+        StableInstanceId::parse("row-a").unwrap(),
+    );
+    let row_b = RepeatedGroupInstance::new(
+        RepeatedGroupId::parse("rows").unwrap(),
+        StableInstanceId::parse("row-b").unwrap(),
+    );
+    let field_id = FieldId::parse("row-value").unwrap();
+    let field_a = FieldInstance::try_new(field_id.clone(), vec![row_a.clone()]).unwrap();
+    let field_b = FieldInstance::try_new(field_id, vec![row_b.clone()]).unwrap();
+    let result = evaluator(spec)
+        .evaluate(&field_event_request(
+            ValidationContext::new(
+                ValidationPhase::Change,
+                BehaviorProfile::OfficialCompatibility,
+            ),
+            field_b.clone(),
+            vec![row_a, row_b.clone()],
+            vec![
+                RawFieldValue::new(field_a, RawValue::Text("a".into())),
+                RawFieldValue::new(field_b, RawValue::Text("b".into())),
+            ],
+        ))
+        .unwrap();
+
+    assert_eq!(result.report().expected_rules().len(), 1);
+    assert_eq!(result.report().expected_rules()[0].instance(), Some(&row_b));
+}
+
+#[test]
+fn first_blocking_issue_keeps_current_rule_resets_but_suppresses_later_rules() {
+    let singleton = |field_id| FieldRef {
+        field_id,
+        instance: FieldInstanceSelector::Singleton,
+    };
+    let first_effects = leaked_slice(vec![
+        Effect::EmitIssue {
+            severity: RuleSeverity::Blocking,
+            message: "blocking",
+            official_message: Some("blocking"),
+            assessment: RuleAssessment::VerifiedCorrect,
+            fields: &[],
+        },
+        Effect::EmitIssue {
+            severity: RuleSeverity::Advisory,
+            message: "suppressed",
+            official_message: None,
+            assessment: RuleAssessment::VerifiedCorrect,
+            fields: &[],
+        },
+        Effect::SetRawFieldValue {
+            field: singleton("reset-a"),
+            value: StaticRawValue::Text("0.00"),
+        },
+        Effect::SetRawFieldValue {
+            field: singleton("reset-b"),
+            value: StaticRawValue::Absent,
+        },
+    ]);
+    let later_effects = leaked_slice(vec![Effect::SetRawFieldValue {
+        field: singleton("reset-a"),
+        value: StaticRawValue::Text("forged-later"),
+    }]);
+    let rules = leaked_slice(vec![
+        RuleSpec {
+            rule_id: "blocking-reset",
+            scope: EvaluationScope::Singleton,
+            order: 10,
+            phases: &[ValidationPhase::Blur],
+            trigger_field_ids: &["trigger"],
+            profiles: executable(RuleBranch {
+                predicate: &TRUE,
+                effects: first_effects,
+            }),
+        },
+        RuleSpec {
+            rule_id: "later-reset",
+            scope: EvaluationScope::Singleton,
+            order: 20,
+            phases: &[ValidationPhase::Blur],
+            trigger_field_ids: &["trigger"],
+            profiles: executable(RuleBranch {
+                predicate: &TRUE,
+                effects: later_effects,
+            }),
+        },
+    ]);
+    let programs = leaked_slice(vec![FieldEventProgramSpec {
+        phase: ValidationPhase::Blur,
+        trigger_field_id: "trigger",
+        profiles: executable(FieldEventProgram {
+            steps: leaked_slice(vec![
+                FieldEventStep::Rule {
+                    rule_id: "blocking-reset",
+                },
+                FieldEventStep::Rule {
+                    rule_id: "later-reset",
+                },
+            ]),
+        }),
+    }]);
+    let spec = spec_with_field_event_programs(
+        &[],
+        leaked_slice(vec![
+            string_field("trigger"),
+            string_field("reset-a"),
+            string_field("reset-b"),
+        ]),
+        &[],
+        &[],
+        rules,
+        programs,
+        executable(EffectEvaluationMode::StopEffectsAfterFirstBlockingIssue),
+    );
+    let event_field = FieldInstance::singleton(FieldId::parse("trigger").unwrap());
+    let request = field_event_request(
+        ValidationContext::new(
+            ValidationPhase::Blur,
+            BehaviorProfile::OfficialCompatibility,
+        ),
+        event_field,
+        Vec::new(),
+        vec![
+            raw_singleton("trigger", RawValue::Text("300000".into())),
+            raw_singleton("reset-a", RawValue::Text("17".into())),
+            raw_singleton("reset-b", RawValue::Text("18".into())),
+        ],
+    );
+    let result = evaluator(spec).evaluate(&request).unwrap();
+
+    assert_eq!(result.report().violations().len(), 1);
+    assert_eq!(result.expected_field_value_assignments().len(), 3);
+    assert_eq!(result.field_value_assignments().len(), 2);
+    assert_eq!(result.field_value_assignments()[0].effect_index(), 2);
+    assert_eq!(result.field_value_assignments()[1].effect_index(), 3);
+    assert_eq!(
+        result.field_value_assignments()[0].value(),
+        &RawValue::Text("0.00".into())
+    );
+    assert_eq!(
+        result.field_value_assignments()[1].value(),
+        &RawValue::Absent
+    );
+
+    let canonical_reset_a = result
+        .canonical_inputs()
+        .iter()
+        .find(|input| input.field().field_id().as_str() == "reset-a")
+        .unwrap();
+    assert_eq!(canonical_reset_a.raw(), &RawValue::Text("17".into()));
+    assert_eq!(
+        canonical_reset_a.canonical(),
+        &CanonicalValue::Text("0.00".into())
+    );
+
+    let mut wire = serde_json::to_value(&result).unwrap();
+    assert_eq!(
+        wire["report"]["event_field"]["field_id"],
+        serde_json::Value::String("trigger".into())
+    );
+    wire["field_value_assignments"][0]["effect_index"] = serde_json::Value::from(99);
+    assert!(
+        serde_json::from_value::<EvaluationResult>(wire)
+            .unwrap_err()
+            .to_string()
+            .contains("does not match compiled effect")
+    );
+
+    let mut missing_event = serde_json::to_value(&result).unwrap();
+    missing_event["report"]
+        .as_object_mut()
+        .unwrap()
+        .remove("event_field");
+    assert!(
+        serde_json::from_value::<EvaluationResult>(missing_event)
+            .unwrap_err()
+            .to_string()
+            .contains("missing its event field")
+    );
 }
 
 #[test]
@@ -1711,15 +3449,17 @@ fn calculation_order_uses_evaluation_order_and_exact_decimal_values() {
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "due",
                 value: tax_value,
-                rounding: Some(Rounding {
+                rounding: Some(&[Rounding {
                     mode: RoundingMode::HalfUp,
                     scale: 2,
-                }),
+                }]),
+                writeback: None,
             }]),
         }),
     };
@@ -1728,12 +3468,14 @@ fn calculation_order_uses_evaluation_order_and_exact_decimal_values() {
         scope: EvaluationScope::Singleton,
         depends_on: &["tax"],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "total",
                 value: double_value,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -1787,6 +3529,85 @@ fn calculation_order_uses_evaluation_order_and_exact_decimal_values() {
 }
 
 #[test]
+fn calculation_rounding_pipeline_applies_half_ceiling_steps_in_declared_order() {
+    let pipeline = leaked_slice(vec![
+        Rounding {
+            mode: RoundingMode::HalfUp,
+            scale: 2,
+        },
+        Rounding {
+            mode: RoundingMode::HalfCeiling,
+            scale: 0,
+        },
+    ]);
+    let rounded = |coefficient| {
+        evaluate_one_output_with_rounding(decimal_literal(coefficient, 3), Some(pipeline))
+            .unwrap()
+            .derived_outputs()[0]
+            .value()
+            .clone()
+    };
+
+    for (coefficient, expected) in [
+        (494, "0"),
+        (499, "1"),
+        (-499, "0"),
+        (-501, "0"),
+        (-506, "-1"),
+        (-1499, "-1"),
+        (-1506, "-2"),
+    ] {
+        assert_eq!(
+            rounded(coefficient),
+            CanonicalValue::Decimal(expected.parse().unwrap()),
+            "pipeline result for coefficient {coefficient}"
+        );
+    }
+
+    let reversed = leaked_slice(vec![pipeline[1], pipeline[0]]);
+    assert_eq!(
+        evaluate_one_output_with_rounding(decimal_literal(499, 3), Some(reversed))
+            .unwrap()
+            .derived_outputs()[0]
+            .value(),
+        &CanonicalValue::Decimal("0".parse().unwrap()),
+        "reversing the steps must change the result"
+    );
+}
+
+#[test]
+fn static_validation_rejects_empty_or_partially_invalid_rounding_pipelines() {
+    assert!(matches!(
+        evaluate_one_output_with_rounding(decimal_literal(499, 3), Some(&[])),
+        Err(EvaluationError::Interpreter(
+            InterpreterError::InvalidStaticSpec(StaticSpecError::EmptyRequiredList {
+                kind: SpecItemKind::Output,
+                value: "output",
+            })
+        ))
+    ));
+
+    let invalid_second_step = leaked_slice(vec![
+        Rounding {
+            mode: RoundingMode::HalfUp,
+            scale: 2,
+        },
+        Rounding {
+            mode: RoundingMode::HalfCeiling,
+            scale: 19,
+        },
+    ]);
+    assert!(matches!(
+        evaluate_one_output_with_rounding(decimal_literal(499, 3), Some(invalid_second_step)),
+        Err(EvaluationError::Interpreter(
+            InterpreterError::InvalidStaticSpec(StaticSpecError::InvalidRoundingScale {
+                scale: 19,
+            })
+        ))
+    ));
+}
+
+#[test]
 fn false_calculation_condition_still_emits_every_expected_output_as_absent() {
     let false_predicate = leaked(Predicate::Constant(false));
     let one = leaked(Expression::Literal(TypedValue::Decimal(DecimalLiteral {
@@ -1809,12 +3630,14 @@ fn false_calculation_condition_still_emits_every_expected_output_as_absent() {
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: false_predicate,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "still-covered",
                 value: would_fail,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -1861,12 +3684,14 @@ fn repeated_group_lookup_and_aggregate_are_stable_by_instance_identity() {
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "total",
                 value: aggregate,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -1941,12 +3766,14 @@ fn group_scoped_outputs_rules_and_derived_aggregate_share_stable_instances() {
             scope: EvaluationScope::EachGroup("rows"),
             depends_on: &[],
             phases: VALIDATE,
+            trigger_field_ids: &[],
             profiles: executable(CalculationBranch {
                 condition: &TRUE,
                 outputs: leaked_slice(vec![CalculationOutput {
                     output_id: "row-output",
                     value: row_value,
                     rounding: None,
+                    writeback: None,
                 }]),
             }),
         },
@@ -1955,12 +3782,14 @@ fn group_scoped_outputs_rules_and_derived_aggregate_share_stable_instances() {
             scope: EvaluationScope::Singleton,
             depends_on: &["row-calculation"],
             phases: VALIDATE,
+            trigger_field_ids: &[],
             profiles: executable(CalculationBranch {
                 condition: &TRUE,
                 outputs: leaked_slice(vec![CalculationOutput {
                     output_id: "total",
                     value: total_value,
                     rounding: None,
+                    writeback: None,
                 }]),
             }),
         },
@@ -1970,6 +3799,7 @@ fn group_scoped_outputs_rules_and_derived_aggregate_share_stable_instances() {
         scope: EvaluationScope::EachGroup("rows"),
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(RuleBranch {
             predicate: &TRUE,
             effects: leaked_slice(vec![Effect::EmitIssue {
@@ -2081,12 +3911,14 @@ fn empty_group_sum_returns_zero_with_the_member_numeric_type() {
             scope: EvaluationScope::Singleton,
             depends_on: &[],
             phases: VALIDATE,
+            trigger_field_ids: &[],
             profiles: executable(CalculationBranch {
                 condition: &TRUE,
                 outputs: leaked_slice(vec![CalculationOutput {
                     output_id: "total",
                     value: aggregate,
                     rounding: None,
+                    writeback: None,
                 }]),
             }),
         };
@@ -2143,12 +3975,14 @@ fn nested_group_aggregate_is_rejected_before_any_row_is_evaluated() {
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "total",
                 value: outer,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -2190,6 +4024,7 @@ fn exact_profile_and_phase_selection_never_falls_back() {
         scope: EvaluationScope::Singleton,
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: Profiled {
             official: Branch::Executable(RuleBranch {
                 predicate: &TRUE,
@@ -2233,7 +4068,7 @@ fn exact_profile_and_phase_selection_never_falls_back() {
 
     let different_phase = evaluator
         .evaluate(&request(
-            ValidationContext::new(ValidationPhase::Input, BehaviorProfile::FilingSafe),
+            ValidationContext::new(ValidationPhase::Save, BehaviorProfile::FilingSafe),
             vec![],
             vec![],
             vec![raw_singleton("name", RawValue::Text("x".into()))],
@@ -2332,18 +4167,23 @@ fn missing_duplicate_and_invalid_inputs_have_distinct_typed_errors() {
     ));
 }
 
-fn one_output_spec(expression: &'static Expression) -> &'static StaticRuleSetSpec {
+fn one_output_spec_with_rounding(
+    expression: &'static Expression,
+    rounding: Option<&'static [Rounding]>,
+) -> &'static StaticRuleSetSpec {
     let calculation = CalculationSpec {
         calculation_id: "calculation",
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "output",
                 value: expression,
-                rounding: None,
+                rounding,
+                writeback: None,
             }]),
         }),
     };
@@ -2358,10 +4198,26 @@ fn one_output_spec(expression: &'static Expression) -> &'static StaticRuleSetSpe
     )
 }
 
+fn one_output_spec(expression: &'static Expression) -> &'static StaticRuleSetSpec {
+    one_output_spec_with_rounding(expression, None)
+}
+
 fn evaluate_one_output(
     expression: &'static Expression,
 ) -> Result<crate::EvaluationResult, EvaluationError> {
     evaluator(one_output_spec(expression)).evaluate(&request(
+        ValidationContext::new(ValidationPhase::Validate, BehaviorProfile::FilingSafe),
+        vec![],
+        vec![],
+        vec![raw_singleton("name", RawValue::Text("x".into()))],
+    ))
+}
+
+fn evaluate_one_output_with_rounding(
+    expression: &'static Expression,
+    rounding: Option<&'static [Rounding]>,
+) -> Result<crate::EvaluationResult, EvaluationError> {
+    evaluator(one_output_spec_with_rounding(expression, rounding)).evaluate(&request(
         ValidationContext::new(ValidationPhase::Validate, BehaviorProfile::FilingSafe),
         vec![],
         vec![],
@@ -2377,6 +4233,7 @@ fn evaluate_one_rule(
         scope: EvaluationScope::Singleton,
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(RuleBranch {
             predicate,
             effects: leaked_slice(vec![Effect::EmitIssue {
@@ -2733,6 +4590,7 @@ fn static_validation_closes_coercion_failed_field_and_profile_scope() {
 
     let preserve_raw = FieldBehavior {
         normalization: EMPTY_NORMALIZATION,
+        event_normalization: &[],
         coercion: Coercion::Integer {
             on_empty: NumericEmptyPolicy::Null,
             on_invalid: InvalidValuePolicy::PreserveRaw,
@@ -2740,6 +4598,7 @@ fn static_validation_closes_coercion_failed_field_and_profile_scope() {
     };
     let reject_invalid = FieldBehavior {
         normalization: EMPTY_NORMALIZATION,
+        event_normalization: &[],
         coercion: Coercion::Integer {
             on_empty: NumericEmptyPolicy::Null,
             on_invalid: InvalidValuePolicy::Error,
@@ -2749,6 +4608,7 @@ fn static_validation_closes_coercion_failed_field_and_profile_scope() {
         field_id: "amount",
         value_type: ValueType::Integer,
         group_id: None,
+        calculation_id: None,
         behavior: Profiled {
             official: Branch::Executable(reject_invalid),
             filing_safe: Branch::Executable(preserve_raw),
@@ -2765,6 +4625,7 @@ fn static_validation_closes_coercion_failed_field_and_profile_scope() {
         scope: EvaluationScope::Singleton,
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: Profiled {
             official: Branch::Unresolved,
             filing_safe: Branch::Executable(RuleBranch {
@@ -2852,6 +4713,7 @@ fn static_validation_rejects_cross_phase_and_profile_dependencies() {
             output_id: "value",
             value: one,
             rounding: None,
+            writeback: None,
         }]),
     };
     let dependent_branch = CalculationBranch {
@@ -2860,6 +4722,7 @@ fn static_validation_rejects_cross_phase_and_profile_dependencies() {
             output_id: "result",
             value: derived,
             rounding: None,
+            writeback: None,
         }]),
     };
     let cross_phase = spec(
@@ -2872,7 +4735,8 @@ fn static_validation_rejects_cross_phase_and_profile_dependencies() {
                 calculation_id: "base",
                 scope: EvaluationScope::Singleton,
                 depends_on: &[],
-                phases: &[ValidationPhase::Input],
+                phases: SAVE,
+                trigger_field_ids: &[],
                 profiles: executable(base_branch),
             },
             CalculationSpec {
@@ -2880,6 +4744,7 @@ fn static_validation_rejects_cross_phase_and_profile_dependencies() {
                 scope: EvaluationScope::Singleton,
                 depends_on: &["base"],
                 phases: VALIDATE,
+                trigger_field_ids: &[],
                 profiles: executable(dependent_branch),
             },
         ]),
@@ -2916,6 +4781,7 @@ fn static_validation_rejects_cross_phase_and_profile_dependencies() {
                 scope: EvaluationScope::Singleton,
                 depends_on: &[],
                 phases: VALIDATE,
+                trigger_field_ids: &[],
                 profiles: Profiled {
                     official: Branch::Executable(base_branch),
                     filing_safe: Branch::Unresolved,
@@ -2926,6 +4792,7 @@ fn static_validation_rejects_cross_phase_and_profile_dependencies() {
                 scope: EvaluationScope::Singleton,
                 depends_on: &["base"],
                 phases: VALIDATE,
+                trigger_field_ids: &[],
                 profiles: Profiled {
                     official: Branch::Unresolved,
                     filing_safe: Branch::Executable(dependent_branch),
@@ -3005,12 +4872,14 @@ fn static_validation_enforces_group_field_selector_scope() {
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "output",
                 value: invalid,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -3062,6 +4931,7 @@ fn static_validation_enforces_group_field_selector_scope() {
         scope: EvaluationScope::Singleton,
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(RuleBranch {
             predicate: quantified,
             effects: leaked_slice(vec![Effect::EmitIssue {
@@ -3097,12 +4967,14 @@ fn mutating_effects_fail_closed_before_rule_execution() {
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(CalculationBranch {
             condition: &TRUE,
             outputs: leaked_slice(vec![CalculationOutput {
                 output_id: "output",
                 value: output,
                 rounding: None,
+                writeback: None,
             }]),
         }),
     };
@@ -3111,6 +4983,7 @@ fn mutating_effects_fail_closed_before_rule_execution() {
         scope: EvaluationScope::Singleton,
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(RuleBranch {
             predicate: &TRUE,
             effects: leaked_slice(vec![Effect::SetDerived {
@@ -3151,6 +5024,7 @@ fn mutating_effects_fail_closed_before_rule_execution() {
         scope: EvaluationScope::Singleton,
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(RuleBranch {
             predicate: &TRUE,
             effects: leaked_slice(vec![Effect::NormalizeField {
@@ -3191,6 +5065,7 @@ fn workflow_state_effect_fails_closed_until_result_contract_can_carry_it() {
         scope: EvaluationScope::Singleton,
         order: 1,
         phases: VALIDATE,
+        trigger_field_ids: &[],
         profiles: executable(RuleBranch {
             predicate: &TRUE,
             effects: leaked_slice(vec![Effect::SetWorkflowState {
@@ -3243,6 +5118,7 @@ fn explicit_validate_workflow_spec(rules: &'static [RuleSpec]) -> &'static Stati
         context_values: &[],
         field_groups: &[],
         fields: leaked_slice(vec![string_field("name")]),
+        field_event_programs: &[],
         evaluation_order: &[],
         calculations: &[],
         rules,

@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -19,15 +19,16 @@ use sha2::{Digest, Sha256};
 
 use crate::error::{CodegenError, Result};
 use crate::evidence::{EvidenceCaptureOperatingSystem, EvidenceCaptureProvenance};
+use crate::files::{
+    ApprovedExternalFile, ApprovedExternalRoot, ReadScope, read_external_bytes_bound,
+    read_external_bytes_under, read_tracked_bytes,
+};
 use crate::json::{CANONICALIZATION_ID, canonical_bytes, parse_strict};
 use crate::path::{
     canonical_repo_root, ensure_under, is_same_or_below, is_same_path, is_symlink_or_reparse_point,
     portable_join,
 };
 use crate::sensitive::reject_sensitive_text;
-use crate::verified_file::open_verified_regular_file;
-#[cfg(windows)]
-use crate::verified_file::stable_windows_link_count;
 
 pub const EVIDENCE_VAULT_SOURCE_MAP_FORMAT: &str = "bir-evidence-vault-source-map-v1";
 pub const EVIDENCE_VAULT_CAPTURE_METADATA_FORMAT: &str = "bir-evidence-vault-capture-metadata-v1";
@@ -39,8 +40,6 @@ pub const EVIDENCE_VAULT_SOURCE_VERIFICATION_DOMAIN: &str =
 
 const CONTENT_ADDRESS_PREFIX: &str = "upstream/sha256/";
 const STAGING_MARKER: &str = ".bir-vault-acquisition-staging-";
-const COPY_BUFFER_BYTES: usize = 64 * 1024;
-
 static STAGING_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Complete, explicit inputs for a vault acquisition or no-write plan.
@@ -51,10 +50,11 @@ pub struct AcquireEvidenceVaultOptions {
     pub capture_metadata: PathBuf,
     pub vault_root: PathBuf,
     pub dry_run: bool,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl AcquireEvidenceVaultOptions {
-    pub fn new(
+    pub fn tracked_checkout(
         repo_root: impl Into<PathBuf>,
         source_map: impl Into<PathBuf>,
         capture_metadata: impl Into<PathBuf>,
@@ -66,6 +66,23 @@ impl AcquireEvidenceVaultOptions {
             capture_metadata: capture_metadata.into(),
             vault_root: vault_root.into(),
             dry_run: false,
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        source_map: impl Into<PathBuf>,
+        capture_metadata: impl Into<PathBuf>,
+        vault_root: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            source_map: source_map.into(),
+            capture_metadata: capture_metadata.into(),
+            vault_root: vault_root.into(),
+            dry_run: false,
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -76,13 +93,26 @@ impl AcquireEvidenceVaultOptions {
 pub struct VerifyEvidenceVaultSourceMapOptions {
     pub repo_root: PathBuf,
     pub source_map: PathBuf,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl VerifyEvidenceVaultSourceMapOptions {
-    pub fn new(repo_root: impl Into<PathBuf>, source_map: impl Into<PathBuf>) -> Self {
+    pub fn tracked_checkout(repo_root: impl Into<PathBuf>, source_map: impl Into<PathBuf>) -> Self {
         Self {
             repo_root: repo_root.into(),
             source_map: source_map.into(),
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        source_map: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            source_map: source_map.into(),
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -284,7 +314,8 @@ pub fn acquire_evidence_vault(
         )?;
     validate_capture_metadata(&capture_metadata)?;
 
-    let (manifest_count, declared_assets) = load_declared_manifest_assets(&repo_root)?;
+    let (manifest_count, declared_assets) =
+        load_declared_manifest_assets(&repo_root, options.read_scope)?;
     let plan = build_acquisition_plan(
         &repo_root,
         &source_map_path,
@@ -331,7 +362,8 @@ pub fn verify_evidence_vault_source_map(
     let (_source_map_path, source_map): (_, EvidenceVaultSourceMap) =
         load_external_canonical_json(&repo_root, &options.source_map, "vault source map")?;
     validate_source_map_header(&source_map)?;
-    let (manifest_count, declared_assets) = load_declared_manifest_assets(&repo_root)?;
+    let (manifest_count, declared_assets) =
+        load_declared_manifest_assets(&repo_root, options.read_scope)?;
     let inventory =
         build_verified_source_inventory(&repo_root, manifest_count, declared_assets, source_map)?;
     let unique_content_count = inventory.content.len();
@@ -607,7 +639,7 @@ fn build_verified_source_inventory(
         let observed = if let Some(observed) = verified_paths.get(&source_path) {
             observed.clone()
         } else {
-            let observed = hash_regular_file(repo_root, &source_path, "vault source asset")?;
+            let observed = hash_regular_file(repo_root, &source_path, "vault source asset", None)?;
             verified_paths.insert(source_path.clone(), observed.clone());
             observed
         };
@@ -681,7 +713,30 @@ fn build_verified_source_inventory(
     })
 }
 
-fn load_declared_manifest_assets(repo_root: &Path) -> Result<(usize, Vec<DeclaredAsset>)> {
+fn load_declared_manifest_assets(
+    repo_root: &Path,
+    read_scope: ReadScope,
+) -> Result<(usize, Vec<DeclaredAsset>)> {
+    let approved_workspace = match read_scope {
+        ReadScope::Tracked => None,
+        ReadScope::External => {
+            let expected = repo_root.to_path_buf();
+            Some(ApprovedExternalRoot::capture(
+                repo_root,
+                "external rules workspace root",
+                |resolved| {
+                    if !is_same_path(resolved, &expected) {
+                        return Err(CodegenError::new(format!(
+                            "external rules workspace root `{}` resolved to a different canonical directory `{}`",
+                            expected.display(),
+                            resolved.display()
+                        )));
+                    }
+                    Ok(())
+                },
+            )?)
+        }
+    };
     let forms_root_path = repo_root.join("rules/forms");
     let forms_root = canonical_real_directory(&forms_root_path, "tracked v1 forms root")?;
     ensure_under(repo_root, &forms_root, "tracked v1 forms root")?;
@@ -732,7 +787,16 @@ fn load_declared_manifest_assets(repo_root: &Path) -> Result<(usize, Vec<Declare
                 manifest_path.display()
             )));
         }
-        let manifest_bytes = read_file_bytes(&manifest_path, "tracked v1 manifest")?;
+        let manifest_bytes = match read_scope {
+            ReadScope::Tracked => read_tracked_bytes(&manifest_path)?,
+            ReadScope::External => read_external_bytes_under(
+                approved_workspace
+                    .as_ref()
+                    .expect("external scope captured the exact workspace root"),
+                &manifest_path,
+                "external tracked v1 manifest",
+            )?,
+        };
         let manifest = parse_strict(&manifest_bytes, &manifest_path)?.into_serde();
         let manifest_object = manifest.as_object().ok_or_else(|| {
             CodegenError::new(format!(
@@ -968,19 +1032,26 @@ fn validate_source_verifier_binding(
         }
     }
     require_absolute_normalized(&recorded_path, "recorded source-map verifier input")?;
-    let recorded = open_verified_regular_file(
+    let expected_source_map = source_map_path.to_path_buf();
+    let recorded = ApprovedExternalFile::capture(
         &recorded_path,
         "recorded source-map verifier input",
         |resolved| {
+            if !is_same_path(resolved, &expected_source_map) {
+                return Err(CodegenError::new(
+                    "capture provenance source-map argument does not resolve to the source map being acquired",
+                ));
+            }
             if is_same_or_below(repo_root, resolved) {
                 return Err(CodegenError::new(
                     "recorded source-map verifier input must remain outside the repository",
                 ));
             }
+            reject_sensitive_path(resolved, "recorded source-map verifier input")?;
             Ok(())
         },
     )?;
-    if !is_same_path(recorded.canonical_path(), source_map_path) {
+    if !is_same_path(recorded.path(), source_map_path) {
         return Err(CodegenError::new(
             "capture provenance source-map argument does not resolve to the source map being acquired",
         ));
@@ -1208,12 +1279,41 @@ fn publish_directory_no_replace(staging: &Path, target: &Path) -> Result<()> {
 }
 
 fn verify_staged_plan(staging: &Path, plan: &AcquisitionPlan) -> Result<()> {
+    let expected_staging = fs::canonicalize(staging).map_err(|source| {
+        CodegenError::io("canonicalize staged evidence vault root", staging, source)
+    })?;
+    let approved_staging = ApprovedExternalRoot::capture(
+        &expected_staging,
+        "staged evidence vault root",
+        |resolved| {
+            if !is_same_path(resolved, &expected_staging) {
+                return Err(CodegenError::new(format!(
+                    "staged evidence vault root `{}` resolved to a different canonical directory `{}`",
+                    expected_staging.display(),
+                    resolved.display()
+                )));
+            }
+            if is_same_or_below(&plan.repo_root, resolved) {
+                return Err(CodegenError::new(format!(
+                    "staged evidence vault root `{}` resolved inside repository `{}`",
+                    resolved.display(),
+                    plan.repo_root.display()
+                )));
+            }
+            reject_sensitive_path(resolved, "staged evidence vault root")
+        },
+    )?;
     let mut expected_paths = BTreeSet::new();
     expected_paths.insert(EVIDENCE_VAULT_CATALOG_FILE.to_owned());
     for entry in &plan.catalog.entries {
         expected_paths.insert(entry.content_path.clone());
         let path = portable_join(staging, &entry.content_path, "staged vault content")?;
-        let observed = hash_regular_file(&plan.repo_root, &path, "staged vault content")?;
+        let observed = hash_regular_file(
+            &plan.repo_root,
+            &path,
+            "staged vault content",
+            Some(&approved_staging),
+        )?;
         if observed != (entry.sha256.clone(), entry.size_bytes) {
             return Err(CodegenError::new(format!(
                 "staged content verification failed for `{}`",
@@ -1238,14 +1338,33 @@ fn verify_staged_plan(staging: &Path, plan: &AcquisitionPlan) -> Result<()> {
         )));
     }
     let catalog_path = staging.join(EVIDENCE_VAULT_CATALOG_FILE);
-    let actual_catalog = read_file_bytes(&catalog_path, "staged evidence vault catalog")?;
+    let actual_catalog = read_external_bytes_under(
+        &approved_staging,
+        &catalog_path,
+        "staged evidence vault catalog",
+    )?;
     if actual_catalog != plan.catalog_bytes {
         return Err(CodegenError::new(
             "staged evidence vault catalog bytes drifted",
         ));
     }
+    let parsed = parse_strict(&actual_catalog, &catalog_path)?;
+    if actual_catalog != canonical_bytes(&parsed) {
+        return Err(CodegenError::new(format!(
+            "staged evidence vault catalog `{}` is not canonical `{CANONICALIZATION_ID}` JSON",
+            catalog_path.display()
+        )));
+    }
     let parsed: EvidenceVaultCatalog =
-        load_canonical_json(&catalog_path, "staged evidence vault catalog")?;
+        serde_json::from_value(parsed.into_serde()).map_err(|source| {
+            CodegenError::with_source(
+                format!(
+                    "closed-structure load of staged evidence vault catalog `{}` failed",
+                    catalog_path.display()
+                ),
+                source,
+            )
+        })?;
     validate_emitted_catalog(&parsed)
 }
 
@@ -1254,8 +1373,16 @@ fn copy_verified_regular_file(
     content: &VerifiedContent,
     destination: &Path,
 ) -> Result<()> {
-    let mut source =
-        open_verified_regular_file(&content.source_path, "vault source asset", |resolved| {
+    let expected_source = content.source_path.clone();
+    let approved_source =
+        ApprovedExternalFile::capture(&content.source_path, "vault source asset", |resolved| {
+            if !is_same_path(resolved, &expected_source) {
+                return Err(CodegenError::new(format!(
+                    "vault source asset `{}` resolved to a different canonical file `{}`",
+                    expected_source.display(),
+                    resolved.display()
+                )));
+            }
             if is_same_or_below(repo_root, resolved) {
                 return Err(CodegenError::new(format!(
                     "vault source asset `{}` resolved inside repository `{}`",
@@ -1265,50 +1392,9 @@ fn copy_verified_regular_file(
             }
             reject_sensitive_path(resolved, "vault source asset")
         })?;
-    let source_metadata = source.file().metadata().map_err(|source| {
-        CodegenError::io(
-            "inspect opened vault source asset",
-            &content.source_path,
-            source,
-        )
-    })?;
-    reject_hard_link_alias(
-        source.file(),
-        &source_metadata,
-        &content.source_path,
-        "vault source asset",
-    )?;
-    let mut output = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(destination)
-        .map_err(|source| CodegenError::io("create vault content file", destination, source))?;
-    let mut digest = Sha256::new();
-    let mut size = 0_u64;
-    let mut buffer = vec![0_u8; COPY_BUFFER_BYTES];
-    loop {
-        let count = source.file_mut().read(&mut buffer).map_err(|source| {
-            CodegenError::io(
-                "read vault source asset during copy",
-                &content.source_path,
-                source,
-            )
-        })?;
-        if count == 0 {
-            break;
-        }
-        size = size
-            .checked_add(count as u64)
-            .ok_or_else(|| CodegenError::new("vault source asset exceeds u64 byte count"))?;
-        digest.update(&buffer[..count]);
-        output.write_all(&buffer[..count]).map_err(|source| {
-            CodegenError::io("write content-addressed vault file", destination, source)
-        })?;
-    }
-    output.sync_all().map_err(|source| {
-        CodegenError::io("sync content-addressed vault file", destination, source)
-    })?;
-    let hash = encode_digest(digest.finalize());
+    let source_bytes = read_external_bytes_bound(approved_source, "vault source asset")?;
+    let size = source_bytes.len() as u64;
+    let hash = sha256_hex(&source_bytes);
     if size != content.size_bytes || hash != content.sha256 {
         return Err(CodegenError::new(format!(
             "vault source asset `{}` changed after planning: expected {} bytes/{} observed {size} bytes/{hash}",
@@ -1317,11 +1403,34 @@ fn copy_verified_regular_file(
             content.sha256
         )));
     }
+    let mut output = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(destination)
+        .map_err(|source| CodegenError::io("create vault content file", destination, source))?;
+    output.write_all(&source_bytes).map_err(|source| {
+        CodegenError::io("write content-addressed vault file", destination, source)
+    })?;
+    output.sync_all().map_err(|source| {
+        CodegenError::io("sync content-addressed vault file", destination, source)
+    })?;
     Ok(())
 }
 
-fn hash_regular_file(repo_root: &Path, path: &Path, label: &str) -> Result<(String, u64)> {
-    let mut file = open_verified_regular_file(path, label, |resolved| {
+fn hash_regular_file(
+    repo_root: &Path,
+    path: &Path,
+    label: &str,
+    approved_root: Option<&ApprovedExternalRoot>,
+) -> Result<(String, u64)> {
+    let validate = |resolved: &Path| {
+        if !is_same_path(resolved, path) {
+            return Err(CodegenError::new(format!(
+                "{label} `{}` resolved to a different canonical file `{}`",
+                path.display(),
+                resolved.display()
+            )));
+        }
         if is_same_or_below(repo_root, resolved) {
             return Err(CodegenError::new(format!(
                 "{label} `{}` resolved inside repository `{}`",
@@ -1330,65 +1439,28 @@ fn hash_regular_file(repo_root: &Path, path: &Path, label: &str) -> Result<(Stri
             )));
         }
         reject_sensitive_path(resolved, label)
-    })?;
-    let metadata = file
-        .file()
-        .metadata()
-        .map_err(|source| CodegenError::io(&format!("inspect opened {label}"), path, source))?;
-    reject_hard_link_alias(file.file(), &metadata, path, label)?;
-    let mut digest = Sha256::new();
-    let mut size = 0_u64;
-    let mut buffer = vec![0_u8; COPY_BUFFER_BYTES];
-    loop {
-        let count = file
-            .file_mut()
-            .read(&mut buffer)
-            .map_err(|source| CodegenError::io(&format!("read {label}"), path, source))?;
-        if count == 0 {
-            break;
-        }
-        size = size
-            .checked_add(count as u64)
-            .ok_or_else(|| CodegenError::new(format!("{label} exceeds u64 byte count")))?;
-        digest.update(&buffer[..count]);
-    }
-    Ok((encode_digest(digest.finalize()), size))
-}
-
-#[cfg(unix)]
-fn reject_hard_link_alias(
-    _file: &File,
-    metadata: &fs::Metadata,
-    path: &Path,
-    label: &str,
-) -> Result<()> {
-    use std::os::unix::fs::MetadataExt as _;
-
-    if metadata.nlink() != 1 {
-        return Err(CodegenError::new(format!(
-            "{label} `{}` has {} hard links; aliased source files are forbidden",
-            path.display(),
-            metadata.nlink()
-        )));
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn reject_hard_link_alias(
-    file: &File,
-    _metadata: &fs::Metadata,
-    path: &Path,
-    label: &str,
-) -> Result<()> {
-    let link_count = stable_windows_link_count(file, path, label)?;
-    if link_count != 1 {
-        return Err(CodegenError::new(format!(
-            "{label} `{}` has {link_count} hard links; aliased source files are forbidden",
-            path.display()
-        )));
-    }
-    Ok(())
+    };
+    let bytes = if let Some(root) = approved_root {
+        root.revalidate(label)?;
+        let approved = ApprovedExternalFile::capture(path, label, |resolved| {
+            validate(resolved)?;
+            if !is_same_or_below(root.path(), resolved) {
+                return Err(CodegenError::new(format!(
+                    "{label} `{}` is outside approved root `{}`",
+                    resolved.display(),
+                    root.path().display()
+                )));
+            }
+            Ok(())
+        })?;
+        let read_result = read_external_bytes_bound(approved, label);
+        root.revalidate(label)?;
+        read_result?
+    } else {
+        let approved = ApprovedExternalFile::capture(path, label, validate)?;
+        read_external_bytes_bound(approved, label)?
+    };
+    Ok((sha256_hex(&bytes), bytes.len() as u64))
 }
 
 fn encode_digest(digest: impl AsRef<[u8]>) -> String {
@@ -1613,7 +1685,7 @@ fn load_canonical_json<T>(path: &Path, label: &str) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let bytes = read_file_bytes(path, label)?;
+    let bytes = read_external_file_bytes(path, label)?;
     let parsed = parse_strict(&bytes, path)?;
     if bytes != canonical_bytes(&parsed) {
         return Err(CodegenError::new(format!(
@@ -1641,7 +1713,15 @@ where
     T: for<'de> Deserialize<'de>,
 {
     require_absolute_normalized(path, label)?;
-    let mut verified = open_verified_regular_file(path, label, |resolved| {
+    let expected = canonical_external_regular_file(repo_root, path, label)?;
+    let approved = ApprovedExternalFile::capture(path, label, |resolved| {
+        if !is_same_path(resolved, &expected) {
+            return Err(CodegenError::new(format!(
+                "{label} `{}` resolved to a different canonical file `{}`",
+                expected.display(),
+                resolved.display()
+            )));
+        }
         if is_same_or_below(repo_root, resolved) {
             return Err(CodegenError::new(format!(
                 "{label} `{}` must remain outside repository `{}`",
@@ -1651,12 +1731,8 @@ where
         }
         reject_sensitive_path(resolved, label)
     })?;
-    let canonical_path = verified.canonical_path().to_path_buf();
-    let mut bytes = Vec::new();
-    verified
-        .file_mut()
-        .read_to_end(&mut bytes)
-        .map_err(|source| CodegenError::io(&format!("read {label}"), &canonical_path, source))?;
+    let canonical_path = approved.path().to_path_buf();
+    let bytes = read_external_bytes_bound(approved, label)?;
     let parsed = parse_strict(&bytes, &canonical_path)?;
     if bytes != canonical_bytes(&parsed) {
         return Err(CodegenError::new(format!(
@@ -1683,13 +1759,20 @@ fn canonical_serialize(value: &impl Serialize, label: &str) -> Result<Vec<u8>> {
     Ok(canonical_bytes(&parsed))
 }
 
-fn read_file_bytes(path: &Path, label: &str) -> Result<Vec<u8>> {
-    let mut file = open_verified_regular_file(path, label, |_| Ok(()))?;
-    let mut bytes = Vec::new();
-    file.file_mut()
-        .read_to_end(&mut bytes)
-        .map_err(|source| CodegenError::io(&format!("read {label}"), path, source))?;
-    Ok(bytes)
+fn read_external_file_bytes(path: &Path, label: &str) -> Result<Vec<u8>> {
+    let expected = fs::canonicalize(path)
+        .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), path, source))?;
+    let approved = ApprovedExternalFile::capture(path, label, |resolved| {
+        if !is_same_path(resolved, &expected) {
+            return Err(CodegenError::new(format!(
+                "{label} `{}` resolved to a different canonical file `{}`",
+                expected.display(),
+                resolved.display()
+            )));
+        }
+        Ok(())
+    })?;
+    read_external_bytes_bound(approved, label)
 }
 
 fn required_array<'a>(
@@ -1950,6 +2033,7 @@ mod tests {
         verify_evidence_vault_source_map,
     };
     use crate::evidence::{EvidenceCaptureOperatingSystem, EvidenceCaptureProvenance};
+    use crate::files::ReadScope;
     use crate::path::canonical_repo_root;
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -2033,7 +2117,10 @@ mod tests {
             let source_map_path = root.path.join("source-map.json");
             write_canonical_json(&source_map_path, &source_map);
             let verified_source_map = verify_evidence_vault_source_map(
-                &VerifyEvidenceVaultSourceMapOptions::new(&repo_root, &source_map_path),
+                &VerifyEvidenceVaultSourceMapOptions::external_workspace(
+                    &repo_root,
+                    &source_map_path,
+                ),
             )
             .expect("verify fixture source map before binding capture metadata");
 
@@ -2077,7 +2164,7 @@ mod tests {
         }
 
         fn options(&self, vault_name: &str, dry_run: bool) -> AcquireEvidenceVaultOptions {
-            let mut options = AcquireEvidenceVaultOptions::new(
+            let mut options = AcquireEvidenceVaultOptions::external_workspace(
                 &self.repo_root,
                 &self.source_map_path,
                 &self.capture_metadata_path,
@@ -2093,7 +2180,10 @@ mod tests {
 
         fn rebind_capture_metadata_to_current_source_map(&self) {
             let verification = verify_evidence_vault_source_map(
-                &VerifyEvidenceVaultSourceMapOptions::new(&self.repo_root, &self.source_map_path),
+                &VerifyEvidenceVaultSourceMapOptions::external_workspace(
+                    &self.repo_root,
+                    &self.source_map_path,
+                ),
             )
             .expect("verify current fixture source map");
             let mut metadata: EvidenceVaultCaptureMetadata =
@@ -2157,8 +2247,8 @@ mod tests {
         let metadata: EvidenceVaultCaptureMetadata =
             load_canonical_json(&metadata_path, "test metadata").expect("load metadata");
         validate_capture_metadata(&metadata).expect("valid capture metadata");
-        let (count, assets) =
-            load_declared_manifest_assets(&repo_root).expect("load fixture manifests");
+        let (count, assets) = load_declared_manifest_assets(&repo_root, ReadScope::External)
+            .expect("load fixture manifests");
         build_acquisition_plan(
             &repo_root,
             &source_map_path,
@@ -2282,10 +2372,12 @@ mod tests {
     #[test]
     fn source_map_verifier_is_no_write_and_binds_all_manifest_assets() {
         let fixture = Fixture::new("source-map-verifier");
-        let report = verify_evidence_vault_source_map(&VerifyEvidenceVaultSourceMapOptions::new(
-            &fixture.repo_root,
-            &fixture.source_map_path,
-        ))
+        let report = verify_evidence_vault_source_map(
+            &VerifyEvidenceVaultSourceMapOptions::external_workspace(
+                &fixture.repo_root,
+                &fixture.source_map_path,
+            ),
+        )
         .expect("verify complete source map");
         assert_eq!(report.manifest_count, EXPECTED_V1_FORM_MANIFEST_COUNT);
         assert_eq!(report.mapped_asset_count, EXPECTED_V1_FORM_MANIFEST_COUNT);
@@ -2466,12 +2558,13 @@ mod tests {
             }
             fixture.write_source_map();
 
-            let error =
-                verify_evidence_vault_source_map(&VerifyEvidenceVaultSourceMapOptions::new(
+            let error = verify_evidence_vault_source_map(
+                &VerifyEvidenceVaultSourceMapOptions::external_workspace(
                     &fixture.repo_root,
                     &fixture.source_map_path,
-                ))
-                .expect_err("sensitive source-map path must fail before byte verification");
+                ),
+            )
+            .expect_err("sensitive source-map path must fail before byte verification");
             assert!(
                 error
                     .to_string()
@@ -2496,10 +2589,12 @@ mod tests {
         }
         fixture.write_source_map();
 
-        let error = verify_evidence_vault_source_map(&VerifyEvidenceVaultSourceMapOptions::new(
-            &fixture.repo_root,
-            &fixture.source_map_path,
-        ))
+        let error = verify_evidence_vault_source_map(
+            &VerifyEvidenceVaultSourceMapOptions::external_workspace(
+                &fixture.repo_root,
+                &fixture.source_map_path,
+            ),
+        )
         .expect_err("hard-linked source-map path must fail before byte verification");
         assert!(
             error.to_string().contains("hard links")

@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 use same_file::Handle;
@@ -25,7 +25,10 @@ use crate::evidence::{
     EvidenceReviewStatus, RuleSetSourceState, SourceExcerptLocator, UpstreamEvidenceFile,
     VerifyEvidenceOptions, verify_evidence, verify_evidence_from_tree,
 };
-use crate::files::{read_bytes, read_tree};
+use crate::files::{
+    ApprovedExternalFile, ApprovedExternalRoot, ReadScope, read_external_bytes_bound,
+    read_external_bytes_under, read_external_tree_under, read_tracked_bytes, read_tracked_tree,
+};
 use crate::hash::{digest_entries, sha256_hex};
 use crate::json::{CANONICALIZATION_ID, canonical_bytes, parse_strict};
 use crate::path::{
@@ -36,7 +39,6 @@ use crate::sensitive::reject_sensitive_text;
 use crate::vault_acquisition::{
     VaultAssetDisposition, validate_source_verifier_provenance, vault_asset_disposition,
 };
-use crate::verified_file::open_verified_regular_file;
 
 pub const EVIDENCE_REVIEW_LEDGER_FORMAT: &str = "bir-evidence-review-ledger-v1";
 pub const EVIDENCE_VAULT_CATALOG_FORMAT: &str = "bir-evidence-vault-catalog-v1";
@@ -61,10 +63,11 @@ pub struct BuildEvidencePacketOptions {
     pub vault_catalog: PathBuf,
     pub output_root: PathBuf,
     pub dry_run: bool,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl BuildEvidencePacketOptions {
-    pub fn new(
+    pub fn tracked_checkout(
         repo_root: impl Into<PathBuf>,
         form_id: impl Into<String>,
         review_ledger: impl Into<PathBuf>,
@@ -78,6 +81,25 @@ impl BuildEvidencePacketOptions {
             vault_catalog: vault_catalog.into(),
             output_root: output_root.into(),
             dry_run: false,
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        form_id: impl Into<String>,
+        review_ledger: impl Into<PathBuf>,
+        vault_catalog: impl Into<PathBuf>,
+        output_root: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            form_id: form_id.into(),
+            review_ledger: review_ledger.into(),
+            vault_catalog: vault_catalog.into(),
+            output_root: output_root.into(),
+            dry_run: false,
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -101,10 +123,11 @@ pub struct StageEvidencePacketReviewOptions {
     pub review_ledger: PathBuf,
     pub vault_catalog: PathBuf,
     pub output_root: PathBuf,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl StageEvidencePacketReviewOptions {
-    pub fn new(
+    pub fn tracked_checkout(
         repo_root: impl Into<PathBuf>,
         form_id: impl Into<String>,
         review_ledger: impl Into<PathBuf>,
@@ -117,6 +140,24 @@ impl StageEvidencePacketReviewOptions {
             review_ledger: review_ledger.into(),
             vault_catalog: vault_catalog.into(),
             output_root: output_root.into(),
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        form_id: impl Into<String>,
+        review_ledger: impl Into<PathBuf>,
+        vault_catalog: impl Into<PathBuf>,
+        output_root: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            form_id: form_id.into(),
+            review_ledger: review_ledger.into(),
+            vault_catalog: vault_catalog.into(),
+            output_root: output_root.into(),
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -128,10 +169,11 @@ pub struct BuildEvidencePacketSetOptions {
     pub vault_catalog: PathBuf,
     pub output_root: PathBuf,
     pub dry_run: bool,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl BuildEvidencePacketSetOptions {
-    pub fn new(
+    pub fn tracked_checkout(
         repo_root: impl Into<PathBuf>,
         review_ledger: impl Into<PathBuf>,
         vault_catalog: impl Into<PathBuf>,
@@ -143,6 +185,23 @@ impl BuildEvidencePacketSetOptions {
             vault_catalog: vault_catalog.into(),
             output_root: output_root.into(),
             dry_run: false,
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        review_ledger: impl Into<PathBuf>,
+        vault_catalog: impl Into<PathBuf>,
+        output_root: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            review_ledger: review_ledger.into(),
+            vault_catalog: vault_catalog.into(),
+            output_root: output_root.into(),
+            dry_run: false,
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -152,8 +211,18 @@ pub struct BuildEvidencePacketSetReport {
     pub packet_count: usize,
     pub packet_set_digest_sha256: String,
     pub rules_index_sha256: String,
+    pub packets: Vec<PlannedPacketDigest>,
     pub output_root: PathBuf,
     pub written: bool,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct PlannedPacketDigest {
+    pub ordinal: usize,
+    pub form_id: String,
+    pub packet_id: String,
+    pub packet_digest_sha256: String,
+    pub manifest_sha256: String,
 }
 
 #[derive(Clone, Debug)]
@@ -161,14 +230,31 @@ pub struct CheckEvidencePacketSetOptions {
     pub repo_root: PathBuf,
     pub packet_root: PathBuf,
     pub vault_dir: Option<PathBuf>,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl CheckEvidencePacketSetOptions {
-    pub fn new(repo_root: impl Into<PathBuf>, packet_root: impl Into<PathBuf>) -> Self {
+    pub fn tracked_checkout(
+        repo_root: impl Into<PathBuf>,
+        packet_root: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             repo_root: repo_root.into(),
             packet_root: packet_root.into(),
             vault_dir: None,
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        packet_root: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            packet_root: packet_root.into(),
+            vault_dir: None,
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -514,7 +600,12 @@ pub fn build_evidence_packet(
 ) -> Result<BuildEvidencePacketReport> {
     let repo_root = canonical_repo_root(&options.repo_root)?;
     reject_canonical_rules_target(&repo_root, &options.output_root)?;
-    let context = BuildContext::load(&repo_root, &options.review_ledger, &options.vault_catalog)?;
+    let context = BuildContext::load(
+        &repo_root,
+        &options.review_ledger,
+        &options.vault_catalog,
+        options.read_scope,
+    )?;
     let index_entry = context
         .rules_index
         .forms
@@ -561,6 +652,7 @@ pub fn stage_evidence_packet_review(
         &options.review_ledger,
         &options.vault_catalog,
         LedgerMode::CandidateReview,
+        options.read_scope,
     )?;
     let index_entry = context
         .rules_index
@@ -595,7 +687,12 @@ pub fn build_evidence_packet_set(
 ) -> Result<BuildEvidencePacketSetReport> {
     let repo_root = canonical_repo_root(&options.repo_root)?;
     reject_canonical_rules_target(&repo_root, &options.output_root)?;
-    let context = BuildContext::load(&repo_root, &options.review_ledger, &options.vault_catalog)?;
+    let context = BuildContext::load(
+        &repo_root,
+        &options.review_ledger,
+        &options.vault_catalog,
+        options.read_scope,
+    )?;
     context.require_exact_ledger_bijection()?;
 
     let mut files = BTreeMap::new();
@@ -638,12 +735,24 @@ pub fn build_evidence_packet_set(
 
     let output_root = absolute_normalized(&options.output_root)?;
     if !options.dry_run {
-        write_packet_set_fresh(&repo_root, &output_root, &files)?;
+        write_packet_set_fresh(&repo_root, &output_root, &files, options.read_scope)?;
     }
+    let packets = set_manifest
+        .packets
+        .iter()
+        .map(|packet| PlannedPacketDigest {
+            ordinal: packet.ordinal,
+            form_id: packet.form_id.clone(),
+            packet_id: packet.packet_id.clone(),
+            packet_digest_sha256: packet.packet_digest_sha256.clone(),
+            manifest_sha256: packet.manifest_sha256.clone(),
+        })
+        .collect();
     Ok(BuildEvidencePacketSetReport {
         packet_count: set_manifest.packet_count,
         packet_set_digest_sha256: set_manifest.packet_set_digest_sha256,
         rules_index_sha256: set_manifest.rules_index_sha256,
+        packets,
         output_root,
         written: !options.dry_run,
     })
@@ -655,11 +764,17 @@ pub fn check_evidence_packet_set(
 ) -> Result<CheckEvidencePacketSetReport> {
     let repo_root = canonical_repo_root(&options.repo_root)?;
     let packet_root = canonical_real_directory(&options.packet_root, "evidence packet root")?;
-    check_packet_set_at(&repo_root, &packet_root, options.vault_dir.as_deref())
+    check_packet_set_at(
+        &repo_root,
+        &packet_root,
+        options.vault_dir.as_deref(),
+        options.read_scope,
+    )
 }
 
 struct BuildContext {
     repo_root: PathBuf,
+    reader: ScopedReader,
     rules_index: RulesIndex,
     rules_index_sha256: String,
     v2_index: V2Index,
@@ -668,13 +783,68 @@ struct BuildContext {
     catalog_by_tuple: BTreeMap<(String, u64), Vec<usize>>,
 }
 
+struct ScopedReader {
+    scope: ReadScope,
+    external_root: Option<ApprovedExternalRoot>,
+}
+
+impl ScopedReader {
+    fn new(scope: ReadScope, root: &Path, label: &str) -> Result<Self> {
+        let external_root = match scope {
+            ReadScope::Tracked => None,
+            ReadScope::External => Some(approve_exact_external_root(root, label, |_| Ok(()))?),
+        };
+        Ok(Self {
+            scope,
+            external_root,
+        })
+    }
+
+    fn read_bytes(&self, path: &Path, label: &str) -> Result<Vec<u8>> {
+        match self.scope {
+            ReadScope::Tracked => read_tracked_bytes(path),
+            ReadScope::External => {
+                let root = self
+                    .external_root
+                    .as_ref()
+                    .expect("external reader retains its approved root");
+                read_external_bytes_under(root, path, label)
+            }
+        }
+    }
+
+    fn read_tree(&self, path: &Path, label: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+        match self.scope {
+            ReadScope::Tracked => read_tracked_tree(path),
+            ReadScope::External => {
+                let root = self
+                    .external_root
+                    .as_ref()
+                    .expect("external reader retains its approved root");
+                root.revalidate(label)?;
+                if !path.exists() {
+                    root.revalidate(label)?;
+                    return Ok(BTreeMap::new());
+                }
+                read_external_tree_under(root, path, label)
+            }
+        }
+    }
+}
+
 impl BuildContext {
-    fn load(repo_root: &Path, ledger_path: &Path, catalog_path: &Path) -> Result<Self> {
+    fn load(
+        repo_root: &Path,
+        ledger_path: &Path,
+        catalog_path: &Path,
+        read_scope: ReadScope,
+    ) -> Result<Self> {
         Self::load_with_mode(
             repo_root,
             ledger_path,
             catalog_path,
             LedgerMode::ReviewedBuild,
+            read_scope,
         )
     }
 
@@ -683,10 +853,12 @@ impl BuildContext {
         ledger_path: &Path,
         catalog_path: &Path,
         ledger_mode: LedgerMode,
+        read_scope: ReadScope,
     ) -> Result<Self> {
+        let reader = ScopedReader::new(read_scope, repo_root, "rules evidence workspace")?;
         let rules_index_path =
             resolve_existing_under(repo_root, "rules/index.json", "rules index")?;
-        let rules_index_bytes = read_bytes(&rules_index_path)?;
+        let rules_index_bytes = reader.read_bytes(&rules_index_path, "rules index")?;
         let rules_index_value = parse_strict(&rules_index_bytes, &rules_index_path)?;
         let rules_index_sha256 = sha256_hex(&canonical_bytes(&rules_index_value));
         let rules_index: RulesIndex = serde_json::from_value(rules_index_value.into_serde())
@@ -697,18 +869,26 @@ impl BuildContext {
 
         let v2_index_path =
             resolve_existing_under(repo_root, "rules/ir/v2/index.json", "v2 rules index")?;
-        let v2_index = load_typed_json::<V2Index>(&v2_index_path, false, "v2 rules index")?;
+        let v2_index =
+            load_scoped_typed_json::<V2Index>(&reader, &v2_index_path, false, "v2 rules index")?;
         validate_v2_index(&v2_index)?;
 
-        let ledger =
-            load_typed_json::<ReviewLedger>(ledger_path, true, "evidence packet review ledger")?;
+        let ledger = load_external_typed_json::<ReviewLedger>(
+            ledger_path,
+            true,
+            "evidence packet review ledger",
+        )?;
         validate_review_ledger(&ledger, ledger_mode)?;
-        let catalog =
-            load_typed_json::<VaultCatalog>(catalog_path, true, "evidence upstream vault catalog")?;
+        let catalog = load_external_typed_json::<VaultCatalog>(
+            catalog_path,
+            true,
+            "evidence upstream vault catalog",
+        )?;
         let catalog_by_tuple = validate_vault_catalog(&catalog)?;
 
         Ok(Self {
             repo_root: repo_root.to_path_buf(),
+            reader,
             rules_index,
             rules_index_sha256,
             v2_index,
@@ -771,7 +951,7 @@ fn build_packet_plan(
         &format!("rules/forms/{}", index_entry.form_id),
         "tracked v1 form root",
     )?;
-    let sources = tracked_v1_sources(&form_root)?;
+    let sources = tracked_v1_sources(&form_root, &context.reader)?;
     let tracked_digest = digest_entries(
         TRACKED_V1_SOURCE_SET_DOMAIN,
         sources
@@ -787,7 +967,7 @@ fn build_packet_plan(
 
     validate_rule_set_identity(context, index_entry, ledger)?;
     let manifest_path = form_root.join("manifest.json");
-    let manifest_value = load_json_value(&manifest_path)?;
+    let manifest_value = load_scoped_json_value(&context.reader, &manifest_path)?;
     validate_manifest_identity(&manifest_value, index_entry)?;
     let assets = manifest_assets(&manifest_value)?;
     let selected = select_upstream_assets(context, &assets)?;
@@ -817,10 +997,11 @@ fn build_packet_plan(
             ))
         })?;
 
-    let fields = load_required_form_document(&form_root, "fields.json")?;
-    let validations = load_required_form_document(&form_root, "validations.json")?;
-    let calculations = load_required_form_document(&form_root, "calculations.json")?;
-    let workflow = load_required_form_document(&form_root, "workflow.json")?;
+    let fields = load_required_form_document(&context.reader, &form_root, "fields.json")?;
+    let validations = load_required_form_document(&context.reader, &form_root, "validations.json")?;
+    let calculations =
+        load_required_form_document(&context.reader, &form_root, "calculations.json")?;
+    let workflow = load_required_form_document(&context.reader, &form_root, "workflow.json")?;
     let inventory = build_inventory(
         index_entry,
         &manifest_value,
@@ -829,6 +1010,7 @@ fn build_packet_plan(
         &calculations,
         &workflow,
         &form_root,
+        &context.reader,
     )?;
 
     let upstream_files: Vec<UpstreamEvidenceFile> = selected
@@ -1210,6 +1392,7 @@ fn build_inventory(
     calculations: &Value,
     workflow: &Value,
     form_root: &Path,
+    reader: &ScopedReader,
 ) -> Result<BuiltInventory> {
     let field_records = records_from_array(fields, "fields", "field_key")?;
     let validation_records = records_from_array(validations, "rules", "rule_id")?;
@@ -1238,7 +1421,7 @@ fn build_inventory(
         records: field_records.clone(),
     };
     let (xml_inventory, serialization_records) =
-        build_xml_inventory(form_root, fields, &field_records)?;
+        build_xml_inventory(form_root, fields, &field_records, reader)?;
 
     let rules = required_array(validations, "rules", "validations.json")?;
     let mut observed = Vec::new();
@@ -1260,7 +1443,7 @@ fn build_inventory(
 
     let save_finalize_reopen = workflow_inventory(workflow)?;
     let workflow_records = generic_workflow_records(workflow)?;
-    let fixture_records = fixture_inventory(form_root)?;
+    let fixture_records = fixture_inventory(form_root, reader)?;
     let declared_gap_count = manifest
         .pointer("/counts/unverified_gaps")
         .and_then(Value::as_u64)
@@ -1307,10 +1490,11 @@ fn build_xml_inventory(
     form_root: &Path,
     fields_document: &Value,
     field_records: &[InventoryRecord],
+    reader: &ScopedReader,
 ) -> Result<(XmlInventory, Vec<InventoryRecord>)> {
     let binding_path = form_root.join("fixtures/serialization-binding-inventory-v796.json");
     if binding_path.exists() {
-        let document = load_json_value(&binding_path)?;
+        let document = load_scoped_json_value(reader, &binding_path)?;
         let bindings = required_array(
             &document,
             "occurrence_bindings",
@@ -1583,9 +1767,9 @@ fn generic_workflow_records(document: &Value) -> Result<Vec<InventoryRecord>> {
     Ok(records)
 }
 
-fn fixture_inventory(form_root: &Path) -> Result<Vec<InventoryRecord>> {
+fn fixture_inventory(form_root: &Path, reader: &ScopedReader) -> Result<Vec<InventoryRecord>> {
     let fixture_root = form_root.join("fixtures");
-    let tree = read_tree(&fixture_root)?;
+    let tree = reader.read_tree(&fixture_root, "tracked v1 fixture tree")?;
     let mut records = Vec::new();
     for (relative, bytes) in tree {
         if !relative.ends_with(".json") {
@@ -1804,8 +1988,8 @@ fn validate_derived_reviews<'a, 'b>(
     Ok(by_path)
 }
 
-fn tracked_v1_sources(form_root: &Path) -> Result<Vec<SourceFile>> {
-    let tree = read_tree(form_root)?;
+fn tracked_v1_sources(form_root: &Path, reader: &ScopedReader) -> Result<Vec<SourceFile>> {
+    let tree = reader.read_tree(form_root, "tracked v1 form tree")?;
     let mut sources = Vec::new();
     for (path, bytes) in tree {
         let name = path.rsplit('/').next().unwrap_or(path.as_str());
@@ -2322,9 +2506,18 @@ fn check_packet_set_at(
     repo_root: &Path,
     packet_root: &Path,
     vault_dir: Option<&Path>,
+    read_scope: ReadScope,
 ) -> Result<CheckEvidencePacketSetReport> {
+    // Publication can start from a mapped-drive or other non-canonical
+    // spelling even though child paths returned by `fs::canonicalize` use an
+    // extended UNC spelling on Windows. Keep the containment root and every
+    // resolved child in the same canonical namespace before comparing them.
+    let packet_root = canonical_real_directory(packet_root, "evidence packet root")?;
+    let reader = ScopedReader::new(read_scope, repo_root, "rules evidence workspace")?;
+    let approved_packet_root =
+        approve_exact_external_root(&packet_root, "evidence packet root", |_| Ok(()))?;
     let rules_index_path = resolve_existing_under(repo_root, "rules/index.json", "rules index")?;
-    let rules_index_bytes = read_bytes(&rules_index_path)?;
+    let rules_index_bytes = reader.read_bytes(&rules_index_path, "rules index")?;
     let rules_index_value = parse_strict(&rules_index_bytes, &rules_index_path)?;
     let rules_index_sha256 = sha256_hex(&canonical_bytes(&rules_index_value));
     let rules_index: RulesIndex =
@@ -2334,12 +2527,17 @@ fn check_packet_set_at(
     validate_rules_index(&rules_index)?;
     let v2_index_path =
         resolve_existing_under(repo_root, "rules/ir/v2/index.json", "v2 rules index")?;
-    let v2_index = load_typed_json::<V2Index>(&v2_index_path, false, "v2 rules index")?;
+    let v2_index =
+        load_scoped_typed_json::<V2Index>(&reader, &v2_index_path, false, "v2 rules index")?;
     validate_v2_index(&v2_index)?;
 
     let manifest_path = packet_root.join(EVIDENCE_PACKET_SET_MANIFEST);
-    let set_manifest: PacketSetManifest =
-        load_typed_json(&manifest_path, true, "packet set manifest")?;
+    let set_manifest: PacketSetManifest = load_external_typed_json_under(
+        &approved_packet_root,
+        &manifest_path,
+        true,
+        "packet set manifest",
+    )?;
     if set_manifest.format != EVIDENCE_PACKET_SET_FORMAT
         || set_manifest.canonicalization != CANONICALIZATION_ID
     {
@@ -2371,7 +2569,7 @@ fn check_packet_set_at(
         std::iter::once(EVIDENCE_PACKET_SET_MANIFEST.to_owned())
             .chain(rules_index.forms.iter().map(|entry| entry.form_id.clone()))
             .collect();
-    let actual_top_level = real_top_level_entries(packet_root)?;
+    let actual_top_level = real_top_level_entries(&approved_packet_root)?;
     if actual_top_level != expected_top_level {
         let extra: Vec<&str> = actual_top_level
             .difference(&expected_top_level)
@@ -2418,8 +2616,9 @@ fn check_packet_set_at(
         validate_sha256(&set_entry.packet_digest_sha256, "packet digest")?;
         validate_sha256(&set_entry.manifest_sha256, "packet manifest sha256")?;
         let packet_dir =
-            resolve_existing_under(packet_root, &set_entry.path, "packet set packet directory")?;
-        let packet_tree = read_tree(&packet_dir)?;
+            resolve_existing_under(&packet_root, &set_entry.path, "packet set packet directory")?;
+        let packet_tree =
+            read_external_tree_under(&approved_packet_root, &packet_dir, "evidence packet")?;
         let packet_manifest_path = packet_dir.join(EVIDENCE_PACKET_MANIFEST);
         let packet_manifest_bytes = packet_tree.get(EVIDENCE_PACKET_MANIFEST).ok_or_else(|| {
             CodegenError::new(format!(
@@ -2444,7 +2643,7 @@ fn check_packet_set_at(
             &format!("rules/forms/{}", index_entry.form_id),
             "tracked v1 form root",
         )?;
-        let tracked_sources = tracked_v1_sources(&form_root)?;
+        let tracked_sources = tracked_v1_sources(&form_root, &reader)?;
         let tracked_digest = digest_entries(
             TRACKED_V1_SOURCE_SET_DOMAIN,
             tracked_sources
@@ -2481,6 +2680,7 @@ fn check_packet_set_at(
             set_manifest.packet_set_digest_sha256
         )));
     }
+    approved_packet_root.revalidate("evidence packet root")?;
     Ok(CheckEvidencePacketSetReport {
         packet_count: checked.len(),
         packet_set_digest_sha256: set_manifest.packet_set_digest_sha256,
@@ -2558,20 +2758,53 @@ fn canonical_serialize(value: &impl Serialize, label: &str) -> Result<Vec<u8>> {
     Ok(canonical_bytes(&parsed))
 }
 
-fn load_json_value(path: &Path) -> Result<Value> {
-    Ok(parse_strict(&read_bytes(path)?, path)?.into_serde())
+fn load_scoped_json_value(reader: &ScopedReader, path: &Path) -> Result<Value> {
+    Ok(parse_strict(&reader.read_bytes(path, "scoped JSON document")?, path)?.into_serde())
 }
 
-fn load_typed_json<T>(path: &Path, require_canonical: bool, label: &str) -> Result<T>
+fn load_scoped_typed_json<T>(
+    reader: &ScopedReader,
+    path: &Path,
+    require_canonical: bool,
+    label: &str,
+) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let mut verified = open_verified_regular_file(path, label, |_| Ok(()))?;
-    let mut bytes = Vec::new();
-    verified
-        .file_mut()
-        .read_to_end(&mut bytes)
-        .map_err(|source| CodegenError::io(&format!("read {label}"), path, source))?;
+    let bytes = reader.read_bytes(path, label)?;
+    parse_typed_json_bytes(&bytes, path, require_canonical, label)
+}
+
+fn load_external_typed_json<T>(path: &Path, require_canonical: bool, label: &str) -> Result<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let expected = fs::canonicalize(path)
+        .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), path, source))?;
+    let approved = ApprovedExternalFile::capture(path, label, |resolved| {
+        if resolved != expected {
+            return Err(CodegenError::new(format!(
+                "{label} `{}` resolved to a different canonical file `{}`",
+                expected.display(),
+                resolved.display()
+            )));
+        }
+        Ok(())
+    })?;
+    let bytes = read_external_bytes_bound(approved, label)?;
+    parse_typed_json_bytes(&bytes, path, require_canonical, label)
+}
+
+fn load_external_typed_json_under<T>(
+    root: &ApprovedExternalRoot,
+    path: &Path,
+    require_canonical: bool,
+    label: &str,
+) -> Result<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let bytes = read_external_bytes_under(root, path, label)?;
     parse_typed_json_bytes(&bytes, path, require_canonical, label)
 }
 
@@ -2602,9 +2835,13 @@ where
     })
 }
 
-fn load_required_form_document(form_root: &Path, relative: &str) -> Result<Value> {
+fn load_required_form_document(
+    reader: &ScopedReader,
+    form_root: &Path,
+    relative: &str,
+) -> Result<Value> {
     let path = resolve_existing_under(form_root, relative, "tracked v1 form document")?;
-    load_json_value(&path)
+    load_scoped_json_value(reader, &path)
 }
 
 fn required_array<'a>(value: &'a Value, key: &str, label: &str) -> Result<&'a Vec<Value>> {
@@ -2801,11 +3038,12 @@ fn reject_machine_locator(value: &str, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn real_top_level_entries(root: &Path) -> Result<BTreeSet<String>> {
-    let entries = fs::read_dir(root)
-        .map_err(|source| CodegenError::io("read packet root", root, source))?
+fn real_top_level_entries(root: &ApprovedExternalRoot) -> Result<BTreeSet<String>> {
+    root.revalidate("evidence packet root")?;
+    let entries = fs::read_dir(root.path())
+        .map_err(|source| CodegenError::io("read packet root", root.path(), source))?
         .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|source| CodegenError::io("read packet root entry", root, source))?;
+        .map_err(|source| CodegenError::io("read packet root entry", root.path(), source))?;
     let mut names = BTreeSet::new();
     for entry in entries {
         let path = entry.path();
@@ -2825,6 +3063,7 @@ fn real_top_level_entries(root: &Path) -> Result<BTreeSet<String>> {
         })?;
         names.insert(name);
     }
+    root.revalidate("evidence packet root")?;
     Ok(names)
 }
 
@@ -2844,9 +3083,10 @@ fn write_packet_set_fresh(
     repo_root: &Path,
     target: &Path,
     files: &BTreeMap<String, Vec<u8>>,
+    read_scope: ReadScope,
 ) -> Result<()> {
     write_fresh_fail_closed(target, files, |output| {
-        check_packet_set_at(repo_root, output, None)?;
+        check_packet_set_at(repo_root, output, None, read_scope)?;
         Ok(())
     })
 }
@@ -2990,6 +3230,25 @@ fn canonical_real_directory(path: &Path, label: &str) -> Result<PathBuf> {
     }
     fs::canonicalize(path)
         .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), path, source))
+}
+
+fn approve_exact_external_root(
+    path: &Path,
+    label: &str,
+    validate_resolved_path: impl Fn(&Path) -> Result<()>,
+) -> Result<ApprovedExternalRoot> {
+    let expected = fs::canonicalize(path)
+        .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), path, source))?;
+    ApprovedExternalRoot::capture(path, label, |resolved| {
+        if resolved != expected {
+            return Err(CodegenError::new(format!(
+                "{label} `{}` resolved to a different canonical root `{}`",
+                expected.display(),
+                resolved.display()
+            )));
+        }
+        validate_resolved_path(resolved)
+    })
 }
 
 fn absolute_normalized(path: &Path) -> Result<PathBuf> {
@@ -3194,13 +3453,14 @@ pub fn run_evidence_set_command(
     };
     match command {
         "stage-evidence-packet-review" => {
-            let report = stage_evidence_packet_review(&StageEvidencePacketReviewOptions::new(
-                repo_root,
-                required_cli_value(form_id, "--form-id")?,
-                required_cli_path(review_ledger, "--review-ledger")?,
-                required_cli_path(vault_catalog, "--vault-catalog")?,
-                required_cli_path(output_root, "--output-root")?,
-            ))?;
+            let report =
+                stage_evidence_packet_review(&StageEvidencePacketReviewOptions::tracked_checkout(
+                    repo_root,
+                    required_cli_value(form_id, "--form-id")?,
+                    required_cli_path(review_ledger, "--review-ledger")?,
+                    required_cli_path(vault_catalog, "--vault-catalog")?,
+                    required_cli_path(output_root, "--output-root")?,
+                ))?;
             println!(
                 "staged candidate evidence packet {} for review at {}",
                 report.packet_id,
@@ -3210,7 +3470,7 @@ pub fn run_evidence_set_command(
             println!("candidate packets cannot be imported or added to a checked packet set");
         }
         "build-evidence-packet" => {
-            let mut options = BuildEvidencePacketOptions::new(
+            let mut options = BuildEvidencePacketOptions::tracked_checkout(
                 repo_root,
                 required_cli_value(form_id, "--form-id")?,
                 required_cli_path(review_ledger, "--review-ledger")?,
@@ -3238,7 +3498,7 @@ pub fn run_evidence_set_command(
                     "`build-evidence-packet-set` does not accept --form-id",
                 ));
             }
-            let mut options = BuildEvidencePacketSetOptions::new(
+            let mut options = BuildEvidencePacketSetOptions::tracked_checkout(
                 repo_root,
                 required_cli_path(review_ledger, "--review-ledger")?,
                 required_cli_path(vault_catalog, "--vault-catalog")?,
@@ -3252,10 +3512,16 @@ pub fn run_evidence_set_command(
                 report.packet_count,
                 report.output_root.display()
             );
+            for packet in &report.packets {
+                println!(
+                    "packet digest {}: {}",
+                    packet.form_id, packet.packet_digest_sha256
+                );
+            }
             println!("packet set digest: {}", report.packet_set_digest_sha256);
         }
         "check-evidence-packet-set" => {
-            let mut options = CheckEvidencePacketSetOptions::new(
+            let mut options = CheckEvidencePacketSetOptions::tracked_checkout(
                 repo_root,
                 required_cli_path(packet_root, "--packet-root")?,
             );
@@ -3347,18 +3613,20 @@ mod tests {
         CheckEvidencePacketSetOptions, DerivedReview, EVIDENCE_PACKET_SET_MANIFEST,
         EVIDENCE_REVIEW_LEDGER_FORMAT, EVIDENCE_VAULT_CATALOG_FORMAT, GAPS_PATH, ManifestAsset,
         PacketSetManifest, ReviewLedger, ReviewLedgerEntry, ReviewedCaptureGap, RuleSetSourceState,
-        SUMMARY_PATH, StageEvidencePacketReviewOptions, VaultAssetDisposition, VaultCatalog,
-        VaultCatalogEntry, build_evidence_packet, build_evidence_packet_set, build_gap_summaries,
-        build_packet_plan, canonical_serialize, check_evidence_packet_set, content_addressed_path,
-        evidence_packet_digest, load_typed_json, packet_set_digest, read_tree,
-        reject_canonical_rules_target, select_upstream_assets, sha256_hex,
-        stage_evidence_packet_review, tracked_v1_sources, write_fresh_fail_closed,
+        SUMMARY_PATH, ScopedReader, StageEvidencePacketReviewOptions, VaultAssetDisposition,
+        VaultCatalog, VaultCatalogEntry, build_evidence_packet, build_evidence_packet_set,
+        build_gap_summaries, build_packet_plan, canonical_serialize, check_evidence_packet_set,
+        check_packet_set_at, content_addressed_path, evidence_packet_digest,
+        load_external_typed_json, packet_set_digest, reject_canonical_rules_target,
+        select_upstream_assets, sha256_hex, stage_evidence_packet_review, tracked_v1_sources,
+        write_fresh_fail_closed,
     };
     use crate::evidence::{
         EvidenceAttestation, EvidenceAttestationKind, EvidenceCaptureOperatingSystem,
         EvidenceCaptureProvenance, EvidencePacketManifest, EvidenceReview, EvidenceReviewStatus,
         ImportEvidenceOptions, import_evidence,
     };
+    use crate::files::{ReadScope, read_external_tree};
     use crate::hash::digest_entries;
     use crate::json::CANONICALIZATION_ID;
 
@@ -3401,11 +3669,45 @@ mod tests {
         fs::write(&source, bytes).expect("write typed JSON");
         fs::hard_link(&source, &alias).expect("create hard-link alias");
 
-        let error = load_typed_json::<Value>(&alias, true, "test catalog")
+        let error = load_external_typed_json::<Value>(&alias, true, "test catalog")
             .expect_err("hard-linked typed JSON must fail closed");
         assert!(error.to_string().contains("hard links"));
 
         fs::remove_dir_all(root).expect("remove typed JSON test root");
+    }
+
+    #[test]
+    fn external_workspace_reader_rejects_or_blocks_root_substitution() {
+        let root = temporary_directory("scoped-reader-root-substitution");
+        let workspace = root.join("workspace");
+        let displaced = root.join("workspace-displaced");
+        fs::create_dir(&workspace).expect("create external workspace");
+        let input = workspace.join("input.json");
+        fs::write(&input, b"approved").expect("write approved workspace input");
+        let reader = ScopedReader::new(ReadScope::External, &workspace, "test external workspace")
+            .expect("approve external workspace");
+
+        match fs::rename(&workspace, &displaced) {
+            Ok(()) => {
+                fs::create_dir(&workspace).expect("create replacement workspace");
+                fs::write(workspace.join("input.json"), b"replacement")
+                    .expect("write replacement workspace input");
+                reader
+                    .read_bytes(&workspace.join("input.json"), "test external input")
+                    .expect_err("substituted workspace root must not authorize replacement bytes");
+            }
+            Err(_) => {
+                assert_eq!(
+                    reader
+                        .read_bytes(&input, "test external input")
+                        .expect("restrictive root handle blocks substitution"),
+                    b"approved"
+                );
+            }
+        }
+
+        drop(reader);
+        fs::remove_dir_all(root).expect("remove scoped reader fixture");
     }
 
     fn capture_provenance(_form_code: &str) -> EvidenceCaptureProvenance {
@@ -3500,6 +3802,8 @@ mod tests {
         let mut index_forms = Vec::new();
         let mut priority_queue = Vec::new();
         let mut ledger_entries = Vec::new();
+        let reader = ScopedReader::new(ReadScope::External, &root, "test rules workspace")
+            .expect("approve test rules workspace");
         for ordinal in 1..=form_count {
             let form_id = format!("form-{ordinal:03}");
             let form_code = format!("F{ordinal:03}");
@@ -3627,7 +3931,7 @@ mod tests {
             fs::write(form_root.join("README.md"), "# Non-source documentation\n")
                 .expect("write excluded readme");
 
-            let sources = tracked_v1_sources(&form_root).expect("tracked sources");
+            let sources = tracked_v1_sources(&form_root, &reader).expect("tracked sources");
             let tracked_digest = digest_entries(
                 super::TRACKED_V1_SOURCE_SET_DOMAIN,
                 sources
@@ -3714,9 +4018,13 @@ mod tests {
 
     fn bind_expected_digests(fixture: &mut Fixture) {
         write_typed_json(&fixture.ledger_path, &fixture.ledger);
-        let context =
-            BuildContext::load(&fixture.root, &fixture.ledger_path, &fixture.catalog_path)
-                .expect("load build context");
+        let context = BuildContext::load(
+            &fixture.root,
+            &fixture.ledger_path,
+            &fixture.catalog_path,
+            ReadScope::External,
+        )
+        .expect("load build context");
         let digests: BTreeMap<String, String> = context
             .rules_index
             .forms
@@ -3770,7 +4078,7 @@ mod tests {
     fn dry_run_bootstraps_digest_without_writing_and_normal_build_is_stable() {
         let mut fixture = fixture(1, 0);
         let dry_target = fixture.root.join("dry-run-output");
-        let mut dry_options = BuildEvidencePacketOptions::new(
+        let mut dry_options = BuildEvidencePacketOptions::external_workspace(
             &fixture.root,
             "form-001",
             &fixture.ledger_path,
@@ -3791,7 +4099,7 @@ mod tests {
         write_typed_json(&fixture.ledger_path, &fixture.ledger);
         let first = fixture.root.join("packet-a");
         let second = fixture.root.join("packet-b");
-        let report_a = build_evidence_packet(&BuildEvidencePacketOptions::new(
+        let report_a = build_evidence_packet(&BuildEvidencePacketOptions::external_workspace(
             &fixture.root,
             "form-001",
             &fixture.ledger_path,
@@ -3799,7 +4107,7 @@ mod tests {
             &first,
         ))
         .expect("build first packet");
-        let report_b = build_evidence_packet(&BuildEvidencePacketOptions::new(
+        let report_b = build_evidence_packet(&BuildEvidencePacketOptions::external_workspace(
             &fixture.root,
             "form-001",
             &fixture.ledger_path,
@@ -3810,8 +4118,8 @@ mod tests {
         assert!(report_a.written && report_b.written);
         assert_eq!(report_a.packet_digest_sha256, planned.packet_digest_sha256);
         assert_eq!(
-            read_tree(&first).expect("first packet tree"),
-            read_tree(&second).expect("second packet tree")
+            read_external_tree(&first).expect("first packet tree"),
+            read_external_tree(&second).expect("second packet tree")
         );
     }
 
@@ -3820,14 +4128,15 @@ mod tests {
         let mut fixture = fixture(1, 0);
         make_candidate(&mut fixture);
         let staged = fixture.root.join("candidate-review");
-        let report = stage_evidence_packet_review(&StageEvidencePacketReviewOptions::new(
-            &fixture.root,
-            "form-001",
-            &fixture.ledger_path,
-            &fixture.catalog_path,
-            &staged,
-        ))
-        .expect("stage candidate review packet");
+        let report =
+            stage_evidence_packet_review(&StageEvidencePacketReviewOptions::external_workspace(
+                &fixture.root,
+                "form-001",
+                &fixture.ledger_path,
+                &fixture.catalog_path,
+                &staged,
+            ))
+            .expect("stage candidate review packet");
         assert!(report.written);
         assert!(staged.join(super::EVIDENCE_PACKET_MANIFEST).is_file());
 
@@ -3838,7 +4147,7 @@ mod tests {
         assert!(!import_target.exists());
 
         let normal_target = fixture.root.join("reviewed-output");
-        let error = build_evidence_packet(&BuildEvidencePacketOptions::new(
+        let error = build_evidence_packet(&BuildEvidencePacketOptions::external_workspace(
             &fixture.root,
             "form-001",
             &fixture.ledger_path,
@@ -3856,7 +4165,7 @@ mod tests {
         fake_fixture.ledger.entries[0].tracked_v1_source_set_sha256 = "f".repeat(64);
         write_typed_json(&fake_fixture.ledger_path, &fake_fixture.ledger);
         let target = fake_fixture.root.join("must-not-exist");
-        let mut options = BuildEvidencePacketOptions::new(
+        let mut options = BuildEvidencePacketOptions::external_workspace(
             &fake_fixture.root,
             "form-001",
             &fake_fixture.ledger_path,
@@ -3872,7 +4181,7 @@ mod tests {
         stale_fixture.ledger.entries[0].expected_packet_digest_sha256 = Some("f".repeat(64));
         write_typed_json(&stale_fixture.ledger_path, &stale_fixture.ledger);
         let target = stale_fixture.root.join("must-not-exist");
-        let error = build_evidence_packet(&BuildEvidencePacketOptions::new(
+        let error = build_evidence_packet(&BuildEvidencePacketOptions::external_workspace(
             &stale_fixture.root,
             "form-001",
             &stale_fixture.ledger_path,
@@ -3888,7 +4197,7 @@ mod tests {
             source_set_sha256: "f".repeat(64),
         };
         write_typed_json(&fixture.ledger_path, &fixture.ledger);
-        let mut options = BuildEvidencePacketOptions::new(
+        let mut options = BuildEvidencePacketOptions::external_workspace(
             &fixture.root,
             "form-001",
             &fixture.ledger_path,
@@ -3913,7 +4222,7 @@ mod tests {
             .command_argv
             .push("C:\\machine-local\\capture-output.json".to_owned());
         write_typed_json(&machine_path_fixture.catalog_path, &catalog);
-        let mut options = BuildEvidencePacketOptions::new(
+        let mut options = BuildEvidencePacketOptions::external_workspace(
             &machine_path_fixture.root,
             "form-001",
             &machine_path_fixture.ledger_path,
@@ -3933,7 +4242,7 @@ mod tests {
         catalog.entries[0].evidence_id = format!("sha256-{}", catalog.entries[0].sha256);
         catalog.entries[0].content_path = content_addressed_path(&catalog.entries[0].sha256);
         write_typed_json(&missing_tuple_fixture.catalog_path, &catalog);
-        let mut options = BuildEvidencePacketOptions::new(
+        let mut options = BuildEvidencePacketOptions::external_workspace(
             &missing_tuple_fixture.root,
             "form-001",
             &missing_tuple_fixture.ledger_path,
@@ -3948,9 +4257,13 @@ mod tests {
     #[test]
     fn upstream_assets_are_deduplicated_by_hash_and_size() {
         let fixture = fixture(1, 0);
-        let context =
-            BuildContext::load(&fixture.root, &fixture.ledger_path, &fixture.catalog_path)
-                .expect("load build context");
+        let context = BuildContext::load(
+            &fixture.root,
+            &fixture.ledger_path,
+            &fixture.catalog_path,
+            ReadScope::External,
+        )
+        .expect("load build context");
         let assets = vec![
             ManifestAsset {
                 asset_id: "installer-primary".to_owned(),
@@ -3988,9 +4301,13 @@ mod tests {
     #[test]
     fn taxpayer_shaped_assets_are_metadata_only_and_never_require_vault_bytes() {
         let fixture = fixture(1, 0);
-        let context =
-            BuildContext::load(&fixture.root, &fixture.ledger_path, &fixture.catalog_path)
-                .expect("load build context");
+        let context = BuildContext::load(
+            &fixture.root,
+            &fixture.ledger_path,
+            &fixture.catalog_path,
+            ReadScope::External,
+        )
+        .expect("load build context");
         let assets = vec![
             ManifestAsset {
                 asset_id: "package-7.9.6".to_owned(),
@@ -4044,9 +4361,13 @@ mod tests {
     #[test]
     fn serialization_count_delta_is_an_explicit_non_observed_gap() {
         let fixture = fixture(1, 1);
-        let context =
-            BuildContext::load(&fixture.root, &fixture.ledger_path, &fixture.catalog_path)
-                .expect("load build context");
+        let context = BuildContext::load(
+            &fixture.root,
+            &fixture.ledger_path,
+            &fixture.catalog_path,
+            ReadScope::External,
+        )
+        .expect("load build context");
         let index = &context.rules_index.forms[0];
         let ledger = context.ledger_entry(&index.form_id).expect("ledger entry");
         let plan = build_packet_plan(&context, index, ledger, false).expect("plan packet");
@@ -4088,7 +4409,7 @@ mod tests {
     #[test]
     fn exact_43_packet_set_is_byte_stable_and_vault_checkable() {
         let mut fixture = fixture(43, 0);
-        let mut dry_options = BuildEvidencePacketSetOptions::new(
+        let mut dry_options = BuildEvidencePacketSetOptions::external_workspace(
             &fixture.root,
             &fixture.ledger_path,
             &fixture.catalog_path,
@@ -4097,45 +4418,69 @@ mod tests {
         dry_options.dry_run = true;
         let dry_report = build_evidence_packet_set(&dry_options).expect("plan exact packet set");
         assert_eq!(dry_report.packet_count, 43);
+        assert_eq!(dry_report.packets.len(), 43);
+        assert_eq!(dry_report.packets[0].ordinal, 1);
+        assert_eq!(dry_report.packets[0].form_id, "form-001");
+        assert_eq!(dry_report.packets[42].ordinal, 43);
+        assert_eq!(dry_report.packets[42].form_id, "form-043");
         assert!(!dry_report.written);
         assert!(!dry_options.output_root.exists());
 
         bind_expected_digests(&mut fixture);
         let first = fixture.root.join("set-a");
         let second = fixture.root.join("set-b");
-        let report_a = build_evidence_packet_set(&BuildEvidencePacketSetOptions::new(
-            &fixture.root,
-            &fixture.ledger_path,
-            &fixture.catalog_path,
-            &first,
-        ))
-        .expect("build first set");
-        let _report_b = build_evidence_packet_set(&BuildEvidencePacketSetOptions::new(
-            &fixture.root,
-            &fixture.ledger_path,
-            &fixture.catalog_path,
-            &second,
-        ))
-        .expect("build second set");
+        let report_a =
+            build_evidence_packet_set(&BuildEvidencePacketSetOptions::external_workspace(
+                &fixture.root,
+                &fixture.ledger_path,
+                &fixture.catalog_path,
+                &first,
+            ))
+            .expect("build first set");
+        let _report_b =
+            build_evidence_packet_set(&BuildEvidencePacketSetOptions::external_workspace(
+                &fixture.root,
+                &fixture.ledger_path,
+                &fixture.catalog_path,
+                &second,
+            ))
+            .expect("build second set");
         assert_eq!(report_a.packet_count, 43);
         assert_eq!(
             report_a.packet_set_digest_sha256,
             dry_report.packet_set_digest_sha256
         );
+        assert_eq!(report_a.packets, dry_report.packets);
         assert_eq!(
-            read_tree(&first).expect("first set"),
-            read_tree(&second).expect("second set")
+            read_external_tree(&first).expect("first set"),
+            read_external_tree(&second).expect("second set")
         );
-        let report =
-            check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(&fixture.root, &first))
-                .expect("check packet set without vault");
+        let alias_component = fixture.root.join("packet-root-alias-component");
+        fs::create_dir(&alias_component).expect("create packet-root alias component");
+        let noncanonical_first = alias_component.join("..").join("set-a");
+        assert_eq!(
+            check_packet_set_at(
+                &fixture.root,
+                &noncanonical_first,
+                None,
+                ReadScope::External,
+            )
+            .expect("check packet set through non-canonical root spelling")
+            .packet_set_digest_sha256,
+            report_a.packet_set_digest_sha256
+        );
+        let report = check_evidence_packet_set(&CheckEvidencePacketSetOptions::external_workspace(
+            &fixture.root,
+            &first,
+        ))
+        .expect("check packet set without vault");
         assert_eq!(report.packet_count, 43);
         assert!(!report.full_upstream_verified);
         assert_eq!(report.packets[0].form_id, "form-001");
         assert_eq!(report.packets[42].form_id, "form-043");
 
         let vault = write_vault(&fixture, &fixture.root);
-        let mut options = CheckEvidencePacketSetOptions::new(&fixture.root, &first);
+        let mut options = CheckEvidencePacketSetOptions::external_workspace(&fixture.root, &first);
         options.vault_dir = Some(vault.clone());
         assert!(
             check_evidence_packet_set(&options)
@@ -4160,7 +4505,7 @@ mod tests {
         let mut fixture = fixture(3, 0);
         bind_expected_digests(&mut fixture);
         let output = fixture.root.join("set");
-        build_evidence_packet_set(&BuildEvidencePacketSetOptions::new(
+        build_evidence_packet_set(&BuildEvidencePacketSetOptions::external_workspace(
             &fixture.root,
             &fixture.ledger_path,
             &fixture.catalog_path,
@@ -4171,17 +4516,21 @@ mod tests {
         let tracked_source = fixture.root.join("rules/forms/form-001/evidence.md");
         let original_source = fs::read(&tracked_source).expect("read tracked source");
         fs::write(&tracked_source, b"# Evidence\n\nDrift.\n").expect("drift tracked source");
-        let error =
-            check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(&fixture.root, &output))
-                .expect_err("tracked v1 source drift must fail");
+        let error = check_evidence_packet_set(&CheckEvidencePacketSetOptions::external_workspace(
+            &fixture.root,
+            &output,
+        ))
+        .expect_err("tracked v1 source drift must fail");
         assert!(error.to_string().contains("tracked v1 source drift"));
         fs::write(&tracked_source, original_source).expect("restore tracked source");
 
         fs::create_dir(output.join("extra")).expect("create extra root");
         fs::write(output.join("extra/file"), b"x").expect("write extra root file");
-        let error =
-            check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(&fixture.root, &output))
-                .expect_err("extra packet root entry must fail");
+        let error = check_evidence_packet_set(&CheckEvidencePacketSetOptions::external_workspace(
+            &fixture.root,
+            &output,
+        ))
+        .expect_err("extra packet root entry must fail");
         assert!(error.to_string().contains("top-level bijection"));
         fs::remove_dir_all(output.join("extra")).expect("remove test extra");
 
@@ -4191,10 +4540,13 @@ mod tests {
         drifted.push(b' ');
         fs::write(&summary_path, drifted).expect("drift summary");
         assert!(
-            check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(&fixture.root, &output,))
-                .expect_err("derived drift must fail")
-                .to_string()
-                .contains("mismatch")
+            check_evidence_packet_set(&CheckEvidencePacketSetOptions::external_workspace(
+                &fixture.root,
+                &output,
+            ))
+            .expect_err("derived drift must fail")
+            .to_string()
+            .contains("mismatch")
         );
         fs::write(&summary_path, original_summary).expect("restore summary");
 
@@ -4206,19 +4558,25 @@ mod tests {
         set.packet_set_digest_sha256 = packet_set_digest(&set).expect("recompute reordered digest");
         write_typed_json(&set_path, &set);
         assert!(
-            check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(&fixture.root, &output,))
-                .expect_err("reordered set must fail")
-                .to_string()
-                .contains("order/bijection")
+            check_evidence_packet_set(&CheckEvidencePacketSetOptions::external_workspace(
+                &fixture.root,
+                &output,
+            ))
+            .expect_err("reordered set must fail")
+            .to_string()
+            .contains("order/bijection")
         );
         fs::write(&set_path, original_set).expect("restore set manifest");
 
         fs::remove_dir_all(output.join("form-003")).expect("remove one test packet");
         assert!(
-            check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(&fixture.root, &output,))
-                .expect_err("missing packet must fail")
-                .to_string()
-                .contains("top-level bijection")
+            check_evidence_packet_set(&CheckEvidencePacketSetOptions::external_workspace(
+                &fixture.root,
+                &output,
+            ))
+            .expect_err("missing packet must fail")
+            .to_string()
+            .contains("top-level bijection")
         );
     }
 
@@ -4227,7 +4585,7 @@ mod tests {
         let mut fixture = fixture(1, 0);
         bind_expected_digests(&mut fixture);
         let output = fixture.root.join("set");
-        build_evidence_packet_set(&BuildEvidencePacketSetOptions::new(
+        build_evidence_packet_set(&BuildEvidencePacketSetOptions::external_workspace(
             &fixture.root,
             &fixture.ledger_path,
             &fixture.catalog_path,
@@ -4248,7 +4606,7 @@ mod tests {
         for file in &mut manifest.derived_evidence {
             file.review_status = EvidenceReviewStatus::Candidate;
         }
-        let mut derived = read_tree(&packet_root).expect("read packet tree");
+        let mut derived = read_external_tree(&packet_root).expect("read packet tree");
         derived.remove(super::EVIDENCE_PACKET_MANIFEST);
         manifest.packet_digest_sha256 =
             evidence_packet_digest(&manifest, &derived).expect("recompute candidate digest");
@@ -4265,9 +4623,11 @@ mod tests {
         set.packet_set_digest_sha256 = packet_set_digest(&set).expect("recompute set digest");
         write_typed_json(&set_path, &set);
 
-        let error =
-            check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(&fixture.root, &output))
-                .expect_err("aggregate checker must reject candidate packet");
+        let error = check_evidence_packet_set(&CheckEvidencePacketSetOptions::external_workspace(
+            &fixture.root,
+            &output,
+        ))
+        .expect_err("aggregate checker must reject candidate packet");
         assert!(error.to_string().contains("must be explicitly reviewed"));
     }
 
@@ -4338,7 +4698,7 @@ mod tests {
         let fixture = fixture(1, 0);
         let link = fixture.root.join("review/ledger-link.json");
         symlink(&fixture.ledger_path, &link).expect("create ledger symlink");
-        let mut options = BuildEvidencePacketOptions::new(
+        let mut options = BuildEvidencePacketOptions::external_workspace(
             &fixture.root,
             "form-001",
             &link,

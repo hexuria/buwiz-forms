@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "kebab-case")]
 pub enum ValidationPhase {
     Input,
+    Blur,
+    Change,
     BlurChange,
     PageNavigation,
     Save,
@@ -17,6 +19,14 @@ pub enum ValidationPhase {
     Validate,
     FinalCopy,
     Submit,
+}
+
+impl ValidationPhase {
+    /// Exact field-event phases require an [`EvaluationRequest`](crate::EvaluationRequest)
+    /// that names the field occurrence which dispatched the event.
+    pub const fn is_field_event(self) -> bool {
+        matches!(self, Self::Input | Self::Blur | Self::Change)
+    }
 }
 
 /// Selects one independently reviewed behavior branch.

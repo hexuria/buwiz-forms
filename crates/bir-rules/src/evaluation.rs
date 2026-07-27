@@ -1,9 +1,9 @@
 use crate::{
     CalculationId, CanonicalFieldValue, CanonicalValue, ContextFingerprint, ContextSnapshotError,
     ContextValue, ContextValueSnapshot, FieldInstance, FieldValueSource, FormRevisionKey,
-    InputRevision, InputSnapshotError, OutputId, RawFieldValue, RawInputSnapshot,
+    InputRevision, InputSnapshotError, OutputId, RawFieldValue, RawInputSnapshot, RawValue,
     RepeatedGroupInstance, ReportError, RuleExecution, RuleExpectation, RuleId, RuleViolation,
-    ValidationContext, ValidationReport,
+    ValidationContext, ValidationPhase, ValidationReport,
 };
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::{error::Error, fmt};
@@ -14,6 +14,8 @@ pub struct EvaluationRequest {
     rule_set: FormRevisionKey,
     context: ValidationContext,
     input_revision: InputRevision,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event_field: Option<FieldInstance>,
     context_fingerprint: ContextFingerprint,
     context_values: ContextValueSnapshot,
     raw_inputs: RawInputSnapshot,
@@ -32,15 +34,79 @@ impl EvaluationRequest {
         repeated_group_instances: Vec<RepeatedGroupInstance>,
         raw_fields: Vec<RawFieldValue>,
     ) -> Result<Self, EvaluationError> {
+        Self::try_new_inner(
+            rule_set,
+            context,
+            input_revision,
+            None,
+            context_values,
+            repeated_group_instances,
+            raw_fields,
+        )
+    }
+
+    /// Capture one exact input/blur/change dispatch.
+    ///
+    /// The event field is a complete [`FieldInstance`], including its stable
+    /// repeated-group identity, and must occur in the captured raw snapshot.
+    pub fn try_new_for_field_event(
+        rule_set: FormRevisionKey,
+        context: ValidationContext,
+        input_revision: InputRevision,
+        event_field: FieldInstance,
+        context_values: Vec<ContextValue>,
+        repeated_group_instances: Vec<RepeatedGroupInstance>,
+        raw_fields: Vec<RawFieldValue>,
+    ) -> Result<Self, EvaluationError> {
+        Self::try_new_inner(
+            rule_set,
+            context,
+            input_revision,
+            Some(event_field),
+            context_values,
+            repeated_group_instances,
+            raw_fields,
+        )
+    }
+
+    fn try_new_inner(
+        rule_set: FormRevisionKey,
+        context: ValidationContext,
+        input_revision: InputRevision,
+        event_field: Option<FieldInstance>,
+        context_values: Vec<ContextValue>,
+        repeated_group_instances: Vec<RepeatedGroupInstance>,
+        raw_fields: Vec<RawFieldValue>,
+    ) -> Result<Self, EvaluationError> {
         let context_values = ContextValueSnapshot::try_new(context_values)
             .map_err(EvaluationError::InvalidContextSnapshot)?;
         let raw_inputs = RawInputSnapshot::try_new(repeated_group_instances, raw_fields)
             .map_err(EvaluationError::InvalidInputSnapshot)?;
+        match (context.phase().is_field_event(), event_field.as_ref()) {
+            (true, None) => {
+                return Err(EvaluationError::MissingEventField {
+                    phase: context.phase(),
+                });
+            }
+            (false, Some(field)) => {
+                return Err(EvaluationError::UnexpectedEventField {
+                    phase: context.phase(),
+                    field: field.clone(),
+                });
+            }
+            (true, Some(field)) if raw_inputs.raw_value(field).is_none() => {
+                return Err(EvaluationError::EventFieldMissingFromSnapshot {
+                    field: field.clone(),
+                });
+            }
+            _ => {}
+        }
         let context_fingerprint = context_values.fingerprint();
         Ok(Self {
             rule_set,
             context,
             input_revision,
+            event_field,
             context_fingerprint,
             context_values,
             raw_inputs,
@@ -64,6 +130,25 @@ impl EvaluationRequest {
         )
     }
 
+    pub fn capture_for_field_event(
+        rule_set: FormRevisionKey,
+        context: ValidationContext,
+        input_revision: InputRevision,
+        event_field: FieldInstance,
+        context_values: Vec<ContextValue>,
+        source: &dyn FieldValueSource,
+    ) -> Result<Self, EvaluationError> {
+        Self::try_new_for_field_event(
+            rule_set,
+            context,
+            input_revision,
+            event_field,
+            context_values,
+            source.repeated_group_instances().to_vec(),
+            source.raw_fields().to_vec(),
+        )
+    }
+
     pub fn rule_set(&self) -> &FormRevisionKey {
         &self.rule_set
     }
@@ -74,6 +159,10 @@ impl EvaluationRequest {
 
     pub const fn input_revision(&self) -> InputRevision {
         self.input_revision
+    }
+
+    pub fn event_field(&self) -> Option<&FieldInstance> {
+        self.event_field.as_ref()
     }
 
     pub const fn context_fingerprint(&self) -> ContextFingerprint {
@@ -100,6 +189,8 @@ impl<'de> Deserialize<'de> for EvaluationRequest {
             rule_set: FormRevisionKey,
             context: ValidationContext,
             input_revision: InputRevision,
+            #[serde(default)]
+            event_field: Option<FieldInstance>,
             context_fingerprint: ContextFingerprint,
             context_values: ContextValueSnapshot,
             raw_inputs: RawInputSnapshot,
@@ -110,10 +201,11 @@ impl<'de> Deserialize<'de> for EvaluationRequest {
         // its canonical slices to keep this constructor as the only request
         // assembly path.
         let supplied_fingerprint = wire.context_fingerprint;
-        let request = Self::try_new(
+        let request = Self::try_new_inner(
             wire.rule_set,
             wire.context,
             wire.input_revision,
+            wire.event_field,
             wire.context_values.values().to_vec(),
             wire.raw_inputs.repeated_group_instances().to_vec(),
             wire.raw_inputs.fields().to_vec(),
@@ -142,6 +234,8 @@ impl<'de> Deserialize<'de> for EvaluationRequest {
 pub struct EvaluationExpectation {
     rules: Vec<RuleExpectation>,
     outputs: Vec<DerivedOutputExpectation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    field_value_assignments: Vec<FieldValueAssignmentExpectation>,
 }
 
 impl<'de> Deserialize<'de> for EvaluationExpectation {
@@ -154,10 +248,17 @@ impl<'de> Deserialize<'de> for EvaluationExpectation {
         struct Wire {
             rules: Vec<RuleExpectation>,
             outputs: Vec<DerivedOutputExpectation>,
+            #[serde(default)]
+            field_value_assignments: Vec<FieldValueAssignmentExpectation>,
         }
 
         let wire = Wire::deserialize(deserializer)?;
-        Self::try_new(wire.rules, wire.outputs).map_err(de::Error::custom)
+        Self::try_new_with_field_value_assignments(
+            wire.rules,
+            wire.outputs,
+            wire.field_value_assignments,
+        )
+        .map_err(de::Error::custom)
     }
 }
 
@@ -165,6 +266,14 @@ impl EvaluationExpectation {
     pub fn try_new(
         rules: Vec<RuleExpectation>,
         outputs: Vec<DerivedOutputExpectation>,
+    ) -> Result<Self, EvaluationError> {
+        Self::try_new_with_field_value_assignments(rules, outputs, Vec::new())
+    }
+
+    pub fn try_new_with_field_value_assignments(
+        rules: Vec<RuleExpectation>,
+        outputs: Vec<DerivedOutputExpectation>,
+        field_value_assignments: Vec<FieldValueAssignmentExpectation>,
     ) -> Result<Self, EvaluationError> {
         for (index, rule) in rules.iter().enumerate() {
             if rules[..index]
@@ -214,7 +323,37 @@ impl EvaluationExpectation {
                 }
             }
         }
-        Ok(Self { rules, outputs })
+        let mut previous_key = None;
+        for (index, assignment) in field_value_assignments.iter().enumerate() {
+            let rule_position = rules
+                .iter()
+                .position(|rule| rule.execution() == assignment.execution())
+                .ok_or_else(|| EvaluationError::AssignmentForUnknownRule {
+                    execution: assignment.execution().clone(),
+                })?;
+            if field_value_assignments[..index].iter().any(|prior| {
+                prior.execution() == assignment.execution()
+                    && prior.effect_index() == assignment.effect_index()
+            }) {
+                return Err(EvaluationError::DuplicateAssignmentEffect {
+                    execution: assignment.execution().clone(),
+                    effect_index: assignment.effect_index(),
+                });
+            }
+            let key = (rule_position, assignment.effect_index());
+            if previous_key.is_some_and(|previous| previous >= key) {
+                return Err(EvaluationError::AssignmentsOutOfOrder {
+                    execution: assignment.execution().clone(),
+                    effect_index: assignment.effect_index(),
+                });
+            }
+            previous_key = Some(key);
+        }
+        Ok(Self {
+            rules,
+            outputs,
+            field_value_assignments,
+        })
     }
 
     pub fn rules(&self) -> &[RuleExpectation] {
@@ -223,6 +362,10 @@ impl EvaluationExpectation {
 
     pub fn outputs(&self) -> &[DerivedOutputExpectation] {
         &self.outputs
+    }
+
+    pub fn field_value_assignments(&self) -> &[FieldValueAssignmentExpectation] {
+        &self.field_value_assignments
     }
 }
 
@@ -325,6 +468,109 @@ impl DerivedValue {
     }
 }
 
+/// One requested raw-buffer replacement emitted by a matched field-event rule.
+///
+/// The request snapshot and each canonical record's retained raw value remain
+/// immutable. An exact field-event program may additionally apply the
+/// assignment to its canonical working-field overlay so later scheduled steps
+/// observe the official DOM mutation; batched evaluations keep assignments as
+/// output instructions only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FieldValueAssignment {
+    execution: RuleExecution,
+    effect_index: u32,
+    field: FieldInstance,
+    value: RawValue,
+}
+
+/// Exact potential raw assignment compiled into one selected rule execution.
+///
+/// The result carries this inventory even when the rule predicate does not
+/// match, so deserialization can reject forged effect indexes, targets, or
+/// replacement values.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FieldValueAssignmentExpectation {
+    execution: RuleExecution,
+    effect_index: u32,
+    field: FieldInstance,
+    value: RawValue,
+}
+
+impl FieldValueAssignmentExpectation {
+    pub const fn new(
+        execution: RuleExecution,
+        effect_index: u32,
+        field: FieldInstance,
+        value: RawValue,
+    ) -> Self {
+        Self {
+            execution,
+            effect_index,
+            field,
+            value,
+        }
+    }
+
+    pub fn execution(&self) -> &RuleExecution {
+        &self.execution
+    }
+
+    pub const fn effect_index(&self) -> u32 {
+        self.effect_index
+    }
+
+    pub fn field(&self) -> &FieldInstance {
+        &self.field
+    }
+
+    pub fn value(&self) -> &RawValue {
+        &self.value
+    }
+}
+
+impl FieldValueAssignment {
+    pub const fn new(
+        execution: RuleExecution,
+        effect_index: u32,
+        field: FieldInstance,
+        value: RawValue,
+    ) -> Self {
+        Self {
+            execution,
+            effect_index,
+            field,
+            value,
+        }
+    }
+
+    pub fn execution(&self) -> &RuleExecution {
+        &self.execution
+    }
+
+    pub const fn effect_index(&self) -> u32 {
+        self.effect_index
+    }
+
+    pub fn field(&self) -> &FieldInstance {
+        &self.field
+    }
+
+    pub fn value(&self) -> &RawValue {
+        &self.value
+    }
+
+    pub fn expectation(&self) -> FieldValueAssignmentExpectation {
+        FieldValueAssignmentExpectation::new(
+            self.execution.clone(),
+            self.effect_index,
+            self.field.clone(),
+            self.value.clone(),
+        )
+    }
+}
+
 /// Raw output produced by crate-owned generated evaluator code.
 ///
 /// The sealed [`crate::CompiledRuleSet`] wrapper converts this into an
@@ -336,6 +582,7 @@ pub struct EvaluationOutput {
     derived_outputs: Vec<DerivedValue>,
     evaluated_rules: Vec<RuleExecution>,
     violations: Vec<RuleViolation>,
+    field_value_assignments: Vec<FieldValueAssignment>,
 }
 
 impl EvaluationOutput {
@@ -350,7 +597,32 @@ impl EvaluationOutput {
             derived_outputs,
             evaluated_rules,
             violations,
+            field_value_assignments: Vec::new(),
         }
+    }
+
+    pub fn new_with_field_value_assignments(
+        canonical_inputs: Vec<CanonicalFieldValue>,
+        derived_outputs: Vec<DerivedValue>,
+        evaluated_rules: Vec<RuleExecution>,
+        violations: Vec<RuleViolation>,
+        field_value_assignments: Vec<FieldValueAssignment>,
+    ) -> Self {
+        Self {
+            canonical_inputs,
+            derived_outputs,
+            evaluated_rules,
+            violations,
+            field_value_assignments,
+        }
+    }
+
+    pub fn with_field_value_assignments(
+        mut self,
+        field_value_assignments: Vec<FieldValueAssignment>,
+    ) -> Self {
+        self.field_value_assignments = field_value_assignments;
+        self
     }
 }
 
@@ -361,6 +633,10 @@ pub struct EvaluationResult {
     canonical_inputs: Vec<CanonicalFieldValue>,
     expected_outputs: Vec<DerivedOutputExpectation>,
     derived_outputs: Vec<DerivedValue>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    expected_field_value_assignments: Vec<FieldValueAssignmentExpectation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    field_value_assignments: Vec<FieldValueAssignment>,
 }
 
 impl EvaluationResult {
@@ -372,22 +648,47 @@ impl EvaluationResult {
         validate_canonical_inputs(request.raw_inputs(), &output.canonical_inputs)?;
         validate_calculation_coverage(expectation.outputs(), &output.derived_outputs)?;
 
-        let report = ValidationReport::try_new(
-            request.rule_set.clone(),
-            request.context,
-            request.input_revision,
-            request.context_fingerprint,
-            expectation.rules.clone(),
-            output.evaluated_rules,
-            output.violations,
-        )
+        let report = match request.event_field() {
+            Some(event_field) => ValidationReport::try_new_for_field_event(
+                request.rule_set.clone(),
+                request.context,
+                request.input_revision,
+                event_field.clone(),
+                request.context_fingerprint,
+                expectation.rules.clone(),
+                output.evaluated_rules,
+                output.violations,
+            ),
+            None => ValidationReport::try_new(
+                request.rule_set.clone(),
+                request.context,
+                request.input_revision,
+                request.context_fingerprint,
+                expectation.rules.clone(),
+                output.evaluated_rules,
+                output.violations,
+            ),
+        }
         .map_err(EvaluationError::InvalidReport)?;
+        validate_field_value_assignments(
+            request.context().phase(),
+            report.expected_rules(),
+            expectation.field_value_assignments(),
+            request
+                .raw_inputs()
+                .fields()
+                .iter()
+                .map(RawFieldValue::field),
+            &output.field_value_assignments,
+        )?;
 
         Ok(Self {
             report,
             canonical_inputs: output.canonical_inputs,
             expected_outputs: expectation.outputs.clone(),
             derived_outputs: output.derived_outputs,
+            expected_field_value_assignments: expectation.field_value_assignments.clone(),
+            field_value_assignments: output.field_value_assignments,
         })
     }
 
@@ -407,6 +708,10 @@ impl EvaluationResult {
         self.report.input_revision()
     }
 
+    pub fn event_field(&self) -> Option<&FieldInstance> {
+        self.report.event_field()
+    }
+
     pub const fn context_fingerprint(&self) -> ContextFingerprint {
         self.report.context_fingerprint()
     }
@@ -423,6 +728,14 @@ impl EvaluationResult {
         &self.derived_outputs
     }
 
+    pub fn field_value_assignments(&self) -> &[FieldValueAssignment] {
+        &self.field_value_assignments
+    }
+
+    pub fn expected_field_value_assignments(&self) -> &[FieldValueAssignmentExpectation] {
+        &self.expected_field_value_assignments
+    }
+
     pub fn is_valid(&self) -> bool {
         self.report.is_valid()
     }
@@ -436,8 +749,29 @@ impl EvaluationResult {
                 });
             }
         }
-        EvaluationExpectation::try_new(Vec::new(), self.expected_outputs.clone())?;
-        validate_calculation_coverage(&self.expected_outputs, &self.derived_outputs)
+        if let Some(event_field) = self.event_field()
+            && !self
+                .canonical_inputs
+                .iter()
+                .any(|input| input.field() == event_field)
+        {
+            return Err(EvaluationError::EventFieldMissingFromSnapshot {
+                field: event_field.clone(),
+            });
+        }
+        EvaluationExpectation::try_new_with_field_value_assignments(
+            self.report.expected_rules().to_vec(),
+            self.expected_outputs.clone(),
+            self.expected_field_value_assignments.clone(),
+        )?;
+        validate_calculation_coverage(&self.expected_outputs, &self.derived_outputs)?;
+        validate_field_value_assignments(
+            self.context().phase(),
+            self.report.expected_rules(),
+            &self.expected_field_value_assignments,
+            self.canonical_inputs.iter().map(CanonicalFieldValue::field),
+            &self.field_value_assignments,
+        )
     }
 }
 
@@ -453,6 +787,10 @@ impl<'de> Deserialize<'de> for EvaluationResult {
             canonical_inputs: Vec<CanonicalFieldValue>,
             expected_outputs: Vec<DerivedOutputExpectation>,
             derived_outputs: Vec<DerivedValue>,
+            #[serde(default)]
+            expected_field_value_assignments: Vec<FieldValueAssignmentExpectation>,
+            #[serde(default)]
+            field_value_assignments: Vec<FieldValueAssignment>,
         }
 
         let wire = Wire::deserialize(deserializer)?;
@@ -461,10 +799,73 @@ impl<'de> Deserialize<'de> for EvaluationResult {
             canonical_inputs: wire.canonical_inputs,
             expected_outputs: wire.expected_outputs,
             derived_outputs: wire.derived_outputs,
+            expected_field_value_assignments: wire.expected_field_value_assignments,
+            field_value_assignments: wire.field_value_assignments,
         };
         result.validate_stored().map_err(de::Error::custom)?;
         Ok(result)
     }
+}
+
+fn validate_field_value_assignments<'a>(
+    phase: ValidationPhase,
+    expected_rules: &[RuleExpectation],
+    expected_assignments: &[FieldValueAssignmentExpectation],
+    available_fields: impl IntoIterator<Item = &'a FieldInstance>,
+    assignments: &[FieldValueAssignment],
+) -> Result<(), EvaluationError> {
+    if assignments.is_empty() && expected_assignments.is_empty() {
+        return Ok(());
+    }
+    if !phase.is_field_event() {
+        return Err(EvaluationError::AssignmentsRequireEventPhase { phase });
+    }
+
+    let available_fields: Vec<_> = available_fields.into_iter().collect();
+    for expected in expected_assignments {
+        if !available_fields.contains(&expected.field()) {
+            return Err(EvaluationError::AssignmentTargetMissing {
+                field: expected.field().clone(),
+            });
+        }
+    }
+    let mut previous_position = None;
+    let mut seen_effects = Vec::new();
+    for assignment in assignments {
+        expected_rules
+            .iter()
+            .position(|expected| expected.execution() == assignment.execution())
+            .ok_or_else(|| EvaluationError::AssignmentForUnknownRule {
+                execution: assignment.execution().clone(),
+            })?;
+        if seen_effects.contains(&(assignment.execution().clone(), assignment.effect_index())) {
+            return Err(EvaluationError::DuplicateAssignmentEffect {
+                execution: assignment.execution().clone(),
+                effect_index: assignment.effect_index(),
+            });
+        }
+        let expected_position = expected_assignments
+            .iter()
+            .position(|expected| expected == &assignment.expectation())
+            .ok_or_else(|| EvaluationError::AssignmentDoesNotMatchEffect {
+                execution: assignment.execution().clone(),
+                effect_index: assignment.effect_index(),
+            })?;
+        if previous_position.is_some_and(|previous| previous >= expected_position) {
+            return Err(EvaluationError::AssignmentsOutOfOrder {
+                execution: assignment.execution().clone(),
+                effect_index: assignment.effect_index(),
+            });
+        }
+        if !available_fields.contains(&assignment.field()) {
+            return Err(EvaluationError::AssignmentTargetMissing {
+                field: assignment.field().clone(),
+            });
+        }
+        seen_effects.push((assignment.execution().clone(), assignment.effect_index()));
+        previous_position = Some(expected_position);
+    }
+    Ok(())
 }
 
 fn validate_canonical_inputs(
@@ -519,6 +920,16 @@ pub enum EvaluationError {
     ContextFingerprintMismatch {
         supplied: ContextFingerprint,
         computed: ContextFingerprint,
+    },
+    MissingEventField {
+        phase: ValidationPhase,
+    },
+    UnexpectedEventField {
+        phase: ValidationPhase,
+        field: FieldInstance,
+    },
+    EventFieldMissingFromSnapshot {
+        field: FieldInstance,
     },
     RuleSetMismatch {
         expected: FormRevisionKey,
@@ -579,6 +990,27 @@ pub enum EvaluationError {
         expected: Vec<DerivedOutputExpectation>,
         evaluated: Vec<DerivedOutputExpectation>,
     },
+    AssignmentsRequireEventPhase {
+        phase: ValidationPhase,
+    },
+    AssignmentForUnknownRule {
+        execution: RuleExecution,
+    },
+    DuplicateAssignmentEffect {
+        execution: RuleExecution,
+        effect_index: u32,
+    },
+    AssignmentDoesNotMatchEffect {
+        execution: RuleExecution,
+        effect_index: u32,
+    },
+    AssignmentsOutOfOrder {
+        execution: RuleExecution,
+        effect_index: u32,
+    },
+    AssignmentTargetMissing {
+        field: FieldInstance,
+    },
     InvalidReport(ReportError),
     Interpreter(crate::static_ir::InterpreterError),
     InternalInvariant {
@@ -600,6 +1032,20 @@ impl fmt::Display for EvaluationError {
                 "serialized context fingerprint {} does not match computed fingerprint {}",
                 supplied.digest(),
                 computed.digest()
+            ),
+            Self::MissingEventField { phase } => write!(
+                formatter,
+                "field-event phase {phase:?} requires an exact event field"
+            ),
+            Self::UnexpectedEventField { phase, field } => write!(
+                formatter,
+                "non-event phase {phase:?} must not carry event field {}",
+                field.field_id()
+            ),
+            Self::EventFieldMissingFromSnapshot { field } => write!(
+                formatter,
+                "event field {} does not occur in the raw input snapshot",
+                field.field_id()
             ),
             Self::RuleSetMismatch {
                 expected,
@@ -706,6 +1152,44 @@ impl fmt::Display for EvaluationError {
                 "calculation coverage mismatch: expected {} outputs, got {}",
                 expected.len(),
                 evaluated.len()
+            ),
+            Self::AssignmentsRequireEventPhase { phase } => write!(
+                formatter,
+                "raw field-value assignments are not permitted in non-event phase {phase:?}"
+            ),
+            Self::AssignmentForUnknownRule { execution } => write!(
+                formatter,
+                "raw field-value assignment refers to unknown rule execution {}",
+                format_rule_execution(execution)
+            ),
+            Self::DuplicateAssignmentEffect {
+                execution,
+                effect_index,
+            } => write!(
+                formatter,
+                "raw field-value assignment repeats effect {effect_index} for {}",
+                format_rule_execution(execution)
+            ),
+            Self::AssignmentDoesNotMatchEffect {
+                execution,
+                effect_index,
+            } => write!(
+                formatter,
+                "raw field-value assignment does not match compiled effect {effect_index} for {}",
+                format_rule_execution(execution)
+            ),
+            Self::AssignmentsOutOfOrder {
+                execution,
+                effect_index,
+            } => write!(
+                formatter,
+                "raw field-value assignment effect {effect_index} for {} is out of order",
+                format_rule_execution(execution)
+            ),
+            Self::AssignmentTargetMissing { field } => write!(
+                formatter,
+                "raw field-value assignment target {} is missing from the request",
+                field.field_id()
             ),
             Self::InvalidReport(error) => write!(formatter, "invalid validation report: {error}"),
             Self::Interpreter(error) => write!(formatter, "static rule execution failed: {error}"),
@@ -877,6 +1361,89 @@ mod tests {
             error
                 .to_string()
                 .contains("does not match computed fingerprint")
+        );
+    }
+
+    #[test]
+    fn field_event_requests_require_an_exact_snapshotted_field_and_preserve_it_on_wire() {
+        let context = ValidationContext::new(ValidationPhase::Blur, BehaviorProfile::FilingSafe);
+        let amount = FieldInstance::singleton(FieldId::parse("amount").unwrap());
+        let raw_fields = vec![RawFieldValue::new(
+            amount.clone(),
+            RawValue::Text("1.2300".into()),
+        )];
+
+        assert!(matches!(
+            EvaluationRequest::try_new(
+                identity(),
+                context,
+                InputRevision::new(12),
+                Vec::new(),
+                Vec::new(),
+                raw_fields.clone(),
+            ),
+            Err(EvaluationError::MissingEventField {
+                phase: ValidationPhase::Blur
+            })
+        ));
+        assert!(matches!(
+            EvaluationRequest::try_new_for_field_event(
+                identity(),
+                context,
+                InputRevision::new(12),
+                FieldInstance::singleton(FieldId::parse("other").unwrap()),
+                Vec::new(),
+                Vec::new(),
+                raw_fields.clone(),
+            ),
+            Err(EvaluationError::EventFieldMissingFromSnapshot { .. })
+        ));
+        assert!(matches!(
+            EvaluationRequest::try_new_for_field_event(
+                identity(),
+                ValidationContext::new(ValidationPhase::Validate, BehaviorProfile::FilingSafe),
+                InputRevision::new(12),
+                amount.clone(),
+                Vec::new(),
+                Vec::new(),
+                raw_fields.clone(),
+            ),
+            Err(EvaluationError::UnexpectedEventField {
+                phase: ValidationPhase::Validate,
+                ..
+            })
+        ));
+
+        let event_request = EvaluationRequest::try_new_for_field_event(
+            identity(),
+            context,
+            InputRevision::new(12),
+            amount.clone(),
+            Vec::new(),
+            Vec::new(),
+            raw_fields,
+        )
+        .unwrap();
+        assert_eq!(event_request.event_field(), Some(&amount));
+        let mut wire = serde_json::to_value(&event_request).unwrap();
+        assert_eq!(wire["event_field"]["field_id"], "amount");
+        assert_eq!(
+            serde_json::from_value::<EvaluationRequest>(wire.clone()).unwrap(),
+            event_request
+        );
+        wire.as_object_mut().unwrap().remove("event_field");
+        assert!(
+            serde_json::from_value::<EvaluationRequest>(wire)
+                .unwrap_err()
+                .to_string()
+                .contains("requires an exact event field")
+        );
+
+        assert!(
+            serde_json::to_value(request())
+                .unwrap()
+                .get("event_field")
+                .is_none()
         );
     }
 

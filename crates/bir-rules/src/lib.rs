@@ -26,7 +26,8 @@ pub use context::{
 };
 pub use evaluation::{
     DerivedOutputExpectation, DerivedValue, EvaluationError, EvaluationExpectation,
-    EvaluationOutput, EvaluationRequest, EvaluationResult,
+    EvaluationOutput, EvaluationRequest, EvaluationResult, FieldValueAssignment,
+    FieldValueAssignmentExpectation,
 };
 pub use identity::{
     CalculationId, ContextValueId, FieldId, FormCode, FormRevision, FormRevisionKey, IdentityError,

@@ -334,6 +334,13 @@ impl RuleExpectation {
 /// Why a validation report was rejected as incomplete or nondeterministic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReportError {
+    MissingEventField {
+        phase: ValidationPhase,
+    },
+    UnexpectedEventField {
+        phase: ValidationPhase,
+        field: FieldInstance,
+    },
     DuplicateExpectedRule {
         execution: RuleExecution,
     },
@@ -373,6 +380,15 @@ pub enum ReportError {
 impl fmt::Display for ReportError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::MissingEventField { phase } => write!(
+                formatter,
+                "field-event validation report for {phase:?} is missing its event field"
+            ),
+            Self::UnexpectedEventField { phase, field } => write!(
+                formatter,
+                "non-event validation report for {phase:?} carries event field {}",
+                field.field_id()
+            ),
             Self::DuplicateExpectedRule { execution } => {
                 write!(
                     formatter,
@@ -464,6 +480,8 @@ pub struct ValidationReport {
     rule_set: FormRevisionKey,
     context: ValidationContext,
     input_revision: InputRevision,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event_field: Option<FieldInstance>,
     context_fingerprint: ContextFingerprint,
     expected_rules: Vec<RuleExpectation>,
     evaluated_rules: Vec<RuleExecution>,
@@ -481,6 +499,66 @@ impl ValidationReport {
         evaluated_rules: Vec<RuleExecution>,
         violations: Vec<RuleViolation>,
     ) -> Result<Self, ReportError> {
+        Self::try_new_inner(
+            rule_set,
+            context,
+            input_revision,
+            None,
+            context_fingerprint,
+            expected_rules,
+            evaluated_rules,
+            violations,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_new_for_field_event(
+        rule_set: FormRevisionKey,
+        context: ValidationContext,
+        input_revision: InputRevision,
+        event_field: FieldInstance,
+        context_fingerprint: ContextFingerprint,
+        expected_rules: Vec<RuleExpectation>,
+        evaluated_rules: Vec<RuleExecution>,
+        violations: Vec<RuleViolation>,
+    ) -> Result<Self, ReportError> {
+        Self::try_new_inner(
+            rule_set,
+            context,
+            input_revision,
+            Some(event_field),
+            context_fingerprint,
+            expected_rules,
+            evaluated_rules,
+            violations,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn try_new_inner(
+        rule_set: FormRevisionKey,
+        context: ValidationContext,
+        input_revision: InputRevision,
+        event_field: Option<FieldInstance>,
+        context_fingerprint: ContextFingerprint,
+        expected_rules: Vec<RuleExpectation>,
+        evaluated_rules: Vec<RuleExecution>,
+        violations: Vec<RuleViolation>,
+    ) -> Result<Self, ReportError> {
+        match (context.phase().is_field_event(), event_field.as_ref()) {
+            (true, None) => {
+                return Err(ReportError::MissingEventField {
+                    phase: context.phase(),
+                });
+            }
+            (false, Some(field)) => {
+                return Err(ReportError::UnexpectedEventField {
+                    phase: context.phase(),
+                    field: field.clone(),
+                });
+            }
+            _ => {}
+        }
         for (index, expected) in expected_rules.iter().enumerate() {
             if expected_rules[..index]
                 .iter()
@@ -558,6 +636,7 @@ impl ValidationReport {
             rule_set,
             context,
             input_revision,
+            event_field,
             context_fingerprint,
             expected_rules,
             evaluated_rules: expected_executions,
@@ -575,6 +654,10 @@ impl ValidationReport {
 
     pub const fn input_revision(&self) -> InputRevision {
         self.input_revision
+    }
+
+    pub fn event_field(&self) -> Option<&FieldInstance> {
+        self.event_field.as_ref()
     }
 
     pub const fn context_fingerprint(&self) -> ContextFingerprint {
@@ -626,6 +709,8 @@ impl<'de> Deserialize<'de> for ValidationReport {
             rule_set: FormRevisionKey,
             context: ValidationContext,
             input_revision: InputRevision,
+            #[serde(default)]
+            event_field: Option<FieldInstance>,
             context_fingerprint: ContextFingerprint,
             expected_rules: Vec<RuleExpectation>,
             evaluated_rules: Vec<RuleExecution>,
@@ -633,10 +718,11 @@ impl<'de> Deserialize<'de> for ValidationReport {
         }
 
         let wire = Wire::deserialize(deserializer)?;
-        Self::try_new(
+        Self::try_new_inner(
             wire.rule_set,
             wire.context,
             wire.input_revision,
+            wire.event_field,
             wire.context_fingerprint,
             wire.expected_rules,
             wire.evaluated_rules,

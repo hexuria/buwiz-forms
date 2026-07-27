@@ -16,7 +16,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::audit::discover_default_repo_root;
 use crate::error::{CodegenError, Result};
-use crate::files::{read_bytes, read_tree};
+use crate::files::{
+    ApprovedExternalRoot, ReadScope, read_external_bytes_under, read_external_tree_bound,
+    read_external_tree_under, read_tracked_tree,
+};
 use crate::hash::{digest_entries, sha256_hex};
 use crate::json::{CANONICALIZATION_ID, JsonValue, canonical_bytes, parse_strict};
 use crate::path::{
@@ -284,10 +287,11 @@ pub struct StageFormOptions {
     /// one-form skeleton workspace. `None` preserves the original mirror-only
     /// behavior.
     pub packet_dir: Option<PathBuf>,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl StageFormOptions {
-    pub fn new(
+    pub fn tracked_checkout(
         repo_root: impl Into<PathBuf>,
         form_id: impl Into<String>,
         staging_root: impl Into<PathBuf>,
@@ -297,6 +301,21 @@ impl StageFormOptions {
             form_id: form_id.into(),
             staging_root: staging_root.into(),
             packet_dir: None,
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        form_id: impl Into<String>,
+        staging_root: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            form_id: form_id.into(),
+            staging_root: staging_root.into(),
+            packet_dir: None,
+            read_scope: ReadScope::External,
         }
     }
 
@@ -334,7 +353,8 @@ pub fn verify_evidence(options: &VerifyEvidenceOptions) -> Result<VerifyEvidence
     Ok(report_for(&verified))
 }
 
-/// Verify a packet against bytes captured earlier through `files::read_tree`.
+/// Verify a packet against bytes captured earlier through
+/// `files::read_external_tree_bound`.
 ///
 /// This is crate-private because callers must preserve the packet root/tree
 /// binding. It exists for compound checks that must hash, parse, and verify one
@@ -417,7 +437,18 @@ pub fn stage_form(options: &StageFormOptions) -> Result<StageFormReport> {
         )));
     }
 
-    let source_files = read_tree(&form_root)?;
+    let source_files = match options.read_scope {
+        ReadScope::Tracked => read_tracked_tree(&form_root)?,
+        ReadScope::External => {
+            let approved_repo =
+                approve_exact_external_root(&repo_root, "external rules workspace", |_| Ok(()))?;
+            read_external_tree_under(
+                &approved_repo,
+                &form_root,
+                "canonical external form directory",
+            )?
+        }
+    };
     if source_files.is_empty() {
         return Err(CodegenError::new(format!(
             "canonical form `{}` contains no files",
@@ -440,12 +471,20 @@ pub fn stage_form(options: &StageFormOptions) -> Result<StageFormReport> {
                 Some(&repo_root.join("rules")),
                 Some(&verified.root),
             )?;
-            let plan = crate::form_factory::build_packet_backed_form_plan(
-                &repo_root,
-                &form_root,
-                &options.form_id,
-                &verified,
-            )?;
+            let plan = match options.read_scope {
+                ReadScope::Tracked => crate::form_factory::build_packet_backed_form_plan(
+                    &repo_root,
+                    &form_root,
+                    &options.form_id,
+                    &verified,
+                )?,
+                ReadScope::External => crate::form_factory::build_packet_backed_form_plan_external(
+                    &repo_root,
+                    &form_root,
+                    &options.form_id,
+                    &verified,
+                )?,
+            };
             (
                 plan.files,
                 Some(plan.packet_id),
@@ -480,8 +519,11 @@ pub fn stage_form(options: &StageFormOptions) -> Result<StageFormReport> {
 
 fn verify_packet(options: &VerifyEvidenceOptions) -> Result<VerifiedPacket> {
     let packet_root = canonical_real_directory(&options.packet_dir, "evidence packet")?;
-    let tree = read_tree(&packet_root)?;
-    verify_packet_tree(options, packet_root, &tree)
+    let approved = approve_exact_external_root(&packet_root, "evidence packet", |_| Ok(()))?;
+    let tree = read_external_tree_bound(&approved, "evidence packet")?;
+    let verified = verify_packet_tree(options, packet_root, &tree)?;
+    approved.revalidate("evidence packet")?;
+    Ok(verified)
 }
 
 fn verify_packet_tree(
@@ -1111,6 +1153,8 @@ fn verify_upstream_vault(
     derived_files: &[DerivedEvidenceFile],
 ) -> Result<()> {
     let vault_root = canonical_real_directory(vault_dir, "upstream evidence vault")?;
+    let approved_vault =
+        approve_exact_external_root(&vault_root, "upstream evidence vault", |_| Ok(()))?;
     for declared in files {
         let path =
             resolve_existing_under(&vault_root, &declared.path, "upstream vault evidence path")?;
@@ -1122,7 +1166,8 @@ fn verify_upstream_vault(
                 path.display()
             )));
         }
-        let bytes = read_bytes(&path)?;
+        let bytes =
+            read_bound_external_file(&path, &approved_vault, "upstream vault evidence file")?;
         verify_size_and_hash(
             &declared.path,
             &bytes,
@@ -1162,6 +1207,33 @@ fn verify_upstream_vault(
         }
     }
     Ok(())
+}
+
+fn read_bound_external_file(
+    path: &Path,
+    approved_root: &ApprovedExternalRoot,
+    label: &str,
+) -> Result<Vec<u8>> {
+    read_external_bytes_under(approved_root, path, label)
+}
+
+fn approve_exact_external_root(
+    path: &Path,
+    label: &str,
+    validate_resolved_path: impl Fn(&Path) -> Result<()>,
+) -> Result<ApprovedExternalRoot> {
+    let expected = fs::canonicalize(path)
+        .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), path, source))?;
+    ApprovedExternalRoot::capture(path, label, |resolved| {
+        if resolved != expected {
+            return Err(CodegenError::new(format!(
+                "{label} `{}` resolved to a different canonical root `{}`",
+                expected.display(),
+                resolved.display()
+            )));
+        }
+        validate_resolved_path(resolved)
+    })
 }
 
 fn reject_sensitive_derived_content(value: &JsonValue, relative: &str) -> Result<()> {
@@ -1469,12 +1541,20 @@ fn write_fresh_tree(target: &Path, files: &BTreeMap<String, Vec<u8>>) -> Result<
         )));
     }
     require_path_identity(target, &target_identity, "fresh output root")?;
-    let observed = read_tree(target).map_err(|error| {
-        CodegenError::new(format!(
-            "{error}; fresh output `{}` was left in place after post-write verification failed",
-            target.display()
-        ))
-    })?;
+    let approved_output = approve_exact_external_root(target, "fresh output root", |_| Ok(()))
+        .map_err(|error| {
+            CodegenError::new(format!(
+                "{error}; fresh output `{}` was left in place after post-write approval failed",
+                target.display()
+            ))
+        })?;
+    let observed =
+        read_external_tree_bound(&approved_output, "fresh output root").map_err(|error| {
+            CodegenError::new(format!(
+                "{error}; fresh output `{}` was left in place after post-write verification failed",
+                target.display()
+            ))
+        })?;
     if &observed != files {
         return Err(CodegenError::new(format!(
             "fresh output `{}` failed its exact post-write tree comparison and was left in place for inspection",
@@ -1692,7 +1772,7 @@ pub fn run_evidence_command(
                 Some(path) => PathBuf::from(path),
                 None => discover_default_repo_root()?,
             };
-            let mut options = StageFormOptions::new(repo_root, form_id, staging_root);
+            let mut options = StageFormOptions::tracked_checkout(repo_root, form_id, staging_root);
             options.packet_dir = packet.map(PathBuf::from);
             let report = stage_form(&options)?;
             println!(
@@ -1779,14 +1859,43 @@ mod tests {
         EvidenceAttestationKind, EvidenceCaptureOperatingSystem, EvidenceCaptureProvenance,
         EvidenceObservation, EvidencePacketManifest, EvidenceReview, EvidenceReviewStatus,
         ImportEvidenceOptions, REQUIRED_ATTESTATIONS, RuleSetSourceState, SourceExcerptLocator,
-        StageFormOptions, UpstreamEvidenceFile, VerifyEvidenceOptions, canonical_serialize,
-        evidence_usage, import_evidence, packet_digest, sha256_hex, stage_form,
-        validate_utc_timestamp, verify_evidence, verify_evidence_from_tree, write_fresh_tree,
+        StageFormOptions, UpstreamEvidenceFile, VerifyEvidenceOptions, approve_exact_external_root,
+        canonical_serialize, evidence_usage, import_evidence, packet_digest,
+        read_bound_external_file, sha256_hex, stage_form, validate_utc_timestamp, verify_evidence,
+        verify_evidence_from_tree, write_fresh_tree,
     };
-    use crate::files::read_tree;
+    use crate::files::read_external_tree;
     use crate::json::CANONICALIZATION_ID;
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn upstream_vault_reader_reasserts_exact_approved_root() {
+        let root = temporary_directory("vault-open-scope");
+        let vault = root.join("vault");
+        fs::create_dir(&vault).expect("create test vault");
+        let inside = vault.join("inside.bin");
+        let outside = root.join("outside.bin");
+        fs::write(&inside, b"inside").expect("write inside vault file");
+        fs::write(&outside, b"outside").expect("write outside vault file");
+        let vault = fs::canonicalize(vault).expect("canonical vault");
+        let inside = fs::canonicalize(inside).expect("canonical inside file");
+        let outside = fs::canonicalize(outside).expect("canonical outside file");
+        let approved_vault =
+            approve_exact_external_root(&vault, "test vault", |_| Ok(())).expect("approve vault");
+
+        assert_eq!(
+            read_bound_external_file(&inside, &approved_vault, "test vault file")
+                .expect("approved vault file"),
+            b"inside"
+        );
+        let error = read_bound_external_file(&outside, &approved_vault, "test vault file")
+            .expect_err("out-of-root vault file must fail in the open callback");
+        assert!(error.to_string().contains("approved"));
+
+        drop(approved_vault);
+        fs::remove_dir_all(root).expect("remove vault scope fixture");
+    }
 
     struct Fixture {
         root: PathBuf,
@@ -1967,7 +2076,7 @@ mod tests {
     #[test]
     fn captured_packet_tree_is_verified_without_reopening_manifest_bytes() {
         let fixture = fixture(EvidenceReviewStatus::Reviewed);
-        let captured = read_tree(&fixture.packet).expect("capture packet tree");
+        let captured = read_external_tree(&fixture.packet).expect("capture packet tree");
         fs::write(
             fixture.packet.join(EVIDENCE_PACKET_MANIFEST),
             b"replaced after capture",
@@ -2417,20 +2526,28 @@ mod tests {
         fs::write(form.join("manifest.json"), b"{}").expect("write form fixture");
 
         let staging = root.join("staging");
-        let report =
-            stage_form(&StageFormOptions::new(&repo, "form-a", &staging)).expect("stage form");
+        let report = stage_form(&StageFormOptions::external_workspace(
+            &repo, "form-a", &staging,
+        ))
+        .expect("stage form");
         assert_eq!(report.staged_file_count, 1);
         assert_eq!(
             fs::read(staging.join("rules/forms/form-a/manifest.json")).expect("read staged form"),
             b"{}"
         );
-        let error = stage_form(&StageFormOptions::new(&repo, "form-a", &staging))
-            .expect_err("existing stage must fail");
+        let error = stage_form(&StageFormOptions::external_workspace(
+            &repo, "form-a", &staging,
+        ))
+        .expect_err("existing stage must fail");
         assert!(error.to_string().contains("refusing to overwrite"));
 
         let canonical_target = repo.join("rules/accidental-stage");
-        let error = stage_form(&StageFormOptions::new(&repo, "form-a", &canonical_target))
-            .expect_err("canonical rules target must fail");
+        let error = stage_form(&StageFormOptions::external_workspace(
+            &repo,
+            "form-a",
+            &canonical_target,
+        ))
+        .expect_err("canonical rules target must fail");
         assert!(error.to_string().contains("canonical rules"));
         fs::remove_dir_all(root).expect("remove stage-form fixture");
     }

@@ -33,7 +33,7 @@ use crate::error::{CodegenError, Result};
 use crate::evidence_set::{
     CheckEvidencePacketSetOptions, CheckEvidencePacketSetReport, check_evidence_packet_set,
 };
-use crate::files::read_bytes;
+use crate::files::read_tracked_bytes;
 use crate::hash::sha256_hex;
 use crate::json::{JsonValue, parse_strict};
 use crate::path::{canonical_repo_root, is_symlink_or_reparse_point, resolve_existing_under};
@@ -237,7 +237,7 @@ pub fn status(options: &StatusOptions) -> Result<StatusReport> {
         criteria.retain(|criterion| criterion.kind == CriterionKind::Boundary);
     } else {
         let coverage = coverage(&CoverageOptions::new(&repo_root));
-        let reconciliation = reconciliation(&ReconciliationOptions::new(&repo_root));
+        let reconciliation = reconciliation(&ReconciliationOptions::tracked_checkout(&repo_root));
         check_aggregate_library_gates(
             &repo_root,
             coverage.as_ref(),
@@ -280,8 +280,10 @@ fn push(
 
 fn check_reviewed_evidence_packet_set(repo_root: &Path, criteria: &mut Vec<Criterion>) {
     let packet_root = repo_root.join(REVIEWED_EVIDENCE_PACKET_SET_PATH);
-    let result =
-        check_evidence_packet_set(&CheckEvidencePacketSetOptions::new(repo_root, packet_root));
+    let result = check_evidence_packet_set(&CheckEvidencePacketSetOptions::tracked_checkout(
+        repo_root,
+        packet_root,
+    ));
     record_reviewed_evidence_packet_set(result, criteria);
 }
 
@@ -760,7 +762,7 @@ fn collect_rust_sources(
             })?
             .to_string_lossy()
             .replace('\\', "/");
-        let bytes = fs::read(&path)
+        let bytes = read_tracked_bytes(&path)
             .map_err(|error| format!("cannot read frozen source {relative}: {error}"))?;
         let relevant = frozen_source_path(&relative) || contains_frozen_authority_token(&bytes);
         if relevant {
@@ -2923,7 +2925,7 @@ fn check_declared_sources_are_clone_reproducible(
         let declared_sha256 = string_at(source, "sha256");
         let corpus_relative = format!("rules/{relative}");
         match resolve_existing_under(repo_root, &corpus_relative, "declared source")
-            .and_then(|path| read_bytes(&path))
+            .and_then(|path| read_tracked_bytes(&path))
         {
             Ok(bytes) => {
                 if bytes.windows(2).any(|pair| pair == b"\r\n") {
@@ -3391,13 +3393,13 @@ fn string_at<'a>(value: &'a JsonValue, key: &str) -> Option<&'a str> {
 
 fn read_json(repo_root: &Path, relative: &str) -> Result<JsonValue> {
     let path = resolve_existing_under(repo_root, relative, relative)?;
-    let bytes = read_bytes(&path)?;
+    let bytes = read_tracked_bytes(&path)?;
     parse_strict(&bytes, &path)
 }
 
 fn read_text(repo_root: &Path, relative: &str) -> Result<String> {
     let path = resolve_existing_under(repo_root, relative, relative)?;
-    let bytes = read_bytes(&path)?;
+    let bytes = read_tracked_bytes(&path)?;
     String::from_utf8(bytes)
         .map_err(|source| CodegenError::with_source(format!("{relative} is not UTF-8"), source))
 }
@@ -3802,7 +3804,7 @@ mod tests {
     }
 
     #[test]
-    fn landed_reviewed_evidence_packet_set_gate_is_open_while_the_set_is_missing() {
+    fn landed_reviewed_evidence_packet_set_gate_is_met_for_the_exact_set() {
         let report = landed_status();
         let criterion = report
             .criteria
@@ -3810,11 +3812,11 @@ mod tests {
             .find(|criterion| criterion.id == "reviewed-evidence-packet-set")
             .expect("reviewed evidence packet set criterion");
         assert_eq!(criterion.kind, CriterionKind::ActiveLibrary);
-        assert!(!criterion.met);
+        assert!(criterion.met, "{}", criterion.detail);
         assert!(
             criterion
                 .detail
-                .contains("evidence/validation-rules/packets/v1 is missing or invalid"),
+                .contains("contains the exact ordered set of 43 reviewed v1 evidence packets"),
             "{}",
             criterion.detail
         );

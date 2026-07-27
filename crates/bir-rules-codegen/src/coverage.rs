@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::error::{CodegenError, Result};
-use crate::files::read_bytes;
+use crate::files::read_tracked_bytes;
 use crate::json::{JsonValue, parse_strict};
 use crate::path::{canonical_repo_root, resolve_existing_under};
 
@@ -270,7 +270,7 @@ struct SnapshotCounts {
 /// Maps a v1 form id to its v2 snapshot counts, when one exists.
 fn load_v2_snapshots(repo_root: &Path) -> Result<BTreeMap<String, SnapshotCounts>> {
     let index_path = resolve_existing_under(repo_root, INDEX_PATH, "v2 index")?;
-    let index = parse_strict(&read_bytes(&index_path)?, &index_path)?;
+    let index = parse_strict(&read_tracked_bytes(&index_path)?, &index_path)?;
     let source_root = index_path
         .parent()
         .ok_or_else(|| CodegenError::new("v2 index has no parent directory"))?;
@@ -288,7 +288,7 @@ fn load_v2_snapshots(repo_root: &Path) -> Result<BTreeMap<String, SnapshotCounts
             continue;
         };
         let rule_set_path = resolve_existing_under(source_root, relative, "snapshot rule set")?;
-        let rule_set = parse_strict(&read_bytes(&rule_set_path)?, &rule_set_path)?;
+        let rule_set = parse_strict(&read_tracked_bytes(&rule_set_path)?, &rule_set_path)?;
 
         // The v2 identity carries a form code; the v1 corpus keys by form id.
         // `legacy_v1` is the recorded bridge between them.
@@ -360,7 +360,7 @@ fn read_optional(path: &Path) -> Result<Option<JsonValue>> {
     if !path.is_file() {
         return Ok(None);
     }
-    Ok(Some(parse_strict(&read_bytes(path)?, path)?))
+    Ok(Some(parse_strict(&read_tracked_bytes(path)?, path)?))
 }
 
 fn count_in(path: &Path, key: &str) -> Result<usize> {

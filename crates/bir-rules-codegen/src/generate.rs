@@ -26,9 +26,17 @@ pub struct GenerateOptions {
 }
 
 impl GenerateOptions {
-    pub fn new(repo_root: impl Into<PathBuf>) -> Self {
+    pub fn tracked_checkout(repo_root: impl Into<PathBuf>) -> Self {
         Self {
-            audit: AuditOptions::new(repo_root),
+            audit: AuditOptions::tracked_checkout(repo_root),
+            output_dir: DEFAULT_OUTPUT_DIR.to_owned(),
+            required_rule_set_id: None,
+        }
+    }
+
+    pub fn external_workspace(repo_root: impl Into<PathBuf>) -> Self {
+        Self {
+            audit: AuditOptions::external_workspace(repo_root),
             output_dir: DEFAULT_OUTPUT_DIR.to_owned(),
             required_rule_set_id: None,
         }
@@ -840,6 +848,10 @@ const GENERATOR_SOURCES: &[(&str, &[u8])] = &[
         "src/capture_metadata.rs",
         include_bytes!("capture_metadata.rs"),
     ),
+    (
+        "src/canonicalize_json.rs",
+        include_bytes!("canonicalize_json.rs"),
+    ),
     ("src/check.rs", include_bytes!("check.rs")),
     ("src/corpus.rs", include_bytes!("corpus.rs")),
     ("src/coverage.rs", include_bytes!("coverage.rs")),
@@ -913,13 +925,13 @@ mod tests {
     #[test]
     fn required_rule_set_focus_is_a_byte_neutral_presence_assertion() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let baseline_options = GenerateOptions::new(&root);
+        let baseline_options = GenerateOptions::external_workspace(&root);
         let baseline_audit =
             audit_for_generation(&baseline_options).expect("audit aggregate without focus");
         let baseline =
             build_generated_files(&baseline_audit).expect("generate aggregate without focus");
 
-        let mut focused_options = GenerateOptions::new(&root);
+        let mut focused_options = GenerateOptions::external_workspace(&root);
         focused_options.required_rule_set_id = Some(LANDED_RULE_SET_ID.to_owned());
         let focused_audit =
             audit_for_generation(&focused_options).expect("audit aggregate with focus");
@@ -953,7 +965,7 @@ mod tests {
         fs::write(root.join("rules/ir/v2/unindexed-corruption.json"), b"{}")
             .expect("write unrelated unindexed JSON corruption");
 
-        let mut options = GenerateOptions::new(&root);
+        let mut options = GenerateOptions::external_workspace(&root);
         options.required_rule_set_id = Some(LANDED_RULE_SET_ID.to_owned());
         let error = audit_for_generation(&options)
             .expect_err("full aggregate audit must reject unrelated corruption");
@@ -968,7 +980,7 @@ mod tests {
     #[test]
     fn landed_candidate_is_test_only_and_generates_an_empty_reviewed_registry() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let audit = audit(&AuditOptions::new(root)).expect("audit landed v2 corpus");
+        let audit = audit(&AuditOptions::external_workspace(root)).expect("audit landed v2 corpus");
         let first = build_generated_files(&audit).expect("generate once");
         let second = build_generated_files(&audit).expect("generate twice");
         assert_eq!(first.files, second.files);
@@ -1876,7 +1888,7 @@ mod tests {
 
     fn landed_audit() -> crate::audit::AuditReport {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        audit(&AuditOptions::new(root)).expect("audit landed v2 corpus")
+        audit(&AuditOptions::external_workspace(root)).expect("audit landed v2 corpus")
     }
 
     fn synthetic_audit(snapshots: Vec<AuditedSnapshot>) -> AuditReport {

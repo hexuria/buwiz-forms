@@ -14,8 +14,9 @@ use bir_rules_codegen::{
     acquire_evidence_vault, audit, build_2550q_bindings, check, coverage,
     discover_evidence_vault_sources, generate, integrate_form,
     load_evidence_review_scaffold_request, operator_census, project_2550q_static_surface,
-    reconciliation, roll_all_pins, roll_pin, scaffold_evidence_review_ledger, status, validate_v1,
-    verify_evidence_vault_source_map, write_evidence_vault_capture_metadata,
+    reconciliation, roll_all_pins, roll_pin, run_canonicalize_json_command,
+    scaffold_evidence_review_ledger, status, validate_v1, verify_evidence_vault_source_map,
+    write_evidence_vault_capture_metadata,
 };
 
 fn main() -> ExitCode {
@@ -57,6 +58,9 @@ fn run() -> Result<()> {
     }
     if command == "scaffold-evidence-review-ledger" {
         return run_scaffold_evidence_review_ledger(arguments);
+    }
+    if command == "canonicalize-json" {
+        return run_canonicalize_json_command(arguments);
     }
     if matches!(
         command.as_str(),
@@ -165,7 +169,7 @@ fn run() -> Result<()> {
         None => bir_rules_codegen::discover_default_repo_root()?,
     };
     let v2_options_present = source_dir.is_some() || schema_dir.is_some() || output_dir.is_some();
-    let mut audit_options = AuditOptions::new(&repo_root);
+    let mut audit_options = AuditOptions::tracked_checkout(&repo_root);
     if let Some(source_dir) = source_dir {
         audit_options.source_dir = source_dir;
     }
@@ -213,7 +217,7 @@ fn run() -> Result<()> {
                     "`reconciliation` reads the tracked corpus and does not accept source/schema/output options",
                 ));
             }
-            let report = reconciliation(&ReconciliationOptions::new(&repo_root))?;
+            let report = reconciliation(&ReconciliationOptions::tracked_checkout(&repo_root))?;
             if json_output {
                 println!(
                     "{}",
@@ -548,7 +552,7 @@ fn run() -> Result<()> {
                     "`generate` does not accept --skip-runtime-tests",
                 ));
             }
-            let mut options = GenerateOptions::new(&repo_root);
+            let mut options = GenerateOptions::tracked_checkout(&repo_root);
             options.audit = audit_options;
             options.required_rule_set_id = rule_set_id.clone();
             if let Some(output_dir) = output_dir {
@@ -569,7 +573,7 @@ fn run() -> Result<()> {
             }
         }
         "check" => {
-            let mut options = CheckOptions::new(&repo_root);
+            let mut options = CheckOptions::tracked_checkout(&repo_root);
             options.generate.audit = audit_options;
             options.generate.required_rule_set_id = rule_set_id.clone();
             if let Some(output_dir) = output_dir {
@@ -652,7 +656,7 @@ fn run_discover_evidence_vault_sources(mut arguments: impl Iterator<Item = Strin
     let output_path = output_path.ok_or_else(|| {
         CodegenError::new("`discover-evidence-vault-sources` requires --output FILE")
     })?;
-    let mut options = DiscoverEvidenceVaultSourcesOptions::new(repo_root, output_path);
+    let mut options = DiscoverEvidenceVaultSourcesOptions::tracked_checkout(repo_root, output_path);
     options.search_roots = search_roots;
     options.dry_run = dry_run;
     let report = match discover_evidence_vault_sources(&options) {
@@ -979,9 +983,9 @@ fn run_verify_evidence_vault_source_map(mut arguments: impl Iterator<Item = Stri
         CodegenError::new("`verify-evidence-vault-source-map` requires --source-map FILE")
     })?;
     let source_map = resolve_existing_cli_path(Path::new(&source_map), "vault source map")?;
-    let report = verify_evidence_vault_source_map(&VerifyEvidenceVaultSourceMapOptions::new(
-        repo_root, source_map,
-    ))?;
+    let report = verify_evidence_vault_source_map(
+        &VerifyEvidenceVaultSourceMapOptions::tracked_checkout(repo_root, source_map),
+    )?;
     if json_output {
         println!(
             "{}",
@@ -1268,8 +1272,12 @@ fn run_acquire_evidence_vault(mut arguments: impl Iterator<Item = String>) -> Re
     let vault_root = vault_root.ok_or_else(|| {
         CodegenError::new("`acquire-evidence-vault` requires --vault-root FRESH-DIR")
     })?;
-    let mut options =
-        AcquireEvidenceVaultOptions::new(repo_root, source_map, capture_metadata, vault_root);
+    let mut options = AcquireEvidenceVaultOptions::tracked_checkout(
+        repo_root,
+        source_map,
+        capture_metadata,
+        vault_root,
+    );
     options.dry_run = dry_run;
     let report = acquire_evidence_vault(&options)?;
     if json_output {
@@ -1358,7 +1366,7 @@ fn print_usage() {
 }
 
 fn usage() -> String {
-    "Usage: bir-rules-codegen <audit|generate|check|validate-v1|status|coverage|operator-census|reconciliation|build-2550q-bindings|project-2550q|roll-pin|discover-evidence-vault-sources|verify-evidence-vault-source-map|write-evidence-capture-metadata|acquire-evidence-vault|scaffold-evidence-review-ledger|verify-evidence|import-evidence|stage-form|stage-evidence-packet-review|build-evidence-packet|build-evidence-packet-set|check-evidence-packet-set|integrate-form> [options]\n\
+    "Usage: bir-rules-codegen <audit|generate|check|validate-v1|status|coverage|operator-census|reconciliation|build-2550q-bindings|project-2550q|roll-pin|canonicalize-json|discover-evidence-vault-sources|verify-evidence-vault-source-map|write-evidence-capture-metadata|acquire-evidence-vault|scaffold-evidence-review-ledger|verify-evidence|import-evidence|stage-form|stage-evidence-packet-review|build-evidence-packet|build-evidence-packet-set|check-evidence-packet-set|integrate-form> [options]\n\
      Options:\n\
      \x20 --repo-root PATH\n\
      \x20 --source-dir REPOSITORY/RELATIVE/PATH\n\
@@ -1374,7 +1382,7 @@ fn usage() -> String {
      \x20 --dry-run              (roll-pin only)\n\
      \x20 --staging-root REPOSITORY/RELATIVE/PATH   (project-2550q only)\n\
      \x20 --skip-runtime-tests   (check only)\n\
-     Run an evidence command with --help for its command-specific options."
+     Run an evidence or canonicalize-json command with --help for command-specific options."
         .to_owned()
 }
 
@@ -1399,5 +1407,7 @@ mod tests {
         assert!(usage.contains("--boundaries-only"));
         assert!(usage.contains("status only; check production boundaries only"));
         assert!(usage.contains("audit, generate, check, or roll-pin"));
+        assert!(usage.contains("canonicalize-json"));
+        assert!(usage.contains("command-specific options"));
     }
 }

@@ -48,6 +48,11 @@ pub(crate) fn render_static_rule_set(snapshot: &AuditedSnapshot) -> Result<Strin
         "$.fields",
         |emitter, value, path| emitter.render_field(value, path),
     )?;
+    let field_event_programs = emitter.render_list(
+        &snapshot.document.field_event_programs,
+        "$.field_event_programs",
+        |emitter, value, path| emitter.render_field_event_program(value, path),
+    )?;
     let evaluation_order = emitter.render_string_slice(&snapshot.document.evaluation_order);
     let calculations = emitter.render_list(
         &snapshot.document.calculations,
@@ -77,6 +82,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {{
     context_values: {context_values},
     field_groups: {field_groups},
     fields: {fields},
+    field_event_programs: {field_event_programs},
     evaluation_order: {evaluation_order},
     calculations: {calculations},
     rules: {rules},
@@ -630,13 +636,15 @@ impl Emitter<'_> {
         )?;
         let group_id =
             self.render_optional_string(self.required(object, "group_id", path)?, path)?;
+        let calculation_id =
+            self.render_optional_string(self.required(object, "calculation_id", path)?, path)?;
         let behavior = self.render_profiled_branches(
             self.required(object, "behavior", path)?,
             &format!("{path}.behavior"),
             |emitter, branch, branch_path| emitter.render_field_behavior(branch, branch_path),
         )?;
         Ok(format!(
-            "FieldSpec {{ field_id: {}, value_type: {}, group_id: {group_id}, behavior: {behavior} }}",
+            "FieldSpec {{ field_id: {}, value_type: {}, group_id: {group_id}, calculation_id: {calculation_id}, behavior: {behavior} }}",
             rust_string(self.string(object, "field_id", path)?),
             self.render_value_type(self.string(object, "value_type", path)?, path)?,
         ))
@@ -651,6 +659,7 @@ impl Emitter<'_> {
             object,
             &[
                 "coercion",
+                "event_normalization",
                 "normalization",
                 "review_decision",
                 "source_refs",
@@ -658,8 +667,15 @@ impl Emitter<'_> {
             ],
             path,
         )?;
+        let event_normalization = object
+            .get("event_normalization")
+            .map(|value| {
+                self.render_field_event_normalization(value, &format!("{path}.event_normalization"))
+            })
+            .transpose()?
+            .unwrap_or_else(|| "&[]".to_owned());
         Ok(format!(
-            "FieldBehavior {{ normalization: {}, coercion: {} }}",
+            "FieldBehavior {{ normalization: {}, event_normalization: {event_normalization}, coercion: {} }}",
             self.render_normalization(
                 self.required(object, "normalization", path)?,
                 &format!("{path}.normalization"),
@@ -669,6 +685,117 @@ impl Emitter<'_> {
                 &format!("{path}.coercion"),
             )?,
         ))
+    }
+
+    fn render_field_event_normalization(&self, value: &JsonValue, path: &str) -> Result<String> {
+        self.render_json_list(
+            self.array_value(value, path)?,
+            path,
+            |emitter, value, entry_path| {
+                let object = emitter.object(value, entry_path)?;
+                emitter.require_keys(object, &["normalization", "phase"], entry_path)?;
+                let phase = emitter.enum_value(
+                    emitter.string(object, "phase", entry_path)?,
+                    &[
+                        ("input", "ValidationPhase::Input"),
+                        ("blur", "ValidationPhase::Blur"),
+                        ("change", "ValidationPhase::Change"),
+                    ],
+                    entry_path,
+                    "field-event-normalization.phase",
+                )?;
+                let normalization = emitter.render_normalization(
+                    emitter.required(object, "normalization", entry_path)?,
+                    &format!("{entry_path}.normalization"),
+                )?;
+                Ok(format!(
+                    "FieldEventNormalization {{ phase: {phase}, normalization: {normalization} }}"
+                ))
+            },
+        )
+    }
+
+    fn render_field_event_program(&self, value: &JsonValue, path: &str) -> Result<String> {
+        let object = self.object(value, path)?;
+        self.require_keys(
+            object,
+            &["phase", "profiles", "source_refs", "trigger_field_id"],
+            path,
+        )?;
+        let phase = self.enum_value(
+            self.string(object, "phase", path)?,
+            &[
+                ("input", "ValidationPhase::Input"),
+                ("blur", "ValidationPhase::Blur"),
+                ("change", "ValidationPhase::Change"),
+            ],
+            path,
+            "field-event-program.phase",
+        )?;
+        let profiles = self.render_profiled_branches(
+            self.required(object, "profiles", path)?,
+            &format!("{path}.profiles"),
+            |emitter, branch, branch_path| {
+                emitter.render_field_event_program_branch(branch, branch_path)
+            },
+        )?;
+        Ok(format!(
+            "FieldEventProgramSpec {{ phase: {phase}, trigger_field_id: {}, profiles: {profiles} }}",
+            rust_string(self.string(object, "trigger_field_id", path)?),
+        ))
+    }
+
+    fn render_field_event_program_branch(
+        &self,
+        object: &BTreeMap<String, JsonValue>,
+        path: &str,
+    ) -> Result<String> {
+        self.require_keys(
+            object,
+            &["review_decision", "source_refs", "state", "steps"],
+            path,
+        )?;
+        let steps = self.render_json_list(
+            self.array(object, "steps", path)?,
+            &format!("{path}.steps"),
+            |emitter, value, step_path| emitter.render_field_event_step(value, step_path),
+        )?;
+        Ok(format!("FieldEventProgram {{ steps: {steps} }}"))
+    }
+
+    fn render_field_event_step(&self, value: &JsonValue, path: &str) -> Result<String> {
+        let object = self.object(value, path)?;
+        match self.string(object, "kind", path)? {
+            "rule" => {
+                self.require_keys(object, &["kind", "rule_id"], path)?;
+                Ok(format!(
+                    "FieldEventStep::Rule {{ rule_id: {} }}",
+                    rust_string(self.string(object, "rule_id", path)?),
+                ))
+            }
+            "calculation" => {
+                self.require_keys(
+                    object,
+                    &["calculation_id", "kind", "output_ids", "write_mode"],
+                    path,
+                )?;
+                let write_mode = self.enum_value(
+                    self.string(object, "write_mode", path)?,
+                    &[
+                        ("insert", "ScheduledOutputWriteMode::Insert"),
+                        ("replace", "ScheduledOutputWriteMode::Replace"),
+                    ],
+                    path,
+                    "field-event-calculation-step.write_mode",
+                )?;
+                Ok(format!(
+                    "FieldEventStep::Calculation {{ calculation_id: {}, output_ids: {}, write_mode: {write_mode} }}",
+                    rust_string(self.string(object, "calculation_id", path)?),
+                    self.render_json_string_slice(self.array(object, "output_ids", path)?, path)?,
+                ))
+            }
+            kind => Err(self.unsupported(path, "field-event-step", kind)),
+        }
     }
 
     fn render_calculation(&self, value: &JsonValue, path: &str) -> Result<String> {
@@ -683,16 +810,19 @@ impl Emitter<'_> {
                 "profiles",
                 "scope",
                 "source_refs",
+                "trigger_field_ids",
             ],
             path,
         )?;
+        self.validate_event_binding_shape(object, path)?;
         let profiles = self.render_profiled_branches(
             self.required(object, "profiles", path)?,
             &format!("{path}.profiles"),
             |emitter, branch, branch_path| emitter.render_calculation_branch(branch, branch_path),
         )?;
+        let trigger_field_ids = self.render_optional_trigger_field_ids(object, path)?;
         Ok(format!(
-            "CalculationSpec {{ calculation_id: {}, scope: {}, depends_on: {}, phases: {}, profiles: {profiles} }}",
+            "CalculationSpec {{ calculation_id: {}, scope: {}, depends_on: {}, phases: {}, trigger_field_ids: {trigger_field_ids}, profiles: {profiles} }}",
             rust_string(self.string(object, "calculation_id", path)?),
             self.render_evaluation_scope(
                 self.required(object, "scope", path)?,
@@ -735,20 +865,81 @@ impl Emitter<'_> {
 
     fn render_calculation_output(&self, value: &JsonValue, path: &str) -> Result<String> {
         let object = self.object(value, path)?;
-        self.require_keys(object, &["output_id", "rounding", "value"], path)?;
+        self.require_keys(
+            object,
+            &["output_id", "rounding", "value", "writeback"],
+            path,
+        )?;
         let rounding = match self.required(object, "rounding", path)? {
             JsonValue::Null => "None".to_owned(),
-            value => format!(
-                "Some({})",
+            value @ JsonValue::Object(_) => format!(
+                "Some(&[{}])",
                 self.render_rounding(value, &format!("{path}.rounding"))?
+            ),
+            JsonValue::Array(values) => {
+                if values.is_empty() {
+                    return Err(self.error(
+                        &format!("{path}.rounding"),
+                        "rounding pipeline must contain at least one step",
+                    ));
+                }
+                format!(
+                    "Some({})",
+                    self.render_json_list(
+                        values,
+                        &format!("{path}.rounding"),
+                        |emitter, value, value_path| { emitter.render_rounding(value, value_path) },
+                    )?
+                )
+            }
+            _ => {
+                return Err(self.error(
+                    &format!("{path}.rounding"),
+                    "expected rounding object, nonempty rounding array, or null",
+                ));
+            }
+        };
+        let writeback = match object.get("writeback") {
+            None | Some(JsonValue::Null) => "None".to_owned(),
+            Some(value) => format!(
+                "Some({})",
+                self.render_calculation_writeback(value, &format!("{path}.writeback"))?
             ),
         };
         Ok(format!(
-            "CalculationOutput {{ output_id: {}, value: &{}, rounding: {rounding} }}",
+            "CalculationOutput {{ output_id: {}, value: &{}, rounding: {rounding}, writeback: {writeback} }}",
             rust_string(self.string(object, "output_id", path)?),
             self.render_expression(
                 self.required(object, "value", path)?,
                 &format!("{path}.value"),
+            )?,
+        ))
+    }
+
+    fn render_calculation_writeback(&self, value: &JsonValue, path: &str) -> Result<String> {
+        let object = self.object(value, path)?;
+        self.require_keys(
+            object,
+            &["field", "format", "review_decision", "source_refs"],
+            path,
+        )?;
+        let format_path = format!("{path}.format");
+        let format = self.object(self.required(object, "format", path)?, &format_path)?;
+        self.require_keys(format, &["kind"], &format_path)?;
+        let format = self.enum_value(
+            self.string(format, "kind", &format_path)?,
+            &[(
+                "offline-ebir-format-currency-v1",
+                "CalculationWriteFormat::OfflineEbirFormatCurrencyV1",
+            )],
+            &format_path,
+            "calculation-write-format.kind",
+        )?;
+        Ok(format!(
+            "CalculationWriteback {{ field: {}, format: {format} }}",
+            self.render_field_ref(
+                self.required(object, "field", path)?,
+                &format!("{path}.field"),
             )?,
         ))
     }
@@ -765,16 +956,21 @@ impl Emitter<'_> {
                 "rule_id",
                 "scope",
                 "source_refs",
+                "trigger_field_ids",
             ],
             path,
         )?;
+        let event_rule = self.validate_event_binding_shape(object, path)?;
         let profiles = self.render_profiled_branches(
             self.required(object, "profiles", path)?,
             &format!("{path}.profiles"),
-            |emitter, branch, branch_path| emitter.render_rule_branch(branch, branch_path),
+            |emitter, branch, branch_path| {
+                emitter.render_rule_branch(branch, branch_path, event_rule)
+            },
         )?;
+        let trigger_field_ids = self.render_optional_trigger_field_ids(object, path)?;
         Ok(format!(
-            "RuleSpec {{ rule_id: {}, scope: {}, order: {}, phases: {}, profiles: {profiles} }}",
+            "RuleSpec {{ rule_id: {}, scope: {}, order: {}, phases: {}, trigger_field_ids: {trigger_field_ids}, profiles: {profiles} }}",
             rust_string(self.string(object, "rule_id", path)?),
             self.render_evaluation_scope(
                 self.required(object, "scope", path)?,
@@ -789,6 +985,7 @@ impl Emitter<'_> {
         &self,
         object: &BTreeMap<String, JsonValue>,
         path: &str,
+        event_rule: bool,
     ) -> Result<String> {
         self.require_keys(
             object,
@@ -804,7 +1001,7 @@ impl Emitter<'_> {
         let effects = self.render_json_list(
             self.array(object, "effects", path)?,
             &format!("{path}.effects"),
-            |emitter, value, value_path| emitter.render_effect(value, value_path),
+            |emitter, value, value_path| emitter.render_effect(value, value_path, event_rule),
         )?;
         Ok(format!(
             "RuleBranch {{ predicate: &{}, effects: {effects} }}",
@@ -901,6 +1098,8 @@ impl Emitter<'_> {
                 self.string(object, "evaluation_phase", path)?,
                 &[
                     ("input", "ValidationPhase::Input"),
+                    ("blur", "ValidationPhase::Blur"),
+                    ("change", "ValidationPhase::Change"),
                     ("blur-change", "ValidationPhase::BlurChange"),
                     ("page-navigation", "ValidationPhase::PageNavigation"),
                     ("save", "ValidationPhase::Save"),
@@ -1143,6 +1342,14 @@ impl Emitter<'_> {
                             )?,
                         ))
                     }
+                    "offline-ebir-money-round-v1" => {
+                        emitter.require_keys(object, &["kind"], step_path)?;
+                        Ok("NormalizationStep::OfflineEbirMoneyRoundV1".to_owned())
+                    }
+                    "offline-ebir-parse-float-fixed-zero-v1" => {
+                        emitter.require_keys(object, &["kind"], step_path)?;
+                        Ok("NormalizationStep::OfflineEbirParseFloatFixedZeroV1".to_owned())
+                    }
                     _ => Err(emitter.unsupported(step_path, "normalization", kind)),
                 }
             },
@@ -1320,6 +1527,7 @@ impl Emitter<'_> {
                     ("none", "RoundingMode::None"),
                     ("half-up", "RoundingMode::HalfUp"),
                     ("half-even", "RoundingMode::HalfEven"),
+                    ("half-ceiling", "RoundingMode::HalfCeiling"),
                     ("toward-zero", "RoundingMode::TowardZero"),
                     ("away-from-zero", "RoundingMode::AwayFromZero"),
                     ("floor", "RoundingMode::Floor"),
@@ -1831,6 +2039,70 @@ impl Emitter<'_> {
                     )?,
                 ))
             }
+            "javascript-global-is-nan-logical-or" => {
+                self.require_keys(object, &["inputs", "kind"], path)?;
+                let inputs = self.array(object, "inputs", path)?;
+                if inputs.is_empty() {
+                    return Err(self.error(
+                        &format!("{path}.inputs"),
+                        "javascript-global-is-nan-logical-or requires nonempty inputs",
+                    ));
+                }
+                let inputs = self.render_json_list(
+                    inputs,
+                    &format!("{path}.inputs"),
+                    |emitter, value, value_path| emitter.render_expression(value, value_path),
+                )?;
+                Ok(format!(
+                    "Predicate::JavaScriptGlobalIsNaNLogicalOr {{ inputs: {inputs} }}"
+                ))
+            }
+            "javascript-number-compare" => {
+                self.require_keys(object, &["input", "kind", "operand", "operator"], path)?;
+                Ok(format!(
+                    "Predicate::JavaScriptNumberCompare {{ operator: {}, input: &{}, operand: &{} }}",
+                    self.enum_value(
+                        self.string(object, "operator", path)?,
+                        &[
+                            ("less-than", "JavaScriptNumberCompareOperator::LessThan",),
+                            (
+                                "greater-than",
+                                "JavaScriptNumberCompareOperator::GreaterThan",
+                            ),
+                            (
+                                "strict-equal",
+                                "JavaScriptNumberCompareOperator::StrictEqual",
+                            ),
+                        ],
+                        path,
+                        "javascript-number-compare.operator",
+                    )?,
+                    self.render_expression(
+                        self.required(object, "input", path)?,
+                        &format!("{path}.input"),
+                    )?,
+                    self.render_expression(
+                        self.required(object, "operand", path)?,
+                        &format!("{path}.operand"),
+                    )?,
+                ))
+            }
+            "checksum" => {
+                self.require_keys(object, &["algorithm", "input", "kind"], path)?;
+                Ok(format!(
+                    "Predicate::Checksum {{ algorithm: {}, input: &{} }}",
+                    self.enum_value(
+                        self.string(object, "algorithm", path)?,
+                        &[("offline-ebir-tin-v1", "ChecksumAlgorithm::OfflineEbirTinV1",)],
+                        path,
+                        "checksum.algorithm",
+                    )?,
+                    self.render_expression(
+                        self.required(object, "input", path)?,
+                        &format!("{path}.input"),
+                    )?,
+                ))
+            }
             "matches" => Err(self.unsupported(
                 path,
                 "predicate.matches",
@@ -1880,7 +2152,7 @@ impl Emitter<'_> {
         }
     }
 
-    fn render_effect(&self, value: &JsonValue, path: &str) -> Result<String> {
+    fn render_effect(&self, value: &JsonValue, path: &str, event_rule: bool) -> Result<String> {
         let object = self.object(value, path)?;
         let kind = self.string(object, "kind", path)?;
         match kind {
@@ -1937,6 +2209,27 @@ impl Emitter<'_> {
                         ],
                         path,
                         "emit-issue.assessment",
+                    )?,
+                ))
+            }
+            "set-raw-field-value" => {
+                if !event_rule {
+                    return Err(self.unsupported(
+                        path,
+                        "effect.set-raw-field-value",
+                        "raw field assignments are permitted only on exact field-event rules",
+                    ));
+                }
+                self.require_keys(object, &["field", "kind", "value"], path)?;
+                Ok(format!(
+                    "Effect::SetRawFieldValue {{ field: {}, value: {} }}",
+                    self.render_field_ref(
+                        self.required(object, "field", path)?,
+                        &format!("{path}.field"),
+                    )?,
+                    self.render_static_raw_value(
+                        self.required(object, "value", path)?,
+                        &format!("{path}.value"),
                     )?,
                 ))
             }
@@ -2030,6 +2323,24 @@ impl Emitter<'_> {
             "FieldRef {{ field_id: {}, instance: {selector} }}",
             rust_string(self.string(object, "field_id", path)?)
         ))
+    }
+
+    fn render_static_raw_value(&self, value: &JsonValue, path: &str) -> Result<String> {
+        let object = self.object(value, path)?;
+        match self.string(object, "state", path)? {
+            "absent" => {
+                self.require_keys(object, &["state"], path)?;
+                Ok("StaticRawValue::Absent".to_owned())
+            }
+            "text" => {
+                self.require_keys(object, &["state", "text"], path)?;
+                Ok(format!(
+                    "StaticRawValue::Text({})",
+                    rust_string(self.string(object, "text", path)?)
+                ))
+            }
+            state => Err(self.unsupported(path, "static-raw-value", state)),
+        }
     }
 
     fn render_field_instance_selector(&self, value: &JsonValue, path: &str) -> Result<String> {
@@ -2153,6 +2464,8 @@ impl Emitter<'_> {
                 self.string_value(phase, &phase_path)?,
                 &[
                     ("input", "ValidationPhase::Input"),
+                    ("blur", "ValidationPhase::Blur"),
+                    ("change", "ValidationPhase::Change"),
                     ("blur-change", "ValidationPhase::BlurChange"),
                     ("page-navigation", "ValidationPhase::PageNavigation"),
                     ("save", "ValidationPhase::Save"),
@@ -2166,6 +2479,66 @@ impl Emitter<'_> {
             )?);
         }
         Ok(format!("&[{}]", rendered.join(", ")))
+    }
+
+    fn validate_event_binding_shape(
+        &self,
+        object: &BTreeMap<String, JsonValue>,
+        path: &str,
+    ) -> Result<bool> {
+        let phases = self.array(object, "phases", path)?;
+        if phases.is_empty() {
+            return Err(self.error(&format!("{path}.phases"), "phases must not be empty"));
+        }
+        let mut has_event = false;
+        for (index, phase) in phases.iter().enumerate() {
+            match self.string_value(phase, &format!("{path}.phases[{index}]"))? {
+                "input" | "blur" | "change" => has_event = true,
+                _ => {}
+            }
+        }
+        match (has_event, object.get("trigger_field_ids")) {
+            (true, Some(value)) if value != &JsonValue::Null => {
+                if self
+                    .array_value(value, &format!("{path}.trigger_field_ids"))?
+                    .is_empty()
+                {
+                    return Err(self.error(
+                        &format!("{path}.trigger_field_ids"),
+                        "field-event entry requires at least one trigger field",
+                    ));
+                }
+            }
+            (true, None | Some(JsonValue::Null)) => {
+                return Err(self.error(
+                    path,
+                    "field-event entry is missing required `trigger_field_ids`",
+                ));
+            }
+            (false, Some(value)) if value != &JsonValue::Null => {
+                return Err(self.error(path, "non-event entry must not carry `trigger_field_ids`"));
+            }
+            (false, None | Some(JsonValue::Null)) => {}
+            _ => unreachable!("all event-binding shapes are covered"),
+        }
+        Ok(has_event)
+    }
+
+    fn render_optional_trigger_field_ids(
+        &self,
+        object: &BTreeMap<String, JsonValue>,
+        path: &str,
+    ) -> Result<String> {
+        object.get("trigger_field_ids").map_or_else(
+            || Ok("&[]".to_owned()),
+            |value| match value {
+                JsonValue::Null => Ok("&[]".to_owned()),
+                _ => self.render_json_string_slice(
+                    self.array_value(value, &format!("{path}.trigger_field_ids"))?,
+                    &format!("{path}.trigger_field_ids"),
+                ),
+            },
+        )
     }
 
     fn render_string_slice(&self, values: &[String]) -> String {
@@ -2515,5 +2888,350 @@ mod tests {
             .unwrap();
         assert!(rendered.contains("JavaScriptParseFloatOperator::GreaterThan"));
         assert!(rendered.contains("coefficient: 1000i128, scale: 0u32"));
+    }
+
+    #[test]
+    fn emitter_renders_closed_checksum_algorithm() {
+        let emitter = Emitter {
+            rule_set_id: "test-v1-p1",
+        };
+        let predicate: JsonValue = serde_json::from_value(json!({
+            "kind": "checksum",
+            "algorithm": "offline-ebir-tin-v1",
+            "input": {
+                "kind": "field",
+                "result_type": "string",
+                "field": {
+                    "field_id": "spouse-tin",
+                    "instance": {"kind": "singleton"}
+                }
+            }
+        }))
+        .unwrap();
+
+        let rendered = emitter.render_predicate(&predicate, "$.predicate").unwrap();
+        assert!(rendered.contains("Predicate::Checksum"));
+        assert!(rendered.contains("ChecksumAlgorithm::OfflineEbirTinV1"));
+        assert!(rendered.contains("field_id: \"spouse-tin\""));
+    }
+
+    #[test]
+    fn emitter_preserves_legacy_rounding_shapes_and_orders_pipeline_steps() {
+        let emitter = Emitter {
+            rule_set_id: "test-v1-p1",
+        };
+        let render = |rounding: serde_json::Value| {
+            let output: JsonValue = serde_json::from_value(json!({
+                "output_id": "rounded",
+                "value": {
+                    "kind": "literal",
+                    "value": {"type": "decimal", "value": "0.499"}
+                },
+                "rounding": rounding
+            }))
+            .unwrap();
+            emitter.render_calculation_output(&output, "$.output")
+        };
+
+        let unrounded = render(json!(null)).unwrap();
+        assert!(unrounded.contains("rounding: None"));
+        assert!(unrounded.contains("writeback: None"));
+        assert!(
+            render(json!({"mode": "half-up", "scale": 2}))
+                .unwrap()
+                .contains("rounding: Some(&[Rounding { mode: RoundingMode::HalfUp, scale: 2 }])")
+        );
+
+        let pipeline = render(json!([
+            {"mode": "half-up", "scale": 2},
+            {"mode": "half-ceiling", "scale": 0}
+        ]))
+        .unwrap();
+        assert!(pipeline.contains(
+            "rounding: Some(&[Rounding { mode: RoundingMode::HalfUp, scale: 2 }, Rounding { mode: RoundingMode::HalfCeiling, scale: 0 }])"
+        ));
+
+        let error = render(json!([])).expect_err("empty rounding pipeline must fail closed");
+        assert!(
+            error
+                .message()
+                .contains("rounding pipeline must contain at least one step")
+        );
+    }
+
+    #[test]
+    fn emitter_renders_exact_field_event_normalization_before_string_coercion() {
+        let emitter = Emitter {
+            rule_set_id: "test-v1-p1",
+        };
+        let behavior: JsonValue = serde_json::from_value(json!({
+            "state": "executable",
+            "normalization": [],
+            "event_normalization": [{
+                "phase": "blur",
+                "normalization": [{"kind": "offline-ebir-money-round-v1"}]
+            }],
+            "coercion": {"kind": "string", "on_empty": "null"},
+            "review_decision": {"source_id": "review"},
+            "source_refs": [{"source_id": "review"}]
+        }))
+        .unwrap();
+
+        let rendered = emitter
+            .render_field_behavior(behavior.object().unwrap(), "$.behavior.official")
+            .unwrap();
+        assert!(rendered.contains("event_normalization: &[FieldEventNormalization"));
+        assert!(rendered.contains("phase: ValidationPhase::Blur"));
+        assert!(rendered.contains("NormalizationStep::OfflineEbirMoneyRoundV1"));
+        assert!(rendered.contains("coercion: Coercion::String"));
+
+        let year_behavior: JsonValue = serde_json::from_value(json!({
+            "state": "executable",
+            "normalization": [],
+            "event_normalization": [{
+                "phase": "blur",
+                "normalization": [{"kind": "offline-ebir-parse-float-fixed-zero-v1"}]
+            }],
+            "coercion": {"kind": "string", "on_empty": "null"},
+            "review_decision": {"source_id": "review"},
+            "source_refs": [{"source_id": "review"}]
+        }))
+        .unwrap();
+        let rendered = emitter
+            .render_field_behavior(year_behavior.object().unwrap(), "$.behavior.official")
+            .unwrap();
+        assert!(rendered.contains("NormalizationStep::OfflineEbirParseFloatFixedZeroV1"));
+    }
+
+    #[test]
+    fn emitter_renders_exact_event_trigger_and_static_raw_assignment_fail_closed() {
+        let emitter = Emitter {
+            rule_set_id: "test-v1-p1",
+        };
+        let branch = json!({
+            "state": "executable",
+            "predicate": {"kind": "constant", "value": true},
+            "effects": [{
+                "kind": "set-raw-field-value",
+                "field": {
+                    "field_id": "amount",
+                    "instance": {"kind": "singleton"}
+                },
+                "value": {"state": "text", "text": "0.00"}
+            }],
+            "review_decision": {"source_id": "review"},
+            "source_refs": [{"source_id": "review"}]
+        });
+        let rule = |phases: serde_json::Value, triggers: Option<serde_json::Value>| {
+            let mut value = json!({
+                "rule_id": "amount-reset",
+                "scope": {"kind": "singleton"},
+                "order": 1,
+                "phases": phases,
+                "field_ids": ["amount"],
+                "profiles": {
+                    "official": branch.clone(),
+                    "filing_safe": branch.clone()
+                },
+                "source_refs": [{"source_id": "review"}]
+            });
+            if let Some(triggers) = triggers {
+                value
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("trigger_field_ids".to_owned(), triggers);
+            }
+            serde_json::from_value::<JsonValue>(value).unwrap()
+        };
+
+        let rendered = emitter
+            .render_rule(
+                &rule(json!(["blur"]), Some(json!(["amount"]))),
+                "$.rules[0]",
+            )
+            .unwrap();
+        assert!(rendered.contains("ValidationPhase::Blur"));
+        assert!(rendered.contains("trigger_field_ids: &[\"amount\"]"));
+        assert!(rendered.contains("Effect::SetRawFieldValue"));
+        assert!(rendered.contains("StaticRawValue::Text(\"0.00\")"));
+
+        let error = emitter
+            .render_rule(&rule(json!(["validate"]), None), "$.rules[0]")
+            .expect_err("raw assignment on a non-event rule must fail");
+        assert!(error.message().contains("permitted only"));
+    }
+
+    #[test]
+    fn emitter_renders_profiled_event_program_writeback_and_field_calculation_owner() {
+        let emitter = Emitter {
+            rule_set_id: "test-v1-p1",
+        };
+        let program: JsonValue = serde_json::from_value(json!({
+            "phase": "change",
+            "trigger_field_id": "amount",
+            "profiles": {
+                "official": {
+                    "state": "executable",
+                    "steps": [
+                        {
+                            "kind": "calculation",
+                            "calculation_id": "amount-calc",
+                            "output_ids": ["amount", "tax"],
+                            "write_mode": "insert"
+                        },
+                        {"kind": "rule", "rule_id": "amount-reset"},
+                        {
+                            "kind": "calculation",
+                            "calculation_id": "amount-calc",
+                            "output_ids": ["tax"],
+                            "write_mode": "replace"
+                        }
+                    ],
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                },
+                "filing_safe": {
+                    "state": "unresolved",
+                    "reason": "not reviewed",
+                    "source_refs": [{"source_id": "review"}]
+                }
+            },
+            "source_refs": [{"source_id": "review"}]
+        }))
+        .unwrap();
+        let rendered = emitter
+            .render_field_event_program(&program, "$.field_event_programs[0]")
+            .unwrap();
+        assert!(rendered.contains("FieldEventProgramSpec"));
+        assert!(rendered.contains("phase: ValidationPhase::Change"));
+        assert!(rendered.contains("trigger_field_id: \"amount\""));
+        assert!(rendered.contains("FieldEventStep::Rule { rule_id: \"amount-reset\" }"));
+        assert!(rendered.contains("calculation_id: \"amount-calc\""));
+        assert!(rendered.contains("output_ids: &[\"amount\", \"tax\"]"));
+        assert!(rendered.contains("ScheduledOutputWriteMode::Insert"));
+        assert!(rendered.contains("ScheduledOutputWriteMode::Replace"));
+
+        let output: JsonValue = serde_json::from_value(json!({
+            "output_id": "amount",
+            "value": {
+                "kind": "literal",
+                "value": {"type": "decimal", "value": "1.25"}
+            },
+            "rounding": null,
+            "writeback": {
+                "field": {
+                    "field_id": "amount",
+                    "instance": {"kind": "singleton"}
+                },
+                "format": {"kind": "offline-ebir-format-currency-v1"},
+                "review_decision": {"source_id": "review"},
+                "source_refs": [{"source_id": "review"}]
+            }
+        }))
+        .unwrap();
+        let rendered = emitter
+            .render_calculation_output(&output, "$.output")
+            .unwrap();
+        assert!(rendered.contains("writeback: Some(CalculationWriteback"));
+        assert!(rendered.contains("field_id: \"amount\""));
+        assert!(rendered.contains("CalculationWriteFormat::OfflineEbirFormatCurrencyV1"));
+
+        let field = |calculation_id: serde_json::Value| {
+            serde_json::from_value::<JsonValue>(json!({
+                "field_id": "amount",
+                "value_type": "string",
+                "control_kind": "currency",
+                "requiredness": "computed",
+                "group_id": null,
+                "calculation_id": calculation_id,
+                "serialized": [],
+                "behavior": {
+                    "official": {
+                        "state": "unresolved",
+                        "reason": "test",
+                        "source_refs": [{"source_id": "review"}]
+                    },
+                    "filing_safe": {
+                        "state": "unresolved",
+                        "reason": "test",
+                        "source_refs": [{"source_id": "review"}]
+                    }
+                },
+                "source_refs": [{"source_id": "review"}]
+            }))
+            .unwrap()
+        };
+        assert!(
+            emitter
+                .render_field(&field(json!("amount-calc")), "$.fields[0]")
+                .unwrap()
+                .contains("calculation_id: Some(\"amount-calc\")")
+        );
+        assert!(
+            emitter
+                .render_field(&field(json!(null)), "$.fields[0]")
+                .unwrap()
+                .contains("calculation_id: None")
+        );
+    }
+
+    #[test]
+    fn emitter_renders_closed_javascript_number_predicates_and_rejects_empty_or_inputs() {
+        let emitter = Emitter {
+            rule_set_id: "test-v1-p1",
+        };
+        let logical_or: JsonValue = serde_json::from_value(json!({
+            "kind": "javascript-global-is-nan-logical-or",
+            "inputs": [
+                {
+                    "kind": "literal",
+                    "value": {"type": "null", "value": null}
+                },
+                {
+                    "kind": "literal",
+                    "value": {"type": "string", "value": "amount"}
+                }
+            ]
+        }))
+        .unwrap();
+        let rendered = emitter
+            .render_predicate(&logical_or, "$.predicate")
+            .unwrap();
+        assert!(rendered.contains("Predicate::JavaScriptGlobalIsNaNLogicalOr"));
+        assert!(rendered.contains("TypedValue::Null"));
+        assert!(rendered.contains("TypedValue::String(\"amount\")"));
+
+        let number_compare: JsonValue = serde_json::from_value(json!({
+            "kind": "javascript-number-compare",
+            "operator": "less-than",
+            "input": {
+                "kind": "literal",
+                "value": {"type": "string", "value": "2024"}
+            },
+            "operand": {
+                "kind": "context",
+                "result_type": "integer",
+                "context_value_id": "current-calendar-year"
+            }
+        }))
+        .unwrap();
+        let rendered = emitter
+            .render_predicate(&number_compare, "$.predicate")
+            .unwrap();
+        assert!(rendered.contains("JavaScriptNumberCompareOperator::LessThan"));
+        assert!(rendered.contains("context_value_id: \"current-calendar-year\""));
+
+        let empty: JsonValue = serde_json::from_value(json!({
+            "kind": "javascript-global-is-nan-logical-or",
+            "inputs": []
+        }))
+        .unwrap();
+        assert!(
+            emitter
+                .render_predicate(&empty, "$.predicate")
+                .expect_err("empty logical-or inputs must fail closed")
+                .message()
+                .contains("requires nonempty inputs")
+        );
     }
 }

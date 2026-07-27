@@ -63,7 +63,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::error::{CodegenError, Result};
-use crate::files::read_bytes;
+use crate::files::{read_external_bytes, read_tracked_bytes};
 use crate::json::{JsonValue, parse_strict};
 use crate::path::{
     canonical_repo_root, is_json_file, resolve_existing_under, resolve_output_under,
@@ -125,6 +125,7 @@ const EXPECTED_FIELD_COUNT: usize = 94;
 #[derive(Clone, Debug)]
 pub struct ProjectStaticSurfaceOptions {
     pub repo_root: PathBuf,
+    read_scope: ProjectionReadScope,
     /// Repository-relative directory to project into instead of the canonical
     /// corpus.
     ///
@@ -141,9 +142,25 @@ impl ProjectStaticSurfaceOptions {
     pub fn new(repo_root: impl Into<PathBuf>) -> Self {
         Self {
             repo_root: repo_root.into(),
+            read_scope: ProjectionReadScope::TrackedCheckout,
             staging_root: None,
         }
     }
+
+    #[cfg(test)]
+    fn external_workspace(repo_root: impl Into<PathBuf>) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            read_scope: ProjectionReadScope::ExternalWorkspace,
+            staging_root: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ProjectionReadScope {
+    TrackedCheckout,
+    ExternalWorkspace,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -169,7 +186,7 @@ pub fn project_2550q_static_surface(
     options: &ProjectStaticSurfaceOptions,
 ) -> Result<StaticProjectionReport> {
     let repo_root = canonical_repo_root(&options.repo_root)?;
-    let plan = build_static_projection(&repo_root)?;
+    let plan = build_static_projection(&repo_root, options.read_scope)?;
 
     let staging = match &options.staging_root {
         Some(relative) => Some(resolve_output_under(
@@ -208,7 +225,7 @@ pub fn project_2550q_static_surface(
 
     write_atomically(&target(&plan.rule_set_path)?, &render(&plan.rule_set)?)?;
     for fixture_path in &plan.fixture_paths {
-        let mut fixture = read_json(fixture_path)?;
+        let mut fixture = read_json(fixture_path, options.read_scope)?;
         project_fixture(&mut fixture, &plan.singleton_fields, fixture_path)?;
         write_atomically(&target(fixture_path)?, &render(&fixture)?)?;
     }
@@ -243,7 +260,10 @@ struct StaticProjection {
     total_field_count: usize,
 }
 
-fn build_static_projection(repo_root: &Path) -> Result<StaticProjection> {
+fn build_static_projection(
+    repo_root: &Path,
+    read_scope: ProjectionReadScope,
+) -> Result<StaticProjection> {
     let rule_set_path = resolve_input(repo_root, RULE_SET_PATH)?;
     let fixtures_dir = resolve_input(repo_root, FIXTURES_PATH)?;
     let binding_path = resolve_input(repo_root, BINDING_INVENTORY_PATH)?;
@@ -251,11 +271,11 @@ fn build_static_projection(repo_root: &Path) -> Result<StaticProjection> {
     let v1_fields_path = resolve_input(repo_root, V1_FIELDS_PATH)?;
     let core_adapter_path = resolve_input(repo_root, CORE_ADAPTER_PATH)?;
 
-    let mut rule_set = read_json(&rule_set_path)?;
-    let binding = read_json(&binding_path)?;
-    let runtime = read_json(&runtime_path)?;
-    let v1_fields = read_json(&v1_fields_path)?;
-    let core_adapter = read_text(&core_adapter_path)?;
+    let mut rule_set = read_json(&rule_set_path, read_scope)?;
+    let binding = read_json(&binding_path, read_scope)?;
+    let runtime = read_json(&runtime_path, read_scope)?;
+    let v1_fields = read_json(&v1_fields_path, read_scope)?;
+    let core_adapter = read_text(&core_adapter_path, read_scope)?;
     let core_singleton_field_ids = parse_core_singleton_field_ids(&core_adapter)?;
 
     // The original calls this `$existingProjectedIds`; it is in fact the set of
@@ -841,13 +861,19 @@ fn resolve_input(repo_root: &Path, relative: &str) -> Result<PathBuf> {
     )
 }
 
-fn read_json(path: &Path) -> Result<JsonValue> {
-    let bytes = read_bytes(path)?;
+fn read_json(path: &Path, scope: ProjectionReadScope) -> Result<JsonValue> {
+    let bytes = match scope {
+        ProjectionReadScope::TrackedCheckout => read_tracked_bytes(path)?,
+        ProjectionReadScope::ExternalWorkspace => read_external_bytes(path)?,
+    };
     parse_strict(&bytes, path)
 }
 
-fn read_text(path: &Path) -> Result<String> {
-    let bytes = read_bytes(path)?;
+fn read_text(path: &Path, scope: ProjectionReadScope) -> Result<String> {
+    let bytes = match scope {
+        ProjectionReadScope::TrackedCheckout => read_tracked_bytes(path)?,
+        ProjectionReadScope::ExternalWorkspace => read_external_bytes(path)?,
+    };
     String::from_utf8(bytes).map_err(|source| {
         CodegenError::with_source(format!("`{}` is not valid UTF-8", path.display()), source)
     })
@@ -945,8 +971,8 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::{
-        CORE_ADAPTER_PATH, FIXTURES_PATH, ProjectStaticSurfaceOptions, RULE_SET_PATH,
-        fixture_paths, project_2550q_static_surface, read_json,
+        CORE_ADAPTER_PATH, FIXTURES_PATH, ProjectStaticSurfaceOptions, ProjectionReadScope,
+        RULE_SET_PATH, fixture_paths, project_2550q_static_surface, read_json,
     };
     use crate::json::canonical_bytes;
     use crate::path::canonical_repo_root;
@@ -1011,8 +1037,10 @@ mod tests {
         let repo_root = landed_repo_root();
         let scratch = materialize_scratch_corpus(&repo_root);
 
-        let report = project_2550q_static_surface(&ProjectStaticSurfaceOptions::new(&scratch))
-            .expect("project the scratch corpus");
+        let report = project_2550q_static_surface(
+            &ProjectStaticSurfaceOptions::external_workspace(&scratch),
+        )
+        .expect("project the scratch corpus");
         assert_eq!(report.executable_raw_field_count, 34);
         assert_eq!(report.documented_only_control_count, 53);
         assert_eq!(report.total_field_count, 94);
@@ -1030,8 +1058,16 @@ mod tests {
         assert_eq!(relatives.len(), 122);
 
         for relative in &relatives {
-            let tracked = read_json(&repo_root.join(relative)).expect("tracked document parses");
-            let projected = read_json(&scratch.join(relative)).expect("projected document parses");
+            let tracked = read_json(
+                &repo_root.join(relative),
+                ProjectionReadScope::TrackedCheckout,
+            )
+            .expect("tracked document parses");
+            let projected = read_json(
+                &scratch.join(relative),
+                ProjectionReadScope::ExternalWorkspace,
+            )
+            .expect("projected document parses");
             assert_eq!(
                 String::from_utf8(canonical_bytes(&projected)).expect("canonical JSON is UTF-8"),
                 String::from_utf8(canonical_bytes(&tracked)).expect("canonical JSON is UTF-8"),

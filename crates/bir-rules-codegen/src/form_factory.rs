@@ -5,6 +5,7 @@
 //! never infers executable semantics or writes canonical `rules/`.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,10 @@ use crate::evidence::{
     VerifiedPacket,
 };
 use crate::evidence_set::{EVIDENCE_SUMMARY_FORMAT, TRACKED_V1_SOURCE_SET_DOMAIN};
-use crate::files::{read_bytes, read_tree};
+use crate::files::{
+    ApprovedExternalRoot, ReadScope, read_external_bytes_under, read_external_tree_under,
+    read_tracked_bytes, read_tracked_tree,
+};
 use crate::hash::{digest_entries, sha256_hex};
 use crate::json::{CANONICALIZATION_ID, canonical_bytes, parse_strict};
 use crate::path::{portable_join, resolve_existing_under};
@@ -25,6 +29,64 @@ use crate::schema::SchemaSet;
 const SUMMARY_PATH: &str = "derived/tracked-v1-summary.json";
 const HANDOFF_FORMAT: &str = "bir-packet-backed-form-handoff-v1";
 const UNRESOLVED_REASON: &str = "The reviewed packet proves this legacy record exists, but no executable v2 semantics have been reviewed.";
+
+struct ScopedReader {
+    scope: ReadScope,
+    external_root: Option<ApprovedExternalRoot>,
+}
+
+impl ScopedReader {
+    fn new(scope: ReadScope, root: &Path, label: &str) -> Result<Self> {
+        let external_root = match scope {
+            ReadScope::Tracked => None,
+            ReadScope::External => {
+                let expected = fs::canonicalize(root).map_err(|source| {
+                    CodegenError::io(&format!("canonicalize {label}"), root, source)
+                })?;
+                Some(ApprovedExternalRoot::capture(root, label, |resolved| {
+                    if resolved != expected {
+                        return Err(CodegenError::new(format!(
+                            "{label} `{}` resolved to unexpected canonical root `{}`",
+                            expected.display(),
+                            resolved.display()
+                        )));
+                    }
+                    Ok(())
+                })?)
+            }
+        };
+        Ok(Self {
+            scope,
+            external_root,
+        })
+    }
+
+    fn read_bytes(&self, path: &Path, label: &str) -> Result<Vec<u8>> {
+        match self.scope {
+            ReadScope::Tracked => read_tracked_bytes(path),
+            ReadScope::External => {
+                let root = self
+                    .external_root
+                    .as_ref()
+                    .expect("external reader retains its approved root");
+                read_external_bytes_under(root, path, label)
+            }
+        }
+    }
+
+    fn read_tree(&self, tree_root: &Path, label: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+        match self.scope {
+            ReadScope::Tracked => read_tracked_tree(tree_root),
+            ReadScope::External => {
+                let root = self
+                    .external_root
+                    .as_ref()
+                    .expect("external reader retains its approved root");
+                read_external_tree_under(root, tree_root, label)
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct PacketBackedFormPlan {
@@ -163,6 +225,38 @@ pub(crate) fn build_packet_backed_form_plan(
     form_id: &str,
     packet: &VerifiedPacket,
 ) -> Result<PacketBackedFormPlan> {
+    build_packet_backed_form_plan_with_scope(
+        repo_root,
+        form_root,
+        form_id,
+        packet,
+        ReadScope::Tracked,
+    )
+}
+
+pub(crate) fn build_packet_backed_form_plan_external(
+    repo_root: &Path,
+    form_root: &Path,
+    form_id: &str,
+    packet: &VerifiedPacket,
+) -> Result<PacketBackedFormPlan> {
+    build_packet_backed_form_plan_with_scope(
+        repo_root,
+        form_root,
+        form_id,
+        packet,
+        ReadScope::External,
+    )
+}
+
+fn build_packet_backed_form_plan_with_scope(
+    repo_root: &Path,
+    form_root: &Path,
+    form_id: &str,
+    packet: &VerifiedPacket,
+    read_scope: ReadScope,
+) -> Result<PacketBackedFormPlan> {
+    let reader = ScopedReader::new(read_scope, repo_root, "packet-backed form repository")?;
     require_reviewed_packet(packet)?;
     if packet.manifest.form_id != form_id {
         return Err(CodegenError::new(format!(
@@ -181,7 +275,7 @@ pub(crate) fn build_packet_backed_form_plan(
     }
 
     let rules_index_path = resolve_existing_under(repo_root, "rules/index.json", "rules index")?;
-    let rules_index: RulesIndex = parse_typed_file(&rules_index_path, "rules index")?;
+    let rules_index: RulesIndex = parse_typed_file(&rules_index_path, "rules index", &reader)?;
     let entries = rules_index
         .forms
         .iter()
@@ -201,11 +295,11 @@ pub(crate) fn build_packet_backed_form_plan(
         )));
     }
 
-    let form_tree = read_tree(form_root)?;
+    let form_tree = reader.read_tree(form_root, "v1 form tree")?;
     let documents = load_form_documents(form_root, &form_tree)?;
     require_identity(index, &documents.manifest, packet)?;
 
-    let tracked_sources = tracked_v1_sources(form_root)?;
+    let tracked_sources = tracked_v1_sources(form_root, &reader)?;
     let tracked_digest = digest_entries(
         TRACKED_V1_SOURCE_SET_DOMAIN,
         tracked_sources
@@ -221,7 +315,7 @@ pub(crate) fn build_packet_backed_form_plan(
 
     let summary = load_summary(packet)?;
     validate_summary_identity(&summary, form_id, &tracked_digest, &tracked_sources)?;
-    let census = validate_census(&summary, &documents, form_root)?;
+    let census = validate_census(&summary, &documents, form_root, &reader)?;
 
     let classifications = legacy_classifications(&census);
     let sources = legacy_sources(form_id, &form_tree)?;
@@ -349,7 +443,10 @@ pub(crate) fn build_packet_backed_form_plan(
     });
 
     let schema_root = resolve_existing_under(repo_root, "rules/schema/v2", "v2 schema root")?;
-    let schemas = SchemaSet::load(&schema_root)?;
+    let schemas = match reader.scope {
+        ReadScope::Tracked => SchemaSet::load_tracked(&schema_root)?,
+        ReadScope::External => SchemaSet::load_external(&schema_root)?,
+    };
     validate_generated_json(&schemas, "rule-set.schema.json", &rule_set)?;
     validate_generated_json(&schemas, "index.schema.json", &v2_index)?;
 
@@ -363,7 +460,7 @@ pub(crate) fn build_packet_backed_form_plan(
             bytes,
         )?;
     }
-    for (relative, bytes) in read_tree(&schema_root)? {
+    for (relative, bytes) in reader.read_tree(&schema_root, "v2 schema tree")? {
         insert_unique(&mut files, format!("rules/schema/v2/{relative}"), bytes)?;
     }
     insert_unique(
@@ -560,6 +657,7 @@ fn validate_census(
     summary: &DerivedSummary,
     documents: &FormDocuments,
     form_root: &Path,
+    reader: &ScopedReader,
 ) -> Result<VerifiedCensus> {
     let fields = inventory_from_array(&documents.fields, "fields", "field_key")?;
     let validations = inventory_from_array(&documents.validations, "rules", "rule_id")?;
@@ -572,8 +670,8 @@ fn validate_census(
         record.ordinal = workflow.len() + 1;
         workflow.push(record);
     }
-    let fixtures = fixture_inventory(form_root)?;
-    let serialization = serialization_inventory(form_root, &fields)?;
+    let fixtures = fixture_inventory(form_root, reader)?;
+    let serialization = serialization_inventory(form_root, &fields, reader)?;
     let gap_count = manifest_count(&documents.manifest, "unverified_gaps")?;
     let gaps = (0..gap_count as usize)
         .map(|index| InventoryRecord {
@@ -631,6 +729,7 @@ fn validate_census(
         &documents.fields,
         &fields,
         form_root,
+        reader,
     )?;
 
     let negative_fixture_count = required_array(&documents.negative_cases, "cases")?.len();
@@ -661,6 +760,7 @@ fn validate_xml_inventory(
     fields_document: &Value,
     fields: &[InventoryRecord],
     form_root: &Path,
+    reader: &ScopedReader,
 ) -> Result<()> {
     if xml.values_emitted {
         return Err(CodegenError::new(
@@ -669,7 +769,7 @@ fn validate_xml_inventory(
     }
     let binding = form_root.join("fixtures/serialization-binding-inventory-v796.json");
     if binding.exists() {
-        let value: Value = parse_typed_file(&binding, "serialization binding inventory")?;
+        let value: Value = parse_typed_file(&binding, "serialization binding inventory", reader)?;
         let bindings = required_array(&value, "occurrence_bindings")?;
         let mut occurrences = BTreeMap::<String, usize>::new();
         let expected_records = bindings
@@ -1021,12 +1121,13 @@ fn inventory_from_array(document: &Value, key: &str, id_key: &str) -> Result<Vec
 fn serialization_inventory(
     form_root: &Path,
     fields: &[InventoryRecord],
+    reader: &ScopedReader,
 ) -> Result<Vec<InventoryRecord>> {
     let path = form_root.join("fixtures/serialization-binding-inventory-v796.json");
     if !path.exists() {
         return Ok(fields.to_vec());
     }
-    let value: Value = parse_typed_file(&path, "serialization binding inventory")?;
+    let value: Value = parse_typed_file(&path, "serialization binding inventory", reader)?;
     required_array(&value, "occurrence_bindings")?
         .iter()
         .enumerate()
@@ -1050,10 +1151,10 @@ fn serialization_inventory(
         .collect()
 }
 
-fn fixture_inventory(form_root: &Path) -> Result<Vec<InventoryRecord>> {
+fn fixture_inventory(form_root: &Path, reader: &ScopedReader) -> Result<Vec<InventoryRecord>> {
     let fixture_root = form_root.join("fixtures");
     let mut records = Vec::new();
-    for (relative, bytes) in read_tree(&fixture_root)? {
+    for (relative, bytes) in reader.read_tree(&fixture_root, "v1 fixture tree")? {
         if !relative.ends_with(".json") {
             continue;
         }
@@ -1145,9 +1246,9 @@ fn parse_tree_json(
     Ok(parse_strict(bytes, &path)?.into_serde())
 }
 
-fn tracked_v1_sources(form_root: &Path) -> Result<Vec<TrackedSource>> {
+fn tracked_v1_sources(form_root: &Path, reader: &ScopedReader) -> Result<Vec<TrackedSource>> {
     let mut sources = Vec::new();
-    for (path, bytes) in read_tree(form_root)? {
+    for (path, bytes) in reader.read_tree(form_root, "tracked v1 source tree")? {
         let name = path.rsplit('/').next().unwrap_or(path.as_str());
         if matches!(name, "README.md" | "HANDOFF.md") || name.starts_with("v2-") {
             continue;
@@ -1228,8 +1329,12 @@ fn required_string<'a>(document: &'a Value, key: &str) -> Result<&'a str> {
         .ok_or_else(|| CodegenError::new(format!("document is missing string `{key}`")))
 }
 
-fn parse_typed_file<T: for<'de> Deserialize<'de>>(path: &Path, label: &str) -> Result<T> {
-    let bytes = read_bytes(path)?;
+fn parse_typed_file<T: for<'de> Deserialize<'de>>(
+    path: &Path,
+    label: &str,
+    reader: &ScopedReader,
+) -> Result<T> {
+    let bytes = reader.read_bytes(path, label)?;
     let value = parse_strict(&bytes, path)?.into_serde();
     serde_json::from_value(value)
         .map_err(|source| CodegenError::with_source(format!("load {label}"), source))
@@ -1270,7 +1375,8 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::{
-        SUMMARY_PATH, build_packet_backed_form_plan, canonical_json, sha256_hex, tracked_v1_sources,
+        SUMMARY_PATH, ScopedReader, build_packet_backed_form_plan_external, canonical_json,
+        sha256_hex, tracked_v1_sources,
     };
     use crate::audit::{AuditOptions, audit};
     use crate::evidence::{
@@ -1280,7 +1386,7 @@ mod tests {
         StageFormOptions, VerifiedPacket, stage_form,
     };
     use crate::evidence_set::{EVIDENCE_SUMMARY_FORMAT, TRACKED_V1_SOURCE_SET_DOMAIN};
-    use crate::files::{read_tree, write_tree_atomically};
+    use crate::files::{ReadScope, read_tracked_tree, write_tree_atomically};
     use crate::hash::digest_entries;
     use crate::json::CANONICALIZATION_ID;
 
@@ -1393,7 +1499,9 @@ mod tests {
             }),
         );
 
-        let tracked = tracked_v1_sources(&form_root).expect("build tracked sources");
+        let reader = ScopedReader::new(ReadScope::External, &repo, "factory fixture repository")
+            .expect("capture factory fixture repository");
+        let tracked = tracked_v1_sources(&form_root, &reader).expect("build tracked sources");
         let tracked_digest = digest_entries(
             TRACKED_V1_SOURCE_SET_DOMAIN,
             tracked
@@ -1535,14 +1643,14 @@ mod tests {
     #[test]
     fn reviewed_planned_packet_emits_auditable_unresolved_skeleton_stably() {
         let fixture = fixture();
-        let first = build_packet_backed_form_plan(
+        let first = build_packet_backed_form_plan_external(
             &fixture.repo,
             &fixture.form_root,
             "form-a",
             &fixture.packet,
         )
         .expect("build reviewed skeleton");
-        let second = build_packet_backed_form_plan(
+        let second = build_packet_backed_form_plan_external(
             &fixture.repo,
             &fixture.form_root,
             "form-a",
@@ -1600,7 +1708,8 @@ mod tests {
 
         let workspace = fixture.root.join("workspace");
         write_tree_atomically(&workspace, &first.files).expect("write external workspace");
-        let report = audit(&AuditOptions::new(&workspace)).expect("audit skeleton workspace");
+        let report =
+            audit(&AuditOptions::external_workspace(&workspace)).expect("audit skeleton workspace");
         assert_eq!(report.snapshot_count(), 1);
         assert_eq!(
             report
@@ -1615,7 +1724,7 @@ mod tests {
     fn candidate_pinned_identity_and_count_drift_fail_closed() {
         let mut fixture = fixture();
         fixture.packet.manifest.review.status = EvidenceReviewStatus::Candidate;
-        let error = build_packet_backed_form_plan(
+        let error = build_packet_backed_form_plan_external(
             &fixture.repo,
             &fixture.form_root,
             "form-a",
@@ -1628,7 +1737,7 @@ mod tests {
         fixture.packet.manifest.rule_set_source_state = RuleSetSourceState::Pinned {
             source_set_sha256: "e".repeat(64),
         };
-        let error = build_packet_backed_form_plan(
+        let error = build_packet_backed_form_plan_external(
             &fixture.repo,
             &fixture.form_root,
             "form-a",
@@ -1641,7 +1750,7 @@ mod tests {
             source_set_sha256: (),
         };
         fixture.packet.manifest.form_code = "OTHER".to_owned();
-        let error = build_packet_backed_form_plan(
+        let error = build_packet_backed_form_plan_external(
             &fixture.repo,
             &fixture.form_root,
             "form-a",
@@ -1664,7 +1773,7 @@ mod tests {
             SUMMARY_PATH.to_owned(),
             canonical_json(&summary, "drifted summary").expect("serialize drift"),
         );
-        let error = build_packet_backed_form_plan(
+        let error = build_packet_backed_form_plan_external(
             &fixture.repo,
             &fixture.form_root,
             "form-a",
@@ -1678,7 +1787,7 @@ mod tests {
     fn canonical_destination_is_rejected_before_packet_materialization() {
         let fixture = fixture();
         let target = fixture.repo.join("rules/factory-output");
-        let options = StageFormOptions::new(&fixture.repo, "form-a", &target)
+        let options = StageFormOptions::external_workspace(&fixture.repo, "form-a", &target)
             .with_packet(fixture.root.join("missing-packet"));
         let error = stage_form(&options).expect_err("canonical target must fail");
         assert!(error.to_string().contains("canonical rules"));
@@ -1716,7 +1825,7 @@ mod tests {
     fn copy_schema_tree(repo: &Path) {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
         let target = repo.join("rules/schema/v2");
-        for (relative, bytes) in read_tree(&source).expect("read v2 schemas") {
+        for (relative, bytes) in read_tracked_tree(&source).expect("read v2 schemas") {
             let path = target.join(relative.replace('/', std::path::MAIN_SEPARATOR_STR));
             fs::create_dir_all(path.parent().expect("schema parent"))
                 .expect("create schema parent");

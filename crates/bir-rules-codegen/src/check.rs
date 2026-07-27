@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::error::{CodegenError, Result};
-use crate::files::read_tree;
+use crate::files::{ApprovedExternalRoot, ReadScope, read_external_tree_under, read_tracked_tree};
 use crate::generate::{
     GenerateOptions, GenerationReport, audit_for_generation, build_generated_files,
     resolve_generated_output,
@@ -17,9 +18,16 @@ pub struct CheckOptions {
 }
 
 impl CheckOptions {
-    pub fn new(repo_root: impl Into<PathBuf>) -> Self {
+    pub fn tracked_checkout(repo_root: impl Into<PathBuf>) -> Self {
         Self {
-            generate: GenerateOptions::new(repo_root),
+            generate: GenerateOptions::tracked_checkout(repo_root),
+            run_runtime_tests: true,
+        }
+    }
+
+    pub fn external_workspace(repo_root: impl Into<PathBuf>) -> Self {
+        Self {
+            generate: GenerateOptions::external_workspace(repo_root),
             run_runtime_tests: true,
         }
     }
@@ -33,7 +41,41 @@ pub fn check(options: &CheckOptions) -> Result<GenerationReport> {
     compare_file_trees("independent generation runs", &first.files, &second.files)?;
 
     let output = resolve_generated_output(&first_audit.repo_root, &options.generate.output_dir)?;
-    let tracked = read_tree(&output)?;
+    let approved_repo = match options.generate.audit.read_scope {
+        ReadScope::Tracked => None,
+        ReadScope::External => {
+            let expected = fs::canonicalize(&first_audit.repo_root).map_err(|source| {
+                CodegenError::io(
+                    "canonicalize generated-output repository",
+                    &first_audit.repo_root,
+                    source,
+                )
+            })?;
+            Some(ApprovedExternalRoot::capture(
+                &first_audit.repo_root,
+                "generated-output repository",
+                |resolved| {
+                    if resolved != expected {
+                        return Err(CodegenError::new(format!(
+                            "generated-output repository `{}` resolved to unexpected canonical root `{}`",
+                            expected.display(),
+                            resolved.display()
+                        )));
+                    }
+                    Ok(())
+                },
+            )?)
+        }
+    };
+    let tracked = match options.generate.audit.read_scope {
+        ReadScope::Tracked => read_tracked_tree(&output)?,
+        ReadScope::External => {
+            let approved_repo = approved_repo
+                .as_ref()
+                .expect("external check retains its approved repository");
+            read_external_tree_under(approved_repo, &output, "generated output")?
+        }
+    };
     compare_file_trees("tracked generated output", &first.files, &tracked)?;
 
     run_rust_format_check(&first_audit.repo_root)?;

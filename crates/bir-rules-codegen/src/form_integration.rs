@@ -30,16 +30,16 @@ use crate::evidence::{
 use crate::evidence_set::{
     EVIDENCE_REVIEW_LEDGER_FORMAT, EVIDENCE_SUMMARY_FORMAT, TRACKED_V1_SOURCE_SET_DOMAIN,
 };
-use crate::files::{read_bytes, read_tree, write_tree_atomically};
+use crate::files::{read_tracked_bytes, read_tracked_tree, write_tree_atomically};
 use crate::generate::{GenerationReport, build_generated_files};
 use crate::hash::{digest_entries, sha256_hex};
 use crate::json::{CANONICALIZATION_ID, canonical_bytes, parse_strict};
 use crate::model::{BranchState, ReviewStatus, SerializationArtifactBranch};
 use crate::path::{
-    DEFAULT_SCHEMA_DIR, DEFAULT_SOURCE_DIR, canonical_repo_root, is_same_or_below,
+    DEFAULT_SCHEMA_DIR, DEFAULT_SOURCE_DIR, canonical_repo_root, is_same_or_below, is_same_path,
     is_symlink_or_reparse_point, resolve_existing_under, validate_portable_relative,
 };
-use crate::verified_file::open_verified_regular_file;
+use crate::verified_file::open_verified_external_regular_file;
 
 pub const FORM_INTEGRATION_TREE_DIGEST_DOMAIN: &str = "bir-rules-form-integration-tree-v1";
 pub const PACKET_BACKED_HANDOFF_FORMAT: &str = "bir-packet-backed-form-handoff-v1";
@@ -339,7 +339,7 @@ fn build_integration_plan(options: &FormIntegrationOptions) -> Result<Integratio
         &repo_root,
         "packet-backed staging root",
     )?;
-    let reviewed_packet_root = canonical_external_directory(
+    let (reviewed_packet_root, reviewed_packet_identity) = approve_external_directory(
         &options.reviewed_packet_dir,
         &repo_root,
         "reviewed evidence packet",
@@ -364,8 +364,12 @@ fn build_integration_plan(options: &FormIntegrationOptions) -> Result<Integratio
         &reviewed_packet_root,
         "reviewed evidence packet",
     )?;
-    let reviewed_artifacts =
-        load_reviewed_artifact_binding(&reviewed_packet_root, &review_ledger_path)?;
+    let reviewed_artifacts = load_reviewed_artifact_binding(
+        &reviewed_packet_root,
+        &reviewed_packet_identity,
+        &review_ledger_path,
+        &repo_root,
+    )?;
     if reviewed_artifacts.manifest.rule_set_id != options.rule_set_id {
         return Err(CodegenError::new(format!(
             "reviewed packet rule_set_id `{}` differs from requested `{}`",
@@ -391,9 +395,9 @@ fn build_integration_plan(options: &FormIntegrationOptions) -> Result<Integratio
         &canonical_form_relative,
         "canonical v1 form root",
     )?;
-    let canonical_form_tree = read_tree(&canonical_form_root)?;
-    let canonical_schemas = read_tree(&canonical_schema_root)?;
-    let current_tree = read_tree(&source_root)?;
+    let canonical_form_tree = read_tracked_tree(&canonical_form_root)?;
+    let canonical_schemas = read_tracked_tree(&canonical_schema_root)?;
+    let current_tree = read_tracked_tree(&source_root)?;
 
     // Inventory names and entry types across the external workspace before
     // opening any staged file. Only the exact fixed handoff/form/schema/v2
@@ -505,7 +509,7 @@ fn build_integration_plan(options: &FormIntegrationOptions) -> Result<Integratio
         })?;
     require_protected_tree(&current_tree)?;
 
-    let current_audit = audit(&AuditOptions::new(&repo_root))?;
+    let current_audit = audit(&AuditOptions::tracked_checkout(&repo_root))?;
     require_protected_audit(&current_audit, &protected_index)?;
     if current_audit.snapshot_count() != current_index.snapshots.len() {
         return Err(CodegenError::new(
@@ -669,7 +673,7 @@ fn refuse_non_atomic_apply<T>(
     source_root: &Path,
     expected_tree: &BTreeMap<String, Vec<u8>>,
 ) -> Result<T> {
-    let live_tree = read_tree(source_root)?;
+    let live_tree = read_tracked_tree(source_root)?;
     if &live_tree != expected_tree {
         return Err(CodegenError::new(format!(
             "canonical v2 source tree changed outside form integration (expected {}, found {}); no bytes were written",
@@ -691,7 +695,7 @@ fn validate_external_proposal(
     rule_set_id: &str,
     protected_index: &ClosedIndexSnapshot,
 ) -> Result<(AuditReport, GenerationReport, String)> {
-    let canonical_rules_tree = read_tree(rules_root)?;
+    let canonical_rules_tree = read_tracked_tree(rules_root)?;
     let extracted_current = extract_subtree(&canonical_rules_tree, "ir/v2/");
     compare_trees(
         "canonical rules tree during proposal construction",
@@ -712,7 +716,10 @@ fn validate_external_proposal(
     }
 
     let mut proposal_files = BTreeMap::new();
-    proposal_files.insert(".rustfmt.toml".to_owned(), read_bytes(&rustfmt_path)?);
+    proposal_files.insert(
+        ".rustfmt.toml".to_owned(),
+        read_tracked_bytes(&rustfmt_path)?,
+    );
     for (path, bytes) in canonical_rules_tree {
         if path == "ir/v2" || path.starts_with("ir/v2/") {
             continue;
@@ -727,12 +734,12 @@ fn validate_external_proposal(
     let validation = (|| {
         write_tree_atomically(workspace.repo_root(), &proposal_files)?;
 
-        let first_audit = audit(&AuditOptions::new(workspace.repo_root()))?;
+        let first_audit = audit(&AuditOptions::external_workspace(workspace.repo_root()))?;
         first_audit.require_rule_set(rule_set_id)?;
         require_protected_audit(&first_audit, protected_index)?;
         let first_generation = build_generated_files(&first_audit)?;
 
-        let second_audit = audit(&AuditOptions::new(workspace.repo_root()))?;
+        let second_audit = audit(&AuditOptions::external_workspace(workspace.repo_root()))?;
         second_audit.require_rule_set(rule_set_id)?;
         require_protected_audit(&second_audit, protected_index)?;
         let second_generation = build_generated_files(&second_audit)?;
@@ -851,7 +858,14 @@ fn capture_staging_workspace(
         let path = staging_root.join(relative.replace('/', std::path::MAIN_SEPARATOR_STR));
         workspace_tree.insert(
             relative.clone(),
-            read_verified_regular_file(&path, "allowlisted staging file")?,
+            read_verified_regular_file(&path, "allowlisted staging file", |resolved| {
+                validate_exact_contained_file(
+                    resolved,
+                    &path,
+                    staging_root,
+                    "allowlisted staging file",
+                )
+            })?,
         );
     }
     let final_inventory =
@@ -1091,7 +1105,7 @@ fn audit_captured_staging(
     let mut workspace = ProposalWorkspace::create(staging_root)?;
     let validation = (|| {
         write_tree_atomically(workspace.repo_root(), captured_tree)?;
-        audit(&AuditOptions::new(workspace.repo_root()))
+        audit(&AuditOptions::external_workspace(workspace.repo_root()))
     })();
     let cleanup = workspace.cleanup();
     match (validation, cleanup) {
@@ -1108,11 +1122,23 @@ fn audit_captured_staging(
 
 fn load_reviewed_artifact_binding(
     packet_root: &Path,
+    approved_packet_identity: &Handle,
     review_ledger_path: &Path,
+    repo_root: &Path,
 ) -> Result<ReviewedArtifactBinding> {
-    let packet_before = read_tree_stably(packet_root, "reviewed evidence packet")?;
+    let packet_before = read_tree_stably(
+        packet_root,
+        "reviewed evidence packet",
+        repo_root,
+        approved_packet_identity,
+    )?;
     let verification = verify_evidence(&VerifyEvidenceOptions::new(packet_root))?;
-    let packet_tree = read_tree_stably(packet_root, "reviewed evidence packet after verification")?;
+    let packet_tree = read_tree_stably(
+        packet_root,
+        "reviewed evidence packet after verification",
+        repo_root,
+        approved_packet_identity,
+    )?;
     compare_trees(
         "reviewed evidence packet during verification",
         &packet_before,
@@ -1178,7 +1204,10 @@ fn load_reviewed_artifact_binding(
         }
     }
 
-    let ledger_bytes = read_verified_regular_file(review_ledger_path, "review ledger")?;
+    let ledger_bytes =
+        read_verified_regular_file(review_ledger_path, "review ledger", |resolved| {
+            validate_exact_external_file(resolved, review_ledger_path, repo_root, "review ledger")
+        })?;
     let ledger_value = parse_strict(&ledger_bytes, review_ledger_path)?;
     if canonical_bytes(&ledger_value) != ledger_bytes {
         return Err(CodegenError::new(format!(
@@ -2049,6 +2078,36 @@ fn canonical_external_directory(path: &Path, repo_root: &Path, label: &str) -> R
     Ok(resolved)
 }
 
+fn approve_external_directory(
+    path: &Path,
+    repo_root: &Path,
+    label: &str,
+) -> Result<(PathBuf, Handle)> {
+    let resolved = canonical_external_directory(path, repo_root, label)?;
+    let identity = Handle::from_path(&resolved).map_err(|source| {
+        CodegenError::io(
+            &format!("open approved {label} identity"),
+            &resolved,
+            source,
+        )
+    })?;
+    let revalidated = canonical_external_directory(&resolved, repo_root, label)?;
+    let current = Handle::from_path(&revalidated).map_err(|source| {
+        CodegenError::io(
+            &format!("reopen approved {label} identity"),
+            &revalidated,
+            source,
+        )
+    })?;
+    if !is_same_path(&resolved, &revalidated) || identity != current {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` changed while its approved root identity was captured",
+            resolved.display()
+        )));
+    }
+    Ok((resolved, identity))
+}
+
 fn canonical_external_file(path: &Path, repo_root: &Path, label: &str) -> Result<PathBuf> {
     if path
         .components()
@@ -2136,7 +2195,12 @@ fn require_file_outside_directory(
     Ok(())
 }
 
-fn read_tree_stably(directory: &Path, label: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+fn read_tree_stably(
+    directory: &Path,
+    label: &str,
+    repo_root: &Path,
+    approved_identity: &Handle,
+) -> Result<BTreeMap<String, Vec<u8>>> {
     let before_metadata = fs::symlink_metadata(directory)
         .map_err(|source| CodegenError::io(&format!("inspect {label}"), directory, source))?;
     if is_symlink_or_reparse_point(&before_metadata) || !before_metadata.is_dir() {
@@ -2147,7 +2211,40 @@ fn read_tree_stably(directory: &Path, label: &str) -> Result<BTreeMap<String, Ve
     }
     let before = Handle::from_path(directory)
         .map_err(|source| CodegenError::io(&format!("open {label} identity"), directory, source))?;
-    let tree = read_tree(directory)?;
+    if &before != approved_identity {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` differs from its approved directory identity before read",
+            directory.display()
+        )));
+    }
+
+    let inventory = inventory_directory_metadata(directory, label)?;
+    let mut tree = BTreeMap::new();
+    for (relative, kind) in &inventory {
+        if *kind != InventoryEntryKind::File {
+            continue;
+        }
+        let path = directory.join(relative.replace('/', std::path::MAIN_SEPARATOR_STR));
+        let bytes = read_verified_regular_file(&path, label, |resolved| {
+            validate_exact_contained_file(resolved, &path, directory, label)?;
+            if is_same_or_below(repo_root, resolved) {
+                return Err(CodegenError::new(format!(
+                    "{label} file `{}` resolved inside repository `{}`",
+                    resolved.display(),
+                    repo_root.display()
+                )));
+            }
+            Ok(())
+        })?;
+        tree.insert(relative.clone(), bytes);
+    }
+    let final_inventory = inventory_directory_metadata(directory, label)?;
+    if final_inventory != inventory {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` metadata changed during read",
+            directory.display()
+        )));
+    }
     let after_metadata = fs::symlink_metadata(directory).map_err(|source| {
         CodegenError::io(&format!("reinspect {label} after read"), directory, source)
     })?;
@@ -2164,23 +2261,67 @@ fn read_tree_stably(directory: &Path, label: &str) -> Result<BTreeMap<String, Ve
             source,
         )
     })?;
-    if before != after {
+    if before != after || &after != approved_identity {
         return Err(CodegenError::new(format!(
-            "{label} `{}` was replaced during read",
+            "{label} `{}` was replaced or differs from its approved identity during read",
             directory.display()
         )));
     }
     Ok(tree)
 }
 
-fn read_verified_regular_file(path: &Path, label: &str) -> Result<Vec<u8>> {
-    let mut verified = open_verified_regular_file(path, label, |_| Ok(()))?;
+fn read_verified_regular_file(
+    path: &Path,
+    label: &str,
+    validate_resolved_path: impl Fn(&Path) -> Result<()>,
+) -> Result<Vec<u8>> {
+    let mut verified = open_verified_external_regular_file(path, label, validate_resolved_path)?;
     let mut bytes = Vec::new();
     verified
         .file_mut()
         .read_to_end(&mut bytes)
         .map_err(|source| CodegenError::io(&format!("read {label}"), path, source))?;
     Ok(bytes)
+}
+
+fn validate_exact_contained_file(
+    resolved: &Path,
+    expected: &Path,
+    root: &Path,
+    label: &str,
+) -> Result<()> {
+    if !is_same_path(resolved, expected) || !is_same_or_below(root, resolved) {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` resolved outside its exact canonical path/root `{}` (resolved `{}`)",
+            expected.display(),
+            root.display(),
+            resolved.display()
+        )));
+    }
+    Ok(())
+}
+
+fn validate_exact_external_file(
+    resolved: &Path,
+    expected: &Path,
+    repo_root: &Path,
+    label: &str,
+) -> Result<()> {
+    if !is_same_path(resolved, expected) {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` resolved to a different canonical file `{}`",
+            expected.display(),
+            resolved.display()
+        )));
+    }
+    if is_same_or_below(repo_root, resolved) {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` resolved inside repository `{}`",
+            resolved.display(),
+            repo_root.display()
+        )));
+    }
+    Ok(())
 }
 
 fn require_one_portable_component(value: &str, label: &str) -> Result<()> {
@@ -2535,7 +2676,18 @@ fn remove_proposal_container(
         )));
     }
     let owner_path = path.join(PROPOSAL_OWNER_FILE);
-    if read_verified_regular_file(&owner_path, "integration proposal owner marker")? != owner_marker
+    if read_verified_regular_file(
+        &owner_path,
+        "integration proposal owner marker",
+        |resolved| {
+            validate_exact_contained_file(
+                resolved,
+                &owner_path,
+                path,
+                "integration proposal owner marker",
+            )
+        },
+    )? != owner_marker
     {
         return Err(CodegenError::new(format!(
             "refusing to remove integration proposal whose owner marker changed at `{}`",
@@ -2558,6 +2710,7 @@ mod tests {
     use std::path::Path;
     use std::sync::atomic::Ordering;
 
+    use same_file::Handle;
     use serde_json::json;
 
     use super::{
@@ -2566,10 +2719,12 @@ mod tests {
         EVIDENCE_SUMMARY_FORMAT, HANDOFF_PATH, HandoffIdentity, HandoffPacket, INDEX_PATH,
         PACKET_BACKED_HANDOFF_FORMAT, PROPOSAL_COUNTER, PROPOSAL_OWNER_FILE,
         PROTECTED_2550Q_RULE_SET_ID, PacketBackedHandoff, ProposalWorkspace, canonical_serialize,
-        capture_staging_workspace, compare_trees, parse_index, read_verified_regular_file,
-        reject_case_fold_collisions, reject_executable_filing_safe_json, render_index,
-        require_add_only_delta, require_allowed_review_state, require_protected_tree_unchanged,
-        tree_digest, validate_closed_snapshot_identity, validate_external_proposal,
+        capture_staging_workspace, compare_trees, parse_index, read_tree_stably,
+        read_verified_regular_file, reject_case_fold_collisions,
+        reject_executable_filing_safe_json, render_index, require_add_only_delta,
+        require_allowed_review_state, require_protected_tree_unchanged, tree_digest,
+        validate_closed_snapshot_identity, validate_exact_contained_file,
+        validate_exact_external_file, validate_external_proposal,
         validate_handoff_artifact_binding, validate_review_ledger_binding,
         validate_review_summary_binding,
     };
@@ -2577,7 +2732,7 @@ mod tests {
         EVIDENCE_PACKET_FORMAT, EvidenceCaptureOperatingSystem, EvidenceCaptureProvenance,
         EvidencePacketManifest, EvidenceReview, EvidenceReviewStatus, RuleSetSourceState,
     };
-    use crate::files::{read_tree, write_tree_atomically};
+    use crate::files::{read_external_tree, write_tree_atomically};
     use crate::hash::sha256_hex;
     use crate::json::{CANONICALIZATION_ID, parse_strict};
 
@@ -2594,11 +2749,79 @@ mod tests {
         fs::write(&source, b"reviewed").expect("write source");
         fs::hard_link(&source, &alias).expect("create hard-link alias");
 
-        let error = read_verified_regular_file(&alias, "test review ledger")
+        let error = read_verified_regular_file(&alias, "test review ledger", |_| Ok(()))
             .expect_err("hard-linked integration input must fail closed");
         assert!(error.to_string().contains("hard links"));
 
         fs::remove_dir_all(root).expect("remove hard-link test root");
+    }
+
+    #[test]
+    fn integration_open_callbacks_reassert_exact_roots_and_external_ledger() {
+        let sequence = PROPOSAL_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "bir-rules-codegen-integration-open-scope-{}-{sequence}",
+            std::process::id()
+        ));
+        let repo = root.join("repo");
+        let staging = root.join("staging");
+        fs::create_dir_all(&repo).expect("create callback repo");
+        fs::create_dir(&staging).expect("create callback staging");
+        let staged = staging.join("HANDOFF.json");
+        let escaped = root.join("escaped.json");
+        let external_ledger = root.join("review-ledger.json");
+        let internal_ledger = repo.join("review-ledger.json");
+        for path in [&staged, &escaped, &external_ledger, &internal_ledger] {
+            fs::write(path, b"{}").expect("write callback fixture");
+        }
+        let repo = fs::canonicalize(repo).expect("canonical repo");
+        let staging = fs::canonicalize(staging).expect("canonical staging");
+        let staged = fs::canonicalize(staged).expect("canonical staged file");
+        let escaped = fs::canonicalize(escaped).expect("canonical escaped file");
+        let external_ledger = fs::canonicalize(external_ledger).expect("canonical external ledger");
+        let internal_ledger = fs::canonicalize(internal_ledger).expect("canonical internal ledger");
+
+        validate_exact_contained_file(&staged, &staged, &staging, "staged")
+            .expect("exact staged path is accepted");
+        validate_exact_contained_file(&escaped, &staged, &staging, "staged")
+            .expect_err("escaped staging resolution must fail");
+        validate_exact_external_file(&external_ledger, &external_ledger, &repo, "review ledger")
+            .expect("exact external ledger is accepted");
+        validate_exact_external_file(&internal_ledger, &internal_ledger, &repo, "review ledger")
+            .expect_err("ledger resolution inside the repository must fail");
+        validate_exact_external_file(&escaped, &external_ledger, &repo, "review ledger")
+            .expect_err("ledger resolution to a different external file must fail");
+
+        fs::remove_dir_all(root).expect("remove callback fixture");
+    }
+
+    #[test]
+    fn reviewed_packet_reader_rejects_root_substitution_before_invocation() {
+        let sequence = PROPOSAL_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "bir-rules-codegen-packet-root-swap-{}-{sequence}",
+            std::process::id()
+        ));
+        let repo = root.join("repo");
+        let packet = root.join("packet");
+        let displaced = root.join("packet-displaced");
+        fs::create_dir(&repo).expect("create packet test repo");
+        fs::create_dir(&packet).expect("create approved packet root");
+        fs::write(packet.join("evidence-packet.json"), b"approved").expect("write approved packet");
+        let repo = fs::canonicalize(repo).expect("canonical packet test repo");
+        let packet = fs::canonicalize(packet).expect("canonical approved packet");
+        let approved = Handle::from_path(&packet).expect("capture approved packet identity");
+
+        fs::rename(&packet, &displaced).expect("displace approved packet root");
+        fs::create_dir(&packet).expect("create replacement packet root");
+        fs::write(packet.join("evidence-packet.json"), b"replacement")
+            .expect("write replacement packet");
+
+        let error = read_tree_stably(&packet, "reviewed packet", &repo, &approved)
+            .expect_err("replacement packet root must fail before any accepted tree read");
+        assert!(error.to_string().contains("approved directory identity"));
+
+        fs::remove_dir_all(root).expect("remove packet root swap fixture");
     }
 
     fn snapshot(rule_set_id: &str, review_status: ClosedReviewStatus) -> ClosedIndexSnapshot {
@@ -2853,7 +3076,7 @@ mod tests {
             .expect("canonicalize repository fixture");
         let rules_root = repo.join("rules");
         let source_root = rules_root.join("ir/v2");
-        let current_tree = read_tree(&source_root).expect("read canonical v2 fixture");
+        let current_tree = read_external_tree(&source_root).expect("read canonical v2 fixture");
         let index = parse_index(
             current_tree
                 .get(INDEX_PATH)
@@ -3144,7 +3367,7 @@ mod tests {
                 .contains("changed outside form integration")
         );
         assert_eq!(
-            read_tree(&target).expect("read untouched concurrent tree"),
+            read_external_tree(&target).expect("read untouched concurrent tree"),
             concurrent
         );
         fs::remove_dir_all(root).expect("remove CAS refusal test root");

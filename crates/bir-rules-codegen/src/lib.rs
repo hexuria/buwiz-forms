@@ -22,6 +22,7 @@
 
 mod audit;
 mod bindings;
+mod canonicalize_json;
 mod capture_metadata;
 mod check;
 mod corpus;
@@ -53,6 +54,10 @@ mod verified_file;
 pub use audit::{AuditOptions, AuditReport, SnapshotSummary, audit, discover_default_repo_root};
 pub use bindings::{
     BindingsReport, BuildBindingsOptions, DEFAULT_BINDING_INVENTORY_PATH, build_2550q_bindings,
+};
+pub use canonicalize_json::{
+    CanonicalizeJsonReport, canonicalize_json, canonicalize_json_usage, check_canonical_json,
+    run_canonicalize_json_command,
 };
 pub use capture_metadata::{
     WriteEvidenceVaultCaptureMetadataOptions, WriteEvidenceVaultCaptureMetadataReport,
@@ -87,10 +92,10 @@ pub use evidence_set::{
     BuildEvidencePacketSetReport, CheckEvidencePacketSetOptions, CheckEvidencePacketSetReport,
     CheckedPacket, EVIDENCE_PACKET_SET_FORMAT, EVIDENCE_PACKET_SET_MANIFEST,
     EVIDENCE_REVIEW_LEDGER_FORMAT, EVIDENCE_SUMMARY_FORMAT, EVIDENCE_VAULT_CATALOG_FORMAT,
-    PACKET_SET_DIGEST_DOMAIN, PACKET_SET_ORDER_DOMAIN, StageEvidencePacketReviewOptions,
-    TRACKED_V1_SOURCE_SET_DOMAIN, build_evidence_packet, build_evidence_packet_set,
-    check_evidence_packet_set, evidence_set_usage, run_evidence_set_command,
-    stage_evidence_packet_review,
+    PACKET_SET_DIGEST_DOMAIN, PACKET_SET_ORDER_DOMAIN, PlannedPacketDigest,
+    StageEvidencePacketReviewOptions, TRACKED_V1_SOURCE_SET_DOMAIN, build_evidence_packet,
+    build_evidence_packet_set, check_evidence_packet_set, evidence_set_usage,
+    run_evidence_set_command, stage_evidence_packet_review,
 };
 pub use form_integration::{
     FORM_INTEGRATION_TREE_DIGEST_DOMAIN, FormIntegrationFile, FormIntegrationOptions,

@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::error::{CodegenError, Result};
-use crate::files::{json_files, read_bytes};
+use crate::files::{json_files, read_tracked_bytes};
 use crate::json::{JsonValue, parse_strict};
 use crate::path::{canonical_repo_root, normalized_relative_path, resolve_existing_under};
 use crate::schema::SchemaSet;
@@ -140,7 +140,7 @@ fn load_documents(rules_root: &Path) -> Result<BTreeMap<String, JsonValue>> {
     let mut documents = BTreeMap::new();
     for path in json_files(rules_root)? {
         let relative = normalized_relative_path(rules_root, &path)?;
-        let bytes = read_bytes(&path)?;
+        let bytes = read_tracked_bytes(&path)?;
         let value = parse_strict(&bytes, &path).map_err(|source| {
             CodegenError::with_source(format!("invalid JSON: rules/{relative}"), source)
         })?;
@@ -402,7 +402,7 @@ fn validate_schema_documents(
     legacy: &BTreeMap<&String, &JsonValue>,
 ) -> Result<usize> {
     let schema_root = resolve_existing_under(rules_root, "schema", "v1 schema directory")?;
-    let schemas = SchemaSet::load_top_level(&schema_root)?;
+    let schemas = SchemaSet::load_top_level_tracked(&schema_root)?;
 
     let mut validated = 0usize;
     for (relative, document) in legacy {

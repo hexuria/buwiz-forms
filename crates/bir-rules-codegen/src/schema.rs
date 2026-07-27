@@ -1,12 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use regex::Regex;
 
 use crate::error::{CodegenError, Result};
-use crate::files::{json_files, read_bytes};
+use crate::files::{
+    ApprovedExternalRoot, ReadScope, json_files, read_external_tree_bound, read_tracked_bytes,
+};
 use crate::json::{JsonValue, canonical_bytes, parse_strict};
-use crate::path::normalized_relative_path;
+use crate::path::{is_json_file, normalized_relative_path, portable_join};
 
 #[derive(Clone, Copy, Debug)]
 enum NestedSchemas {
@@ -24,26 +27,73 @@ pub struct SchemaSet {
 }
 
 impl SchemaSet {
-    pub fn load(root: &Path) -> Result<Self> {
-        Self::load_with(root, NestedSchemas::Reject)
+    pub fn load_tracked(root: &Path) -> Result<Self> {
+        Self::load_with(root, NestedSchemas::Reject, ReadScope::Tracked)
+    }
+
+    pub fn load_external(root: &Path) -> Result<Self> {
+        Self::load_with(root, NestedSchemas::Reject, ReadScope::External)
     }
 
     /// Loads only the schemas directly under `root`, ignoring nested
     /// directories rather than rejecting them.
     ///
     /// The v1 corpus keeps its schemas in `rules/schema/` while the v2 IR keeps
-    /// its own closed set in `rules/schema/v2/`. [`Self::load`] must keep
-    /// rejecting nested documents so the v2 set stays flat; the v1 audit simply
-    /// skips the v2 subtree it does not own.
-    pub fn load_top_level(root: &Path) -> Result<Self> {
-        Self::load_with(root, NestedSchemas::Skip)
+    /// its own closed set in `rules/schema/v2/`. The flat loaders must keep
+    /// rejecting nested documents so the v2 set stays flat; the v1 audit
+    /// simply skips the v2 subtree it does not own.
+    pub fn load_top_level_tracked(root: &Path) -> Result<Self> {
+        Self::load_with(root, NestedSchemas::Skip, ReadScope::Tracked)
     }
 
-    fn load_with(root: &Path, nested: NestedSchemas) -> Result<Self> {
+    fn load_with(root: &Path, nested: NestedSchemas, read_scope: ReadScope) -> Result<Self> {
+        let external_root = match read_scope {
+            ReadScope::Tracked => None,
+            ReadScope::External => {
+                let expected = fs::canonicalize(root).map_err(|source| {
+                    CodegenError::io("canonicalize external schema root", root, source)
+                })?;
+                Some(ApprovedExternalRoot::capture(
+                    root,
+                    "external schema root",
+                    |resolved| {
+                        if resolved != expected {
+                            return Err(CodegenError::new(format!(
+                                "external schema root `{}` resolved to unexpected canonical root `{}`",
+                                expected.display(),
+                                resolved.display()
+                            )));
+                        }
+                        Ok(())
+                    },
+                )?)
+            }
+        };
+        let scan_root = external_root
+            .as_ref()
+            .map_or(root, ApprovedExternalRoot::path);
+        let external_tree = external_root
+            .as_ref()
+            .map(|approved| read_external_tree_bound(approved, "external schema root"))
+            .transpose()?;
+        let schema_files = match external_tree {
+            None => json_files(scan_root)?
+                .into_iter()
+                .map(|path| (path, None))
+                .collect::<Vec<_>>(),
+            Some(tree) => tree
+                .into_iter()
+                .filter(|(relative, _)| is_json_file(Path::new(relative)))
+                .map(|(relative, bytes)| {
+                    portable_join(scan_root, &relative, "external schema snapshot path")
+                        .map(|path| (path, Some(bytes)))
+                })
+                .collect::<Result<Vec<_>>>()?,
+        };
         let mut documents = BTreeMap::new();
         let mut canonical_documents = BTreeMap::new();
-        for path in json_files(root)? {
-            let relative = normalized_relative_path(root, &path)?;
+        for (path, snapshot_bytes) in schema_files {
+            let relative = normalized_relative_path(scan_root, &path)?;
             if relative.contains('/') {
                 match nested {
                     NestedSchemas::Skip => continue,
@@ -54,7 +104,10 @@ impl SchemaSet {
                     }
                 }
             }
-            let bytes = read_bytes(&path)?;
+            let bytes = match snapshot_bytes {
+                Some(bytes) => bytes,
+                None => read_tracked_bytes(&path)?,
+            };
             let value = parse_strict(&bytes, &path)?;
             if !matches!(value, JsonValue::Object(_)) {
                 return Err(CodegenError::new(format!(
@@ -407,6 +460,50 @@ impl SchemaSet {
                 }
             }
         }
+        if let Some(JsonValue::Array(prefix_items)) = schema.get("prefixItems") {
+            for (index, item_schema) in prefix_items.iter().enumerate() {
+                if let Some(value) = array.get(index) {
+                    self.validate_node(
+                        document_name,
+                        item_schema,
+                        value,
+                        &format!("{instance_path}/{index}"),
+                        ref_stack,
+                        errors,
+                    );
+                }
+            }
+        }
+        if let Some(contains_schema) = schema.get("contains") {
+            let mut matching = 0usize;
+            for (index, value) in array.iter().enumerate() {
+                let mut candidate_errors = Vec::new();
+                self.validate_node(
+                    document_name,
+                    contains_schema,
+                    value,
+                    &format!("{instance_path}/{index}"),
+                    ref_stack,
+                    &mut candidate_errors,
+                );
+                if candidate_errors.is_empty() {
+                    matching += 1;
+                }
+            }
+            let minimum = integer_property(schema, "minContains").unwrap_or(1);
+            if matching < minimum {
+                errors.push(format!(
+                    "{instance_path}: contains matched {matching} items, below minContains {minimum}"
+                ));
+            }
+            if let Some(maximum) = integer_property(schema, "maxContains") {
+                if matching > maximum {
+                    errors.push(format!(
+                        "{instance_path}: contains matched {matching} items, above maxContains {maximum}"
+                    ));
+                }
+            }
+        }
         if let Some(item_schema) = schema.get("items") {
             for (index, value) in array.iter().enumerate() {
                 self.validate_node(
@@ -647,16 +744,410 @@ mod tests {
     use std::path::Path;
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    use serde_json::json;
+
     use super::SchemaSet;
     use crate::json::{JsonValue, parse_strict};
     use crate::model::SerializationBodyCodec;
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
+    fn set_first_calculation_rounding(document: &mut JsonValue, rounding: JsonValue) {
+        let JsonValue::Array(calculations) = document
+            .object_mut()
+            .unwrap()
+            .get_mut("calculations")
+            .unwrap()
+        else {
+            panic!("calculations are an array");
+        };
+        let profiles = calculations[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("profiles")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        let official = profiles.get_mut("official").unwrap().object_mut().unwrap();
+        let JsonValue::Array(outputs) = official.get_mut("outputs").unwrap() else {
+            panic!("calculation outputs are an array");
+        };
+        outputs[0]
+            .object_mut()
+            .unwrap()
+            .insert("rounding".to_owned(), rounding);
+    }
+
+    #[test]
+    fn calculation_rounding_schema_preserves_legacy_shapes_and_adds_nonempty_pipelines() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
+        let rule_set_path = root.join("../../ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
+        let rule_set = parse_strict(
+            &fs::read(&rule_set_path).expect("read candidate rule set"),
+            &rule_set_path,
+        )
+        .expect("parse candidate rule set");
+
+        for (label, rounding) in [
+            ("legacy null", serde_json::json!(null)),
+            (
+                "legacy object",
+                serde_json::json!({"mode": "half-ceiling", "scale": 0}),
+            ),
+            (
+                "ordered pipeline",
+                serde_json::json!([
+                    {"mode": "half-up", "scale": 2},
+                    {"mode": "half-ceiling", "scale": 0}
+                ]),
+            ),
+        ] {
+            let mut candidate = rule_set.clone();
+            set_first_calculation_rounding(
+                &mut candidate,
+                serde_json::from_value(rounding).unwrap(),
+            );
+            schemas
+                .validate("rule-set.schema.json", &candidate)
+                .unwrap_or_else(|error| panic!("{label} must validate: {}", error.message()));
+        }
+
+        let mut empty = rule_set;
+        set_first_calculation_rounding(&mut empty, JsonValue::Array(Vec::new()));
+        schemas
+            .validate("rule-set.schema.json", &empty)
+            .expect_err("empty rounding pipeline must fail closed");
+    }
+
+    #[test]
+    fn field_event_schema_requires_exact_phase_trigger_binding_and_closed_raw_literal() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
+        let rule_set_path = root.join("../../ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
+        let mut rule_set = parse_strict(
+            &fs::read(&rule_set_path).expect("read candidate rule set"),
+            &rule_set_path,
+        )
+        .expect("parse candidate rule set");
+        let JsonValue::Array(rules) = rule_set.object_mut().unwrap().get_mut("rules").unwrap()
+        else {
+            panic!("rules are an array");
+        };
+        let rule = rules[0].object_mut().unwrap();
+        rule.insert(
+            "phases".to_owned(),
+            serde_json::from_value(serde_json::json!(["blur"])).unwrap(),
+        );
+        rule.insert(
+            "trigger_field_ids".to_owned(),
+            serde_json::from_value(serde_json::json!(["syntactic-trigger"])).unwrap(),
+        );
+        schemas
+            .validate("rule-set.schema.json", &rule_set)
+            .expect("exact event phase with trigger validates structurally");
+
+        let mut missing_trigger = rule_set.clone();
+        let JsonValue::Array(rules) = missing_trigger
+            .object_mut()
+            .unwrap()
+            .get_mut("rules")
+            .unwrap()
+        else {
+            panic!("rules are an array");
+        };
+        rules[0].object_mut().unwrap().remove("trigger_field_ids");
+        schemas
+            .validate("rule-set.schema.json", &missing_trigger)
+            .expect_err("event phase without trigger must fail");
+
+        let mut mixed = rule_set;
+        let JsonValue::Array(rules) = mixed.object_mut().unwrap().get_mut("rules").unwrap() else {
+            panic!("rules are an array");
+        };
+        rules[0].object_mut().unwrap().insert(
+            "phases".to_owned(),
+            serde_json::from_value(serde_json::json!(["blur", "validate"])).unwrap(),
+        );
+        schemas
+            .validate("rule-set.schema.json", &mixed)
+            .expect("one reconciled entry may carry event and batch eligibility");
+        let mut mixed_without_trigger = mixed;
+        let JsonValue::Array(rules) = mixed_without_trigger
+            .object_mut()
+            .unwrap()
+            .get_mut("rules")
+            .unwrap()
+        else {
+            panic!("rules are an array");
+        };
+        rules[0].object_mut().unwrap().remove("trigger_field_ids");
+        schemas
+            .validate("rule-set.schema.json", &mixed_without_trigger)
+            .expect_err("mixed eligibility with an event phase still requires triggers");
+
+        let mut explicit_null = missing_trigger;
+        let JsonValue::Array(rules) = explicit_null
+            .object_mut()
+            .unwrap()
+            .get_mut("rules")
+            .unwrap()
+        else {
+            panic!("rules are an array");
+        };
+        let rule = rules[0].object_mut().unwrap();
+        rule.insert(
+            "phases".to_owned(),
+            serde_json::from_value(serde_json::json!(["validate"])).unwrap(),
+        );
+        rule.insert("trigger_field_ids".to_owned(), JsonValue::Null);
+        schemas
+            .validate("rule-set.schema.json", &explicit_null)
+            .expect("batch-only eligibility may carry an explicit null trigger projection");
+
+        let raw_effect: JsonValue = serde_json::from_value(serde_json::json!({
+            "kind": "set-raw-field-value",
+            "field": {
+                "field_id": "amount",
+                "instance": {"kind": "singleton"}
+            },
+            "value": {"state": "text", "text": "0.00"}
+        }))
+        .unwrap();
+        schemas
+            .validate("effect.schema.json", &raw_effect)
+            .expect("closed static raw text literal validates");
+    }
+
+    #[test]
+    fn profiled_field_event_program_and_calculation_writeback_schema_is_closed() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
+        let rule_set_path = root.join("../../ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
+        let original = parse_strict(
+            &fs::read(&rule_set_path).expect("read candidate rule set"),
+            &rule_set_path,
+        )
+        .expect("parse candidate rule set");
+        schemas
+            .validate("rule-set.schema.json", &original)
+            .expect("field_event_programs and writeback remain optional");
+
+        let mut candidate = original;
+        candidate.object_mut().unwrap().insert(
+            "field_event_programs".to_owned(),
+            serde_json::from_value(json!([{
+                "phase": "change",
+                "trigger_field_id": "syntactic-trigger",
+                "profiles": {
+                    "official": {
+                        "state": "executable",
+                        "steps": [
+                            {
+                                "kind": "calculation",
+                                "calculation_id": "syntactic-calculation",
+                                "output_ids": ["first", "second"],
+                                "write_mode": "insert"
+                            },
+                            {"kind": "rule", "rule_id": "syntactic-rule"}
+                        ],
+                        "review_decision": {"source_id": "syntactic-review"},
+                        "source_refs": [{"source_id": "syntactic-review"}]
+                    },
+                    "filing_safe": {
+                        "state": "unresolved",
+                        "reason": "not reviewed",
+                        "source_refs": [{"source_id": "syntactic-review"}]
+                    }
+                },
+                "source_refs": [{"source_id": "syntactic-review"}]
+            }]))
+            .unwrap(),
+        );
+        let JsonValue::Array(calculations) = candidate
+            .object_mut()
+            .unwrap()
+            .get_mut("calculations")
+            .unwrap()
+        else {
+            panic!("calculations are an array");
+        };
+        let profiles = calculations[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("profiles")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        let branch = profiles.get_mut("official").unwrap().object_mut().unwrap();
+        let JsonValue::Array(outputs) = branch.get_mut("outputs").unwrap() else {
+            panic!("calculation outputs are an array");
+        };
+        outputs[0].object_mut().unwrap().insert(
+            "writeback".to_owned(),
+            serde_json::from_value(json!({
+                "field": {
+                    "field_id": "syntactic-target",
+                    "instance": {"kind": "singleton"}
+                },
+                "format": {"kind": "offline-ebir-format-currency-v1"},
+                "review_decision": {"source_id": "syntactic-review"},
+                "source_refs": [{"source_id": "syntactic-review"}]
+            }))
+            .unwrap(),
+        );
+        schemas
+            .validate("rule-set.schema.json", &candidate)
+            .expect("closed event program and writeback validate structurally");
+
+        let mut invalid_phase = candidate.clone();
+        let JsonValue::Array(programs) = invalid_phase
+            .object_mut()
+            .unwrap()
+            .get_mut("field_event_programs")
+            .unwrap()
+        else {
+            panic!("programs are an array");
+        };
+        programs[0]
+            .object_mut()
+            .unwrap()
+            .insert("phase".to_owned(), JsonValue::String("validate".to_owned()));
+        schemas
+            .validate("rule-set.schema.json", &invalid_phase)
+            .expect_err("non-exact event phase must fail");
+
+        let mut empty_outputs = candidate.clone();
+        let JsonValue::Array(programs) = empty_outputs
+            .object_mut()
+            .unwrap()
+            .get_mut("field_event_programs")
+            .unwrap()
+        else {
+            panic!("programs are an array");
+        };
+        let profiles = programs[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("profiles")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        let official = profiles.get_mut("official").unwrap().object_mut().unwrap();
+        let JsonValue::Array(steps) = official.get_mut("steps").unwrap() else {
+            panic!("steps are an array");
+        };
+        steps[0]
+            .object_mut()
+            .unwrap()
+            .insert("output_ids".to_owned(), JsonValue::Array(Vec::new()));
+        schemas
+            .validate("rule-set.schema.json", &empty_outputs)
+            .expect_err("empty selected outputs must fail");
+
+        let mut unknown_format = candidate;
+        let JsonValue::Array(calculations) = unknown_format
+            .object_mut()
+            .unwrap()
+            .get_mut("calculations")
+            .unwrap()
+        else {
+            panic!("calculations are an array");
+        };
+        let profiles = calculations[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("profiles")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        let branch = profiles.get_mut("official").unwrap().object_mut().unwrap();
+        let JsonValue::Array(outputs) = branch.get_mut("outputs").unwrap() else {
+            panic!("calculation outputs are an array");
+        };
+        outputs[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("writeback")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .get_mut("format")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .insert(
+                "kind".to_owned(),
+                JsonValue::String("generic-decimal".to_owned()),
+            );
+        schemas
+            .validate("rule-set.schema.json", &unknown_format)
+            .expect_err("unreviewed write format must fail closed");
+    }
+
+    #[test]
+    fn javascript_number_predicate_schema_is_closed_and_requires_nonempty_logical_or_inputs() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
+        let logical_or: JsonValue = serde_json::from_value(serde_json::json!({
+            "kind": "javascript-global-is-nan-logical-or",
+            "inputs": [
+                {
+                    "kind": "literal",
+                    "value": {"type": "null", "value": null}
+                },
+                {
+                    "kind": "literal",
+                    "value": {"type": "string", "value": "amount"}
+                }
+            ]
+        }))
+        .unwrap();
+        schemas
+            .validate("predicate.schema.json", &logical_or)
+            .expect("nonempty ordered logical-or inputs validate");
+
+        let empty: JsonValue = serde_json::from_value(serde_json::json!({
+            "kind": "javascript-global-is-nan-logical-or",
+            "inputs": []
+        }))
+        .unwrap();
+        schemas
+            .validate("predicate.schema.json", &empty)
+            .expect_err("empty logical-or inputs must fail closed");
+
+        let number_compare: JsonValue = serde_json::from_value(serde_json::json!({
+            "kind": "javascript-number-compare",
+            "operator": "strict-equal",
+            "input": {
+                "kind": "literal",
+                "value": {"type": "string", "value": "2025"}
+            },
+            "operand": {
+                "kind": "context",
+                "result_type": "integer",
+                "context_value_id": "current-calendar-year"
+            }
+        }))
+        .unwrap();
+        schemas
+            .validate("predicate.schema.json", &number_compare)
+            .expect("closed comparison operator and expression operands validate");
+
+        let mut unknown_operator = number_compare;
+        unknown_operator.object_mut().unwrap().insert(
+            "operator".to_owned(),
+            JsonValue::String("less-than-or-equal".to_owned()),
+        );
+        schemas
+            .validate("predicate.schema.json", &unknown_operator)
+            .expect_err("unreviewed comparison operator must fail closed");
+    }
+
     #[test]
     fn common_identifier_schema_matches_runtime_stable_id_alphabet_and_boundaries() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let valid_maximum = format!("a{}Z", "/B".repeat(126) + "B");
         assert_eq!(valid_maximum.len(), 255);
         let invalid_too_long = format!("a{}Z", "B".repeat(254));
@@ -697,7 +1188,7 @@ mod tests {
     #[test]
     fn candidate_schema_requires_digest_fixture_and_matching_executable_policy_branch() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let index_path = root.join("../../ir/v2/index.json");
         let mut index = parse_strict(&fs::read(&index_path).expect("read v2 index"), &index_path)
             .expect("parse v2 index");
@@ -874,7 +1365,7 @@ mod tests {
     #[test]
     fn legacy_record_classification_schema_is_closed_and_source_bound() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let rule_set_path = root.join("../../ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
         let mut rule_set = parse_strict(
             &fs::read(&rule_set_path).expect("read landed rule set"),
@@ -1042,7 +1533,7 @@ mod tests {
         )
         .expect("write root schema");
 
-        let schemas = SchemaSet::load(&root).expect("load schemas");
+        let schemas = SchemaSet::load_external(&root).expect("load schemas");
         let valid = parse_strict(br#"{"id":"abc"}"#, Path::new("valid.json"))
             .expect("parse valid instance");
         schemas
@@ -1083,7 +1574,7 @@ mod tests {
             crate::json::canonical_bytes(&schema),
         )
         .expect("write date schema");
-        let schemas = SchemaSet::load(&root).expect("load schemas");
+        let schemas = SchemaSet::load_external(&root).expect("load schemas");
 
         let leap = crate::json::JsonValue::String("2024-02-29".to_owned());
         schemas
@@ -1097,7 +1588,7 @@ mod tests {
     #[test]
     fn expression_schema_binds_decimal_division_policy_exclusively_to_divide() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
 
         let valid = parse_strict(
             br#"{
@@ -1186,7 +1677,7 @@ mod tests {
     #[test]
     fn expression_schema_requires_derived_selector_and_expression_aggregate_value() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
 
         let derived: JsonValue = serde_json::from_value(serde_json::json!({
             "kind": "derived",
@@ -1248,7 +1739,7 @@ mod tests {
     #[test]
     fn rule_set_schema_requires_explicit_calculation_and_rule_scopes() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let scaffold_path = root.join("../../ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
         let mut rule_set = parse_strict(
             &fs::read(&scaffold_path).expect("read scaffold rule set"),
@@ -1346,7 +1837,7 @@ mod tests {
     #[test]
     fn evaluation_result_schema_binds_exact_nullable_group_identity() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let result = |instance: serde_json::Value| {
             serde_json::from_value::<JsonValue>(serde_json::json!({
                 "report": {
@@ -1430,7 +1921,7 @@ mod tests {
     #[test]
     fn coercion_failed_predicate_requires_one_exact_field_reference() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
 
         let valid = parse_strict(
             br#"{
@@ -1486,7 +1977,7 @@ mod tests {
     #[test]
     fn javascript_parse_float_predicate_binds_operator_and_decimal_operand_shape() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let input = serde_json::json!({
             "kind": "field",
             "result_type": "string",
@@ -1553,9 +2044,55 @@ mod tests {
     }
 
     #[test]
+    fn checksum_predicate_has_a_closed_algorithm_and_input_shape() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
+        let input = serde_json::json!({
+            "kind": "field",
+            "result_type": "string",
+            "field": {
+                "field_id": "spouse-tin",
+                "instance": {"kind": "singleton"}
+            }
+        });
+        let valid: JsonValue = serde_json::from_value(serde_json::json!({
+            "kind": "checksum",
+            "algorithm": "offline-ebir-tin-v1",
+            "input": input.clone()
+        }))
+        .expect("build checksum predicate");
+        schemas
+            .validate("predicate.schema.json", &valid)
+            .expect("closed checksum predicate is valid");
+
+        for invalid in [
+            serde_json::json!({
+                "kind": "checksum",
+                "algorithm": "unknown",
+                "input": input.clone()
+            }),
+            serde_json::json!({
+                "kind": "checksum",
+                "algorithm": "offline-ebir-tin-v1"
+            }),
+            serde_json::json!({
+                "kind": "checksum",
+                "algorithm": "offline-ebir-tin-v1",
+                "input": input.clone(),
+                "extra": true
+            }),
+        ] {
+            let invalid = serde_json::from_value(invalid).expect("build invalid predicate");
+            schemas
+                .validate("predicate.schema.json", &invalid)
+                .expect_err("checksum predicate must fail closed");
+        }
+    }
+
+    #[test]
     fn serialization_variant_schema_matches_runtime_artifact_variant_id() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let valid_maximum = format!("a{}z", "b".repeat(126));
         let invalid_too_long = format!("a{}z", "b".repeat(127));
         let candidates = [
@@ -1608,7 +2145,7 @@ mod tests {
     #[test]
     fn serialization_schema_allows_top_level_but_rejects_nested_dynamic_groups() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let literal = |ordinal| {
             serde_json::json!({
                 "kind": "reviewed-literal",
@@ -1650,7 +2187,7 @@ mod tests {
     #[test]
     fn serialization_body_codec_schema_model_and_runtime_alphabets_match() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let candidates = [
             "raw-literal",
             "legacy-javascript-escape",
@@ -1703,7 +2240,7 @@ mod tests {
     #[test]
     fn serialization_derived_projection_requires_closed_instance_selector() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/schema/v2");
-        let schemas = SchemaSet::load(&root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_tracked(&root).expect("load repository v2 schemas");
         let node = |instance| {
             serde_json::json!({
                 "kind": "metadata-element",

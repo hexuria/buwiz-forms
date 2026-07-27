@@ -20,17 +20,20 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 use crate::error::{CodegenError, Result as CodegenResult};
+use crate::files::{
+    ApprovedExternalFile, ApprovedExternalRoot, ReadScope, read_external_bytes_bound,
+    read_external_bytes_under, read_tracked_bytes,
+};
 use crate::json::{CANONICALIZATION_ID, canonical_bytes, parse_strict};
-use crate::path::{canonical_repo_root, is_same_or_below, is_symlink_or_reparse_point};
+use crate::path::{
+    canonical_repo_root, is_same_or_below, is_same_path, is_symlink_or_reparse_point,
+};
 use crate::vault_acquisition::{
     EVIDENCE_VAULT_SOURCE_MAP_FORMAT, EXPECTED_V1_FORM_MANIFEST_COUNT, EvidenceVaultSourceMap,
     EvidenceVaultSourceMapEntry, VaultAssetDisposition, vault_asset_disposition,
 };
-use crate::verified_file::open_verified_regular_file;
 #[cfg(windows)]
 use crate::verified_file::stable_windows_link_count;
-
-const HASH_BUFFER_BYTES: usize = 64 * 1024;
 
 /// Complete inputs for a no-write discovery or fresh external source-map emit.
 #[derive(Clone, Debug)]
@@ -39,15 +42,33 @@ pub struct DiscoverEvidenceVaultSourcesOptions {
     pub search_roots: Vec<PathBuf>,
     pub output_path: PathBuf,
     pub dry_run: bool,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl DiscoverEvidenceVaultSourcesOptions {
-    pub fn new(repo_root: impl Into<PathBuf>, output_path: impl Into<PathBuf>) -> Self {
+    pub fn tracked_checkout(
+        repo_root: impl Into<PathBuf>,
+        output_path: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             repo_root: repo_root.into(),
             search_roots: Vec::new(),
             output_path: output_path.into(),
             dry_run: false,
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(
+        repo_root: impl Into<PathBuf>,
+        output_path: impl Into<PathBuf>,
+    ) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            search_roots: Vec::new(),
+            output_path: output_path.into(),
+            dry_run: false,
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -237,7 +258,7 @@ pub fn discover_evidence_vault_sources(
     options: &DiscoverEvidenceVaultSourcesOptions,
 ) -> EvidenceVaultSourceDiscoveryResult<DiscoverEvidenceVaultSourcesReport> {
     let repo_root = canonical_repo_root(&options.repo_root)?;
-    let inventory = load_manifest_inventory(&repo_root)?;
+    let inventory = load_manifest_inventory(&repo_root, options.read_scope)?;
     let output_path = validate_fresh_external_output(&repo_root, &options.output_path)?;
     let search_roots = validate_search_roots(&repo_root, &options.search_roots)?;
 
@@ -295,7 +316,7 @@ pub fn discover_evidence_vault_sources(
         let unresolved_asset_count = unresolved_assets.len();
         let searched_roots = search_roots
             .iter()
-            .map(|path| path_to_utf8(path))
+            .map(|root| path_to_utf8(root.path()))
             .collect::<CodegenResult<Vec<_>>>()?;
         return Err(EvidenceVaultSourceDiscoveryError::Unresolved(
             EvidenceVaultUnresolvedReport {
@@ -367,7 +388,30 @@ pub fn discover_evidence_vault_sources(
     })
 }
 
-fn load_manifest_inventory(repo_root: &Path) -> CodegenResult<ManifestInventory> {
+fn load_manifest_inventory(
+    repo_root: &Path,
+    read_scope: ReadScope,
+) -> CodegenResult<ManifestInventory> {
+    let approved_workspace = match read_scope {
+        ReadScope::Tracked => None,
+        ReadScope::External => {
+            let expected = repo_root.to_path_buf();
+            Some(ApprovedExternalRoot::capture(
+                repo_root,
+                "external rules workspace root",
+                |resolved| {
+                    if !is_same_path(resolved, &expected) {
+                        return Err(CodegenError::new(format!(
+                            "external rules workspace root `{}` resolved to a different canonical directory `{}`",
+                            expected.display(),
+                            resolved.display()
+                        )));
+                    }
+                    Ok(())
+                },
+            )?)
+        }
+    };
     let forms_root_path = repo_root.join("rules/forms");
     reject_symlink_ancestors(&forms_root_path, "tracked v1 forms root")?;
     let forms_metadata = fs::symlink_metadata(&forms_root_path).map_err(|source| {
@@ -451,9 +495,16 @@ fn load_manifest_inventory(repo_root: &Path) -> CodegenResult<ManifestInventory>
                 manifest_path.display()
             )));
         }
-        let manifest_bytes = fs::read(&manifest_path).map_err(|source| {
-            CodegenError::io("read tracked v1 manifest", &manifest_path, source)
-        })?;
+        let manifest_bytes = match read_scope {
+            ReadScope::Tracked => read_tracked_bytes(&manifest_path)?,
+            ReadScope::External => read_external_bytes_under(
+                approved_workspace
+                    .as_ref()
+                    .expect("external scope captured the exact workspace root"),
+                &manifest_path,
+                "external tracked v1 manifest",
+            )?,
+        };
         let manifest = parse_strict(&manifest_bytes, &manifest_path)?.into_serde();
         let manifest_object = manifest.as_object().ok_or_else(|| {
             CodegenError::new(format!(
@@ -631,6 +682,7 @@ fn discover_exact_manifest_candidates(
             let observed = inspect_candidate(
                 repo_root,
                 &path,
+                None,
                 expected_sizes,
                 forbidden_leaves,
                 forbidden_absolute_locators,
@@ -660,7 +712,7 @@ fn discover_exact_manifest_candidates(
 
 fn discover_in_search_roots(
     repo_root: &Path,
-    roots: &[PathBuf],
+    roots: &[ApprovedExternalRoot],
     allowed_locator_leaves: &BTreeSet<String>,
     forbidden_leaves: &BTreeSet<String>,
     forbidden_absolute_locators: &BTreeSet<String>,
@@ -675,6 +727,7 @@ fn discover_in_search_roots(
         visit_search_directory(
             repo_root,
             root,
+            root.path(),
             allowed_locator_leaves,
             forbidden_leaves,
             forbidden_absolute_locators,
@@ -688,6 +741,7 @@ fn discover_in_search_roots(
 
 fn visit_search_directory(
     repo_root: &Path,
+    search_root: &ApprovedExternalRoot,
     directory: &Path,
     allowed_locator_leaves: &BTreeSet<String>,
     forbidden_leaves: &BTreeSet<String>,
@@ -697,6 +751,17 @@ fn visit_search_directory(
     state: &mut CandidateState,
 ) -> CodegenResult<()> {
     if needed.is_empty() {
+        return Ok(());
+    }
+    search_root.revalidate("vault source search root")?;
+    if !is_same_or_below(search_root.path(), directory) {
+        state.reject(
+            directory,
+            format!(
+                "search directory escaped approved search root `{}`",
+                search_root.path().display()
+            ),
+        );
         return Ok(());
     }
     let entries = match fs::read_dir(directory) {
@@ -718,6 +783,7 @@ fn visit_search_directory(
             return Ok(());
         }
     };
+    search_root.revalidate("vault source search root")?;
     let mut entries = entries;
     entries.sort_by_key(|entry| path_sort_key(&entry.path()));
 
@@ -746,6 +812,7 @@ fn visit_search_directory(
         if metadata.is_dir() {
             visit_search_directory(
                 repo_root,
+                search_root,
                 &path,
                 allowed_locator_leaves,
                 forbidden_leaves,
@@ -785,6 +852,7 @@ fn visit_search_directory(
         let Some(observed) = inspect_candidate(
             repo_root,
             &path,
+            Some(search_root),
             &expected_sizes,
             forbidden_leaves,
             forbidden_absolute_locators,
@@ -803,6 +871,7 @@ fn visit_search_directory(
 fn inspect_candidate(
     repo_root: &Path,
     path: &Path,
+    approved_search_root: Option<&ApprovedExternalRoot>,
     expected_sizes: &BTreeSet<u64>,
     forbidden_leaves: &BTreeSet<String>,
     forbidden_absolute_locators: &BTreeSet<String>,
@@ -861,6 +930,18 @@ fn inspect_candidate(
         );
         return Ok(None);
     }
+    if let Some(search_root) = approved_search_root {
+        if !is_same_or_below(search_root.path(), &canonical) {
+            state.reject(
+                &canonical,
+                format!(
+                    "candidate escaped approved search root `{}`",
+                    search_root.path().display()
+                ),
+            );
+            return Ok(None);
+        }
+    }
     if let Some(reason) =
         sensitive_path_reason(&canonical, forbidden_leaves, forbidden_absolute_locators)
     {
@@ -873,6 +954,7 @@ fn inspect_candidate(
     let content = match hash_regular_file(
         repo_root,
         &canonical,
+        approved_search_root,
         forbidden_leaves,
         forbidden_absolute_locators,
     ) {
@@ -893,10 +975,27 @@ fn inspect_candidate(
 fn hash_regular_file(
     repo_root: &Path,
     path: &Path,
+    approved_search_root: Option<&ApprovedExternalRoot>,
     forbidden_leaves: &BTreeSet<String>,
     forbidden_absolute_locators: &BTreeSet<String>,
 ) -> CodegenResult<ContentKey> {
-    let mut verified = open_verified_regular_file(path, "vault source candidate", |resolved| {
+    let validate = |resolved: &Path| {
+        if !is_same_path(resolved, path) {
+            return Err(CodegenError::new(format!(
+                "vault source candidate `{}` resolved to a different canonical file `{}`",
+                path.display(),
+                resolved.display()
+            )));
+        }
+        if let Some(search_root) = approved_search_root {
+            if !is_same_or_below(search_root.path(), resolved) {
+                return Err(CodegenError::new(format!(
+                    "vault source candidate `{}` resolves outside approved search root `{}`",
+                    resolved.display(),
+                    search_root.path().display()
+                )));
+            }
+        }
         if is_same_or_below(repo_root, resolved) {
             return Err(CodegenError::new(format!(
                 "vault source candidate `{}` resolves inside repository `{}`",
@@ -913,43 +1012,43 @@ fn hash_regular_file(
             )));
         }
         Ok(())
-    })?;
-    let metadata = verified.file().metadata().map_err(|source| {
-        CodegenError::io(
-            "inspect verified vault source candidate",
-            verified.canonical_path(),
-            source,
-        )
-    })?;
-    if metadata.len() == 0 {
+    };
+    let bytes = if let Some(search_root) = approved_search_root {
+        search_root.revalidate("vault source candidate")?;
+        let approved = ApprovedExternalFile::capture(path, "vault source candidate", |resolved| {
+            validate(resolved)?;
+            if !is_same_or_below(search_root.path(), resolved) {
+                return Err(CodegenError::new(format!(
+                    "vault source candidate `{}` resolves outside approved search root `{}`",
+                    resolved.display(),
+                    search_root.path().display()
+                )));
+            }
+            Ok(())
+        })?;
+        let read_result = read_external_bytes_bound(approved, "vault source candidate");
+        search_root.revalidate("vault source candidate")?;
+        read_result?
+    } else {
+        let approved = ApprovedExternalFile::capture(path, "vault source candidate", validate)?;
+        read_external_bytes_bound(approved, "vault source candidate")?
+    };
+    if bytes.is_empty() {
         return Err(CodegenError::new(format!(
             "vault source candidate `{}` must not be zero-size",
             path.display()
         )));
     }
-    let mut digest = Sha256::new();
-    let mut size_bytes = 0_u64;
-    let mut buffer = vec![0_u8; HASH_BUFFER_BYTES];
-    loop {
-        let count = verified
-            .file_mut()
-            .read(&mut buffer)
-            .map_err(|source| CodegenError::io("read vault source candidate", path, source))?;
-        if count == 0 {
-            break;
-        }
-        size_bytes = size_bytes
-            .checked_add(count as u64)
-            .ok_or_else(|| CodegenError::new("vault source candidate exceeds u64 byte count"))?;
-        digest.update(&buffer[..count]);
-    }
     Ok(ContentKey {
-        sha256: encode_digest(digest.finalize()),
-        size_bytes,
+        sha256: sha256_hex(&bytes),
+        size_bytes: bytes.len() as u64,
     })
 }
 
-fn validate_search_roots(repo_root: &Path, roots: &[PathBuf]) -> CodegenResult<Vec<PathBuf>> {
+fn validate_search_roots(
+    repo_root: &Path,
+    roots: &[PathBuf],
+) -> CodegenResult<Vec<ApprovedExternalRoot>> {
     let mut canonical_roots = Vec::with_capacity(roots.len());
     for root in roots {
         require_absolute_normalized(root, "vault source search root")?;
@@ -1021,7 +1120,44 @@ fn validate_search_roots(repo_root: &Path, roots: &[PathBuf]) -> CodegenResult<V
         non_overlapping.push(root);
     }
     non_overlapping.sort_by_key(|path| path_sort_key(path));
-    Ok(non_overlapping)
+    non_overlapping
+        .into_iter()
+        .map(|expected| {
+            ApprovedExternalRoot::capture(
+                &expected,
+                "vault source search root",
+                |resolved| {
+                    if !is_same_path(resolved, &expected) {
+                        return Err(CodegenError::new(format!(
+                            "vault source search root `{}` resolved to a different canonical directory `{}`",
+                            expected.display(),
+                            resolved.display()
+                        )));
+                    }
+                    if is_same_or_below(repo_root, resolved) {
+                        return Err(CodegenError::new(format!(
+                            "vault source search root `{}` resolved inside repository `{}`",
+                            resolved.display(),
+                            repo_root.display()
+                        )));
+                    }
+                    if sensitive_path_reason(
+                        resolved,
+                        &BTreeSet::new(),
+                        &BTreeSet::new(),
+                    )
+                    .is_some()
+                    {
+                        return Err(CodegenError::new(format!(
+                            "vault source search root `{}` resolves beneath a known taxpayer/save/live-database root",
+                            resolved.display()
+                        )));
+                    }
+                    Ok(())
+                },
+            )
+        })
+        .collect()
 }
 
 fn validate_fresh_external_output(repo_root: &Path, target: &Path) -> CodegenResult<PathBuf> {
@@ -1682,6 +1818,7 @@ fn sync_directory(path: &Path) -> CodegenResult<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::fs;
     use std::io;
     use std::path::{Path, PathBuf};
@@ -1690,10 +1827,14 @@ mod tests {
 
     use serde_json::{Value, json};
 
+    use crate::error::CodegenError;
+    use crate::files::ApprovedExternalRoot;
+
     use super::{
         DiscoverEvidenceVaultSourcesOptions, EXPECTED_V1_FORM_MANIFEST_COUNT,
         EvidenceVaultSourceDiscoveryError, canonical_serialize, discover_evidence_vault_sources,
-        sha256_hex, write_fresh_source_map_file, write_fresh_source_map_file_with_hook,
+        hash_regular_file, sha256_hex, write_fresh_source_map_file,
+        write_fresh_source_map_file_with_hook,
     };
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -1722,6 +1863,84 @@ mod tests {
                 fs::remove_dir_all(&self.path).expect("remove owned test root");
             }
         }
+    }
+
+    #[test]
+    fn candidate_open_reasserts_approved_search_root() {
+        let root = TestRoot::new("search-root-open");
+        let repo = root.path.join("repo");
+        let approved = root.path.join("approved");
+        fs::create_dir(&repo).expect("create test repo");
+        fs::create_dir(&approved).expect("create approved search root");
+        let inside = approved.join("inside.bin");
+        let outside = root.path.join("outside.bin");
+        fs::write(&inside, OFFICIAL_BYTES).expect("write inside candidate");
+        fs::write(&outside, OFFICIAL_BYTES).expect("write escaped candidate");
+        let repo = fs::canonicalize(repo).expect("canonical test repo");
+        let approved = fs::canonicalize(approved).expect("canonical approved root");
+        let inside = fs::canonicalize(inside).expect("canonical inside candidate");
+        let outside = fs::canonicalize(outside).expect("canonical escaped candidate");
+        let forbidden = BTreeSet::new();
+        let expected_approved = approved.clone();
+        let approved =
+            ApprovedExternalRoot::capture(&approved, "test approved search root", |resolved| {
+                if resolved != expected_approved.as_path() {
+                    return Err(CodegenError::new(
+                        "test approved search root resolved unexpectedly",
+                    ));
+                }
+                Ok(())
+            })
+            .expect("approve exact test search root");
+
+        hash_regular_file(&repo, &inside, Some(&approved), &forbidden, &forbidden)
+            .expect("candidate beneath approved root is accepted");
+        let error = hash_regular_file(&repo, &outside, Some(&approved), &forbidden, &forbidden)
+            .expect_err("candidate outside approved root must fail during verified open");
+        assert!(error.to_string().contains("outside approved search root"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn candidate_open_rejects_approved_search_root_substitution() {
+        let root = TestRoot::new("search-root-substitution");
+        let repo = root.path.join("repo");
+        let search = root.path.join("approved");
+        let displaced = root.path.join("displaced");
+        fs::create_dir(&repo).expect("create test repo");
+        fs::create_dir(&search).expect("create approved search root");
+        let candidate = search.join("inside.bin");
+        fs::write(&candidate, OFFICIAL_BYTES).expect("write original candidate");
+        let repo = fs::canonicalize(repo).expect("canonical test repo");
+        let expected_search = fs::canonicalize(&search).expect("canonical approved root");
+        let approved = ApprovedExternalRoot::capture(
+            &expected_search,
+            "test approved search root",
+            |resolved| {
+                if resolved != expected_search.as_path() {
+                    return Err(CodegenError::new(
+                        "test approved search root resolved unexpectedly",
+                    ));
+                }
+                Ok(())
+            },
+        )
+        .expect("approve exact test search root");
+
+        fs::rename(&search, &displaced).expect("displace approved search root");
+        fs::create_dir(&search).expect("install substitute search root");
+        fs::write(&candidate, OFFICIAL_BYTES).expect("write substitute candidate");
+        let candidate = fs::canonicalize(candidate).expect("canonical substitute candidate");
+        let forbidden = BTreeSet::new();
+
+        let error = hash_regular_file(&repo, &candidate, Some(&approved), &forbidden, &forbidden)
+            .expect_err("substituted approved search root must fail closed");
+        assert!(
+            error.to_string().contains("changed")
+                || error.to_string().contains("replaced")
+                || error.to_string().contains("identity"),
+            "{error}"
+        );
     }
 
     struct Fixture {
@@ -1804,8 +2023,10 @@ mod tests {
             search_roots: Vec<PathBuf>,
             dry_run: bool,
         ) -> DiscoverEvidenceVaultSourcesOptions {
-            let mut options =
-                DiscoverEvidenceVaultSourcesOptions::new(&self.repo_root, self.output(output_name));
+            let mut options = DiscoverEvidenceVaultSourcesOptions::external_workspace(
+                &self.repo_root,
+                self.output(output_name),
+            );
             options.search_roots = search_roots;
             options.dry_run = dry_run;
             options
@@ -2148,7 +2369,10 @@ mod tests {
         assert!(error.to_string().contains("outside repository"), "{error}");
 
         let internal_output = fixture.repo_root.join("source-map.json");
-        let options = DiscoverEvidenceVaultSourcesOptions::new(&fixture.repo_root, internal_output);
+        let options = DiscoverEvidenceVaultSourcesOptions::external_workspace(
+            &fixture.repo_root,
+            internal_output,
+        );
         let error =
             discover_evidence_vault_sources(&options).expect_err("repository output must fail");
         assert!(

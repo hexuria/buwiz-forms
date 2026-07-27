@@ -27,6 +27,15 @@
           "$ref": "#/$defs/javascript_parse_float"
         },
         {
+          "$ref": "#/$defs/javascript_global_is_nan_logical_or"
+        },
+        {
+          "$ref": "#/$defs/javascript_number_compare"
+        },
+        {
+          "$ref": "#/$defs/checksum"
+        },
+        {
           "$ref": "#/$defs/matches"
         },
         {
@@ -225,6 +234,76 @@
             }
           },
           "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "javascript_global_is_nan_logical_or": {
+      "type": "object",
+      "required": [
+        "kind",
+        "inputs"
+      ],
+      "properties": {
+        "kind": {
+          "const": "javascript-global-is-nan-logical-or"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "expression.schema.json#/$defs/expression"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "javascript_number_compare": {
+      "type": "object",
+      "required": [
+        "kind",
+        "operator",
+        "input",
+        "operand"
+      ],
+      "properties": {
+        "kind": {
+          "const": "javascript-number-compare"
+        },
+        "operator": {
+          "enum": [
+            "less-than",
+            "greater-than",
+            "strict-equal"
+          ]
+        },
+        "input": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        },
+        "operand": {
+          "$ref": "expression.schema.json#/$defs/expression"
+        }
+      },
+      "additionalProperties": false
+    },
+    "checksum": {
+      "type": "object",
+      "required": [
+        "kind",
+        "algorithm",
+        "input"
+      ],
+      "properties": {
+        "kind": {
+          "const": "checksum"
+        },
+        "algorithm": {
+          "enum": [
+            "offline-ebir-tin-v1"
+          ]
+        },
+        "input": {
+          "$ref": "expression.schema.json#/$defs/expression"
         }
       },
       "additionalProperties": false

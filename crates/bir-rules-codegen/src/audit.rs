@@ -1,19 +1,24 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::{CodegenError, Result};
-use crate::files::{json_files, read_bytes};
+use crate::files::{
+    ApprovedExternalRoot, ReadScope, json_files, read_external_bytes_under,
+    read_external_tree_under, read_tracked_bytes,
+};
 use crate::hash::{digest_entries, sha256_hex};
 use crate::json::{JsonValue, canonical_bytes, parse_strict, parse_typed};
 use crate::model::{
     BranchState, DerivedInstanceSelector, EvaluationScope, IndexDocument, IndexSnapshot,
-    LegacyArtifact, ProfileStates, ReviewStatus, RuleSetDocument, SerializationArtifactBranch,
-    SerializationArtifactTarget, SerializationDecimalSeparator, SerializationGrouping,
-    SerializationKeyProjection, SerializationNode, SerializationOccurrenceProjection,
-    SerializationPresence, SerializationPresentFormat, SerializationValueProjection,
+    LegacyArtifact, LegacyNonRuntimeReason, ProfileStates, ReviewStatus, RuleSetDocument,
+    SerializationArtifactBranch, SerializationArtifactTarget, SerializationDecimalSeparator,
+    SerializationGrouping, SerializationKeyProjection, SerializationNode,
+    SerializationOccurrenceProjection, SerializationPresence, SerializationPresentFormat,
+    SerializationValueProjection,
 };
 use crate::path::{
-    DEFAULT_SCHEMA_DIR, DEFAULT_SOURCE_DIR, canonical_repo_root, discover_repo_root,
+    DEFAULT_SCHEMA_DIR, DEFAULT_SOURCE_DIR, canonical_repo_root, discover_repo_root, is_json_file,
     normalized_relative_path, portable_join, resolve_existing_under,
 };
 use crate::schema::SchemaSet;
@@ -23,14 +28,106 @@ pub struct AuditOptions {
     pub repo_root: PathBuf,
     pub source_dir: String,
     pub schema_dir: String,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl AuditOptions {
-    pub fn new(repo_root: impl Into<PathBuf>) -> Self {
+    pub fn tracked_checkout(repo_root: impl Into<PathBuf>) -> Self {
         Self {
             repo_root: repo_root.into(),
             source_dir: DEFAULT_SOURCE_DIR.to_owned(),
             schema_dir: DEFAULT_SCHEMA_DIR.to_owned(),
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(repo_root: impl Into<PathBuf>) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            source_dir: DEFAULT_SOURCE_DIR.to_owned(),
+            schema_dir: DEFAULT_SCHEMA_DIR.to_owned(),
+            read_scope: ReadScope::External,
+        }
+    }
+}
+
+struct ScopedReader {
+    scope: ReadScope,
+    external_root: Option<ApprovedExternalRoot>,
+}
+
+impl ScopedReader {
+    fn new(scope: ReadScope, root: &Path, label: &str) -> Result<Self> {
+        let external_root = match scope {
+            ReadScope::Tracked => None,
+            ReadScope::External => {
+                let expected = fs::canonicalize(root).map_err(|source| {
+                    CodegenError::io(&format!("canonicalize {label}"), root, source)
+                })?;
+                Some(ApprovedExternalRoot::capture(root, label, |resolved| {
+                    if resolved != expected {
+                        return Err(CodegenError::new(format!(
+                            "{label} `{}` resolved to unexpected canonical root `{}`",
+                            expected.display(),
+                            resolved.display()
+                        )));
+                    }
+                    Ok(())
+                })?)
+            }
+        };
+        Ok(Self {
+            scope,
+            external_root,
+        })
+    }
+
+    fn read_bytes(&self, path: &Path, label: &str) -> Result<Vec<u8>> {
+        match self.scope {
+            ReadScope::Tracked => read_tracked_bytes(path),
+            ReadScope::External => {
+                let root = self
+                    .external_root
+                    .as_ref()
+                    .expect("external reader retains its approved root");
+                read_external_bytes_under(root, path, label)
+            }
+        }
+    }
+
+    fn read_tree(&self, root: &Path, label: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+        match self.scope {
+            ReadScope::Tracked => Err(CodegenError::new(format!(
+                "internal error: tracked {label} must preserve path-based traversal"
+            ))),
+            ReadScope::External => {
+                let approved_root = self
+                    .external_root
+                    .as_ref()
+                    .expect("external reader retains its approved root");
+                read_external_tree_under(approved_root, root, label)
+            }
+        }
+    }
+}
+
+fn read_v2_source_bytes(
+    reader: &ScopedReader,
+    external_tree: Option<&BTreeMap<String, Vec<u8>>>,
+    source_root: &Path,
+    path: &Path,
+    label: &str,
+) -> Result<Vec<u8>> {
+    match external_tree {
+        None => reader.read_bytes(path, label),
+        Some(tree) => {
+            let relative = normalized_relative_path(source_root, path)?;
+            tree.get(&relative).cloned().ok_or_else(|| {
+                CodegenError::new(format!(
+                    "{label} `{}` is missing from the approved v2 source tree",
+                    path.display()
+                ))
+            })
         }
     }
 }
@@ -50,7 +147,7 @@ pub fn discover_default_repo_root() -> Result<PathBuf> {
 /// ```compile_fail
 /// use bir_rules_codegen::{AuditOptions, audit};
 ///
-/// let mut report = audit(&AuditOptions::new(".")).unwrap();
+/// let mut report = audit(&AuditOptions::tracked_checkout(".")).unwrap();
 /// report.snapshots[0]
 ///     .document
 ///     .identity
@@ -158,24 +255,52 @@ impl AuditReport {
 pub fn audit(options: &AuditOptions) -> Result<AuditReport> {
     let repo_root = canonical_repo_root(&options.repo_root)?;
     let rules_root = resolve_existing_under(&repo_root, "rules", "rules root")?;
+    let reader = ScopedReader::new(options.read_scope, &rules_root, "rules root")?;
     let source_root =
         resolve_existing_under(&repo_root, &options.source_dir, "v2 source directory")?;
     let schema_root =
         resolve_existing_under(&repo_root, &options.schema_dir, "v2 schema directory")?;
-    let schemas = SchemaSet::load(&schema_root)?;
+    let schemas = match options.read_scope {
+        ReadScope::Tracked => SchemaSet::load_tracked(&schema_root)?,
+        ReadScope::External => SchemaSet::load_external(&schema_root)?,
+    };
     let schema_digest =
         digest_owned_entries("bir-rules-schema-set-v1", schemas.canonical_documents());
 
+    let external_source_tree = match options.read_scope {
+        ReadScope::Tracked => None,
+        ReadScope::External => Some(reader.read_tree(&source_root, "v2 source tree")?),
+    };
     let index_path = source_root.join("index.json");
-    let index_bytes = read_bytes(&index_path)?;
+    let index_bytes = read_v2_source_bytes(
+        &reader,
+        external_source_tree.as_ref(),
+        &source_root,
+        &index_path,
+        "v2 index",
+    )?;
     let (index, index_json) = parse_typed::<IndexDocument>(&index_bytes, &index_path)?;
     schemas.validate("index.schema.json", &index_json)?;
 
-    let all_json_files = json_files(&source_root)?;
+    let all_json_files = match &external_source_tree {
+        None => json_files(&source_root)?,
+        Some(tree) => tree
+            .keys()
+            .filter(|relative| is_json_file(Path::new(relative)))
+            .map(|relative| portable_join(&source_root, relative, "v2 source snapshot path"))
+            .collect::<Result<Vec<_>>>()?,
+    };
     let mut canonical_source_files = BTreeMap::new();
     for path in &all_json_files {
         let relative = normalized_relative_path(&source_root, path)?;
-        let value = parse_strict(&read_bytes(path)?, path)?;
+        let bytes = read_v2_source_bytes(
+            &reader,
+            external_source_tree.as_ref(),
+            &source_root,
+            path,
+            "v2 source JSON",
+        )?;
+        let value = parse_strict(&bytes, path)?;
         canonical_source_files.insert(relative, canonical_bytes(&value));
     }
 
@@ -186,14 +311,23 @@ pub fn audit(options: &AuditOptions) -> Result<AuditReport> {
 
     for entry in &index.snapshots {
         let rule_set_path = portable_join(&source_root, &entry.path, "snapshot path")?;
-        let rule_set_bytes = read_bytes(&rule_set_path)?;
+        let rule_set_bytes = read_v2_source_bytes(
+            &reader,
+            external_source_tree.as_ref(),
+            &source_root,
+            &rule_set_path,
+            "v2 rule set",
+        )?;
         let (document, rule_set_json) =
             parse_typed::<RuleSetDocument>(&rule_set_bytes, &rule_set_path)?;
         schemas.validate("rule-set.schema.json", &rule_set_json)?;
 
         let mut fixture_values = BTreeMap::new();
         for fixture in &document.fixtures {
-            let fixture_path = resolve_existing_under(&rules_root, fixture, "v2 fixture path")?;
+            let fixture_path = match &external_source_tree {
+                None => resolve_existing_under(&rules_root, fixture, "v2 fixture path")?,
+                Some(_) => portable_join(&rules_root, fixture, "v2 fixture path")?,
+            };
             let expected_prefix = format!("{source_prefix}/{}/fixtures/", entry.rule_set_id);
             if !fixture.starts_with(&expected_prefix) || !fixture.ends_with(".json") {
                 return Err(CodegenError::new(format!(
@@ -207,7 +341,14 @@ pub fn audit(options: &AuditOptions) -> Result<AuditReport> {
                     "fixture `{fixture}` is referenced more than once"
                 )));
             }
-            let fixture_json = parse_strict(&read_bytes(&fixture_path)?, &fixture_path)?;
+            let fixture_bytes = read_v2_source_bytes(
+                &reader,
+                external_source_tree.as_ref(),
+                &source_root,
+                &fixture_path,
+                "v2 fixture",
+            )?;
+            let fixture_json = parse_strict(&fixture_bytes, &fixture_path)?;
             schemas.validate("fixture.schema.json", &fixture_json)?;
             fixture_values.insert(fixture.clone(), fixture_json);
         }
@@ -218,6 +359,7 @@ pub fn audit(options: &AuditOptions) -> Result<AuditReport> {
             &rule_set_json,
             &fixture_values,
             &rules_root,
+            &reader,
         )?;
 
         let normalized_source_sha256 = snapshot_source_digest(&rule_set_json, &fixture_values)?;
@@ -276,14 +418,65 @@ pub fn audit(options: &AuditOptions) -> Result<AuditReport> {
 
 #[cfg(test)]
 mod snapshot_summary_tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     use super::{AuditOptions, audit};
 
     const RULE_SET_ID: &str = "2550q-v2024-p7.9.6.0";
+    static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct LocalRulesFixture {
+        root: PathBuf,
+    }
+
+    impl LocalRulesFixture {
+        fn new() -> Self {
+            let source_repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+            let root = std::env::temp_dir().join(format!(
+                "bir-audit-local-rules-{}-{}",
+                std::process::id(),
+                FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&root).expect("create local audit fixture");
+            for relative in ["rules/schema/v2", "rules/ir/v2", "rules/forms/2550q-v2024"] {
+                copy_tree(&source_repo.join(relative), &root.join(relative));
+            }
+            Self { root }
+        }
+    }
+
+    impl Drop for LocalRulesFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn copy_tree(source: &Path, target: &Path) {
+        fs::create_dir_all(target).expect("create local rules directory");
+        for entry in fs::read_dir(source).expect("enumerate source rules tree") {
+            let entry = entry.expect("read source rules entry");
+            let file_type = entry.file_type().expect("read source rules entry type");
+            let destination = target.join(entry.file_name());
+            if file_type.is_dir() {
+                copy_tree(&entry.path(), &destination);
+            } else if file_type.is_file() {
+                fs::copy(entry.path(), destination).expect("copy source rules file");
+            } else {
+                panic!(
+                    "source rules fixture contains unsupported entry `{}`",
+                    entry.path().display()
+                );
+            }
+        }
+    }
 
     #[test]
     fn required_rule_set_exposes_only_immutable_audited_summary() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let report = audit(&AuditOptions::new(root)).expect("audit landed v2 corpus");
+        let fixture = LocalRulesFixture::new();
+        let report = audit(&AuditOptions::external_workspace(&fixture.root))
+            .expect("audit landed v2 corpus");
 
         let summary = report
             .require_rule_set(RULE_SET_ID)
@@ -305,8 +498,9 @@ mod snapshot_summary_tests {
 
     #[test]
     fn unknown_required_rule_set_fails_closed() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let report = audit(&AuditOptions::new(root)).expect("audit landed v2 corpus");
+        let fixture = LocalRulesFixture::new();
+        let report = audit(&AuditOptions::external_workspace(&fixture.root))
+            .expect("audit landed v2 corpus");
 
         let error = report
             .require_rule_set("unknown-rule-set")
@@ -320,6 +514,26 @@ mod snapshot_summary_tests {
             report.snapshot_count(),
             1,
             "failed focus must not narrow audit"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn external_workspace_unc_root_preserves_strict_e87_failure() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        if !root.to_string_lossy().starts_with(r"\\") {
+            return;
+        }
+        let error = match audit(&AuditOptions::external_workspace(root)) {
+            Ok(_) => panic!("UNC external workspace must fail closed"),
+            Err(error) => error,
+        };
+        let message = error.to_string();
+        assert!(
+            message.contains("parameter is incorrect")
+                || message.contains("os error 87")
+                || message.contains("restrictive Windows ancestor"),
+            "unexpected UNC external-workspace error: {message}"
         );
     }
 }
@@ -403,6 +617,7 @@ fn validate_snapshot(
     rule_set_json: &JsonValue,
     fixtures: &BTreeMap<String, JsonValue>,
     rules_root: &Path,
+    reader: &ScopedReader,
 ) -> Result<()> {
     if document.schema_version != "2.0.0" {
         return Err(CodegenError::new(format!(
@@ -476,10 +691,13 @@ fn validate_snapshot(
     }
 
     reject_machine_local_paths(rule_set_json, "$")?;
-    validate_sources(document, rules_root)?;
+    validate_sources(document, rules_root, reader)?;
     validate_boolean_coercion_tokens(document)?;
-    validate_legacy_mapping(document, rules_root)?;
+    validate_legacy_mapping(document, rules_root, reader)?;
     validate_references(document, rule_set_json, fixtures)?;
+    validate_calculation_rounding_pipelines(document)?;
+    validate_field_event_contract(document)?;
+    validate_field_event_programs(document)?;
     validate_scoped_evaluation_contract(document)?;
     validate_serialization_contract(document)?;
     validate_calculation_graph(document)?;
@@ -487,9 +705,849 @@ fn validate_snapshot(
     validate_rule_order(document)?;
     validate_fixture_identity(index, document, fixtures)?;
     if document.review_status == ReviewStatus::Reviewed {
-        validate_reviewed_completeness(document, fixtures, rules_root)?;
+        validate_reviewed_completeness(document, fixtures, rules_root, reader)?;
     }
     Ok(())
+}
+
+fn validate_field_event_contract(document: &RuleSetDocument) -> Result<()> {
+    for (field_index, field) in document.fields.iter().enumerate() {
+        let field_path = format!("$.fields[{field_index}]");
+        let field = required_object(field, "field")?;
+        let Some(behavior) = field.get("behavior") else {
+            // Full audits reach this function only after schema validation;
+            // focused semantic tests may intentionally use a reduced field.
+            continue;
+        };
+        let behavior = required_object(behavior, "field behavior")?;
+        for profile in ["official", "filing_safe"] {
+            let branch_path = format!("{field_path}.behavior.{profile}");
+            let branch = required_object(
+                behavior.get(profile).ok_or_else(|| {
+                    CodegenError::new(format!("{branch_path}: missing behavior branch"))
+                })?,
+                "field behavior branch",
+            )?;
+            if branch.get("state").and_then(JsonValue::as_str) != Some("executable") {
+                continue;
+            }
+
+            let base_normalization =
+                required_array(branch, "normalization", "field behavior branch")?;
+            if base_normalization
+                .iter()
+                .any(is_exact_offline_event_normalizer)
+            {
+                return Err(CodegenError::new(format!(
+                    "{branch_path}.normalization: exact Offline eBIRForms helpers require an exact field-event binding"
+                )));
+            }
+
+            let Some(event_normalization) = branch.get("event_normalization") else {
+                continue;
+            };
+            let JsonValue::Array(event_normalization) = event_normalization else {
+                return Err(CodegenError::new(format!(
+                    "{branch_path}.event_normalization: expected array"
+                )));
+            };
+            let mut phases = BTreeSet::new();
+            for (event_index, event) in event_normalization.iter().enumerate() {
+                let event_path = format!("{branch_path}.event_normalization[{event_index}]");
+                let event = required_object(event, "field event normalization")?;
+                let phase = required_string(event, "phase", "field event normalization")?;
+                if !matches!(phase, "input" | "blur" | "change") {
+                    return Err(CodegenError::new(format!(
+                        "{event_path}.phase: expected input, blur, or change"
+                    )));
+                }
+                if !phases.insert(phase) {
+                    return Err(CodegenError::new(format!(
+                        "{branch_path}.event_normalization: duplicate phase `{phase}`"
+                    )));
+                }
+                let pipeline = required_array(event, "normalization", "field event normalization")?;
+                if pipeline.is_empty() {
+                    return Err(CodegenError::new(format!(
+                        "{event_path}.normalization: expected at least one step"
+                    )));
+                }
+                if pipeline.iter().any(is_exact_offline_event_normalizer) {
+                    let field_value_type = required_string(field, "value_type", "field")?;
+                    let coercion = required_object(
+                        branch.get("coercion").ok_or_else(|| {
+                            CodegenError::new(format!("{branch_path}.coercion: missing coercion"))
+                        })?,
+                        "field coercion",
+                    )?;
+                    let coercion_kind = required_string(coercion, "kind", "field coercion")?;
+                    if pipeline.len() != 1
+                        || phase != "blur"
+                        || !base_normalization.is_empty()
+                        || field_value_type != "string"
+                        || coercion_kind != "string"
+                    {
+                        return Err(CodegenError::new(format!(
+                            "{event_path}.normalization: exact Offline eBIRForms helper requires an empty base pipeline, exact blur phase, string field/coercion, and no companion event step"
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    for (index, calculation) in document.calculations.iter().enumerate() {
+        let path = format!("$.calculations[{index}]");
+        let calculation = required_object(calculation, "calculation")?;
+        let scope = calculation_evaluation_scope(calculation, &path)?;
+        validate_field_event_entry(document, calculation, &scope, false, &path)?;
+    }
+    for (index, rule) in document.rules.iter().enumerate() {
+        let path = format!("$.rules[{index}]");
+        let rule = required_object(rule, "rule")?;
+        let scope = parse_evaluation_scope(
+            rule.get("scope")
+                .ok_or_else(|| CodegenError::new(format!("{path}: rule is missing scope")))?,
+            &format!("{path}.scope"),
+        )?;
+        validate_field_event_entry(document, rule, &scope, true, &path)?;
+    }
+    Ok(())
+}
+
+fn is_exact_offline_event_normalizer(value: &JsonValue) -> bool {
+    value
+        .object()
+        .and_then(|object| object.get("kind"))
+        .and_then(JsonValue::as_str)
+        .is_some_and(|kind| {
+            matches!(
+                kind,
+                "offline-ebir-money-round-v1" | "offline-ebir-parse-float-fixed-zero-v1"
+            )
+        })
+}
+
+fn validate_field_event_entry(
+    document: &RuleSetDocument,
+    entry: &BTreeMap<String, JsonValue>,
+    scope: &EvaluationScope,
+    is_rule: bool,
+    path: &str,
+) -> Result<()> {
+    let phases = required_string_array(entry, "phases", "field-event entry")?;
+    let has_event = phases
+        .iter()
+        .any(|phase| matches!(*phase, "input" | "blur" | "change"));
+
+    let triggers = match entry.get("trigger_field_ids") {
+        None | Some(JsonValue::Null) => None,
+        Some(value) => Some({
+            let JsonValue::Array(values) = value else {
+                return Err(CodegenError::new(format!(
+                    "{path}.trigger_field_ids: expected array"
+                )));
+            };
+            values
+                .iter()
+                .enumerate()
+                .map(|(index, value)| {
+                    value.as_str().ok_or_else(|| {
+                        CodegenError::new(format!(
+                            "{path}.trigger_field_ids[{index}]: expected string"
+                        ))
+                    })
+                })
+                .collect::<Result<Vec<_>>>()
+        }?),
+    };
+    match (has_event, triggers.as_deref()) {
+        (true, None | Some([])) => {
+            return Err(CodegenError::new(format!(
+                "{path}: field-event entry requires nonempty trigger_field_ids"
+            )));
+        }
+        (false, Some(_)) => {
+            return Err(CodegenError::new(format!(
+                "{path}: non-event entry must not carry trigger_field_ids"
+            )));
+        }
+        _ => {}
+    }
+
+    if let Some(triggers) = triggers.as_deref() {
+        let mut seen = BTreeSet::new();
+        for trigger in triggers {
+            if !seen.insert(*trigger) {
+                return Err(CodegenError::new(format!(
+                    "{path}.trigger_field_ids: duplicate trigger field `{trigger}`"
+                )));
+            }
+            let field = document
+                .fields
+                .iter()
+                .find_map(|field| {
+                    let field = field.object()?;
+                    (field.get("field_id")?.as_str()? == *trigger).then_some(field)
+                })
+                .ok_or_else(|| {
+                    CodegenError::new(format!(
+                        "{path}.trigger_field_ids: field `{trigger}` does not resolve"
+                    ))
+                })?;
+            let field_group = field.get("group_id").and_then(JsonValue::as_str);
+            let scope_matches = match scope {
+                EvaluationScope::Singleton => field_group.is_none(),
+                EvaluationScope::EachGroup { group_id } => field_group == Some(group_id.as_str()),
+            };
+            if !scope_matches {
+                return Err(CodegenError::new(format!(
+                    "{path}.trigger_field_ids: field `{trigger}` does not match evaluation scope {scope:?}"
+                )));
+            }
+        }
+    }
+
+    if is_rule {
+        let profiles = required_object(
+            entry
+                .get("profiles")
+                .ok_or_else(|| CodegenError::new(format!("{path}: missing profiles")))?,
+            "rule profiles",
+        )?;
+        for profile in ["official", "filing_safe"] {
+            let branch = required_object(
+                profiles.get(profile).ok_or_else(|| {
+                    CodegenError::new(format!("{path}.profiles: missing {profile}"))
+                })?,
+                "rule profile",
+            )?;
+            if branch.get("state").and_then(JsonValue::as_str) != Some("executable") {
+                continue;
+            }
+            for (effect_index, effect) in required_array(branch, "effects", "rule profile")?
+                .iter()
+                .enumerate()
+            {
+                let effect = required_object(effect, "rule effect")?;
+                if effect.get("kind").and_then(JsonValue::as_str) == Some("set-raw-field-value")
+                    && !has_event
+                {
+                    return Err(CodegenError::new(format!(
+                        "{path}.profiles.{profile}.effects[{effect_index}]: set-raw-field-value is permitted only on exact field-event rules"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_field_event_programs(document: &RuleSetDocument) -> Result<()> {
+    let writeback_outputs = validate_calculation_writebacks(document)?;
+    let mut pairs = BTreeSet::new();
+    let mut executable_programs = BTreeSet::new();
+    let mut entry_coverage =
+        BTreeMap::<(String, String, String), (BTreeSet<String>, BTreeSet<String>)>::new();
+    let mut selected_writebacks = BTreeSet::new();
+
+    for (program_index, program) in document.field_event_programs.iter().enumerate() {
+        let path = format!("$.field_event_programs[{program_index}]");
+        let program = required_object(program, "field-event program")?;
+        require_nonempty_source_refs(program, &path)?;
+        let phase = required_string(program, "phase", "field-event program")?;
+        if !matches!(phase, "input" | "blur" | "change") {
+            return Err(CodegenError::new(format!(
+                "{path}.phase: expected exact input, blur, or change phase"
+            )));
+        }
+        let trigger_field_id = required_string(program, "trigger_field_id", "field-event program")?;
+        if !pairs.insert((phase.to_owned(), trigger_field_id.to_owned())) {
+            return Err(CodegenError::new(format!(
+                "{path}: duplicate field-event program for ({phase}, {trigger_field_id})"
+            )));
+        }
+        field_definition(
+            document,
+            trigger_field_id,
+            &format!("{path}.trigger_field_id"),
+        )?;
+
+        let profiles = required_object(
+            program
+                .get("profiles")
+                .ok_or_else(|| CodegenError::new(format!("{path}: missing profiles")))?,
+            "field-event program profiles",
+        )?;
+        for profile in ["official", "filing_safe"] {
+            let branch_path = format!("{path}.profiles.{profile}");
+            let branch = required_object(
+                profiles.get(profile).ok_or_else(|| {
+                    CodegenError::new(format!("{path}.profiles: missing {profile}"))
+                })?,
+                "field-event program branch",
+            )?;
+            require_nonempty_source_refs(branch, &branch_path)?;
+            match required_string(branch, "state", "field-event program branch")? {
+                "executable" => {
+                    required_object(
+                        branch.get("review_decision").ok_or_else(|| {
+                            CodegenError::new(format!("{branch_path}: missing review_decision"))
+                        })?,
+                        "field-event program review decision",
+                    )?;
+                    executable_programs.insert((
+                        phase.to_owned(),
+                        trigger_field_id.to_owned(),
+                        profile.to_owned(),
+                    ));
+                    validate_field_event_program_branch(
+                        document,
+                        branch,
+                        phase,
+                        trigger_field_id,
+                        profile,
+                        &branch_path,
+                        &writeback_outputs,
+                        &mut entry_coverage,
+                        &mut selected_writebacks,
+                    )?;
+                }
+                "documented_only" | "unresolved" => {}
+                state => {
+                    return Err(CodegenError::new(format!(
+                        "{branch_path}.state: unknown field-event program branch state `{state}`"
+                    )));
+                }
+            }
+        }
+    }
+
+    if let Some((calculation_id, profile, output_id)) =
+        writeback_outputs.difference(&selected_writebacks).next()
+    {
+        return Err(CodegenError::new(format!(
+            "calculation output `{calculation_id}.{output_id}` profile `{profile}` has a writeback but is not selected by an executable field-event program"
+        )));
+    }
+    validate_event_entry_program_coverage(document, &entry_coverage)?;
+    validate_event_normalization_program_coverage(document, &executable_programs)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_field_event_program_branch(
+    document: &RuleSetDocument,
+    branch: &BTreeMap<String, JsonValue>,
+    phase: &str,
+    trigger_field_id: &str,
+    profile: &str,
+    path: &str,
+    writeback_outputs: &BTreeSet<(String, String, String)>,
+    entry_coverage: &mut BTreeMap<(String, String, String), (BTreeSet<String>, BTreeSet<String>)>,
+    selected_writebacks: &mut BTreeSet<(String, String, String)>,
+) -> Result<()> {
+    let steps = required_array(branch, "steps", "field-event program branch")?;
+    let mut seen_rules = BTreeSet::new();
+    let mut previous_rule_order = None;
+    let mut output_slots = BTreeSet::new();
+
+    for (step_index, step) in steps.iter().enumerate() {
+        let step_path = format!("{path}.steps[{step_index}]");
+        let step = required_object(step, "field-event program step")?;
+        match required_string(step, "kind", "field-event program step")? {
+            "rule" => {
+                let rule_id = required_string(step, "rule_id", "field-event rule step")?;
+                if !seen_rules.insert(rule_id) {
+                    return Err(CodegenError::new(format!(
+                        "{step_path}: rule `{rule_id}` appears more than once in one field-event program"
+                    )));
+                }
+                let rule = find_entry(
+                    &document.rules,
+                    "rule_id",
+                    rule_id,
+                    &format!("{step_path}.rule_id"),
+                )?;
+                validate_program_entry_pair(rule, phase, trigger_field_id, &step_path)?;
+                require_executable_entry_profile(rule, profile, &step_path)?;
+                let order = required_u64(rule, "order", "field-event rule")?;
+                if previous_rule_order.is_some_and(|previous| order <= previous) {
+                    return Err(CodegenError::new(format!(
+                        "{step_path}: field-event rules must be in strict rule order; found {order} after {}",
+                        previous_rule_order.expect("checked")
+                    )));
+                }
+                previous_rule_order = Some(order);
+                let coverage = entry_coverage
+                    .entry(("rule".to_owned(), rule_id.to_owned(), profile.to_owned()))
+                    .or_default();
+                coverage.0.insert(phase.to_owned());
+                coverage.1.insert(trigger_field_id.to_owned());
+            }
+            "calculation" => {
+                let calculation_id =
+                    required_string(step, "calculation_id", "field-event calculation step")?;
+                let calculation = find_entry(
+                    &document.calculations,
+                    "calculation_id",
+                    calculation_id,
+                    &format!("{step_path}.calculation_id"),
+                )?;
+                validate_program_entry_pair(calculation, phase, trigger_field_id, &step_path)?;
+                let calculation_branch =
+                    require_executable_entry_profile(calculation, profile, &step_path)?;
+                let selected =
+                    required_string_array(step, "output_ids", "field-event calculation step")?;
+                validate_selected_output_order(calculation, &selected, &step_path)?;
+                let write_mode =
+                    required_string(step, "write_mode", "field-event calculation step")?;
+                if !matches!(write_mode, "insert" | "replace") {
+                    return Err(CodegenError::new(format!(
+                        "{step_path}.write_mode: expected insert or replace"
+                    )));
+                }
+                let outputs = required_array(calculation_branch, "outputs", "calculation profile")?;
+                for output_id in selected {
+                    let output = find_entry(
+                        outputs,
+                        "output_id",
+                        output_id,
+                        &format!("{step_path}.output_ids"),
+                    )?;
+                    if output
+                        .get("writeback")
+                        .is_none_or(|value| value == &JsonValue::Null)
+                        || !writeback_outputs.contains(&(
+                            calculation_id.to_owned(),
+                            profile.to_owned(),
+                            output_id.to_owned(),
+                        ))
+                    {
+                        return Err(CodegenError::new(format!(
+                            "{step_path}: selected output `{calculation_id}.{output_id}` requires a validated writeback in profile `{profile}`"
+                        )));
+                    }
+                    selected_writebacks.insert((
+                        calculation_id.to_owned(),
+                        profile.to_owned(),
+                        output_id.to_owned(),
+                    ));
+
+                    let slot = (calculation_id.to_owned(), output_id.to_owned());
+                    match write_mode {
+                        "insert" if !output_slots.insert(slot.clone()) => {
+                            return Err(CodegenError::new(format!(
+                                "{step_path}: insert requires absent output slot `{calculation_id}.{output_id}`"
+                            )));
+                        }
+                        "replace" if !output_slots.contains(&slot) => {
+                            return Err(CodegenError::new(format!(
+                                "{step_path}: replace requires present output slot `{calculation_id}.{output_id}`"
+                            )));
+                        }
+                        "insert" | "replace" => {}
+                        _ => unreachable!("write mode checked above"),
+                    }
+                }
+                let coverage = entry_coverage
+                    .entry((
+                        "calculation".to_owned(),
+                        calculation_id.to_owned(),
+                        profile.to_owned(),
+                    ))
+                    .or_default();
+                coverage.0.insert(phase.to_owned());
+                coverage.1.insert(trigger_field_id.to_owned());
+            }
+            kind => {
+                return Err(CodegenError::new(format!(
+                    "{step_path}.kind: unknown field-event step `{kind}`"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_selected_output_order(
+    calculation: &BTreeMap<String, JsonValue>,
+    selected: &[&str],
+    path: &str,
+) -> Result<()> {
+    if selected.is_empty() {
+        return Err(CodegenError::new(format!(
+            "{path}.output_ids: selected outputs must be nonempty"
+        )));
+    }
+    let declared = required_string_array(calculation, "output_ids", "calculation")?;
+    let mut seen = BTreeSet::new();
+    let mut cursor = 0usize;
+    for output_id in selected {
+        if !seen.insert(*output_id) {
+            return Err(CodegenError::new(format!(
+                "{path}.output_ids: duplicate selected output `{output_id}`"
+            )));
+        }
+        while cursor < declared.len() && declared[cursor] != *output_id {
+            cursor += 1;
+        }
+        if cursor == declared.len() {
+            return Err(CodegenError::new(format!(
+                "{path}.output_ids: selected outputs must be a declared-order subsequence; `{output_id}` is missing or out of order"
+            )));
+        }
+        cursor += 1;
+    }
+    Ok(())
+}
+
+fn validate_program_entry_pair(
+    entry: &BTreeMap<String, JsonValue>,
+    phase: &str,
+    trigger_field_id: &str,
+    path: &str,
+) -> Result<()> {
+    let phases = required_string_array(entry, "phases", "field-event entry")?;
+    let triggers = required_string_array(entry, "trigger_field_ids", "field-event entry")?;
+    if !phases.contains(&phase) || !triggers.contains(&trigger_field_id) {
+        return Err(CodegenError::new(format!(
+            "{path}: target entry eligibility does not contain exact pair ({phase}, {trigger_field_id})"
+        )));
+    }
+    Ok(())
+}
+
+fn require_executable_entry_profile<'a>(
+    entry: &'a BTreeMap<String, JsonValue>,
+    profile: &str,
+    path: &str,
+) -> Result<&'a BTreeMap<String, JsonValue>> {
+    let profiles = required_object(
+        entry.get("profiles").ok_or_else(|| {
+            CodegenError::new(format!("{path}: target entry is missing profiles"))
+        })?,
+        "field-event entry profiles",
+    )?;
+    let branch = required_object(
+        profiles.get(profile).ok_or_else(|| {
+            CodegenError::new(format!(
+                "{path}: target entry is missing profile `{profile}`"
+            ))
+        })?,
+        "field-event entry profile",
+    )?;
+    if branch.get("state").and_then(JsonValue::as_str) == Some("executable") {
+        Ok(branch)
+    } else {
+        Err(CodegenError::new(format!(
+            "{path}: target entry profile `{profile}` is not executable"
+        )))
+    }
+}
+
+fn validate_event_entry_program_coverage(
+    document: &RuleSetDocument,
+    entry_coverage: &BTreeMap<(String, String, String), (BTreeSet<String>, BTreeSet<String>)>,
+) -> Result<()> {
+    for (kind, id_key, entries) in [
+        (
+            "calculation",
+            "calculation_id",
+            document.calculations.as_slice(),
+        ),
+        ("rule", "rule_id", document.rules.as_slice()),
+    ] {
+        for (index, entry) in entries.iter().enumerate() {
+            let path = format!("$.{kind}s[{index}]");
+            let entry = required_object(entry, kind)?;
+            let phases = required_string_array(entry, "phases", kind)?;
+            if !phases
+                .iter()
+                .any(|phase| matches!(*phase, "input" | "blur" | "change"))
+            {
+                continue;
+            }
+            let id = required_string(entry, id_key, kind)?;
+            let profiles = required_object(
+                entry
+                    .get("profiles")
+                    .ok_or_else(|| CodegenError::new(format!("{path}: missing profiles")))?,
+                "field-event entry profiles",
+            )?;
+            for profile in ["official", "filing_safe"] {
+                let branch = required_object(
+                    profiles.get(profile).ok_or_else(|| {
+                        CodegenError::new(format!("{path}.profiles: missing {profile}"))
+                    })?,
+                    "field-event entry profile",
+                )?;
+                if branch.get("state").and_then(JsonValue::as_str) == Some("executable") {
+                    let expected_phases = phases
+                        .iter()
+                        .filter(|phase| matches!(**phase, "input" | "blur" | "change"))
+                        .map(|phase| (*phase).to_owned())
+                        .collect::<BTreeSet<_>>();
+                    let expected_triggers =
+                        required_string_array(entry, "trigger_field_ids", kind)?
+                            .into_iter()
+                            .map(str::to_owned)
+                            .collect::<BTreeSet<_>>();
+                    let key = (kind.to_owned(), id.to_owned(), profile.to_owned());
+                    let (actual_phases, actual_triggers) =
+                        entry_coverage.get(&key).cloned().unwrap_or_default();
+                    if actual_phases != expected_phases || actual_triggers != expected_triggers {
+                        return Err(CodegenError::new(format!(
+                            "{path}.profiles.{profile}: executable field-event {kind} `{id}` program projections differ; expected phases {expected_phases:?} and triggers {expected_triggers:?}, found phases {actual_phases:?} and triggers {actual_triggers:?}"
+                        )));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_event_normalization_program_coverage(
+    document: &RuleSetDocument,
+    executable_programs: &BTreeSet<(String, String, String)>,
+) -> Result<()> {
+    for (field_index, field) in document.fields.iter().enumerate() {
+        let field_path = format!("$.fields[{field_index}]");
+        let field = required_object(field, "field")?;
+        let field_id = required_string(field, "field_id", "field")?;
+        let Some(behavior) = field.get("behavior") else {
+            continue;
+        };
+        let behavior = required_object(behavior, "field behavior")?;
+        for profile in ["official", "filing_safe"] {
+            let branch_path = format!("{field_path}.behavior.{profile}");
+            let branch = required_object(
+                behavior.get(profile).ok_or_else(|| {
+                    CodegenError::new(format!("{branch_path}: missing behavior branch"))
+                })?,
+                "field behavior branch",
+            )?;
+            if branch.get("state").and_then(JsonValue::as_str) != Some("executable") {
+                continue;
+            }
+            let Some(events) = branch.get("event_normalization") else {
+                continue;
+            };
+            let JsonValue::Array(events) = events else {
+                return Err(CodegenError::new(format!(
+                    "{branch_path}.event_normalization: expected array"
+                )));
+            };
+            for (event_index, event) in events.iter().enumerate() {
+                let event_path = format!("{branch_path}.event_normalization[{event_index}]");
+                let event = required_object(event, "field event normalization")?;
+                let phase = required_string(event, "phase", "field event normalization")?;
+                if !executable_programs.contains(&(
+                    phase.to_owned(),
+                    field_id.to_owned(),
+                    profile.to_owned(),
+                )) {
+                    return Err(CodegenError::new(format!(
+                        "{event_path}: field event normalization pair ({phase}, {field_id}) requires a matching executable program for profile `{profile}`"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_calculation_writebacks(
+    document: &RuleSetDocument,
+) -> Result<BTreeSet<(String, String, String)>> {
+    let mut validated_outputs = BTreeSet::new();
+    let mut target_bindings = BTreeMap::<String, (String, String)>::new();
+    for (calculation_index, calculation) in document.calculations.iter().enumerate() {
+        let path = format!("$.calculations[{calculation_index}]");
+        let calculation = required_object(calculation, "calculation")?;
+        let calculation_id = required_string(calculation, "calculation_id", "calculation")?;
+        let scope = calculation_evaluation_scope(calculation, &path)?;
+        let current_group = evaluation_scope_group(&scope);
+        let has_event_phase = required_string_array(calculation, "phases", "calculation")?
+            .iter()
+            .any(|phase| matches!(*phase, "input" | "blur" | "change"));
+        let profiles = required_object(
+            calculation
+                .get("profiles")
+                .ok_or_else(|| CodegenError::new(format!("{path}: missing profiles")))?,
+            "calculation profiles",
+        )?;
+        for profile in ["official", "filing_safe"] {
+            let branch_path = format!("{path}.profiles.{profile}");
+            let branch = required_object(
+                profiles.get(profile).ok_or_else(|| {
+                    CodegenError::new(format!("{path}.profiles: missing {profile}"))
+                })?,
+                "calculation profile",
+            )?;
+            if branch.get("state").and_then(JsonValue::as_str) != Some("executable") {
+                continue;
+            }
+            for (output_index, output) in required_array(branch, "outputs", "calculation profile")?
+                .iter()
+                .enumerate()
+            {
+                let output_path = format!("{branch_path}.outputs[{output_index}]");
+                let output = required_object(output, "calculation output")?;
+                let output_id = required_string(output, "output_id", "calculation output")?;
+                let Some(writeback) = output.get("writeback") else {
+                    continue;
+                };
+                if writeback == &JsonValue::Null {
+                    continue;
+                }
+                let value = output
+                    .get("value")
+                    .ok_or_else(|| CodegenError::new(format!("{output_path}: missing value")))?;
+                let value_type =
+                    declared_expression_value_type(value, &format!("{output_path}.value"))?;
+                if !matches!(value_type, "integer" | "decimal") {
+                    return Err(CodegenError::new(format!(
+                        "{output_path}.writeback: calculation output must have a finite numeric integer or decimal type, found `{value_type}`"
+                    )));
+                }
+                if !has_event_phase {
+                    return Err(CodegenError::new(format!(
+                        "{output_path}.writeback: calculation `{calculation_id}` must declare an exact input, blur, or change phase"
+                    )));
+                }
+                let writeback_path = format!("{output_path}.writeback");
+                let writeback = required_object(writeback, "calculation writeback")?;
+                require_nonempty_source_refs(writeback, &writeback_path)?;
+                required_object(
+                    writeback.get("review_decision").ok_or_else(|| {
+                        CodegenError::new(format!("{writeback_path}: missing review_decision"))
+                    })?,
+                    "calculation writeback review decision",
+                )?;
+                let format_path = format!("{writeback_path}.format");
+                let format = required_object(
+                    writeback.get("format").ok_or_else(|| {
+                        CodegenError::new(format!("{writeback_path}: missing format"))
+                    })?,
+                    "calculation write format",
+                )?;
+                if required_string(format, "kind", "calculation write format")?
+                    != "offline-ebir-format-currency-v1"
+                {
+                    return Err(CodegenError::new(format!(
+                        "{format_path}.kind: unsupported calculation write format"
+                    )));
+                }
+                let field_path = format!("{writeback_path}.field");
+                let field_ref = required_object(
+                    writeback.get("field").ok_or_else(|| {
+                        CodegenError::new(format!("{writeback_path}: missing field"))
+                    })?,
+                    "calculation writeback field",
+                )?;
+                validate_scoped_field_ref(document, field_ref, current_group, &field_path)?;
+                let field_id =
+                    required_string(field_ref, "field_id", "calculation writeback field")?;
+                let field = field_definition(document, field_id, &field_path)?;
+                if field.get("value_type").and_then(JsonValue::as_str) != Some("string") {
+                    return Err(CodegenError::new(format!(
+                        "{field_path}: calculation writeback target `{field_id}` must have String value_type"
+                    )));
+                }
+                match field.get("calculation_id") {
+                    Some(JsonValue::String(owner)) if owner == calculation_id => {}
+                    Some(JsonValue::String(owner)) => {
+                        return Err(CodegenError::new(format!(
+                            "{field_path}: field calculation_id `{owner}` does not match `{calculation_id}`"
+                        )));
+                    }
+                    None | Some(JsonValue::Null) => {
+                        return Err(CodegenError::new(format!(
+                            "{field_path}: writeback field calculation_id must exactly own `{calculation_id}`"
+                        )));
+                    }
+                    Some(_) => {
+                        return Err(CodegenError::new(format!(
+                            "{field_path}: field calculation_id must be string or null"
+                        )));
+                    }
+                }
+                let target = field_ref_identity(field_ref, &field_path)?;
+                let output_identity = (calculation_id.to_owned(), output_id.to_owned());
+                if let Some(existing) = target_bindings.get(&target) {
+                    if existing != &output_identity {
+                        return Err(CodegenError::new(format!(
+                            "{field_path}: writeback target is already bound to calculation output `{}.{}`",
+                            existing.0, existing.1
+                        )));
+                    }
+                } else {
+                    target_bindings.insert(target, output_identity);
+                }
+                validated_outputs.insert((
+                    calculation_id.to_owned(),
+                    profile.to_owned(),
+                    output_id.to_owned(),
+                ));
+            }
+        }
+    }
+    Ok(validated_outputs)
+}
+
+fn require_nonempty_source_refs(object: &BTreeMap<String, JsonValue>, path: &str) -> Result<()> {
+    if required_array(object, "source_refs", path)?.is_empty() {
+        Err(CodegenError::new(format!(
+            "{path}.source_refs: source evidence is required"
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+fn find_entry<'a>(
+    entries: &'a [JsonValue],
+    id_key: &str,
+    id: &str,
+    path: &str,
+) -> Result<&'a BTreeMap<String, JsonValue>> {
+    entries
+        .iter()
+        .find_map(|entry| {
+            let entry = entry.object()?;
+            (entry.get(id_key)?.as_str()? == id).then_some(entry)
+        })
+        .ok_or_else(|| CodegenError::new(format!("{path}: `{id}` does not resolve")))
+}
+
+fn field_definition<'a>(
+    document: &'a RuleSetDocument,
+    field_id: &str,
+    path: &str,
+) -> Result<&'a BTreeMap<String, JsonValue>> {
+    find_entry(&document.fields, "field_id", field_id, path)
+}
+
+fn field_ref_identity(field_ref: &BTreeMap<String, JsonValue>, path: &str) -> Result<String> {
+    let field_id = required_string(field_ref, "field_id", "field reference")?;
+    let instance = required_object(
+        field_ref
+            .get("instance")
+            .ok_or_else(|| CodegenError::new(format!("{path}: missing instance")))?,
+        "field instance selector",
+    )?;
+    let kind = required_string(instance, "kind", "field instance selector")?;
+    match kind {
+        "singleton" | "current-group-instance" => Ok(format!("{field_id}\0{kind}")),
+        "stable-instance-id" => Ok(format!(
+            "{field_id}\0{kind}\0{}",
+            required_string(instance, "instance_id", "field instance selector")?
+        )),
+        _ => Err(CodegenError::new(format!(
+            "{path}.instance.kind: unknown field instance selector `{kind}`"
+        ))),
+    }
 }
 
 fn compare_identity(label: &str, index: &str, document: &str) -> Result<()> {
@@ -502,7 +1560,11 @@ fn compare_identity(label: &str, index: &str, document: &str) -> Result<()> {
     }
 }
 
-fn validate_sources(document: &RuleSetDocument, rules_root: &Path) -> Result<()> {
+fn validate_sources(
+    document: &RuleSetDocument,
+    rules_root: &Path,
+    reader: &ScopedReader,
+) -> Result<()> {
     let mut ids = BTreeSet::new();
     let mut physical_sources = BTreeMap::new();
     for source in &document.sources {
@@ -523,7 +1585,7 @@ fn validate_sources(document: &RuleSetDocument, rules_root: &Path) -> Result<()>
                 source.source_id, source.sha256
             )));
         }
-        let actual = sha256_hex(&read_bytes(&path)?);
+        let actual = sha256_hex(&reader.read_bytes(&path, "source artifact")?);
         if actual != source.sha256 {
             return Err(CodegenError::new(format!(
                 "source `{}` hash mismatch for `{}`: expected {}, found {actual}",
@@ -597,7 +1659,11 @@ pub(crate) fn validate_boolean_coercion_tokens(document: &RuleSetDocument) -> Re
     Ok(())
 }
 
-fn validate_legacy_mapping(document: &RuleSetDocument, rules_root: &Path) -> Result<()> {
+fn validate_legacy_mapping(
+    document: &RuleSetDocument,
+    rules_root: &Path,
+    reader: &ScopedReader,
+) -> Result<()> {
     if document.legacy_v1.schema_version != "1.0.0" {
         return Err(CodegenError::new(
             "legacy_v1 schema_version must be `1.0.0`",
@@ -646,7 +1712,7 @@ fn validate_legacy_mapping(document: &RuleSetDocument, rules_root: &Path) -> Res
             )));
         }
         let path = resolve_existing_under(rules_root, &source.path, "legacy source path")?;
-        let value = parse_strict(&read_bytes(&path)?, &path)?;
+        let value = parse_strict(&reader.read_bytes(&path, "legacy source")?, &path)?;
         let actual_count = match mapping.artifact {
             LegacyArtifact::Manifest => 1,
             LegacyArtifact::Fields => array_len_property(&value, "fields")?,
@@ -812,6 +1878,30 @@ fn validate_legacy_record_classifications(
                 "legacy {} classification `{locator}` must cite exact source `{expected_source_id}` and locator",
                 artifact.label()
             )));
+        }
+        if classification.non_runtime_reason()
+            == Some(LegacyNonRuntimeReason::DocumentedOfficialNoOp)
+        {
+            if artifact != LegacyArtifact::Validations {
+                return Err(CodegenError::new(format!(
+                    "legacy {} classification `{locator}` cannot use documented-official-no-op",
+                    artifact.label()
+                )));
+            }
+            let has_review_decision = classification.source_refs().iter().any(|source_ref| {
+                source_ref
+                    .locator
+                    .as_deref()
+                    .is_some_and(|value| !value.is_empty())
+                    && document.sources.iter().any(|source| {
+                        source.source_id == source_ref.source_id && source.kind == "review-decision"
+                    })
+            });
+            if !has_review_decision {
+                return Err(CodegenError::new(format!(
+                    "legacy validation classification `{locator}` using documented-official-no-op must cite a locator in a declared review-decision source"
+                )));
+            }
         }
     }
     Ok(())
@@ -2462,6 +3552,106 @@ fn validate_serialization_predicate(
                 &format!("{path}.field"),
             )
         }
+        "javascript-global-is-nan-logical-or" => {
+            let inputs = required_array(
+                object,
+                "inputs",
+                "serialization JavaScript global isNaN logical-or predicate",
+            )?;
+            if inputs.is_empty() {
+                return Err(CodegenError::new(format!(
+                    "{path}: JavaScript global isNaN logical-or requires nonempty inputs"
+                )));
+            }
+            for (index, input) in inputs.iter().enumerate() {
+                let input_type = validate_serialization_expression(
+                    document,
+                    target,
+                    profile,
+                    input,
+                    current_group,
+                    &format!("{path}.inputs[{index}]"),
+                )?;
+                if !matches!(input_type.as_str(), "string" | "null") {
+                    return Err(CodegenError::new(format!(
+                        "{path}.inputs[{index}]: JavaScript logical-or input must be string or null, got `{input_type}`"
+                    )));
+                }
+            }
+            Ok(())
+        }
+        "javascript-number-compare" => {
+            let operator = required_string(
+                object,
+                "operator",
+                "serialization JavaScript Number comparison predicate",
+            )?;
+            if !matches!(operator, "less-than" | "greater-than" | "strict-equal") {
+                return Err(CodegenError::new(format!(
+                    "{path}: unsupported JavaScript Number comparison operator `{operator}`"
+                )));
+            }
+            let input_type = validate_serialization_expression(
+                document,
+                target,
+                profile,
+                object.get("input").ok_or_else(|| {
+                    CodegenError::new(format!(
+                        "{path}: JavaScript Number comparison is missing input"
+                    ))
+                })?,
+                current_group,
+                &format!("{path}.input"),
+            )?;
+            if !matches!(input_type.as_str(), "string" | "null") {
+                return Err(CodegenError::new(format!(
+                    "{path}: JavaScript Number comparison input must be string or null, got `{input_type}`"
+                )));
+            }
+            let operand_type = validate_serialization_expression(
+                document,
+                target,
+                profile,
+                object.get("operand").ok_or_else(|| {
+                    CodegenError::new(format!(
+                        "{path}: JavaScript Number comparison is missing operand"
+                    ))
+                })?,
+                current_group,
+                &format!("{path}.operand"),
+            )?;
+            if !matches!(operand_type.as_str(), "integer" | "decimal") {
+                return Err(CodegenError::new(format!(
+                    "{path}: JavaScript Number comparison operand must be integer or decimal, got `{operand_type}`"
+                )));
+            }
+            Ok(())
+        }
+        "checksum" => {
+            let algorithm =
+                required_string(object, "algorithm", "serialization checksum predicate")?;
+            if algorithm != "offline-ebir-tin-v1" {
+                return Err(CodegenError::new(format!(
+                    "{path}: unsupported checksum algorithm `{algorithm}`"
+                )));
+            }
+            let input_type = validate_serialization_expression(
+                document,
+                target,
+                profile,
+                object.get("input").ok_or_else(|| {
+                    CodegenError::new(format!("{path}: checksum predicate is missing input"))
+                })?,
+                current_group,
+                &format!("{path}.input"),
+            )?;
+            if input_type != "string" {
+                return Err(CodegenError::new(format!(
+                    "{path}: checksum predicate requires string input, got `{input_type}`"
+                )));
+            }
+            Ok(())
+        }
         "matches" => Err(CodegenError::new(format!(
             "{path}: unsupported executable serialization presence predicate `matches`; no audited packaged regex backend exists"
         ))),
@@ -2944,6 +4134,105 @@ fn serialization_group_bounds(
     Ok((minimum, maximum))
 }
 
+fn validate_calculation_rounding_pipelines(document: &RuleSetDocument) -> Result<()> {
+    for (calculation_index, calculation) in document.calculations.iter().enumerate() {
+        let calculation_path = format!("$.calculations[{calculation_index}]");
+        let calculation = required_object(calculation, "calculation")?;
+        let profiles = required_object(
+            calculation.get("profiles").ok_or_else(|| {
+                CodegenError::new(format!("{calculation_path}: missing profiles"))
+            })?,
+            "calculation profiles",
+        )?;
+
+        for profile in ["official", "filing_safe"] {
+            let branch_path = format!("{calculation_path}.profiles.{profile}");
+            let branch = required_object(
+                profiles.get(profile).ok_or_else(|| {
+                    CodegenError::new(format!("{calculation_path}: missing {profile} profile"))
+                })?,
+                "calculation profile",
+            )?;
+            if branch.get("state").and_then(JsonValue::as_str) != Some("executable") {
+                continue;
+            }
+
+            let outputs = required_array(branch, "outputs", "executable calculation profile")?;
+            for (output_index, output) in outputs.iter().enumerate() {
+                let output_path = format!("{branch_path}.outputs[{output_index}]");
+                let output = required_object(output, "calculation output")?;
+                let rounding_path = format!("{output_path}.rounding");
+                let rounding = output
+                    .get("rounding")
+                    .ok_or_else(|| CodegenError::new(format!("{output_path}: missing rounding")))?;
+                match rounding {
+                    JsonValue::Null => continue,
+                    JsonValue::Object(_) => {
+                        validate_calculation_rounding_step(rounding, &rounding_path)?;
+                    }
+                    JsonValue::Array(steps) => {
+                        if steps.is_empty() {
+                            return Err(CodegenError::new(format!(
+                                "{rounding_path}: rounding pipeline must contain at least one step"
+                            )));
+                        }
+                        for (step_index, step) in steps.iter().enumerate() {
+                            validate_calculation_rounding_step(
+                                step,
+                                &format!("{rounding_path}[{step_index}]"),
+                            )?;
+                        }
+                    }
+                    _ => {
+                        return Err(CodegenError::new(format!(
+                            "{rounding_path}: expected rounding object, nonempty rounding array, or null"
+                        )));
+                    }
+                }
+
+                let value = output
+                    .get("value")
+                    .ok_or_else(|| CodegenError::new(format!("{output_path}: missing value")))?;
+                let value_type =
+                    declared_expression_value_type(value, &format!("{output_path}.value"))?;
+                if !matches!(value_type, "decimal" | "null") {
+                    return Err(CodegenError::new(format!(
+                        "{rounding_path}: calculation rounding requires decimal value, found `{value_type}`"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_calculation_rounding_step(value: &JsonValue, path: &str) -> Result<()> {
+    let rounding = required_object(value, "calculation rounding step")?;
+    let mode = required_string(rounding, "mode", "calculation rounding step")?;
+    if !matches!(
+        mode,
+        "none"
+            | "half-up"
+            | "half-even"
+            | "half-ceiling"
+            | "toward-zero"
+            | "away-from-zero"
+            | "floor"
+            | "ceiling"
+    ) {
+        return Err(CodegenError::new(format!(
+            "{path}.mode: unsupported calculation rounding mode `{mode}`"
+        )));
+    }
+    let scale = required_u64(rounding, "scale", "calculation rounding step")?;
+    if scale > 18 {
+        return Err(CodegenError::new(format!(
+            "{path}.scale: calculation rounding scale {scale} exceeds 18"
+        )));
+    }
+    Ok(())
+}
+
 fn validate_scoped_evaluation_contract(document: &RuleSetDocument) -> Result<()> {
     for (index, calculation) in document.calculations.iter().enumerate() {
         let path = format!("$.calculations[{index}]");
@@ -3120,6 +4409,65 @@ fn validate_scoped_node(
                         )));
                     }
                 }
+                Some("javascript-global-is-nan-logical-or") => {
+                    let inputs = required_array(
+                        object,
+                        "inputs",
+                        "JavaScript global isNaN logical-or predicate",
+                    )?;
+                    if inputs.is_empty() {
+                        return Err(CodegenError::new(format!(
+                            "{path}: JavaScript global isNaN logical-or requires nonempty inputs"
+                        )));
+                    }
+                    for (index, input) in inputs.iter().enumerate() {
+                        let input_type = declared_expression_value_type(
+                            input,
+                            &format!("{path}.inputs[{index}]"),
+                        )?;
+                        if !matches!(input_type, "string" | "null") {
+                            return Err(CodegenError::new(format!(
+                                "{path}.inputs[{index}]: JavaScript logical-or input must be string or null"
+                            )));
+                        }
+                    }
+                }
+                Some("javascript-number-compare") => {
+                    let operator = required_string(
+                        object,
+                        "operator",
+                        "JavaScript Number comparison predicate",
+                    )?;
+                    if !matches!(operator, "less-than" | "greater-than" | "strict-equal") {
+                        return Err(CodegenError::new(format!(
+                            "{path}: unsupported JavaScript Number comparison operator `{operator}`"
+                        )));
+                    }
+                    let input = object.get("input").ok_or_else(|| {
+                        CodegenError::new(format!(
+                            "{path}: JavaScript Number comparison is missing input"
+                        ))
+                    })?;
+                    let input_type =
+                        declared_expression_value_type(input, &format!("{path}.input"))?;
+                    if !matches!(input_type, "string" | "null") {
+                        return Err(CodegenError::new(format!(
+                            "{path}: JavaScript Number comparison input must be string or null"
+                        )));
+                    }
+                    let operand = object.get("operand").ok_or_else(|| {
+                        CodegenError::new(format!(
+                            "{path}: JavaScript Number comparison is missing operand"
+                        ))
+                    })?;
+                    let operand_type =
+                        declared_expression_value_type(operand, &format!("{path}.operand"))?;
+                    if !matches!(operand_type, "integer" | "decimal") {
+                        return Err(CodegenError::new(format!(
+                            "{path}: JavaScript Number comparison operand must be integer or decimal"
+                        )));
+                    }
+                }
                 Some("javascript-parse-float") => {
                     let input = object.get("input").ok_or_else(|| {
                         CodegenError::new(format!(
@@ -3156,6 +4504,24 @@ fn validate_scoped_node(
                                 "{path}: invalid JavaScript parseFloat operator/operand shape"
                             )));
                         }
+                    }
+                }
+                Some("checksum") => {
+                    let input = object.get("input").ok_or_else(|| {
+                        CodegenError::new(format!("{path}: checksum predicate is missing input"))
+                    })?;
+                    let input_type =
+                        declared_expression_value_type(input, &format!("{path}.input"))?;
+                    if !matches!(input_type, "string" | "null") {
+                        return Err(CodegenError::new(format!(
+                            "{path}: checksum predicate requires string input"
+                        )));
+                    }
+                    let algorithm = required_string(object, "algorithm", "checksum predicate")?;
+                    if algorithm != "offline-ebir-tin-v1" {
+                        return Err(CodegenError::new(format!(
+                            "{path}: unsupported checksum algorithm `{algorithm}`"
+                        )));
                     }
                 }
                 Some("javascript-parse-int-radix10") => {
@@ -3703,13 +5069,15 @@ fn validate_rule_order(document: &RuleSetDocument) -> Result<()> {
 fn validation_phase_rank(phase: &str) -> Result<u8> {
     match phase {
         "input" => Ok(0),
-        "blur-change" => Ok(1),
-        "page-navigation" => Ok(2),
-        "save" => Ok(3),
-        "draft-preview" => Ok(4),
-        "validate" => Ok(5),
-        "final-copy" => Ok(6),
-        "submit" => Ok(7),
+        "blur" => Ok(1),
+        "change" => Ok(2),
+        "blur-change" => Ok(3),
+        "page-navigation" => Ok(4),
+        "save" => Ok(5),
+        "draft-preview" => Ok(6),
+        "validate" => Ok(7),
+        "final-copy" => Ok(8),
+        "submit" => Ok(9),
         _ => Err(CodegenError::new(format!(
             "unknown validation phase `{phase}` after schema validation"
         ))),
@@ -3749,7 +5117,7 @@ mod rule_order_contract_tests {
         let rule_set_path =
             manifest_dir.join("../../rules/ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
         let rule_set = parse_strict(
-            &read_bytes(&rule_set_path).expect("read candidate rule set"),
+            &std::fs::read(&rule_set_path).expect("read candidate rule set"),
             &rule_set_path,
         )
         .expect("parse candidate rule set");
@@ -3820,6 +5188,28 @@ mod rule_order_contract_tests {
     }
 
     #[test]
+    fn physical_rule_order_distinguishes_input_blur_change_and_compatibility_phase() {
+        let canonical = document_with_rules(vec![
+            rule("input-a", 1, &["input"]),
+            rule("blur-a", 1, &["blur"]),
+            rule("change-a", 1, &["change"]),
+            rule("blur-change-a", 1, &["blur-change"]),
+        ]);
+        validate_rule_order(&canonical).expect("exact event phases have deterministic ranks");
+
+        let noncanonical = document_with_rules(vec![
+            rule("change-a", 1, &["change"]),
+            rule("blur-a", 1, &["blur"]),
+        ]);
+        assert!(
+            validate_rule_order(&noncanonical)
+                .expect_err("change must sort after blur")
+                .message()
+                .contains("canonical physical order")
+        );
+    }
+
+    #[test]
     fn fixture_rule_expectations_sort_by_order_rule_id_and_instance() {
         let document = document_with_rules(vec![
             executable_rule(
@@ -3849,7 +5239,7 @@ mod rule_order_contract_tests {
         ];
 
         let expectations =
-            executable_rule_expectations(&document, "official", "validate", &group_instances)
+            executable_rule_expectations(&document, "official", "validate", &group_instances, None)
                 .expect("build fixture expectations");
         let actual = expectations
             .iter()
@@ -3941,16 +5331,25 @@ fn validate_reviewed_completeness(
     document: &RuleSetDocument,
     fixtures: &BTreeMap<String, JsonValue>,
     rules_root: &Path,
+    reader: &ScopedReader,
 ) -> Result<()> {
     validate_reviewed_typed_counts(document)?;
     validate_reviewed_legacy_mappings(document)?;
-    let artifacts = load_reviewed_legacy_artifacts(document, rules_root)?;
+    let artifacts = load_reviewed_legacy_artifacts(document, rules_root, reader)?;
     validate_reviewed_completeness_with_artifacts(document, fixtures, &artifacts)?;
-    let negative_fixtures =
-        load_reviewed_fixture_evidence(document, rules_root, "legacy-v1-negative-fixtures")?;
+    let negative_fixtures = load_reviewed_fixture_evidence(
+        document,
+        rules_root,
+        "legacy-v1-negative-fixtures",
+        reader,
+    )?;
     validate_reviewed_legacy_negative_fixture_bijection(document, fixtures, &negative_fixtures)?;
-    let calculation_fixtures =
-        load_reviewed_fixture_evidence(document, rules_root, "legacy-v1-calculation-fixtures")?;
+    let calculation_fixtures = load_reviewed_fixture_evidence(
+        document,
+        rules_root,
+        "legacy-v1-calculation-fixtures",
+        reader,
+    )?;
     validate_reviewed_legacy_calculation_fixture_coverage(document, fixtures, &calculation_fixtures)
 }
 
@@ -4417,6 +5816,7 @@ fn validate_reviewed_legacy_mappings(document: &RuleSetDocument) -> Result<()> {
 fn load_reviewed_legacy_artifacts(
     document: &RuleSetDocument,
     rules_root: &Path,
+    reader: &ScopedReader,
 ) -> Result<BTreeMap<LegacyArtifact, JsonValue>> {
     let sources = document
         .sources
@@ -4445,7 +5845,10 @@ fn load_reviewed_legacy_artifacts(
             ))
         })?;
         let path = resolve_existing_under(rules_root, &source.path, "reviewed legacy source path")?;
-        artifacts.insert(artifact, parse_strict(&read_bytes(&path)?, &path)?);
+        artifacts.insert(
+            artifact,
+            parse_strict(&reader.read_bytes(&path, "reviewed legacy source")?, &path)?,
+        );
     }
     Ok(artifacts)
 }
@@ -4460,6 +5863,7 @@ fn load_reviewed_fixture_evidence(
     document: &RuleSetDocument,
     rules_root: &Path,
     source_kind: &str,
+    reader: &ScopedReader,
 ) -> Result<ReviewedFixtureEvidence> {
     let matching = document
         .sources
@@ -4480,7 +5884,10 @@ fn load_reviewed_fixture_evidence(
     )?;
     Ok(ReviewedFixtureEvidence {
         source_id: source.source_id.clone(),
-        document: parse_strict(&read_bytes(&path)?, &path)?,
+        document: parse_strict(
+            &reader.read_bytes(&path, "reviewed legacy fixture source")?,
+            &path,
+        )?,
     })
 }
 
@@ -5028,6 +6435,7 @@ struct FixtureFieldInstance {
 struct ValidatedFixtureInput {
     group_instances: Vec<FixtureGroupInstance>,
     raw_fields: BTreeMap<FixtureFieldInstance, JsonValue>,
+    event_field: Option<FixtureFieldInstance>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -5112,6 +6520,7 @@ fn validate_reviewed_fixture_coverage(
             profile,
             phase,
             &validated_input.group_instances,
+            validated_input.event_field.as_ref(),
         )?;
         if expected_rules != applicable_rules {
             return Err(CodegenError::new(format!(
@@ -5143,6 +6552,7 @@ fn validate_reviewed_fixture_coverage(
             profile,
             phase,
             &validated_input.group_instances,
+            validated_input.event_field.as_ref(),
         )?;
         validate_exact_output_coverage(
             path,
@@ -5346,6 +6756,11 @@ fn validate_fixture_context(
             "{path}: input context_fingerprint `{input_fingerprint}` differs from report `{report_fingerprint}`"
         )));
     }
+    if input.get("event_field") != report.get("event_field") {
+        return Err(CodegenError::new(format!(
+            "{path}: input and report event_field identities differ"
+        )));
+    }
     Ok(())
 }
 
@@ -5523,9 +6938,47 @@ fn validate_fixture_input(
         )));
     }
 
+    let phase = required_string(
+        required_object(
+            input
+                .get("context")
+                .ok_or_else(|| CodegenError::new(format!("{path}: input missing context")))?,
+            "evaluation fixture input context",
+        )?,
+        "phase",
+        "evaluation fixture input context",
+    )?;
+    let event_phase = matches!(phase, "input" | "blur" | "change");
+    let event_field = input
+        .get("event_field")
+        .map(|value| fixture_field_instance(value, "evaluation fixture event field"))
+        .transpose()?;
+    match (event_phase, event_field.as_ref()) {
+        (true, None) => {
+            return Err(CodegenError::new(format!(
+                "{path}: field-event fixture is missing event_field"
+            )));
+        }
+        (false, Some(_)) => {
+            return Err(CodegenError::new(format!(
+                "{path}: non-event fixture must not carry event_field"
+            )));
+        }
+        _ => {}
+    }
+    if event_field
+        .as_ref()
+        .is_some_and(|field| !actual_field_identities.contains(field))
+    {
+        return Err(CodegenError::new(format!(
+            "{path}: event_field does not exactly occur in raw_inputs"
+        )));
+    }
+
     Ok(ValidatedFixtureInput {
         group_instances,
         raw_fields: actual_fields.into_iter().collect(),
+        event_field,
     })
 }
 
@@ -5880,17 +7333,48 @@ fn execution_instances_for_scope(
     }
 }
 
+fn execution_instances_for_scope_for_event(
+    scope: &EvaluationScope,
+    group_instances: &[FixtureGroupInstance],
+    event_field: Option<&FixtureFieldInstance>,
+) -> Vec<Option<FixtureGroupInstance>> {
+    let Some(event_field) = event_field else {
+        return execution_instances_for_scope(scope, group_instances);
+    };
+    match scope {
+        EvaluationScope::Singleton => vec![None],
+        EvaluationScope::EachGroup { group_id } => event_field
+            .group_path
+            .iter()
+            .find(|instance| instance.group_id == *group_id)
+            .cloned()
+            .map(Some)
+            .into_iter()
+            .collect(),
+    }
+}
+
 fn executable_rule_expectations(
     document: &RuleSetDocument,
     profile: &str,
     phase: &str,
     group_instances: &[FixtureGroupInstance],
+    event_field: Option<&FixtureFieldInstance>,
 ) -> Result<Vec<FixtureRuleExpectation>> {
     let mut expectations = Vec::new();
     for rule in &document.rules {
         let rule = required_object(rule, "rule")?;
         if profile_branch_is_executable(rule, profile, "rule")?
             && required_string_array(rule, "phases", "rule")?.contains(&phase)
+            && event_field.is_none_or(|field| {
+                rule.get("trigger_field_ids")
+                    .is_some_and(|value| match value {
+                        JsonValue::Array(triggers) => triggers
+                            .iter()
+                            .any(|trigger| trigger.as_str() == Some(field.field_id.as_str())),
+                        _ => false,
+                    })
+            })
         {
             let scope = parse_evaluation_scope(
                 rule.get("scope")
@@ -5900,7 +7384,7 @@ fn executable_rule_expectations(
             let rule_id = required_string(rule, "rule_id", "rule")?.to_owned();
             let order = required_u64(rule, "order", "rule")?;
             expectations.extend(
-                execution_instances_for_scope(&scope, group_instances)
+                execution_instances_for_scope_for_event(&scope, group_instances, event_field)
                     .into_iter()
                     .map(|instance| FixtureRuleExpectation {
                         execution: FixtureRuleExecution {
@@ -5977,6 +7461,7 @@ fn executable_output_expectations(
     profile: &str,
     phase: &str,
     group_instances: &[FixtureGroupInstance],
+    event_field: Option<&FixtureFieldInstance>,
 ) -> Result<Vec<FixtureOutputExpectation>> {
     let calculations = document
         .calculations
@@ -5998,9 +7483,21 @@ fn executable_output_expectations(
         })?;
         if profile_branch_is_executable(calculation, profile, "calculation")?
             && required_string_array(calculation, "phases", "calculation")?.contains(&phase)
+            && event_field.is_none_or(|field| {
+                calculation
+                    .get("trigger_field_ids")
+                    .is_some_and(|value| match value {
+                        JsonValue::Array(triggers) => triggers
+                            .iter()
+                            .any(|trigger| trigger.as_str() == Some(field.field_id.as_str())),
+                        _ => false,
+                    })
+            })
         {
             let scope = calculation_evaluation_scope(calculation, "calculation")?;
-            for instance in execution_instances_for_scope(&scope, group_instances) {
+            for instance in
+                execution_instances_for_scope_for_event(&scope, group_instances, event_field)
+            {
                 for output_id in required_string_array(calculation, "output_ids", "calculation")? {
                     expectations.push(FixtureOutputExpectation {
                         calculation_id: calculation_id.clone(),
@@ -6761,9 +8258,9 @@ mod evaluation_policy_contract_tests {
         let schema_root = manifest_dir.join("../../rules/schema/v2");
         let rule_set_path =
             manifest_dir.join("../../rules/ir/v2/2550q-v2024-p7.9.6.0/rule-set.json");
-        let schemas = SchemaSet::load(&schema_root).expect("load repository v2 schemas");
+        let schemas = SchemaSet::load_external(&schema_root).expect("load repository v2 schemas");
         let rule_set = parse_strict(
-            &read_bytes(&rule_set_path).expect("read scaffold rule set"),
+            &std::fs::read(&rule_set_path).expect("read scaffold rule set"),
             &rule_set_path,
         )
         .expect("parse scaffold rule set");
@@ -7426,10 +8923,10 @@ mod scoped_evaluation_contract_tests {
         .expect("scoped test document deserializes")
     }
 
-    fn calculation_output_value_mut<'a>(
+    fn calculation_output_mut<'a>(
         document: &'a mut RuleSetDocument,
         calculation_index: usize,
-    ) -> &'a mut JsonValue {
+    ) -> &'a mut BTreeMap<String, JsonValue> {
         let calculation = document.calculations[calculation_index]
             .object_mut()
             .unwrap();
@@ -7442,7 +8939,397 @@ mod scoped_evaluation_contract_tests {
         let JsonValue::Array(outputs) = branch.get_mut("outputs").unwrap() else {
             panic!("outputs are an array");
         };
-        outputs[0].object_mut().unwrap().get_mut("value").unwrap()
+        outputs[0].object_mut().unwrap()
+    }
+
+    fn calculation_output_value_mut(
+        document: &mut RuleSetDocument,
+        calculation_index: usize,
+    ) -> &mut JsonValue {
+        calculation_output_mut(document, calculation_index)
+            .get_mut("value")
+            .unwrap()
+    }
+
+    #[test]
+    fn field_event_audit_enforces_exact_phases_triggers_scope_and_raw_effects() {
+        let event_rule = |document: &mut RuleSetDocument| {
+            let rule = document.rules[0].object_mut().unwrap();
+            rule.insert(
+                "phases".to_owned(),
+                serde_json::from_value(json!(["change"])).unwrap(),
+            );
+            rule.insert(
+                "trigger_field_ids".to_owned(),
+                serde_json::from_value(json!(["row-amount"])).unwrap(),
+            );
+            for profile in ["official", "filing_safe"] {
+                let branch = rule
+                    .get_mut("profiles")
+                    .unwrap()
+                    .object_mut()
+                    .unwrap()
+                    .get_mut(profile)
+                    .unwrap()
+                    .object_mut()
+                    .unwrap();
+                branch.insert(
+                    "effects".to_owned(),
+                    serde_json::from_value(json!([{
+                        "kind": "set-raw-field-value",
+                        "field": {
+                            "field_id": "row-amount",
+                            "instance": {"kind": "current-group-instance"}
+                        },
+                        "value": {"state": "text", "text": "0.00"}
+                    }]))
+                    .unwrap(),
+                );
+            }
+        };
+
+        let mut valid = scoped_document();
+        event_rule(&mut valid);
+        validate_field_event_contract(&valid)
+            .expect("exact change trigger and raw effect are accepted");
+
+        let mut mixed = valid.clone();
+        mixed.rules[0].object_mut().unwrap().insert(
+            "phases".to_owned(),
+            serde_json::from_value(json!(["change", "validate"])).unwrap(),
+        );
+        validate_field_event_contract(&mixed)
+            .expect("one reconciled rule may carry event and batch eligibility");
+
+        let mut explicit_null = scoped_document();
+        explicit_null.rules[0]
+            .object_mut()
+            .unwrap()
+            .insert("trigger_field_ids".to_owned(), JsonValue::Null);
+        validate_field_event_contract(&explicit_null)
+            .expect("batch-only entry may carry an explicit null trigger projection");
+
+        let mut wrong_scope = valid.clone();
+        wrong_scope.rules[0].object_mut().unwrap().insert(
+            "scope".to_owned(),
+            serde_json::from_value(json!({"kind": "singleton"})).unwrap(),
+        );
+        assert!(
+            validate_field_event_contract(&wrong_scope)
+                .expect_err("group trigger must not bind singleton scope")
+                .message()
+                .contains("does not match evaluation scope")
+        );
+
+        let mut non_event_effect = valid;
+        let rule = non_event_effect.rules[0].object_mut().unwrap();
+        rule.insert(
+            "phases".to_owned(),
+            serde_json::from_value(json!(["validate"])).unwrap(),
+        );
+        rule.remove("trigger_field_ids");
+        assert!(
+            validate_field_event_contract(&non_event_effect)
+                .expect_err("raw assignment effects are event-rule only")
+                .message()
+                .contains("permitted only")
+        );
+    }
+
+    #[test]
+    fn field_event_audit_scopes_offline_money_normalization_exactly_once() {
+        let branch = json!({
+            "state": "executable",
+            "normalization": [],
+            "event_normalization": [{
+                "phase": "blur",
+                "normalization": [{"kind": "offline-ebir-money-round-v1"}]
+            }],
+            "coercion": {"kind": "string", "on_empty": "null"},
+            "review_decision": {"source_id": "review"},
+            "source_refs": [{"source_id": "review"}]
+        });
+        let mut valid = scoped_document();
+        let field = valid.fields[0].object_mut().unwrap();
+        field.insert(
+            "value_type".to_owned(),
+            JsonValue::String("string".to_owned()),
+        );
+        field.insert(
+            "behavior".to_owned(),
+            serde_json::from_value(json!({
+                "official": branch.clone(),
+                "filing_safe": branch
+            }))
+            .unwrap(),
+        );
+        validate_field_event_contract(&valid)
+            .expect("one exact Blur money normalization is accepted");
+
+        fn behavior_branch(document: &mut RuleSetDocument) -> &mut BTreeMap<String, JsonValue> {
+            document.fields[0]
+                .object_mut()
+                .unwrap()
+                .get_mut("behavior")
+                .unwrap()
+                .object_mut()
+                .unwrap()
+                .get_mut("official")
+                .unwrap()
+                .object_mut()
+                .unwrap()
+        }
+
+        let mut duplicate = valid.clone();
+        behavior_branch(&mut duplicate).insert(
+            "event_normalization".to_owned(),
+            serde_json::from_value(json!([
+                {
+                    "phase": "blur",
+                    "normalization": [{"kind": "offline-ebir-money-round-v1"}]
+                },
+                {
+                    "phase": "blur",
+                    "normalization": [{"kind": "trim", "side": "both"}]
+                }
+            ]))
+            .unwrap(),
+        );
+        assert!(
+            validate_field_event_contract(&duplicate)
+                .expect_err("duplicate event phases must fail")
+                .message()
+                .contains("duplicate phase")
+        );
+
+        let mut unscoped = valid.clone();
+        behavior_branch(&mut unscoped).insert(
+            "normalization".to_owned(),
+            serde_json::from_value(json!([{"kind": "offline-ebir-money-round-v1"}])).unwrap(),
+        );
+        assert!(
+            validate_field_event_contract(&unscoped)
+                .expect_err("money helper must not be globally normalized")
+                .message()
+                .contains("an exact field-event binding")
+        );
+
+        let mut year_helper = valid.clone();
+        let events = behavior_branch(&mut year_helper)
+            .get_mut("event_normalization")
+            .unwrap();
+        let JsonValue::Array(events) = events else {
+            panic!("test event normalization must remain an array");
+        };
+        events[0].object_mut().unwrap().insert(
+            "normalization".to_owned(),
+            serde_json::from_value(json!([{
+                "kind": "offline-ebir-parse-float-fixed-zero-v1"
+            }]))
+            .unwrap(),
+        );
+        validate_field_event_contract(&year_helper)
+            .expect("one exact Blur whole-number normalization is accepted");
+
+        let mut composed = valid;
+        behavior_branch(&mut composed).insert(
+            "event_normalization".to_owned(),
+            serde_json::from_value(json!([{
+                "phase": "blur",
+                "normalization": [
+                    {"kind": "trim", "side": "both"},
+                    {"kind": "offline-ebir-money-round-v1"}
+                ]
+            }]))
+            .unwrap(),
+        );
+        assert!(
+            validate_field_event_contract(&composed)
+                .expect_err("money helper pipeline must remain source-exact")
+                .message()
+                .contains("no companion event step")
+        );
+
+        let mut wrong_phase = duplicate;
+        let events = behavior_branch(&mut wrong_phase)
+            .get_mut("event_normalization")
+            .unwrap();
+        let JsonValue::Array(events) = events else {
+            panic!("test event normalization must remain an array");
+        };
+        events.truncate(1);
+        events[0]
+            .object_mut()
+            .unwrap()
+            .insert("phase".to_owned(), JsonValue::String("change".to_owned()));
+        assert!(
+            validate_field_event_contract(&wrong_phase)
+                .expect_err("legacy money helper is Blur-only")
+                .message()
+                .contains("exact blur phase")
+        );
+
+        let mut preprocessed = unscoped;
+        behavior_branch(&mut preprocessed).insert(
+            "normalization".to_owned(),
+            serde_json::from_value(json!([{"kind": "trim", "side": "both"}])).unwrap(),
+        );
+        assert!(
+            validate_field_event_contract(&preprocessed)
+                .expect_err("base normalization would change source lexical semantics")
+                .message()
+                .contains("empty base pipeline")
+        );
+
+        let mut decimal_coercion = wrong_phase;
+        behavior_branch(&mut decimal_coercion).insert(
+            "event_normalization".to_owned(),
+            serde_json::from_value(json!([{
+                "phase": "blur",
+                "normalization": [{"kind": "offline-ebir-money-round-v1"}]
+            }]))
+            .unwrap(),
+        );
+        behavior_branch(&mut decimal_coercion).insert(
+            "coercion".to_owned(),
+            serde_json::from_value(json!({
+                "kind": "decimal",
+                "policy": {
+                    "precision": 38,
+                    "scale": 2,
+                    "division_scale": 18,
+                    "rounding": {"mode": "none", "scale": 2},
+                    "overflow": "error"
+                },
+                "grouping": "comma",
+                "on_empty": "zero",
+                "on_invalid": "error"
+            }))
+            .unwrap(),
+        );
+        assert!(
+            validate_field_event_contract(&decimal_coercion)
+                .expect_err("money display normalization must preserve canonical String")
+                .message()
+                .contains("string field/coercion")
+        );
+    }
+
+    #[test]
+    fn scoped_audit_closes_javascript_number_predicate_types_and_logical_or_cardinality() {
+        let set_official_predicate =
+            |document: &mut RuleSetDocument, predicate: serde_json::Value| {
+                document.rules[0]
+                    .object_mut()
+                    .unwrap()
+                    .get_mut("profiles")
+                    .unwrap()
+                    .object_mut()
+                    .unwrap()
+                    .get_mut("official")
+                    .unwrap()
+                    .object_mut()
+                    .unwrap()
+                    .insert(
+                        "predicate".to_owned(),
+                        serde_json::from_value(predicate).unwrap(),
+                    );
+            };
+
+        let mut logical_or = scoped_document();
+        set_official_predicate(
+            &mut logical_or,
+            json!({
+                "kind": "javascript-global-is-nan-logical-or",
+                "inputs": [
+                    {
+                        "kind": "literal",
+                        "value": {"type": "null", "value": null}
+                    },
+                    {
+                        "kind": "literal",
+                        "value": {"type": "string", "value": "amount"}
+                    }
+                ]
+            }),
+        );
+        validate_scoped_evaluation_contract(&logical_or)
+            .expect("ordered string/null logical-or inputs are accepted");
+
+        let mut number_compare = scoped_document();
+        set_official_predicate(
+            &mut number_compare,
+            json!({
+                "kind": "javascript-number-compare",
+                "operator": "less-than",
+                "input": {
+                    "kind": "literal",
+                    "value": {"type": "string", "value": "2024"}
+                },
+                "operand": {
+                    "kind": "literal",
+                    "value": {"type": "integer", "value": 2025}
+                }
+            }),
+        );
+        validate_scoped_evaluation_contract(&number_compare)
+            .expect("string-to-integer JavaScript Number comparison is accepted");
+
+        let mut empty = scoped_document();
+        set_official_predicate(
+            &mut empty,
+            json!({
+                "kind": "javascript-global-is-nan-logical-or",
+                "inputs": []
+            }),
+        );
+        assert!(
+            validate_scoped_evaluation_contract(&empty)
+                .expect_err("empty logical-or inputs must fail closed")
+                .message()
+                .contains("requires nonempty inputs")
+        );
+
+        let mut wrong_input = scoped_document();
+        set_official_predicate(
+            &mut wrong_input,
+            json!({
+                "kind": "javascript-global-is-nan-logical-or",
+                "inputs": [{
+                    "kind": "literal",
+                    "value": {"type": "integer", "value": 1}
+                }]
+            }),
+        );
+        assert!(
+            validate_scoped_evaluation_contract(&wrong_input)
+                .expect_err("logical-or numeric input must fail")
+                .message()
+                .contains("must be string or null")
+        );
+
+        let mut wrong_operand = scoped_document();
+        set_official_predicate(
+            &mut wrong_operand,
+            json!({
+                "kind": "javascript-number-compare",
+                "operator": "strict-equal",
+                "input": {
+                    "kind": "literal",
+                    "value": {"type": "string", "value": "2025"}
+                },
+                "operand": {
+                    "kind": "literal",
+                    "value": {"type": "string", "value": "2025"}
+                }
+            }),
+        );
+        assert!(
+            validate_scoped_evaluation_contract(&wrong_operand)
+                .expect_err("string operand must fail")
+                .message()
+                .contains("operand must be integer or decimal")
+        );
     }
 
     fn scoped_fixture_input(instance_ids: &[&str]) -> JsonValue {
@@ -7474,6 +9361,10 @@ mod scoped_evaluation_contract_tests {
         fingerprint_input.extend_from_slice(br#"{"values":[]}"#);
         let context_fingerprint = sha256_hex(&fingerprint_input);
         serde_json::from_value(json!({
+            "context": {
+                "phase": "validate",
+                "profile": "official"
+            },
             "context_fingerprint": context_fingerprint,
             "context_values": {"values": []},
             "raw_inputs": {
@@ -7489,6 +9380,74 @@ mod scoped_evaluation_contract_tests {
         let document = scoped_document();
         validate_scoped_evaluation_contract(&document).expect("scoped references are compatible");
         validate_calculation_graph(&document).expect("scoped dependencies are ordered and exact");
+    }
+
+    #[test]
+    fn calculation_rounding_audit_accepts_legacy_object_and_ordered_pipeline() {
+        let mut legacy = scoped_document();
+        calculation_output_mut(&mut legacy, 0).insert(
+            "rounding".to_owned(),
+            serde_json::from_value(json!({
+                "mode": "half-ceiling",
+                "scale": 0
+            }))
+            .unwrap(),
+        );
+        validate_calculation_rounding_pipelines(&legacy)
+            .expect("legacy rounding object remains accepted");
+
+        let mut pipeline = scoped_document();
+        calculation_output_mut(&mut pipeline, 0).insert(
+            "rounding".to_owned(),
+            serde_json::from_value(json!([
+                {"mode": "half-up", "scale": 2},
+                {"mode": "half-ceiling", "scale": 0}
+            ]))
+            .unwrap(),
+        );
+        validate_calculation_rounding_pipelines(&pipeline)
+            .expect("ordered rounding pipeline is accepted");
+    }
+
+    #[test]
+    fn calculation_rounding_audit_rejects_empty_invalid_or_nondecimal_pipelines() {
+        let mut empty = scoped_document();
+        calculation_output_mut(&mut empty, 0)
+            .insert("rounding".to_owned(), JsonValue::Array(Vec::new()));
+        let error = validate_calculation_rounding_pipelines(&empty)
+            .expect_err("empty rounding pipeline must fail closed");
+        assert!(error.message().contains("at least one step"));
+
+        let mut invalid_second_step = scoped_document();
+        calculation_output_mut(&mut invalid_second_step, 0).insert(
+            "rounding".to_owned(),
+            serde_json::from_value(json!([
+                {"mode": "half-up", "scale": 2},
+                {"mode": "half-ceiling", "scale": 19}
+            ]))
+            .unwrap(),
+        );
+        let error = validate_calculation_rounding_pipelines(&invalid_second_step)
+            .expect_err("every rounding step must be audited");
+        assert!(error.message().contains("scale 19 exceeds 18"));
+
+        let mut nondecimal = scoped_document();
+        let output = calculation_output_mut(&mut nondecimal, 0);
+        output.insert(
+            "rounding".to_owned(),
+            serde_json::from_value(json!({"mode": "half-up", "scale": 0})).unwrap(),
+        );
+        output.insert(
+            "value".to_owned(),
+            serde_json::from_value(json!({
+                "kind": "literal",
+                "value": {"type": "integer", "value": 1}
+            }))
+            .unwrap(),
+        );
+        let error = validate_calculation_rounding_pipelines(&nondecimal)
+            .expect_err("calculation rounding is decimal-only");
+        assert!(error.message().contains("requires decimal value"));
     }
 
     #[test]
@@ -7602,17 +9561,74 @@ mod scoped_evaluation_contract_tests {
             },
         ];
         let rules =
-            executable_rule_expectations(&document, "official", "validate", &instances).unwrap();
+            executable_rule_expectations(&document, "official", "validate", &instances, None)
+                .unwrap();
         assert_eq!(rules.len(), 2);
         assert_eq!(rules[0].execution.instance, Some(instances[0].clone()));
         assert_eq!(rules[1].execution.instance, Some(instances[1].clone()));
 
         let outputs =
-            executable_output_expectations(&document, "official", "validate", &instances).unwrap();
+            executable_output_expectations(&document, "official", "validate", &instances, None)
+                .unwrap();
         assert_eq!(outputs.len(), 3);
         assert_eq!(outputs[0].instance, Some(instances[0].clone()));
         assert_eq!(outputs[1].instance, Some(instances[1].clone()));
         assert_eq!(outputs[2].instance, None);
+    }
+
+    #[test]
+    fn fixture_inventory_isolates_trigger_and_stable_event_instance() {
+        let mut document = scoped_document();
+        let rule = document.rules[0].object_mut().unwrap();
+        rule.insert(
+            "phases".to_owned(),
+            serde_json::from_value(json!(["change"])).unwrap(),
+        );
+        rule.insert(
+            "trigger_field_ids".to_owned(),
+            serde_json::from_value(json!(["row-amount"])).unwrap(),
+        );
+        let instances = vec![
+            FixtureGroupInstance {
+                group_id: "rows".to_owned(),
+                instance_id: "row-1".to_owned(),
+            },
+            FixtureGroupInstance {
+                group_id: "rows".to_owned(),
+                instance_id: "row-2".to_owned(),
+            },
+        ];
+        let event_field = FixtureFieldInstance {
+            field_id: "row-amount".to_owned(),
+            group_path: vec![instances[1].clone()],
+        };
+
+        let rules = executable_rule_expectations(
+            &document,
+            "official",
+            "change",
+            &instances,
+            Some(&event_field),
+        )
+        .unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].execution.instance, Some(instances[1].clone()));
+
+        let other_field = FixtureFieldInstance {
+            field_id: "other".to_owned(),
+            group_path: vec![instances[1].clone()],
+        };
+        assert!(
+            executable_rule_expectations(
+                &document,
+                "official",
+                "change",
+                &instances,
+                Some(&other_field),
+            )
+            .unwrap()
+            .is_empty()
+        );
     }
 
     #[test]
@@ -7795,7 +9811,7 @@ mod scoped_evaluation_contract_tests {
         assert_eq!(instances[1].instance_id, "row-2");
 
         let applicable =
-            executable_output_expectations(&document, "official", "validate", &instances)
+            executable_output_expectations(&document, "official", "validate", &instances, None)
                 .expect("build exact output inventory");
         assert_eq!(applicable.len(), 3);
         assert_eq!(
@@ -7819,6 +9835,598 @@ mod scoped_evaluation_contract_tests {
         .expect_err("one row cannot stand in for another row's output");
         assert!(error.message().contains("row-2"));
         assert!(error.message().contains("must exactly match"));
+    }
+
+    fn field_event_program_document() -> RuleSetDocument {
+        let mut document = scoped_document();
+        let field = document.fields[0].object_mut().unwrap();
+        field.insert(
+            "value_type".to_owned(),
+            JsonValue::String("string".to_owned()),
+        );
+        field.insert(
+            "calculation_id".to_owned(),
+            JsonValue::String("row-tax".to_owned()),
+        );
+        field.insert(
+            "behavior".to_owned(),
+            serde_json::from_value(json!({
+                "official": {
+                    "state": "executable",
+                    "normalization": [],
+                    "event_normalization": [{
+                        "phase": "change",
+                        "normalization": [{"kind": "trim", "side": "both"}]
+                    }],
+                    "coercion": {"kind": "string", "on_empty": "null"},
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                },
+                "filing_safe": {
+                    "state": "executable",
+                    "normalization": [],
+                    "event_normalization": [{
+                        "phase": "change",
+                        "normalization": [{"kind": "trim", "side": "both"}]
+                    }],
+                    "coercion": {"kind": "string", "on_empty": "null"},
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                }
+            }))
+            .unwrap(),
+        );
+
+        let calculation = document.calculations[0].object_mut().unwrap();
+        calculation.insert(
+            "phases".to_owned(),
+            serde_json::from_value(json!(["change"])).unwrap(),
+        );
+        calculation.insert(
+            "trigger_field_ids".to_owned(),
+            serde_json::from_value(json!(["row-amount"])).unwrap(),
+        );
+        let profiles = calculation
+            .get_mut("profiles")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        for profile in ["official", "filing_safe"] {
+            let branch = profiles.get_mut(profile).unwrap().object_mut().unwrap();
+            let JsonValue::Array(outputs) = branch.get_mut("outputs").unwrap() else {
+                panic!("outputs are an array");
+            };
+            outputs[0].object_mut().unwrap().insert(
+                "writeback".to_owned(),
+                serde_json::from_value(json!({
+                    "field": {
+                        "field_id": "row-amount",
+                        "instance": {"kind": "current-group-instance"}
+                    },
+                    "format": {"kind": "offline-ebir-format-currency-v1"},
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                }))
+                .unwrap(),
+            );
+        }
+
+        let rule = document.rules[0].object_mut().unwrap();
+        rule.insert(
+            "phases".to_owned(),
+            serde_json::from_value(json!(["change"])).unwrap(),
+        );
+        rule.insert(
+            "trigger_field_ids".to_owned(),
+            serde_json::from_value(json!(["row-amount"])).unwrap(),
+        );
+
+        document.field_event_programs = serde_json::from_value(json!([{
+            "phase": "change",
+            "trigger_field_id": "row-amount",
+            "profiles": {
+                "official": {
+                    "state": "executable",
+                    "steps": [
+                        {
+                            "kind": "calculation",
+                            "calculation_id": "row-tax",
+                            "output_ids": ["value"],
+                            "write_mode": "insert"
+                        },
+                        {"kind": "rule", "rule_id": "row-valid"}
+                    ],
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                },
+                "filing_safe": {
+                    "state": "executable",
+                    "steps": [
+                        {
+                            "kind": "calculation",
+                            "calculation_id": "row-tax",
+                            "output_ids": ["value"],
+                            "write_mode": "insert"
+                        },
+                        {"kind": "rule", "rule_id": "row-valid"}
+                    ],
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                }
+            },
+            "source_refs": [{"source_id": "review"}]
+        }]))
+        .unwrap();
+        document
+    }
+
+    fn event_program_branch_mut<'a>(
+        document: &'a mut RuleSetDocument,
+        profile: &str,
+    ) -> &'a mut BTreeMap<String, JsonValue> {
+        document.field_event_programs[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("profiles")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .get_mut(profile)
+            .unwrap()
+            .object_mut()
+            .unwrap()
+    }
+
+    fn event_program_steps_mut<'a>(
+        document: &'a mut RuleSetDocument,
+        profile: &str,
+    ) -> &'a mut Vec<JsonValue> {
+        let value = event_program_branch_mut(document, profile)
+            .get_mut("steps")
+            .unwrap();
+        let JsonValue::Array(steps) = value else {
+            panic!("steps are an array");
+        };
+        steps
+    }
+
+    #[test]
+    fn profiled_field_event_program_audit_accepts_exact_insert_then_replace_and_rejects_pair_or_slot_ambiguity()
+     {
+        let document = field_event_program_document();
+        validate_field_event_programs(&document)
+            .expect("exact profiled program with writeback is valid");
+
+        let mut no_op = scoped_document();
+        no_op.field_event_programs = serde_json::from_value(json!([{
+            "phase": "change",
+            "trigger_field_id": "row-amount",
+            "profiles": {
+                "official": {
+                    "state": "executable",
+                    "steps": [],
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                },
+                "filing_safe": {
+                    "state": "executable",
+                    "steps": [],
+                    "review_decision": {"source_id": "review"},
+                    "source_refs": [{"source_id": "review"}]
+                }
+            },
+            "source_refs": [{"source_id": "review"}]
+        }]))
+        .unwrap();
+        validate_field_event_programs(&no_op)
+            .expect("an exact observed no-op handler remains an executable empty program");
+
+        let mut repeated = document.clone();
+        for profile in ["official", "filing_safe"] {
+            let branch = event_program_branch_mut(&mut repeated, profile);
+            let JsonValue::Array(steps) = branch.get_mut("steps").unwrap() else {
+                panic!("steps are an array");
+            };
+            steps.insert(
+                1,
+                serde_json::from_value(json!({
+                    "kind": "calculation",
+                    "calculation_id": "row-tax",
+                    "output_ids": ["value"],
+                    "write_mode": "replace"
+                }))
+                .unwrap(),
+            );
+        }
+        validate_field_event_programs(&repeated)
+            .expect("replace of a present derived output slot is valid");
+
+        let mut replace_absent = document.clone();
+        event_program_steps_mut(&mut replace_absent, "official")[0]
+            .object_mut()
+            .unwrap()
+            .insert(
+                "write_mode".to_owned(),
+                JsonValue::String("replace".to_owned()),
+            );
+        assert!(
+            validate_field_event_programs(&replace_absent)
+                .expect_err("replace cannot create an absent output slot")
+                .message()
+                .contains("replace requires present output slot")
+        );
+
+        let mut duplicate_pair = document;
+        let duplicate = duplicate_pair.field_event_programs[0].clone();
+        duplicate_pair.field_event_programs.push(duplicate);
+        assert!(
+            validate_field_event_programs(&duplicate_pair)
+                .expect_err("phase/trigger pair must be unique")
+                .message()
+                .contains("duplicate field-event program")
+        );
+    }
+
+    #[test]
+    fn profiled_field_event_program_audit_enforces_selected_output_contract_and_evidence() {
+        let document = field_event_program_document();
+
+        let mut empty = document.clone();
+        event_program_steps_mut(&mut empty, "official")[0]
+            .object_mut()
+            .unwrap()
+            .insert("output_ids".to_owned(), JsonValue::Array(Vec::new()));
+        assert!(
+            validate_field_event_programs(&empty)
+                .expect_err("selected output list must be nonempty")
+                .message()
+                .contains("must be nonempty")
+        );
+
+        let mut out_of_order = document.clone();
+        out_of_order.calculations[0].object_mut().unwrap().insert(
+            "output_ids".to_owned(),
+            serde_json::from_value(json!(["first", "value"])).unwrap(),
+        );
+        event_program_steps_mut(&mut out_of_order, "official")[0]
+            .object_mut()
+            .unwrap()
+            .insert(
+                "output_ids".to_owned(),
+                serde_json::from_value(json!(["value", "first"])).unwrap(),
+            );
+        assert!(
+            validate_field_event_programs(&out_of_order)
+                .expect_err("selected outputs must retain declaration order")
+                .message()
+                .contains("declared-order subsequence")
+        );
+
+        let mut missing_writeback = document.clone();
+        calculation_output_mut(&mut missing_writeback, 0).remove("writeback");
+        assert!(
+            validate_field_event_programs(&missing_writeback)
+                .expect_err("scheduled output requires writeback")
+                .message()
+                .contains("requires a validated writeback")
+        );
+
+        let mut unselected_writeback = document.clone();
+        for profile in ["official", "filing_safe"] {
+            event_program_steps_mut(&mut unselected_writeback, profile).retain(|step| {
+                step.object()
+                    .and_then(|step| step.get("kind"))
+                    .and_then(JsonValue::as_str)
+                    != Some("calculation")
+            });
+        }
+        assert!(
+            validate_field_event_programs(&unselected_writeback)
+                .expect_err("every writeback must be selected by its profile program")
+                .message()
+                .contains("has a writeback but is not selected")
+        );
+
+        let mut batch_writeback = document.clone();
+        batch_writeback.calculations[0]
+            .object_mut()
+            .unwrap()
+            .insert(
+                "phases".to_owned(),
+                serde_json::from_value(json!(["validate"])).unwrap(),
+            );
+        assert!(
+            validate_field_event_programs(&batch_writeback)
+                .expect_err("batch-only calculations cannot expose event writebacks")
+                .message()
+                .contains("must declare an exact input, blur, or change phase")
+        );
+
+        let mut missing_sources = document;
+        missing_sources.field_event_programs[0]
+            .object_mut()
+            .unwrap()
+            .insert("source_refs".to_owned(), JsonValue::Array(Vec::new()));
+        assert!(
+            validate_field_event_programs(&missing_sources)
+                .expect_err("program requires source evidence")
+                .message()
+                .contains("source evidence is required")
+        );
+    }
+
+    #[test]
+    fn profiled_field_event_program_audit_enforces_eligibility_coverage_and_rule_order() {
+        let document = field_event_program_document();
+
+        let mut projected_pairs = document.clone();
+        let mut other_field = projected_pairs.fields[0].clone();
+        other_field.object_mut().unwrap().insert(
+            "field_id".to_owned(),
+            JsonValue::String("row-other".to_owned()),
+        );
+        other_field.object_mut().unwrap().remove("behavior");
+        projected_pairs.fields.push(other_field);
+        for entry in projected_pairs
+            .calculations
+            .iter_mut()
+            .take(1)
+            .chain(projected_pairs.rules.iter_mut())
+        {
+            let entry = entry.object_mut().unwrap();
+            entry.insert(
+                "phases".to_owned(),
+                serde_json::from_value(json!(["blur", "change"])).unwrap(),
+            );
+            entry.insert(
+                "trigger_field_ids".to_owned(),
+                serde_json::from_value(json!(["row-amount", "row-other"])).unwrap(),
+            );
+        }
+        projected_pairs.field_event_programs[0]
+            .object_mut()
+            .unwrap()
+            .insert("phase".to_owned(), JsonValue::String("blur".to_owned()));
+        let mut second_program = projected_pairs.field_event_programs[0].clone();
+        second_program
+            .object_mut()
+            .unwrap()
+            .insert("phase".to_owned(), JsonValue::String("change".to_owned()));
+        second_program.object_mut().unwrap().insert(
+            "trigger_field_id".to_owned(),
+            JsonValue::String("row-other".to_owned()),
+        );
+        projected_pairs.field_event_programs.push(second_program);
+        let behavior = projected_pairs.fields[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("behavior")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        for profile in ["official", "filing_safe"] {
+            let branch = behavior.get_mut(profile).unwrap().object_mut().unwrap();
+            let JsonValue::Array(events) = branch.get_mut("event_normalization").unwrap() else {
+                panic!("event normalization is an array");
+            };
+            events[0]
+                .object_mut()
+                .unwrap()
+                .insert("phase".to_owned(), JsonValue::String("blur".to_owned()));
+        }
+        validate_field_event_programs(&projected_pairs)
+            .expect("phase and trigger projections need not form a cross product");
+
+        let mut orphan_projection = projected_pairs;
+        orphan_projection.field_event_programs.pop();
+        assert!(
+            validate_field_event_programs(&orphan_projection)
+                .expect_err("every declared phase and trigger projection needs a real pair")
+                .message()
+                .contains("program projections differ")
+        );
+
+        let mut wrong_pair = document.clone();
+        wrong_pair.field_event_programs[0]
+            .object_mut()
+            .unwrap()
+            .insert("phase".to_owned(), JsonValue::String("blur".to_owned()));
+        assert!(
+            validate_field_event_programs(&wrong_pair)
+                .expect_err("steps must be eligible for the exact pair")
+                .message()
+                .contains("eligibility does not contain exact pair")
+        );
+
+        let mut unreferenced = document.clone();
+        for profile in ["official", "filing_safe"] {
+            let branch = event_program_branch_mut(&mut unreferenced, profile);
+            let JsonValue::Array(steps) = branch.get_mut("steps").unwrap() else {
+                panic!("steps are an array");
+            };
+            steps.retain(|step| {
+                step.object()
+                    .and_then(|step| step.get("kind"))
+                    .and_then(JsonValue::as_str)
+                    != Some("rule")
+            });
+        }
+        assert!(
+            validate_field_event_programs(&unreferenced)
+                .expect_err("every executable event rule/profile requires a program step")
+                .message()
+                .contains("program projections differ")
+        );
+
+        let mut missing_normalization_pair = document.clone();
+        let behavior = missing_normalization_pair.fields[0]
+            .object_mut()
+            .unwrap()
+            .get_mut("behavior")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        let branch = behavior.get_mut("official").unwrap().object_mut().unwrap();
+        let JsonValue::Array(events) = branch.get_mut("event_normalization").unwrap() else {
+            panic!("event normalization is an array");
+        };
+        events[0]
+            .object_mut()
+            .unwrap()
+            .insert("phase".to_owned(), JsonValue::String("blur".to_owned()));
+        assert!(
+            validate_field_event_programs(&missing_normalization_pair)
+                .expect_err("event normalization needs the same executable program pair")
+                .message()
+                .contains("requires a matching executable program")
+        );
+
+        let mut duplicate_rule = document.clone();
+        event_program_steps_mut(&mut duplicate_rule, "official")
+            .push(serde_json::from_value(json!({"kind": "rule", "rule_id": "row-valid"})).unwrap());
+        assert!(
+            validate_field_event_programs(&duplicate_rule)
+                .expect_err("a rule can appear at most once")
+                .message()
+                .contains("appears more than once")
+        );
+
+        let mut wrong_rule_order = document;
+        let mut later_rule = wrong_rule_order.rules[0].clone();
+        later_rule.object_mut().unwrap().insert(
+            "rule_id".to_owned(),
+            JsonValue::String("row-valid-later".to_owned()),
+        );
+        later_rule.object_mut().unwrap().insert(
+            "order".to_owned(),
+            serde_json::from_value(json!(2)).unwrap(),
+        );
+        wrong_rule_order.rules.push(later_rule);
+        for profile in ["official", "filing_safe"] {
+            let branch = event_program_branch_mut(&mut wrong_rule_order, profile);
+            let JsonValue::Array(steps) = branch.get_mut("steps").unwrap() else {
+                panic!("steps are an array");
+            };
+            steps.truncate(1);
+            steps.push(
+                serde_json::from_value(json!({"kind": "rule", "rule_id": "row-valid-later"}))
+                    .unwrap(),
+            );
+            steps.push(
+                serde_json::from_value(json!({"kind": "rule", "rule_id": "row-valid"})).unwrap(),
+            );
+        }
+        assert!(
+            validate_field_event_programs(&wrong_rule_order)
+                .expect_err("rules must retain strict global order")
+                .message()
+                .contains("strict rule order")
+        );
+    }
+
+    #[test]
+    fn calculation_writeback_audit_enforces_target_type_scope_owner_and_uniqueness() {
+        let document = field_event_program_document();
+
+        let mut nonnumeric_output = document.clone();
+        calculation_output_value_mut(&mut nonnumeric_output, 0)
+            .object_mut()
+            .unwrap()
+            .insert(
+                "result_type".to_owned(),
+                JsonValue::String("string".to_owned()),
+            );
+        assert!(
+            validate_field_event_programs(&nonnumeric_output)
+                .expect_err("writeback output must remain in the reviewed finite numeric domain")
+                .message()
+                .contains("finite numeric integer or decimal")
+        );
+
+        let mut wrong_type = document.clone();
+        wrong_type.fields[0].object_mut().unwrap().insert(
+            "value_type".to_owned(),
+            JsonValue::String("decimal".to_owned()),
+        );
+        assert!(
+            validate_field_event_programs(&wrong_type)
+                .expect_err("writeback target must be string")
+                .message()
+                .contains("must have String value_type")
+        );
+
+        let mut wrong_owner = document.clone();
+        wrong_owner.fields[0].object_mut().unwrap().insert(
+            "calculation_id".to_owned(),
+            JsonValue::String("another-calculation".to_owned()),
+        );
+        assert!(
+            validate_field_event_programs(&wrong_owner)
+                .expect_err("field calculation owner must match")
+                .message()
+                .contains("does not match")
+        );
+
+        let mut missing_owner = document.clone();
+        missing_owner.fields[0]
+            .object_mut()
+            .unwrap()
+            .insert("calculation_id".to_owned(), JsonValue::Null);
+        assert!(
+            validate_field_event_programs(&missing_owner)
+                .expect_err("writeback target must declare its calculation owner")
+                .message()
+                .contains("must exactly own")
+        );
+
+        let mut wrong_scope = document.clone();
+        calculation_output_mut(&mut wrong_scope, 0)
+            .get_mut("writeback")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .get_mut("field")
+            .unwrap()
+            .object_mut()
+            .unwrap()
+            .insert(
+                "instance".to_owned(),
+                serde_json::from_value(json!({"kind": "singleton"})).unwrap(),
+            );
+        assert!(
+            validate_field_event_programs(&wrong_scope)
+                .expect_err("writeback field selector must match calculation scope")
+                .message()
+                .contains("is incompatible")
+        );
+
+        let mut duplicate_target = document;
+        let calculation = duplicate_target.calculations[0].object_mut().unwrap();
+        calculation.insert(
+            "output_ids".to_owned(),
+            serde_json::from_value(json!(["value", "other"])).unwrap(),
+        );
+        let profiles = calculation
+            .get_mut("profiles")
+            .unwrap()
+            .object_mut()
+            .unwrap();
+        let official = profiles.get_mut("official").unwrap().object_mut().unwrap();
+        let JsonValue::Array(outputs) = official.get_mut("outputs").unwrap() else {
+            panic!("outputs are an array");
+        };
+        let mut other = outputs[0].clone();
+        other.object_mut().unwrap().insert(
+            "output_id".to_owned(),
+            JsonValue::String("other".to_owned()),
+        );
+        outputs.push(other);
+        assert!(
+            validate_field_event_programs(&duplicate_target)
+                .expect_err("distinct outputs cannot share a writeback target")
+                .message()
+                .contains("already bound")
+        );
     }
 }
 
@@ -8068,8 +10676,10 @@ mod reviewed_completeness_tests {
             .expect("deserialize aliased source"),
         ];
 
-        let error =
-            validate_sources(&document, &root).expect_err("physical evidence alias must fail");
+        let reader = ScopedReader::new(ReadScope::External, &root, "source alias test root")
+            .expect("capture source alias test root");
+        let error = validate_sources(&document, &root, &reader)
+            .expect_err("physical evidence alias must fail");
         assert!(
             error.message().contains("aliases physical evidence"),
             "unexpected error: {error}"
@@ -8082,6 +10692,7 @@ mod reviewed_completeness_tests {
             error.message().contains("aliased-evidence"),
             "unexpected error: {error}"
         );
+        drop(reader);
         std::fs::remove_dir_all(&root).expect("remove source alias test directory");
     }
 
@@ -8942,7 +11553,7 @@ mod reviewed_completeness_tests {
                 .unwrap()
                 .object_mut()
                 .unwrap()
-                .insert("phase".to_owned(), JsonValue::String("input".to_owned()));
+                .insert("phase".to_owned(), JsonValue::String("save".to_owned()));
         }
         {
             let expected = fixture.get_mut("expected").unwrap().object_mut().unwrap();
@@ -8952,7 +11563,7 @@ mod reviewed_completeness_tests {
                 .unwrap()
                 .object_mut()
                 .unwrap()
-                .insert("phase".to_owned(), JsonValue::String("input".to_owned()));
+                .insert("phase".to_owned(), JsonValue::String("save".to_owned()));
             report.insert("expected_rules".to_owned(), JsonValue::Array(Vec::new()));
             report.insert("evaluated_rules".to_owned(), JsonValue::Array(Vec::new()));
             expected.insert("expected_outputs".to_owned(), JsonValue::Array(Vec::new()));
@@ -9179,6 +11790,62 @@ mod reviewed_completeness_tests {
         let error = validate_legacy_record_classifications(&document, &artifacts)
             .expect_err("validation classification without legacy ID must fail");
         assert!(error.message().contains("must name its source `rule_id`"));
+    }
+
+    #[test]
+    fn documented_official_no_op_requires_exact_validation_and_review_decision() {
+        let mut document = reviewed_document();
+        document.rules[0]
+            .object_mut()
+            .unwrap()
+            .insert("source_refs".to_owned(), JsonValue::Array(Vec::new()));
+        document.sources.push(crate::model::Source {
+            source_id: "no-op-review".to_owned(),
+            kind: "review-decision".to_owned(),
+            path: "forms/test/no-op-review.json".to_owned(),
+            sha256: DIGEST_B.to_owned(),
+        });
+        let classification = |review_source_id: &str, review_locator: Option<&str>| {
+            crate::model::LegacyRecordClassification::NonRuntime {
+                artifact: LegacyArtifact::Validations,
+                legacy_id: Some("legacy-rule".to_owned()),
+                locator: "#/rules/0".to_owned(),
+                reason: LegacyNonRuntimeReason::DocumentedOfficialNoOp,
+                source_refs: vec![
+                    crate::model::SourceRef {
+                        source_id: "legacy-validations".to_owned(),
+                        locator: Some("#/rules/0".to_owned()),
+                    },
+                    crate::model::SourceRef {
+                        source_id: review_source_id.to_owned(),
+                        locator: review_locator.map(str::to_owned),
+                    },
+                ],
+            }
+        };
+        document.legacy_v1.record_classifications =
+            vec![classification("no-op-review", Some("#decision"))];
+        let mut artifacts = legacy_artifacts();
+        artifacts.insert(
+            LegacyArtifact::Validations,
+            serde_json::from_value(json!({
+                "rules": [{"rule_id": "legacy-rule"}]
+            }))
+            .unwrap(),
+        );
+        validate_legacy_record_classifications(&document, &artifacts)
+            .expect("exact validation locator plus review decision proves the no-op");
+
+        document.legacy_v1.record_classifications = vec![classification("no-op-review", None)];
+        let error = validate_legacy_record_classifications(&document, &artifacts)
+            .expect_err("review decision without a locator must fail");
+        assert!(error.message().contains("declared review-decision"));
+
+        document.legacy_v1.record_classifications =
+            vec![classification("legacy-validations", Some("#/rules/0"))];
+        let error = validate_legacy_record_classifications(&document, &artifacts)
+            .expect_err("the legacy source itself cannot substitute for review");
+        assert!(error.message().contains("declared review-decision"));
     }
 
     #[test]

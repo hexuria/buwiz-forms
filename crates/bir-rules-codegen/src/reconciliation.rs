@@ -12,18 +12,28 @@ use serde::Serialize;
 
 use crate::audit::{AuditOptions, audit};
 use crate::error::Result;
+use crate::files::ReadScope;
 use crate::json::JsonValue;
 use crate::model::{LegacyArtifact, LegacyRecordClassification, RuleSetDocument};
 
 #[derive(Clone, Debug)]
 pub struct ReconciliationOptions {
     pub repo_root: PathBuf,
+    pub(crate) read_scope: ReadScope,
 }
 
 impl ReconciliationOptions {
-    pub fn new(repo_root: impl Into<PathBuf>) -> Self {
+    pub fn tracked_checkout(repo_root: impl Into<PathBuf>) -> Self {
         Self {
             repo_root: repo_root.into(),
+            read_scope: ReadScope::Tracked,
+        }
+    }
+
+    pub fn external_workspace(repo_root: impl Into<PathBuf>) -> Self {
+        Self {
+            repo_root: repo_root.into(),
+            read_scope: ReadScope::External,
         }
     }
 }
@@ -61,7 +71,11 @@ pub struct ReconciliationReport {
 }
 
 pub fn reconciliation(options: &ReconciliationOptions) -> Result<ReconciliationReport> {
-    let audit = audit(&AuditOptions::new(&options.repo_root))?;
+    let audit_options = match options.read_scope {
+        ReadScope::Tracked => AuditOptions::tracked_checkout(&options.repo_root),
+        ReadScope::External => AuditOptions::external_workspace(&options.repo_root),
+    };
+    let audit = audit(&audit_options)?;
     let mut forms = audit
         .snapshots
         .iter()
@@ -298,8 +312,8 @@ mod tests {
     #[test]
     fn landed_candidate_exposes_its_unclassified_legacy_gap() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let report =
-            reconciliation(&ReconciliationOptions::new(root)).expect("reconciliation report");
+        let report = reconciliation(&ReconciliationOptions::tracked_checkout(root))
+            .expect("reconciliation report");
         assert_eq!(report.forms_with_v2_snapshot, 1);
         assert_eq!(report.complete_forms, 0);
         assert!(report.represented_records > 0);

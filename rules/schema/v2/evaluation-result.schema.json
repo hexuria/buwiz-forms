@@ -328,6 +328,9 @@
         "input_revision": {
           "$ref": "common.schema.json#/$defs/input_revision"
         },
+        "event_field": {
+          "$ref": "#/$defs/field_instance"
+        },
         "context_fingerprint": {
           "$ref": "common.schema.json#/$defs/context_fingerprint"
         },
@@ -338,7 +341,12 @@
           "$ref": "#/$defs/raw_input_snapshot"
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/event_field_binding"
+        }
+      ]
     },
     "rule_field_ref": {
       "type": "object",
@@ -436,6 +444,32 @@
               "type": "null"
             }
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "field_value_assignment": {
+      "type": "object",
+      "required": [
+        "execution",
+        "effect_index",
+        "field",
+        "value"
+      ],
+      "properties": {
+        "execution": {
+          "$ref": "#/$defs/rule_execution"
+        },
+        "effect_index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "field": {
+          "$ref": "#/$defs/field_instance"
+        },
+        "value": {
+          "$ref": "#/$defs/raw_value"
         }
       },
       "additionalProperties": false
@@ -558,6 +592,14 @@
           },
           "uniqueItems": true,
           "description": "Required named outputs in reviewed topological/emission order."
+        },
+        "field_value_assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field_value_assignment"
+          },
+          "uniqueItems": true,
+          "description": "Potential exact field-assignment effects in rule/effect order."
         }
       },
       "additionalProperties": false
@@ -582,6 +624,9 @@
         },
         "input_revision": {
           "$ref": "common.schema.json#/$defs/input_revision"
+        },
+        "event_field": {
+          "$ref": "#/$defs/field_instance"
         },
         "context_fingerprint": {
           "$ref": "common.schema.json#/$defs/context_fingerprint"
@@ -611,7 +656,12 @@
           "description": "Strictly ordered by IssueOrder. Every violation must reference an expected rule and match the report phase/profile."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/event_field_binding"
+        }
+      ]
     },
     "derived_value": {
       "type": "object",
@@ -679,9 +729,60 @@
           },
           "uniqueItems": true,
           "description": "Must exactly equal expected_outputs projected to (calculation_id, output_id, instance), in the same order; enforced by EvaluationResult deserialization."
+        },
+        "expected_field_value_assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field_value_assignment"
+          },
+          "uniqueItems": true,
+          "description": "Complete potential assignment-effect inventory for the selected rule executions, including exact effect index, target, and static raw value."
+        },
+        "field_value_assignments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field_value_assignment"
+          },
+          "uniqueItems": true,
+          "description": "Ordered raw-buffer replacement instructions. The runtime binds each effect to an expected rule execution, an existing request field, and the report input revision."
         }
       },
       "additionalProperties": false
+    },
+    "event_field_binding": {
+      "if": {
+        "properties": {
+          "context": {
+            "properties": {
+              "phase": {
+                "enum": [
+                  "input",
+                  "blur",
+                  "change"
+                ]
+              }
+            },
+            "required": [
+              "phase"
+            ]
+          }
+        },
+        "required": [
+          "context"
+        ]
+      },
+      "then": {
+        "required": [
+          "event_field"
+        ]
+      },
+      "else": {
+        "properties": {
+          "event_field": {
+            "type": "null"
+          }
+        }
+      }
     }
   },
   "$ref": "#/$defs/evaluation_result"

@@ -154,9 +154,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:OptQuarter1",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -171,9 +173,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:OptQuarter2",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -188,9 +192,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:OptQuarter3",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -205,9 +211,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:OptQuarter4",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -222,9 +230,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:branchCode",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -236,9 +246,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:calendarNo1",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -253,9 +265,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:fiscalNo1",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -270,9 +284,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxpayerName",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -284,9 +300,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:txtRDOCode",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -298,9 +316,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:txtTIN1",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -312,9 +332,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:txtTIN2",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -326,9 +348,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:txtTIN3",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -340,9 +364,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:RtnPeriodToNo4",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -354,9 +380,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:txtYearNo2",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -368,9 +396,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxpayerAddress",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -382,9 +412,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxpayerZip",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -396,9 +428,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxpayerContactNumber",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -410,9 +444,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxpayerEmailAddress",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -424,9 +460,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxPayerClassification1",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -441,9 +479,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxPayerClassification2",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -458,9 +498,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxPayerClassification3",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -475,9 +517,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:taxPayerClassification4",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -492,9 +536,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:internationalTreatyYn",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -509,9 +555,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:specifyInternationalTreaty",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -523,9 +571,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:addSpecifyNo19",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -537,9 +587,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:otherCreditsNo19",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -551,9 +603,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:addSpecifyNo42",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -565,9 +619,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:otherSpecify42",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -579,9 +635,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:addSpecifyNo47",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -593,9 +651,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:otherSpecify47",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -607,9 +667,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:addSpecifyNo56",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -621,9 +683,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:otherSpecify56",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::Null,
                     },
@@ -635,9 +699,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtDatePurchase1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -649,9 +715,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtSourceCode1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -663,9 +731,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtDescription1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -677,9 +747,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtAmountPurchase1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -691,9 +763,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtInputTax1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -705,9 +779,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtEstimatedLife1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -719,9 +795,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtRecognizedLife1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -733,9 +811,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtAllowedInputTax1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -747,9 +827,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtBalanceInputTax1",
             value_type: ValueType::String,
             group_id: Some("schedule-1-capital-good-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -761,9 +843,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtDateCovered3",
             value_type: ValueType::String,
             group_id: Some("schedule-3-creditable-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -775,9 +859,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtDateCovered3To",
             value_type: ValueType::String,
             group_id: Some("schedule-3-creditable-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -789,9 +875,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtNameWithHoldingAgent3",
             value_type: ValueType::String,
             group_id: Some("schedule-3-creditable-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -803,9 +891,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtIncomePayment3",
             value_type: ValueType::String,
             group_id: Some("schedule-3-creditable-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -817,9 +907,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtTotalTaxWithHeld3",
             value_type: ValueType::String,
             group_id: Some("schedule-3-creditable-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -831,9 +923,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtDate4",
             value_type: ValueType::String,
             group_id: Some("schedule-4-advance-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -845,9 +939,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtDate4To",
             value_type: ValueType::String,
             group_id: Some("schedule-4-advance-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -859,9 +955,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtNameOfMiller4",
             value_type: ValueType::String,
             group_id: Some("schedule-4-advance-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -873,9 +971,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtNameOfTaxpayer4",
             value_type: ValueType::String,
             group_id: Some("schedule-4-advance-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -887,9 +987,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtOfficialReceiptNumber4",
             value_type: ValueType::String,
             group_id: Some("schedule-4-advance-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -901,9 +1003,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "txtAmountPaid4",
             value_type: ValueType::String,
             group_id: Some("schedule-4-advance-vat-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -915,9 +1019,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo19Description",
             value_type: ValueType::String,
             group_id: Some("item-19-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -929,9 +1035,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo19Amount",
             value_type: ValueType::String,
             group_id: Some("item-19-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -943,9 +1051,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo42Description",
             value_type: ValueType::String,
             group_id: Some("item-42-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -957,9 +1067,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo42Amount",
             value_type: ValueType::String,
             group_id: Some("item-42-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -971,9 +1083,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo47Description",
             value_type: ValueType::String,
             group_id: Some("item-47-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -985,9 +1099,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo47Amount",
             value_type: ValueType::String,
             group_id: Some("item-47-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -999,9 +1115,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo56Description",
             value_type: ValueType::String,
             group_id: Some("item-56-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1013,9 +1131,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:totalTaxPayableNo56Amount",
             value_type: ValueType::String,
             group_id: Some("item-56-additional-row"),
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1027,9 +1147,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:selectedMonthNo2",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1041,9 +1163,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:RtnPeriodFromNo4",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1055,9 +1179,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:amendedReturnYesNo5",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -1072,9 +1198,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:amendedReturnNo5",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -1089,9 +1217,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:OptShortPrd1",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -1106,9 +1236,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:OptShortPrd2",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -1123,9 +1255,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:specialRateYn",
             value_type: ValueType::Boolean,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::Boolean {
                         true_values: &["true"],
                         false_values: &["false"],
@@ -1140,9 +1274,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:vatPaidReturn",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1154,9 +1290,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:surcharge",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1168,9 +1306,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:interest",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1182,9 +1322,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:compromise",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1196,9 +1338,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:vatableSales",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1210,9 +1354,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:zeroRatedSales",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1224,9 +1370,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:exemptSales",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1238,9 +1386,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:lessOutputVat",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1252,9 +1402,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:addOutputVat",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1266,9 +1418,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:inputTaxCarried",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1280,9 +1434,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:transitionalInputTax",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1294,9 +1450,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:presumptiveInputTax",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1308,9 +1466,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:domesticPurchase",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1322,9 +1482,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:domesticInputTax",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1336,9 +1498,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:servicesPurchase",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1350,9 +1514,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:serviceInputTax",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1364,9 +1530,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:importPurchase",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1378,9 +1546,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:importInputTax",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1392,9 +1562,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "otherSpecify47B",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1406,9 +1578,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:domesticPurchaseNoTax",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1420,9 +1594,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:vatExemptImports",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1434,9 +1610,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:vatRefund",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1448,9 +1626,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:inputVatUnpaid",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1462,9 +1642,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:addInputVat",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1476,9 +1658,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:sched2InputTaxDirect",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1490,9 +1674,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:sched2VatExemptSale",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1504,9 +1690,11 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             field_id: "frm2550qv2024:sched2AmountInputTax",
             value_type: ValueType::String,
             group_id: None,
+            calculation_id: None,
             behavior: Profiled {
                 official: Branch::Executable(FieldBehavior {
                     normalization: &[],
+                    event_normalization: &[],
                     coercion: Coercion::String {
                         on_empty: StringEmptyPolicy::EmptyString,
                     },
@@ -1515,12 +1703,14 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             },
         },
     ],
+    field_event_programs: &[],
     evaluation_order: &["2550q-order3-date-parts"],
     calculations: &[CalculationSpec {
         calculation_id: "2550q-order3-date-parts",
         scope: EvaluationScope::Singleton,
         depends_on: &[],
         phases: &[ValidationPhase::Validate],
+        trigger_field_ids: &[],
         profiles: Profiled {
             official: Branch::Executable(CalculationBranch {
                 condition: &Predicate::Constant(true),
@@ -1538,6 +1728,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
                             },
                         },
                         rounding: None,
+                        writeback: None,
                     },
                     CalculationOutput {
                         output_id: "return-year",
@@ -1557,6 +1748,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
                             },
                         },
                         rounding: None,
+                        writeback: None,
                     },
                     CalculationOutput {
                         output_id: "return-month",
@@ -1576,6 +1768,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
                             },
                         },
                         rounding: None,
+                        writeback: None,
                     },
                     CalculationOutput {
                         output_id: "return-day",
@@ -1595,6 +1788,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
                             },
                         },
                         rounding: None,
+                        writeback: None,
                     },
                     CalculationOutput {
                         output_id: "return-date-day",
@@ -1675,6 +1869,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
                             },
                         },
                         rounding: None,
+                        writeback: None,
                     },
                     CalculationOutput {
                         output_id: "current-date-day",
@@ -1686,6 +1881,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
                             },
                         },
                         rounding: None,
+                        writeback: None,
                     },
                 ],
             }),
@@ -1698,6 +1894,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 1,
             phases: &[ValidationPhase::Save],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Any(&[
@@ -1775,6 +1972,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 2,
             phases: &[ValidationPhase::Save],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Compare {
@@ -1807,6 +2005,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 3,
             phases: &[ValidationPhase::Save],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Presence {
@@ -1840,6 +2039,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 1,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -1891,6 +2091,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 2,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -1972,6 +2173,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 3,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2105,6 +2307,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 4,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Any(&[
@@ -2182,6 +2385,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 5,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Presence {
@@ -2213,6 +2417,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 6,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Presence {
@@ -2244,6 +2449,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 7,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Presence {
@@ -2277,6 +2483,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 8,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Presence {
@@ -2310,6 +2517,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 9,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Presence {
@@ -2343,6 +2551,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 10,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::Presence {
@@ -2376,6 +2585,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 11,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2457,6 +2667,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 12,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2507,6 +2718,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 13,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::JavaScriptParseFloat {
@@ -2539,6 +2751,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 14,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2592,6 +2805,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 15,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2647,6 +2861,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 16,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::JavaScriptParseFloat {
@@ -2679,6 +2894,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 17,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2732,6 +2948,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 18,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2787,6 +3004,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 19,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::JavaScriptParseFloat {
@@ -2819,6 +3037,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 20,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2872,6 +3091,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 21,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2927,6 +3147,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 22,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -2971,6 +3192,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 23,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[
@@ -3024,6 +3246,7 @@ pub static STATIC_RULE_SET_SPEC: StaticRuleSetSpec = StaticRuleSetSpec {
             scope: EvaluationScope::Singleton,
             order: 24,
             phases: &[ValidationPhase::Validate],
+            trigger_field_ids: &[],
             profiles: Profiled {
                 official: Branch::Executable(RuleBranch {
                     predicate: &Predicate::All(&[

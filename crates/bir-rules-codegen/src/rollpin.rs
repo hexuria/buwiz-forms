@@ -26,7 +26,7 @@ use serde::Serialize;
 
 use crate::audit::snapshot_source_digest;
 use crate::error::{CodegenError, Result};
-use crate::files::read_bytes;
+use crate::files::read_tracked_bytes;
 use crate::hash::sha256_hex;
 use crate::json::{JsonValue, parse_strict};
 use crate::path::{canonical_repo_root, resolve_existing_under};
@@ -245,7 +245,7 @@ pub fn roll_pin(options: &RollPinOptions) -> Result<RollPinReport> {
 pub fn roll_all_pins(repo_root: impl Into<PathBuf>) -> Result<RollAllPinsReport> {
     let repo_root = canonical_repo_root(&repo_root.into())?;
     let index_path = resolve_existing_under(&repo_root, INDEX_PATH, "v2 index")?;
-    let index = parse_strict(&read_bytes(&index_path)?, &index_path)?;
+    let index = parse_strict(&read_tracked_bytes(&index_path)?, &index_path)?;
     let snapshots = index
         .object()
         .and_then(|index| index.get("snapshots"))
@@ -293,7 +293,7 @@ fn repin_declared_sources(
         };
         let corpus_relative = format!("{relative}");
         let path = resolve_existing_under(rules_root, &corpus_relative, "declared source")?;
-        let current = sha256_hex(&read_bytes(&path)?);
+        let current = sha256_hex(&read_tracked_bytes(&path)?);
         if current == declared {
             continue;
         }
@@ -350,7 +350,7 @@ fn substitute_exact(
 fn write_all_or_restore(staged: Vec<(PathBuf, String)>) -> Result<()> {
     let mut backups: Vec<(PathBuf, Vec<u8>)> = Vec::with_capacity(staged.len());
     for (path, _) in &staged {
-        backups.push((path.clone(), read_bytes(path)?));
+        backups.push((path.clone(), read_tracked_bytes(path)?));
     }
 
     let mut written = 0usize;
@@ -388,7 +388,7 @@ fn write_all_or_restore(staged: Vec<(PathBuf, String)>) -> Result<()> {
 }
 
 fn read_text(path: &Path) -> Result<String> {
-    let bytes = read_bytes(path)?;
+    let bytes = read_tracked_bytes(path)?;
     String::from_utf8(bytes).map_err(|source| {
         CodegenError::with_source(format!("`{}` is not valid UTF-8", path.display()), source)
     })

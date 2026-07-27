@@ -65,6 +65,8 @@ pub struct RuleSetDocument {
     pub context_values: Vec<JsonValue>,
     pub field_groups: Vec<JsonValue>,
     pub fields: Vec<JsonValue>,
+    #[serde(default)]
+    pub field_event_programs: Vec<JsonValue>,
     pub evaluation_order: Vec<String>,
     pub calculations: Vec<JsonValue>,
     pub rules: Vec<JsonValue>,
@@ -530,6 +532,13 @@ impl LegacyRecordClassification {
         matches!(self, Self::NonRuntime { .. })
     }
 
+    pub fn non_runtime_reason(&self) -> Option<LegacyNonRuntimeReason> {
+        match self {
+            Self::NonRuntime { reason, .. } => Some(*reason),
+            Self::Unresolved { .. } => None,
+        }
+    }
+
     pub fn source_refs(&self) -> &[SourceRef] {
         match self {
             Self::NonRuntime { source_refs, .. } | Self::Unresolved { source_refs, .. } => {
@@ -546,6 +555,7 @@ pub enum LegacyNonRuntimeReason {
     Obsolete,
     ExternalSubmissionOrCredential,
     NonValidationUiBehavior,
+    DocumentedOfficialNoOp,
     EvidenceBlocked,
 }
 

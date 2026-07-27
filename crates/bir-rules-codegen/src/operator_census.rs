@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::audit::{AuditOptions, audit};
 use crate::corpus::{CorpusReport, ValidateV1Options, validate_v1};
 use crate::error::{CodegenError, Result};
-use crate::files::read_bytes;
+use crate::files::read_tracked_bytes;
 use crate::json::{JsonValue, parse_typed};
 use crate::model::ReviewStatus;
 use crate::path::{canonical_repo_root, resolve_existing_under};
@@ -109,7 +109,7 @@ pub struct OperatorCensusReport {
 
 pub fn operator_census(options: &OperatorCensusOptions) -> Result<OperatorCensusReport> {
     let v1 = validate_v1(&ValidateV1Options::new(&options.repo_root))?;
-    let v2 = audit(&AuditOptions::new(&options.repo_root))?;
+    let v2 = audit(&AuditOptions::tracked_checkout(&options.repo_root))?;
     let (v1_validation_constructs, v1_calculation_constructs) =
         census_v1_constructs(&options.repo_root, &v1)?;
 
@@ -131,6 +131,15 @@ pub fn operator_census(options: &OperatorCensusOptions) -> Result<OperatorCensus
             if let Some(normalization) = array_value(official, "normalization") {
                 for step in normalization {
                     count_direct_kind(step, &mut operators.normalizations);
+                }
+            }
+            if let Some(events) = array_value(official, "event_normalization") {
+                for event in events {
+                    if let Some(normalization) = array_value(event, "normalization") {
+                        for step in normalization {
+                            count_direct_kind(step, &mut operators.normalizations);
+                        }
+                    }
                 }
             }
         }
@@ -455,7 +464,7 @@ where
     T: for<'de> Deserialize<'de>,
 {
     let path = resolve_existing_under(rules_root, relative, label)?;
-    let bytes = read_bytes(&path)?;
+    let bytes = read_tracked_bytes(&path)?;
     let (document, _) = parse_typed(&bytes, &path)?;
     Ok(document)
 }

@@ -25,7 +25,9 @@ use crate::evidence::{
     EvidenceReviewStatus, RuleSetSourceState,
 };
 use crate::evidence_set::{EVIDENCE_REVIEW_LEDGER_FORMAT, TRACKED_V1_SOURCE_SET_DOMAIN};
-use crate::files::{read_bytes, read_tree};
+use crate::files::{
+    ApprovedExternalFile, read_external_bytes_bound, read_tracked_bytes, read_tracked_tree,
+};
 use crate::form_integration::PROTECTED_2550Q_RULE_SET_ID;
 use crate::hash::{digest_entries, sha256_hex};
 use crate::json::{CANONICALIZATION_ID, canonical_bytes, parse_strict};
@@ -41,7 +43,6 @@ use crate::vault_acquisition::{
 };
 #[cfg(windows)]
 use crate::verified_file::stable_windows_link_count;
-use crate::verified_file::{VerifiedRegularFile, open_verified_regular_file};
 
 pub const EXPECTED_REVIEW_LEDGER_FORM_COUNT: usize = 43;
 pub const EVIDENCE_REVIEW_SCAFFOLD_REQUEST_FORMAT: &str = "bir-evidence-review-scaffold-request-v1";
@@ -52,7 +53,9 @@ const SOURCE_EXCERPT_PREFIX: &str = "derived/source-excerpts/";
 const CONTENT_ADDRESS_PREFIX: &str = "upstream/sha256/";
 const PROTECTED_2550Q_FORM_ID: &str = "2550q-v2024";
 
-const EXPECTED_V1_JSON_FILES: usize = 659;
+const EXPECTED_TOTAL_JSON_FILES: usize = 659;
+const EXPECTED_V1_JSON_FILES: usize = 520;
+const EXPECTED_V2_JSON_FILES: usize = 139;
 const EXPECTED_V1_FIELDS: usize = 9_592;
 const EXPECTED_V1_VALIDATIONS: usize = 2_007;
 const EXPECTED_V1_CALCULATIONS: usize = 623;
@@ -274,19 +277,18 @@ pub fn scaffold_evidence_review_ledger(
 ) -> Result<ScaffoldEvidenceReviewLedgerReport> {
     let repo_root = canonical_repo_root_strict(&options.repo_root)?;
     let output_path = validate_fresh_external_output(&repo_root, &options.output_path)?;
-    let mut catalog_file = open_verified_external_scaffold_input(
+    let catalog_file = open_verified_external_scaffold_input(
         &options.vault_catalog,
         "evidence vault catalog",
         |_| Ok(()),
     )?;
-    let (catalog, catalog_bytes) = load_canonical_typed::<EvidenceVaultCatalog>(
-        catalog_file.file_mut(),
-        "evidence vault catalog",
-    )?;
+    let catalog_bytes = read_external_bytes_bound(catalog_file, "evidence vault catalog")?;
+    let catalog =
+        load_canonical_typed::<EvidenceVaultCatalog>(&catalog_bytes, "evidence vault catalog")?;
     let catalog_index = validate_catalog(&catalog)?;
 
     let index_path = resolve_existing_under(&repo_root, "rules/index.json", "rules index")?;
-    let index_bytes = read_bytes(&index_path)?;
+    let index_bytes = read_tracked_bytes(&index_path)?;
     let index_json = parse_strict(&index_bytes, &index_path)?;
     let rules_index_sha256 = sha256_hex(&canonical_bytes(&index_json));
     let index: RulesIndex = serde_json::from_value(index_json.into_serde()).map_err(|source| {
@@ -299,7 +301,7 @@ pub fn scaffold_evidence_review_ledger(
     validate_production_census(&corpus)?;
     let census_by_form = index_census(&corpus)?;
 
-    let v2_audit = audit(&AuditOptions::new(&repo_root))?;
+    let v2_audit = audit(&AuditOptions::tracked_checkout(&repo_root))?;
     let protected_v2 = load_protected_v2_identity(&repo_root, &v2_audit, &index)?;
 
     let mut expected_catalog_tuples = BTreeSet::<(String, u64)>::new();
@@ -316,7 +318,7 @@ pub fn scaffold_evidence_review_ledger(
             "tracked v1 form manifest",
         )?;
         let manifest_value =
-            parse_strict(&read_bytes(&manifest_path)?, &manifest_path)?.into_serde();
+            parse_strict(&read_tracked_bytes(&manifest_path)?, &manifest_path)?.into_serde();
         validate_manifest_identity(&manifest_value, index_entry)?;
         let assets = manifest_assets(&manifest_value)?;
         for asset in &assets {
@@ -413,7 +415,7 @@ pub fn load_evidence_review_scaffold_request(
     input_path: &Path,
 ) -> Result<EvidenceReviewScaffoldRequest> {
     let repo_root = canonical_repo_root_strict(repo_root)?;
-    let mut input_file = open_verified_external_scaffold_input(
+    let input_file = open_verified_external_scaffold_input(
         input_path,
         "evidence review scaffold request",
         |resolved| {
@@ -425,7 +427,7 @@ pub fn load_evidence_review_scaffold_request(
             Ok(())
         },
     )?;
-    let bytes = read_opened_file(input_file.file_mut(), "evidence review scaffold request")?;
+    let bytes = read_external_bytes_bound(input_file, "evidence review scaffold request")?;
     let parsed = parse_strict(&bytes, Path::new("evidence review scaffold request"))?;
     if canonical_bytes(&parsed) != bytes {
         return Err(CodegenError::new(
@@ -454,7 +456,9 @@ pub fn load_evidence_review_scaffold_request(
 fn validate_production_census(report: &CorpusReport) -> Result<()> {
     let observed = (
         report.forms_audited,
+        report.total_json_files,
         report.json_files,
+        report.v2_json_files,
         report.fields,
         report.validations,
         report.calculations,
@@ -463,7 +467,9 @@ fn validate_production_census(report: &CorpusReport) -> Result<()> {
     );
     let expected = (
         EXPECTED_REVIEW_LEDGER_FORM_COUNT,
+        EXPECTED_TOTAL_JSON_FILES,
         EXPECTED_V1_JSON_FILES,
+        EXPECTED_V2_JSON_FILES,
         EXPECTED_V1_FIELDS,
         EXPECTED_V1_VALIDATIONS,
         EXPECTED_V1_CALCULATIONS,
@@ -472,7 +478,7 @@ fn validate_production_census(report: &CorpusReport) -> Result<()> {
     );
     if observed != expected {
         return Err(CodegenError::new(format!(
-            "tracked v1 census drift blocks evidence-review scaffolding: expected forms/json/fields/validations/calculations/negative/schema={expected:?}, observed={observed:?}"
+            "tracked corpus census drift blocks evidence-review scaffolding: expected forms/total-json/v1-json/v2-json/fields/validations/calculations/negative/schema={expected:?}, observed={observed:?}"
         )));
     }
     Ok(())
@@ -626,7 +632,7 @@ fn load_protected_v2_identity(
     }
     let v2_index_path =
         resolve_existing_under(repo_root, "rules/ir/v2/index.json", "v2 rules index")?;
-    let bytes = read_bytes(&v2_index_path)?;
+    let bytes = read_tracked_bytes(&v2_index_path)?;
     let strict = parse_strict(&bytes, &v2_index_path)?;
     let index: IndexDocument = serde_json::from_value(strict.into_serde()).map_err(|source| {
         CodegenError::with_source("load closed v2 rules index structure", source)
@@ -1239,7 +1245,7 @@ fn validate_capture_gap_inputs(gaps: &[CandidateCaptureGap]) -> Result<()> {
 }
 
 fn tracked_v1_sources(form_root: &Path) -> Result<Vec<TrackedSource>> {
-    let tree = read_tree(form_root)?;
+    let tree = read_tracked_tree(form_root)?;
     let mut sources = Vec::new();
     for (path, bytes) in tree {
         let name = path.rsplit('/').next().unwrap_or(path.as_str());
@@ -1290,7 +1296,7 @@ fn canonical_text(bytes: &[u8], path: &str) -> Result<Vec<u8>> {
 }
 
 fn content_addressed_path(sha256: &str) -> String {
-    format!("{CONTENT_ADDRESS_PREFIX}{sha256}")
+    format!("{CONTENT_ADDRESS_PREFIX}{}/{}", &sha256[..2], sha256)
 }
 
 fn source_excerpt_path(excerpt_id: &str) -> Result<String> {
@@ -1575,7 +1581,7 @@ fn open_verified_external_scaffold_input<F>(
     path: &Path,
     label: &str,
     validate_resolved_path: F,
-) -> Result<VerifiedRegularFile>
+) -> Result<ApprovedExternalFile>
 where
     F: Fn(&Path) -> Result<()>,
 {
@@ -1592,11 +1598,18 @@ where
     }
     let absolute = absolute_normalized(path)?;
     reject_sensitive_scaffold_input_path(&absolute, label)?;
-    open_verified_regular_file(&absolute, label, |resolved| {
+    let expected = fs::canonicalize(&absolute)
+        .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), &absolute, source))?;
+    ApprovedExternalFile::capture(&absolute, label, |resolved| {
         // The verified-file helper invokes this callback before opening and
         // again after opening while it proves handle/path identity. Keeping
         // the closed sensitive-root policy inside the callback prevents a
         // replacement race from redirecting either external input.
+        if resolved != expected {
+            return Err(CodegenError::new(format!(
+                "{label} resolved to a different exact canonical file"
+            )));
+        }
         reject_sensitive_scaffold_input_path(resolved, label)?;
         validate_resolved_path(resolved)
     })
@@ -1755,18 +1768,10 @@ fn reject_symlink_ancestors(path: &Path, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn read_opened_file(file: &mut File, label: &str) -> Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)
-        .map_err(|source| CodegenError::with_source(format!("read opened {label}"), source))?;
-    Ok(bytes)
-}
-
-fn load_canonical_typed<T>(file: &mut File, label: &str) -> Result<(T, Vec<u8>)>
+fn load_canonical_typed<T>(bytes: &[u8], label: &str) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let bytes = read_opened_file(file, label)?;
     let value = parse_strict(&bytes, Path::new(label))?;
     if bytes != canonical_bytes(&value) {
         return Err(CodegenError::new(format!(
@@ -1776,7 +1781,7 @@ where
     let typed = serde_json::from_value(value.into_serde()).map_err(|source| {
         CodegenError::with_source(format!("closed-structure load of {label} failed"), source)
     })?;
-    Ok((typed, bytes))
+    Ok(typed)
 }
 
 fn canonical_serialize(value: &impl Serialize, label: &str) -> Result<Vec<u8>> {
@@ -2082,6 +2087,7 @@ mod tests {
         EvidenceAttestation, EvidenceAttestationKind, EvidenceCaptureOperatingSystem,
         EvidenceCaptureProvenance, EvidenceReview,
     };
+    use crate::files::read_external_bytes_bound;
     use crate::hash::sha256_hex;
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -2528,9 +2534,35 @@ mod tests {
             "resolved-path policy must run before and after handle open"
         );
         assert_eq!(
-            verified.canonical_path(),
+            verified.path(),
             fs::canonicalize(&path).expect("canonical safe input")
         );
+    }
+
+    #[test]
+    fn external_input_capability_rejects_or_blocks_same_path_substitution() {
+        let root = TestRoot::new("input-exact-path");
+        let path = root.path.join("catalog.json");
+        let displaced = root.path.join("catalog-displaced.json");
+        fs::write(&path, b"approved").expect("create approved external input");
+        let approved =
+            open_verified_external_scaffold_input(&path, "evidence vault catalog", |_| Ok(()))
+                .expect("approve exact external input");
+
+        match fs::rename(&path, &displaced) {
+            Ok(()) => {
+                fs::write(&path, b"replacement").expect("create same-path replacement");
+                read_external_bytes_bound(approved, "evidence vault catalog")
+                    .expect_err("same-path replacement must not be read");
+            }
+            Err(_) => {
+                assert_eq!(
+                    read_external_bytes_bound(approved, "evidence vault catalog")
+                        .expect("restrictive handle blocks substitution"),
+                    b"approved"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2720,6 +2752,11 @@ mod tests {
                 .contains("lexically normalized")
         );
         assert_eq!(CONTENT_ADDRESS_PREFIX, "upstream/sha256/");
+        let sha256 = "ab".repeat(32);
+        assert_eq!(
+            content_addressed_path(&sha256),
+            format!("upstream/sha256/ab/{sha256}")
+        );
     }
 
     #[cfg(unix)]
