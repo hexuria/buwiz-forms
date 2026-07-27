@@ -2958,8 +2958,15 @@ mod tests {
         let repeated = json["raw_editor_state"]["repeated_fields"]
             .as_object()
             .expect("repeated fields are a JSON object");
+        // Compare as a set. `serde_json::Map` is a `BTreeMap` (alphabetical) or
+        // an `IndexMap` (insertion order) depending on whether the
+        // `preserve_order` feature is on, and feature unification turns it on
+        // only for the full-workspace build. This assertion is about which
+        // family wire names are emitted, not about the JSON object's key order.
+        let mut repeated_keys = repeated.keys().map(String::as_str).collect::<Vec<_>>();
+        repeated_keys.sort_unstable();
         assert_eq!(
-            repeated.keys().map(String::as_str).collect::<Vec<_>>(),
+            repeated_keys,
             vec![
                 "item-19-additional",
                 "item-42-additional",

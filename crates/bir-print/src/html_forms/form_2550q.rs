@@ -78,7 +78,7 @@ pub(super) const PROVIDER: RenderFormProvider = RenderFormProvider {
     expected_base_page_count: 2,
     schedules: &[],
     visual_fixture_file_name: "2550q-normal.json",
-    visual_fixture_sha256: "9869638cf5f9dd1fcb4bc83f87d1ae8adfef274905ec8e462358c238e07abf13",
+    visual_fixture_sha256: "f9b13277d40b0b6b093ac4f1c93c289ff72fcc77e191a3a98d3eb27ce11176b3",
     official_source: "https://bir-cdn.bir.gov.ph/BIR/pdf/2550Q%20%20April%202024%20ENCS_Final.pdf",
     official_source_sha256: "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
     reference_dpi: 144,
@@ -791,6 +791,12 @@ fn normal_fixture() -> Result<Form2550QDraft, RenderProviderError> {
     draft
         .local_print_fields
         .machine_validation_or_receipt_details = "AAB RECEIPT 2550Q-2025-0001".to_string();
+    // Populated schedule rows carry stable identity, exactly as they do when the
+    // editor adds them. `capacity_fixture` already does this; without it here,
+    // every fixture derived from this one reports a row without stable identity.
+    draft.ensure_repeating_row_ids().map_err(|error| {
+        RenderProviderError::Fixture(format!("2550Q normal fixture row identity: {error}"))
+    })?;
     draft.recompute();
     Ok(draft)
 }

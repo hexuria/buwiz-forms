@@ -104,19 +104,37 @@ impl ReviewedRawBindingTarget {
 }
 
 impl Form2550QDraft {
+    /// Raw authority that checked XML requires but the draft does not carry.
+    ///
+    /// This is a *checked-XML export* requirement, not a general draft
+    /// invariant. Raw values are only ever seeded from a checked XML import, so
+    /// a purely typed draft has none - and for it the typed fields are the
+    /// authority. Running this as part of `validate()` would make every typed
+    /// draft (print preview, render-contract fixtures) report a wall of
+    /// missing-value errors that no user action can clear. The refusal to
+    /// synthesize still binds, fully, wherever XML is actually produced.
+    pub(super) fn missing_required_raw_authority_errors(&self) -> Vec<(String, String)> {
+        let mut errors = Vec::new();
+        for target in self.reviewed_raw_binding_targets() {
+            if target.raw_value(self).is_none()
+                && REQUIRED_RAW_AUTHORITY_KEYS.contains(&target.xml_key.as_str())
+            {
+                errors.push((
+                    format!("raw_editor.{}", target.stable_path),
+                    "Required raw value is missing; checked XML refuses to synthesize \
+                     it from the typed draft"
+                        .to_string(),
+                ));
+            }
+        }
+        errors
+    }
+
     pub(super) fn raw_editor_coherence_errors(&self) -> Vec<(String, String)> {
         let typed_fields = self.to_reviewed_field_map();
         let mut errors = Vec::new();
         for target in self.reviewed_raw_binding_targets() {
             let Some(raw_value) = target.raw_value(self) else {
-                if REQUIRED_RAW_AUTHORITY_KEYS.contains(&target.xml_key.as_str()) {
-                    errors.push((
-                        format!("raw_editor.{}", target.stable_path),
-                        "Required raw value is missing; checked XML refuses to synthesize \
-                         it from the typed draft"
-                            .to_string(),
-                    ));
-                }
                 continue;
             };
             if self
@@ -762,7 +780,11 @@ impl Form2550QDraft {
     pub fn try_to_bir_xml_payload(&self) -> Result<String, Vec<(String, String)>> {
         let mut normalized = self.clone();
         normalized.recompute();
-        let errors = normalized.validate();
+        let mut errors = normalized.validate();
+        // Checked XML never synthesizes a required raw value from typed state.
+        // This binds here, at the point XML is produced, rather than in
+        // `validate()`, which also serves print preview.
+        errors.extend(normalized.missing_required_raw_authority_errors());
         if errors.is_empty() {
             Ok(crate::bir_xml::generate_bir_xml(
                 &normalized.to_reviewed_field_map(),
