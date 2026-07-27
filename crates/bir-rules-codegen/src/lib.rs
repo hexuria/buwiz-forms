@@ -32,25 +32,35 @@
 #![forbid(unsafe_code)]
 #![recursion_limit = "256"]
 
-/// Process temp directory for tests, symlink-resolved where that is needed.
+/// Process temp directory for tests, in a form the path guards accept.
 ///
-/// On macOS `std::env::temp_dir()` returns a path under `/var`, itself a symlink
-/// to `/private/var`. The vault and evidence writers deliberately refuse any
-/// path that traverses a symlink, so tests building scratch roots from the raw
-/// temp dir trip that guard on macOS.
+/// Two platform quirks, and the fix has to satisfy both:
 ///
-/// This canonicalizes on Unix only. On Windows `fs::canonicalize` returns the
-/// `\\?\` extended-length form, which is a *different* path spelling than the
-/// one under test - the path-validation suites assert on normalization and
-/// escape rejection, and handing them a pre-normalized `\\?\` path changes what
-/// they are exercising. Windows has no symlinked temp dir, so it needs no fix.
+/// * macOS returns a path under `/var`, itself a symlink to `/private/var`.
+///   The vault and evidence writers refuse any path that traverses a symlink,
+///   so the raw temp dir trips that guard.
+/// * Windows CI returns an 8.3 short path (`C:\Users\RUNNER~1\...`) while the
+///   code canonicalizes internally to the long name (`...\runneradmin\...`),
+///   so the two never compare equal.
+///
+/// `fs::canonicalize` fixes both, but on Windows it also prepends the `\\?\`
+/// extended-length prefix - a different path *spelling* than any real caller
+/// supplies, which changes what the normalization and escape-rejection suites
+/// are exercising. So canonicalize, then strip that prefix on Windows.
 #[cfg(test)]
 pub(crate) fn test_temp_dir() -> std::path::PathBuf {
-    let raw = std::env::temp_dir();
+    let canonical =
+        std::fs::canonicalize(std::env::temp_dir()).expect("canonicalize process temp dir");
     if cfg!(windows) {
-        raw
+        let text = canonical.to_string_lossy().into_owned();
+        let stripped = text
+            .strip_prefix(r"\\?\UNC\")
+            .map(|rest| format!(r"\\{rest}"))
+            .or_else(|| text.strip_prefix(r"\\?\").map(str::to_owned))
+            .unwrap_or(text);
+        std::path::PathBuf::from(stripped)
     } else {
-        std::fs::canonicalize(&raw).expect("canonicalize process temp dir")
+        canonical
     }
 }
 

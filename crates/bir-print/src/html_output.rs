@@ -488,8 +488,14 @@ pub fn finalize_pdf_export(
         // is still bound to the validated page/render graph after serialization.
         let report = validate_pdf_file(temp_path, expectation)?;
         debug_assert_eq!(report, raw_report);
+        // Write access is required, not incidental: `sync_all` is
+        // `FlushFileBuffers` on Windows, which needs GENERIC_WRITE and fails
+        // with ERROR_ACCESS_DENIED on a read-only handle. On Unix `fsync`
+        // would accept a read-only descriptor, which is why this only ever
+        // failed on Windows - including for real exports, not just tests.
         fs::OpenOptions::new()
             .read(true)
+            .write(true)
             .open(temp_path)?
             .sync_all()?;
         atomic_replace(temp_path, destination)?;
