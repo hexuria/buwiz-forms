@@ -12,7 +12,7 @@ pub fn enforce_single_instance() {
         use std::os::windows::ffi::OsStrExt;
         use windows::Win32::Foundation::ERROR_ALREADY_EXISTS;
         use windows::Win32::System::Threading::CreateMutexW;
-        use windows_core::PCWSTR;
+        use windows::core::PCWSTR;
 
         let name: Vec<u16> = OsStr::new("eBIRForms_Desktop_App_Mutex_Lock")
             .encode_wide()
@@ -110,7 +110,7 @@ pub fn print_pdf(path: &std::path::Path) -> Result<(), &'static str> {
         use std::os::windows::ffi::OsStrExt;
         use windows::Win32::UI::Shell::ShellExecuteW;
         use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        use windows_core::PCWSTR;
+        use windows::core::PCWSTR;
 
         let verb: Vec<u16> = std::ffi::OsStr::new("print")
             .encode_wide()
@@ -203,8 +203,8 @@ pub fn reclaim_keyboard_focus() {
         // SAFETY: `enum_callback` is a valid Win32 EnumWindows callback.
         // `pid` is passed as LPARAM (integer) and reinterpreted inside the
         // callback as u32 — the cast is safe because process IDs fit in u32.
-        unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: isize) -> i32 {
-            let target_pid = lparam as u32;
+        unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let target_pid = lparam.0 as u32;
             let mut window_pid: u32 = 0;
             // SAFETY: hwnd comes from EnumWindows (always valid). window_pid is
             // a local variable passed by mutable reference.
@@ -216,15 +216,15 @@ pub fn reclaim_keyboard_focus() {
             {
                 // SAFETY: hwnd belongs to our process and is visible.
                 let _ = unsafe { SetForegroundWindow(hwnd) };
-                return 0; // FALSE — stop enumeration
+                return BOOL(0); // FALSE — stop enumeration
             }
-            1 // TRUE — continue enumeration
+            BOOL(1) // TRUE — continue enumeration
         }
 
         // SAFETY: `enum_callback` has the correct `unsafe extern "system"` ABI
         // expected by EnumWindows. The LPARAM is our process ID cast to isize.
         unsafe {
-            let _ = EnumWindows(Some(enum_callback), pid as isize);
+            let _ = EnumWindows(Some(enum_callback), LPARAM(pid as isize));
         }
     }
 }
@@ -237,7 +237,8 @@ pub const MONOSPACE_FONT: &str = "Cascadia Mono";
 // ── Dock Management ──────────────────────────────────────────────────────────
 
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM};
+// `BOOL` moved out of `Win32::Foundation` into core in windows 0.62.
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::GetCurrentProcessId;
 #[cfg(target_os = "windows")]
@@ -245,6 +246,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SW_HIDE, SW_SHOW, SetForegroundWindow,
     ShowWindow,
 };
+#[cfg(target_os = "windows")]
+use windows::core::BOOL;
 
 // SAFETY: These three functions are Win32 EnumWindows callbacks — the
 // `unsafe extern "system"` ABI is an unavoidable requirement of the Win32 API.
