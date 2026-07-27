@@ -23,7 +23,7 @@ The immediate problem is no longer “build more renderer infrastructure.” The
 ```text
 Worktree: /Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity
 Branch:   codex/print-preview-parity
-HEAD:     4a63ae0 (Correct form readiness evidence metadata)
+HEAD:     bebd59a (Correct form readiness evidence metadata)
 Baseline: 267d34a
 Delta:    273 commits; 529 files changed; 160,077 insertions; 735,454 deletions
 ```
@@ -149,7 +149,7 @@ Primary anchors:
 - `crates/bir-core/src/integration/validation.rs`
 - `crates/bir-desktop/src/cor_ocr.rs`
 - `crates/bir-desktop/src/views/profile_manager/`
-- Commits `ec7e399`, `4de541e`, `acbddef`
+- Commits `ec7e399`, `1a53b00`, `30251c1`
 
 ### 5. Native HTML print and PDF implementation
 
@@ -359,7 +359,7 @@ Continue the approved HTML-only eBIRForms migration in:
 /Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity
 
 Branch: codex/print-preview-parity
-Expected starting HEAD: 4a63ae0
+Expected starting HEAD: bebd59a
 
 Read HANDOVER_HTML_ONLY_EBIRFORMS_2026-07-19.md first. Treat the current Git tree, migration manifest, release-evidence manifest, and official source pack as authoritative. Do not claim completion from historical commentary.
 

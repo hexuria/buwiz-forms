@@ -17,9 +17,9 @@ skipping this plan.
 | Measure | Recorded baseline |
 | --- | --- |
 | Branch | `codex/print-preview-parity` |
-| Portable library-foundation checkpoint | `f2e78ef52ce1bc9ff9dabecea97590c09ce84c46` |
-| Local-artifact ignore checkpoint | `e772d390fd6bfacb983157cdb936517e400f73ed` |
-| Pre-publication origin baseline | `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5`; publication of the recorded checkpoint series in a draft PR was explicitly authorized on 2026-07-27 |
+| Portable library-foundation checkpoint | `f5f782b25a40266e190072aae22fc3f9d56bc5b0` |
+| Local-artifact ignore checkpoint | `0b5db4073bdbff7813d2079d2df6fefa9ab5d999` |
+| Pre-publication origin baseline | `0cde6a1aa57aa18548a1a07e5a5e21c52cb60758`; publication of the recorded checkpoint series in a draft PR was explicitly authorized on 2026-07-27 |
 | v1 evidence corpus | 43 forms / 9,592 fields / 2,007 validations / 623 calculations |
 | v2 candidate library | 1 candidate / 27 executable validations / 1 executable calculation |
 | Reviewed v2 rulesets | 0 |

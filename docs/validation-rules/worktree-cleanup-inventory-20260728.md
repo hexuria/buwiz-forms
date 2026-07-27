@@ -11,10 +11,10 @@ Retained checkouts:
 - `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity` — active checkout
 
 Every branch below still exists as a ref. Removing a worktree deletes only
-its directory. Branches carrying commits not reachable from `8903f59` also
+its directory. Branches carrying commits not reachable from `1b77fc9` also
 have a `rescue/<branch>` tag pinning the exact commit.
 
-| Unique commits vs 8903f59 | Branch | HEAD | Rescue tag |
+| Unique commits vs 1b77fc9 | Branch | HEAD | Rescue tag |
 | ---: | --- | --- | --- |
 | 5 | `codex/2551q-final-parity-root` | `00a2ff85878f` | `rescue/codex/2551q-final-parity-root` |
 | 4 | `codex/0605-final-parity` | `2f5d29338646` | `rescue/codex/0605-final-parity` |
@@ -42,15 +42,15 @@ have a `rescue/<branch>` tag pinning the exact commit.
 | 1 | `codex/0619-parity-pass` | `8f4de758b945` | `rescue/codex/0619-parity-pass` |
 | 1 | `codex/0619-family-final-parity` | `aba721d0a136` | `rescue/codex/0619-family-final-parity` |
 | 1 | `codex/0605-parity-pass` | `c58096c447e8` | `rescue/codex/0605-parity-pass` |
-| 0 | `codex/poppler-raster-audit` | `923878cc7247` | `—` |
-| 0 | `codex/2551q-font-mapping` | `923878cc7247` | `—` |
-| 0 | `codex/2551q-final-parity2` | `f0fd32924637` | `—` |
-| 0 | `codex/2550q2024-final-parity` | `ca2dc0caad98` | `—` |
-| 0 | `codex/1702rt-parity-pass-root` | `7071915880e4` | `—` |
-| 0 | `codex/1702mx-final-parity2` | `ca2dc0caad98` | `—` |
-| 0 | `codex/1701q-final-parity2` | `ca2dc0caad98` | `—` |
-| 0 | `codex/1701-final-parity3` | `ca2dc0caad98` | `—` |
-| 0 | `codex/0605-final-parity2` | `ca2dc0caad98` | `—` |
+| 0 | `codex/poppler-raster-audit` | `9bc840619824` | `—` |
+| 0 | `codex/2551q-font-mapping` | `9bc840619824` | `—` |
+| 0 | `codex/2551q-final-parity2` | `969aa4052f09` | `—` |
+| 0 | `codex/2550q2024-final-parity` | `7feb0952cb25` | `—` |
+| 0 | `codex/1702rt-parity-pass-root` | `addac2803ec5` | `—` |
+| 0 | `codex/1702mx-final-parity2` | `7feb0952cb25` | `—` |
+| 0 | `codex/1701q-final-parity2` | `7feb0952cb25` | `—` |
+| 0 | `codex/1701-final-parity3` | `7feb0952cb25` | `—` |
+| 0 | `codex/0605-final-parity2` | `7feb0952cb25` | `—` |
 | 0 | `/private/tmp/ebir-native-evidence-879554d-w1I01R` | `` | `—` |
 | 0 | `/private/tmp/ebir-final-macos-diag-923878c` | `` | `—` |
 | 0 | `/private/tmp/bir-2551q-page1-glyph` | `` | `—` |

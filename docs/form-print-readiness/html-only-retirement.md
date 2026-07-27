@@ -15,7 +15,7 @@ The pre-retirement Git tree contained:
 
 The prior assembled payload was approximately 106 MB uncompressed. A fresh
 2026-07-19 ad-hoc universal macOS diagnostic package built from source revision
-`10d739ea27f5b39a11967becffb60d330534de2d` contains 38,151,966 bytes (36.38
+`111cce2f72e5e1fd7bdd38a4c74afb1880069d0f` contains 38,151,966 bytes (36.38
 MiB) of regular files, about 64% less than that prior assembled payload. Its
 DMG is 22,349,838 bytes, and the compiled offline HTML renderer directory is
 1,217,872 bytes (1.16 MiB) after adding the ten renderer components. The

@@ -28,11 +28,11 @@ are frozen. The Wave 0 print objective remains preserved at
 Recorded 2026-07-26 from the authoritative checkout:
 
 - branch `codex/print-preview-parity`;
-- remote baseline `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5`;
+- remote baseline `0cde6a1aa57aa18548a1a07e5a5e21c52cb60758`;
 - portable library-foundation checkpoint
-  `f2e78ef52ce1bc9ff9dabecea97590c09ce84c46`;
+  `f5f782b25a40266e190072aae22fc3f9d56bc5b0`;
 - local-artifact ignore checkpoint
-  `e772d390fd6bfacb983157cdb936517e400f73ed`;
+  `0b5db4073bdbff7813d2079d2df6fefa9ab5d999`;
 - v1 corpus: **43 forms / 9,592 fields / 2,007 validations /
   623 calculations**;
 - v2 library: **1 candidate / 27 executable validations /

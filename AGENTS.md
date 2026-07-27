@@ -1,6 +1,6 @@
 # AGENTS.md — bir (HTML-only eBIRForms migration)
 
-Authoritative checkout: `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir` on branch `main`. This is the only worktree and the only branch. The former `bir-print-parity` worktree and the 49 auxiliary branches were removed on 2026-07-28; every branch was first pushed to `codeitlikemiley/ebirforms` at its exact commit and tagged `rescue/<branch>`, and that remote was then detached from this clone (re-add it to restore anything). `public` -> `hexuria/buwiz-forms` is the working remote and the only CI that runs. Prefix shell commands with the `rtk` wrapper (`rtk git status`, `rtk cargo test --locked -p bir-print`, `rtk npm run test:forms`).
+Authoritative checkout: `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir` on branch `main`. This is the only worktree and the only branch. The former `bir-print-parity` worktree and the 49 auxiliary branches were removed on 2026-07-28; every branch was first pushed to `codeitlikemiley/ebirforms` at its exact commit and tagged `rescue/<branch>`, and that remote was then detached from this clone (re-add it to restore anything). `public` -> `hexuria/buwiz-forms` is the working remote and the only CI that runs. On 2026-07-28 `main` was rewritten to strip `Co-Authored-By:` trailers, changing the SHA of the 265 commits from 2026-07-18 onward; any commit hash in an older note must be translated through `docs/commit-sha-remap-20260728.md`, and the pre-rewrite history is kept locally at `refs/backup/pre-trailer-strip-20260728` (never push it). Prefix shell commands with the `rtk` wrapper (`rtk git status`, `rtk cargo test --locked -p bir-print`, `rtk npm run test:forms`).
 
 ## The visual criterion (read before touching any form renderer)
 
@@ -137,7 +137,7 @@ has its own objective, plan and gates. Do not apply print-parity reasoning to it
   `docs/validation-rules/execution-plan.md`. Objective:
   `.claude/GOAL.md`. Historical promotion analysis:
   `docs/validation-rules/action-plan.md`. Prior session: `handoff.md`.
-- Rebaseline at local/origin `de828fd`: v1 **43 forms / 9,592 fields / 2,007
+- Rebaseline at local/origin `0cde6a1`: v1 **43 forms / 9,592 fields / 2,007
   validations / 623 calculations**; v2 **1 candidate / 27 executable
   validations / 1 executable calculation**. The 2550Q 53-projection
   classification is complete, but that is not a form-completion or promotion

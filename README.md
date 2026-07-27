@@ -1,7 +1,7 @@
 # E-BIRForms
 
-[![CI](https://github.com/codeitlikemiley/ebirforms/actions/workflows/ci.yml/badge.svg)](https://github.com/codeitlikemiley/ebirforms/actions/workflows/ci.yml)
-[![Release](https://github.com/codeitlikemiley/ebirforms/actions/workflows/release.yml/badge.svg)](https://github.com/codeitlikemiley/ebirforms/actions/workflows/release.yml)
+[![CI](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/ci.yml)
+[![Release](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml/badge.svg)](https://github.com/hexuria/buwiz-forms/actions/workflows/release.yml)
 
 A modern, native, and secure desktop application for managing and filing eBIRForms in the Philippines. Built in Rust using the [GPUI](https://gpui.rs/) framework, E-BIRForms is an offline-first reimplementation of the traditional eBIRForms workflow for macOS, Windows, and Linux.
 

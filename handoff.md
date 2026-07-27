@@ -4,7 +4,7 @@
 > The 53-projection classification requested below has since landed. The
 > 2026-07-26 rebaseline recorded local HEAD and
 > `origin/codex/print-preview-parity` at
-> `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5`. The active objective is now the
+> `0cde6a1aa57aa18548a1a07e5a5e21c52cb60758`. The active objective is now the
 > portable, ordered 43-form candidate library in
 > `docs/validation-rules/execution-plan.md`; GPUI, filing, promotion, and new
 > worktrees remain frozen until that baseline exists. The rest of this file is
@@ -43,7 +43,7 @@ Do not work in the sibling `bir/` checkout. The authoritative checkout is:
   (mounted as `R:\` during the last session)
 
 The current Git HEAD underneath the uncommitted work is
-`a337b85f88d5db2f949e634b2f6b70c8a98152a3`. The working branch and all
+`490e5a5d6bff529f873892e1c8c0b22ce50b5e1f`. The working branch and all
 uncommitted files are the actual continuation state.
 
 ## Critical shared-drive warning

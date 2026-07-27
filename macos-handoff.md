@@ -42,12 +42,12 @@ after the portable library tooling reports a concrete evidence gap.
 At handoff:
 
 - portable library-foundation checkpoint:
-  `f2e78ef52ce1bc9ff9dabecea97590c09ce84c46`;
+  `f5f782b25a40266e190072aae22fc3f9d56bc5b0`;
 - local-artifact ignore checkpoint:
-  `e772d390fd6bfacb983157cdb936517e400f73ed`;
+  `0b5db4073bdbff7813d2079d2df6fefa9ab5d999`;
 - the documentation checkpoint is the commit containing this file;
 - pre-publication upstream checkpoint:
-  `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5`;
+  `0cde6a1aa57aa18548a1a07e5a5e21c52cb60758`;
 - the checkpoint series has since been merged into `main` and published to
   `hexuria/buwiz-forms`, where CI is green on all ten jobs across macOS, Linux
   and Windows; the draft PR referenced here was on the now-detached
