@@ -17,16 +17,18 @@ skipping this plan.
 | Measure | Recorded baseline |
 | --- | --- |
 | Branch | `codex/print-preview-parity` |
-| Local HEAD | `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5` |
-| Origin branch | same commit |
+| Portable library-foundation checkpoint | `f2e78ef52ce1bc9ff9dabecea97590c09ce84c46` |
+| Local-artifact ignore checkpoint | `e772d390fd6bfacb983157cdb936517e400f73ed` |
+| Pre-publication origin baseline | `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5`; publication of the recorded checkpoint series in a draft PR was explicitly authorized on 2026-07-27 |
 | v1 evidence corpus | 43 forms / 9,592 fields / 2,007 validations / 623 calculations |
 | v2 candidate library | 1 candidate / 27 executable validations / 1 executable calculation |
 | Reviewed v2 rulesets | 0 |
 | 2550Q 53-projection classification | complete; still value-free and non-authorizing |
 
-The checkout was already dirty with unrelated user-owned changes. The commit
-identity above records the source baseline underneath those changes; it is not
-a clean-tree claim.
+The checkout remains dirty with unrelated user-owned changes. The local
+checkpoint records the completed portable evidence factory underneath the
+current implementation work; it is not a clean-tree claim. The 2026-07-27
+publication authority does not authorize later unrelated commits or pushes.
 
 The v1 corpus is complete only in the evidence-inventory sense: a gap may be
 explicit and still satisfy a v1 form manifest. It does **not** mean that 43
@@ -156,6 +158,16 @@ unfinished library work.
 ## Phase 1 — portable evidence packets
 
 No additional form candidate starts until the packet contract is stable.
+
+**Working-tree checkpoint (2026-07-26): complete.** The reviewed tracked set
+contains 43 packets / 130 canonical JSON files at
+`evidence/validation-rules/packets/v1`, with aggregate digest
+`9fa6df6c6657166140b37b67d4d7ca382ce3dc4986fb13f4f6a8caf0e828ac74`.
+The portable check passes with upstream verification reported as false, and
+the explicit-vault check passes with full upstream verification true. The
+first reviewed packet was separately built, verified, and safely imported
+before the aggregate set was published. These facts satisfy Phase 1 only;
+they grant no v2, application, Final Copy, or filing authority.
 
 ### Phase 1A — contract and safe tooling
 
@@ -362,6 +374,26 @@ them from the local clock, username, or host.
 ## Phase 2 — generic library capability closure
 
 Use `operator-census` and `reconciliation` to drive generic work:
+
+**Current 1701Q slice (2026-07-26):** source reconciliation is locked at 172
+fields, 33 executable validations, seven source-backed validation
+classifications, 19 executable calculations, two workflow states, one
+executable transition, and seven workflow classifications. Portable reviewed
+evidence closes the TIN checksum, selected-index/RDO state, official no-op,
+ordered rounding, and all item-46 schedules. Exact field-bound
+Input/Blur/Change events, reset assignments, and the two legacy JavaScript
+validation predicates are implemented in the working tree and remain subject
+to the recurring gates.
+
+The active blocker is the official editable-money Blur pipeline. Static source
+and Windows JScript captures prove that `round(this, 2)` mutates the triggering
+field before the dependent calculation runs: ordinary invalid finite text and
+overprecision become `0.00`, while signed Infinity yields a malformed
+non-decimal string. The provisional authoring shorthand
+`money_input_policy.on_invalid = error` is therefore not executable official
+behavior. The candidate remains external until same-event normalized-value
+ordering and the non-finite outcome have an explicit fail-closed IR contract;
+neither may be silently approximated.
 
 ```sh
 rtk cargo run --locked -p bir-rules-codegen -- operator-census --json

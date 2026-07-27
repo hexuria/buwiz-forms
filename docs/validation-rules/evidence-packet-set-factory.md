@@ -23,6 +23,26 @@ The builder does not supply dates, usernames, reviewer identities,
 attestations, capture arguments, or review decisions. Those facts come only
 from the reviewed ledger.
 
+## Canonical JSON helper
+
+Use the standalone helper to check reviewed JSON byte-for-byte or to create one
+fresh canonical copy:
+
+```text
+rtk cargo run --locked -p bir-rules-codegen -- \
+  canonicalize-json --check /review/ledger.json
+
+rtk cargo run --locked -p bir-rules-codegen -- \
+  canonicalize-json --input /review/draft.json \
+  --output /review/ledger.json
+```
+
+Parsing is strict: duplicate keys and trailing content fail. Output is exact
+`bir-json-c14n-v1` with no BOM, CR, or trailing LF. Conversion never mutates
+the input, rejects the same input/output, existing output, path escape, and
+symlink/reparse traversal, then creates once and rereads the file to verify its
+bytes and SHA-256.
+
 ## Candidate review, digest planning, and reviewed construction
 
 Review is a three-step state transition. First, a candidate ledger has
@@ -77,6 +97,12 @@ directory. The reviewer binds that digest in the reviewed ledger and reruns
 without `--dry-run`. A normal build rejects candidate status and any null,
 fake, or stale digest. At no point does the tool change a review state,
 attestation, timestamp, or ledger.
+
+For the aggregate command, the dry-run report prints the same ordered
+per-form packet digests in one shared corpus pass before printing the packet
+set digest. Reviewers should use that output to bind all 43 expected digests;
+running 43 independent planners is equivalent but needlessly repeats the
+closed corpus scan.
 
 The 43-packet command follows the same protocol:
 
