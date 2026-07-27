@@ -3235,34 +3235,18 @@ mod tests {
         assert!(error.to_string().contains("replaced"));
         assert_eq!(fs::read(&sentinel).expect("read sentinel"), b"must survive");
 
-        fs::remove_dir_all(&container).expect("remove test replacement");
-        rename_once_destination_is_free(&displaced, &container);
+        // Do not delete `container` and then reuse the name. On Windows a
+        // deleted directory's name stays reserved until every handle to it is
+        // closed, so renaming onto it fails with a sharing violation (OS error
+        // 32) - and it does not clear on its own, so retrying does not help.
+        // Renaming the replacement away frees the name immediately, on every
+        // platform, with no timing assumption.
+        let parked = root.join("parked-replacement");
+        fs::rename(&container, &parked).expect("park attacker replacement");
+        fs::rename(&displaced, &container).expect("restore owned proposal path");
+        fs::remove_dir_all(&parked).expect("remove parked attacker replacement");
         workspace.cleanup().expect("clean restored owned proposal");
         fs::remove_dir_all(root).expect("remove identity test root");
-    }
-
-    /// Rename `from` onto `to`, tolerating Windows' asynchronous directory
-    /// removal.
-    ///
-    /// `remove_dir_all` can return while the name is still in a pending-delete
-    /// state, and renaming onto a pending-delete name fails with a sharing
-    /// violation (OS error 32). The deletion does complete, so a bounded retry
-    /// is sufficient. Unix frees the name immediately and takes the first pass.
-    fn rename_once_destination_is_free(from: &Path, to: &Path) {
-        let mut last = None;
-        for _ in 0..50 {
-            match fs::rename(from, to) {
-                Ok(()) => return,
-                Err(error) => {
-                    last = Some(error);
-                    std::thread::sleep(std::time::Duration::from_millis(20));
-                }
-            }
-        }
-        panic!(
-            "restore owned proposal path: {}",
-            last.expect("at least one rename attempt was made")
-        );
     }
 
     #[test]
