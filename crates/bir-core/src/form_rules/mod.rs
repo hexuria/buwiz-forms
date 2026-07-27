@@ -5,6 +5,20 @@
 //! supply an exact [`bir_rules::FormRevisionKey`] through an
 //! [`bir_rules::EvaluationRequest`]; the 2550Q live facade owns request
 //! construction and accepts only an exact revision pin.
+//!
+//! This seam is deliberately inert: `payload::CheckedFinalCopyPayload::try_new`
+//! always returns `Err`, and the 2550Q designation always returns `None`. The
+//! constructors and accessors that a future reviewed path would call therefore
+//! have no production caller yet. They are reviewed scaffolding, not leftovers —
+//! deleting them to satisfy `dead_code` would erode the boundary the review
+//! flow is built around. Error payloads likewise carry full provenance so a
+//! caller can report exactly why a filing path stayed closed.
+#![allow(
+    dead_code,
+    clippy::result_large_err,
+    clippy::enum_variant_names,
+    clippy::type_complexity
+)]
 
 mod checked_serialization;
 mod form_2550q;
@@ -35,6 +49,8 @@ pub use bir_rules::{
 pub(crate) use form_2550q::{
     seed_raw_editor_state_from_reviewed_fields, validate_form_2550q_raw_bindings,
 };
+// Consumed only by the `db::form_rule_state` coverage tests.
+#[cfg(test)]
 pub(crate) use payload::FinalCopyFieldCoverage;
 pub use payload::{CheckedFinalCopyPayload, CheckedFinalCopyPayloadError};
 pub use registry::{

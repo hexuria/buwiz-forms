@@ -1712,18 +1712,17 @@ impl SerializationInspector {
         &self,
         current_group: Option<&RepeatedGroupInstance>,
     ) -> Result<(), SerializationInspectionError> {
-        if let Some(instance) = current_group {
-            if self
+        if let Some(instance) = current_group
+            && self
                 .request
                 .raw_inputs()
                 .repeated_group_instances()
                 .binary_search(instance)
                 .is_err()
-            {
-                return Err(SerializationInspectionError::CurrentGroupNotDeclared {
-                    instance: instance.clone(),
-                });
-            }
+        {
+            return Err(SerializationInspectionError::CurrentGroupNotDeclared {
+                instance: instance.clone(),
+            });
         }
         Ok(())
     }
@@ -3253,10 +3252,11 @@ fn execute_selected_calculation(
         // that sentinel through a terminal formatter. An evaluated output that
         // becomes absent is different: the formatter rejects it below so
         // blank/NaN-producing expression paths cannot masquerade as no-write.
-        if apply_writeback && condition {
-            if let Some(writeback) = output.writeback {
-                apply_calculation_writeback(writeback, &value, environment)?;
-            }
+        if apply_writeback
+            && condition
+            && let Some(writeback) = output.writeback
+        {
+            apply_calculation_writeback(writeback, &value, environment)?;
         }
     }
     Ok(())
@@ -4308,7 +4308,7 @@ fn offline_ebir_format_numeric_string(
     cleaned: &str,
     operation: ExecutionOperation,
 ) -> Result<String, InterpreterError> {
-    let number = match legacy_javascript_number(&cleaned) {
+    let number = match legacy_javascript_number(cleaned) {
         LegacyJavaScriptNumber::NaN => 0.0,
         LegacyJavaScriptNumber::NegativeInfinity | LegacyJavaScriptNumber::PositiveInfinity => {
             return Err(InterpreterError::Overflow { operation });
@@ -4728,7 +4728,7 @@ fn evaluate_javascript_parse_float_predicate(
     match operator {
         JavaScriptParseFloatOperator::IsNaN => Ok(parsed.is_nan()),
         JavaScriptParseFloatOperator::StrictEqual | JavaScriptParseFloatOperator::GreaterThan => {
-            let literal = operand.ok_or_else(|| {
+            let literal = operand.ok_or({
                 InterpreterError::InvalidStaticSpec(
                     StaticSpecError::InvalidJavaScriptParseFloatPredicate {
                         operator,
@@ -7207,7 +7207,7 @@ fn validate_event_binding(
     trigger_field_ids: &[&'static str],
 ) -> Result<(), InterpreterError> {
     let event_phase = phases.iter().any(|phase| phase.is_field_event());
-    if event_phase != !trigger_field_ids.is_empty() {
+    if event_phase == trigger_field_ids.is_empty() {
         return Err(if event_phase {
             StaticSpecError::EmptyRequiredList { kind, value }
         } else {
@@ -7256,6 +7256,9 @@ fn validate_unique_ids(
     Ok(())
 }
 
+// `is_empty()` guards state the spec rule being enforced; matching an
+// empty literal instead would obscure why the spec is rejected.
+#[allow(clippy::redundant_guards)]
 fn validate_coercion(coercion: Coercion) -> Result<(), InterpreterError> {
     match coercion {
         Coercion::Decimal { decimal, .. } => {
@@ -7324,6 +7327,9 @@ fn validate_rounding(rounding: Rounding) -> Result<(), InterpreterError> {
     }
 }
 
+// `is_empty()` guards state the spec rule being enforced; matching an
+// empty literal instead would obscure why the spec is rejected.
+#[allow(clippy::redundant_guards)]
 fn validate_normalization(pipeline: &[NormalizationStep]) -> Result<(), InterpreterError> {
     for step in pipeline {
         match step {

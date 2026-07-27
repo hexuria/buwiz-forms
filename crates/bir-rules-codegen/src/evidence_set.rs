@@ -3650,7 +3650,7 @@ mod tests {
     }
 
     fn temporary_directory(label: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-evidence-set-{label}-{}-{}",
             std::process::id(),
             TEST_COUNTER.fetch_add(1, Ordering::Relaxed)

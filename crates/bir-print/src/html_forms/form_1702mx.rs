@@ -1,3 +1,11 @@
+//! Exact January 2018C four-page mixed-income corporate return.
+//!
+//! The reviewed source pack also contains a distinct two-page mandatory
+//! attachment. That companion is deliberately not part of this provider's
+//! pagination policy: no reviewed attachment transport contract exists, and
+//! silently appending it would turn a conditional document into base-return
+//! pages five and six.
+
 use bir_core::{
     forms::{
         form_1702mx::{
@@ -44,14 +52,6 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
         sha256: "f915402e6aee6bd9b4bfeefe0f7d1f2ed6c767c1284b492f0f67c364feb9065f",
     },
 ];
-
-/// Exact January 2018C four-page mixed-income corporate return.
-///
-/// The reviewed source pack also contains a distinct two-page mandatory
-/// attachment. That companion is deliberately not part of this provider's
-/// pagination policy: no reviewed attachment transport contract exists, and
-/// silently appending it would turn a conditional document into base-return
-/// pages five and six.
 
 // Pinned by scripts/prepare_chromium_reference.mjs from the same official
 // PDF bytes; see references/1702mx-2018c-chromium-source.json

@@ -23,8 +23,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use regex::Regex;
+
+/// Hoisted out of the per-capability-record loop: the pattern is constant, so
+/// recompiling it for every record is pure waste.
+static CAPABILITIES_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\bcapabilities\s*:\s*FormCapabilities\s*\{")
+        .expect("capabilities block regex is valid")
+});
 use serde::Serialize;
 use syn::{Attribute, Item, Meta, UseTree};
 
@@ -1219,9 +1227,7 @@ fn capability_matrix(source: &str) -> std::result::Result<Vec<CapabilityFact>, S
         let record_close = matching_delimiter(registry_code, record_open, b'{', b'}')?;
         let raw_block = &registry_raw[record_match.start()..=record_close];
         let code_block = &registry_code[record_match.start()..=record_close];
-        let capabilities_pattern = Regex::new(r"\bcapabilities\s*:\s*FormCapabilities\s*\{")
-            .expect("capabilities block regex is valid");
-        let capabilities_match = capabilities_pattern
+        let capabilities_match = CAPABILITIES_PATTERN
             .find(code_block)
             .ok_or_else(|| "capability record lacks FormCapabilities initializer".to_owned())?;
         let capabilities_open = code_block[capabilities_match.start()..capabilities_match.end()]
@@ -1419,12 +1425,12 @@ fn mask_rust_non_code(source: &str) -> std::result::Result<String, String> {
             mask_non_newline(&mut masked[start..index]);
             continue;
         }
-        if bytes[index] == b'\'' {
-            if let Some(end) = rust_char_literal_end(bytes, index) {
-                mask_non_newline(&mut masked[index..end]);
-                index = end;
-                continue;
-            }
+        if bytes[index] == b'\''
+            && let Some(end) = rust_char_literal_end(bytes, index)
+        {
+            mask_non_newline(&mut masked[index..end]);
+            index = end;
+            continue;
         }
         index += 1;
     }
@@ -3231,7 +3237,7 @@ fn terms_match(partition: &JsonValue, expected: &[(&str, usize)]) -> bool {
     terms.len() == expected.len()
         && expected
             .iter()
-            .all(|(name, count)| terms.get(*name).and_then(|value| integer(value)) == Some(*count))
+            .all(|(name, count)| terms.get(*name).and_then(integer) == Some(*count))
 }
 
 /// Promotion needs zero `"state": "unresolved"` anywhere in the rule set. Of the
@@ -3262,10 +3268,10 @@ fn check_filing_safe_resolved_where_official_is_correct(
     let mut verified: BTreeMap<&str, ()> = BTreeMap::new();
     if let Some(JsonValue::Array(rules)) = validations.object().and_then(|d| d.get("rules")) {
         for rule in rules {
-            if string_at(rule, "assessment") == Some("verified-correct") {
-                if let Some(id) = string_at(rule, "rule_id") {
-                    verified.insert(id, ());
-                }
+            if string_at(rule, "assessment") == Some("verified-correct")
+                && let Some(id) = string_at(rule, "rule_id")
+            {
+                verified.insert(id, ());
             }
         }
     }

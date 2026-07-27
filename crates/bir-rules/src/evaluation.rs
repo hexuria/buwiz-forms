@@ -312,15 +312,14 @@ impl EvaluationExpectation {
             }
             if let Some(previous) = outputs[..index].iter().rev().find(|prior| {
                 prior.calculation_id == output.calculation_id && prior.output_id == output.output_id
-            }) {
-                if previous.instance.as_ref() >= output.instance.as_ref() {
-                    return Err(EvaluationError::ExpectedOutputInstanceOrderNotStrict {
-                        calculation_id: output.calculation_id.clone(),
-                        output_id: output.output_id.clone(),
-                        previous: previous.instance.clone(),
-                        current: output.instance.clone(),
-                    });
-                }
+            }) && previous.instance.as_ref() >= output.instance.as_ref()
+            {
+                return Err(EvaluationError::ExpectedOutputInstanceOrderNotStrict {
+                    calculation_id: output.calculation_id.clone(),
+                    output_id: output.output_id.clone(),
+                    previous: previous.instance.clone(),
+                    current: output.instance.clone(),
+                });
             }
         }
         let mut previous_key = None;

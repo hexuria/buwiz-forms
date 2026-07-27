@@ -635,9 +635,8 @@ fn build_integration_plan(options: &FormIntegrationOptions) -> Result<Integratio
     let proposed_files = file_manifest(&proposed_tree);
     let changed_tree = proposed_tree
         .iter()
-        .filter_map(|(path, bytes)| {
-            (current_tree.get(path) != Some(bytes)).then(|| (path.clone(), bytes.clone()))
-        })
+        .filter(|&(path, bytes)| current_tree.get(path) != Some(bytes))
+        .map(|(path, bytes)| (path.clone(), bytes.clone()))
         .collect::<BTreeMap<_, _>>();
     let changed_files = file_manifest(&changed_tree);
     let report = FormIntegrationReport {
@@ -2739,7 +2738,7 @@ mod tests {
     #[test]
     fn integration_external_file_read_rejects_hard_link_aliases() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-integration-hard-link-{}-{sequence}",
             std::process::id()
         ));
@@ -2759,7 +2758,7 @@ mod tests {
     #[test]
     fn integration_open_callbacks_reassert_exact_roots_and_external_ledger() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-integration-open-scope-{}-{sequence}",
             std::process::id()
         ));
@@ -2798,13 +2797,14 @@ mod tests {
     #[test]
     fn reviewed_packet_reader_rejects_root_substitution_before_invocation() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-packet-root-swap-{}-{sequence}",
             std::process::id()
         ));
         let repo = root.join("repo");
         let packet = root.join("packet");
         let displaced = root.join("packet-displaced");
+        fs::create_dir_all(&root).expect("create packet test root");
         fs::create_dir(&repo).expect("create packet test repo");
         fs::create_dir(&packet).expect("create approved packet root");
         fs::write(packet.join("evidence-packet.json"), b"approved").expect("write approved packet");
@@ -3091,7 +3091,7 @@ mod tests {
             .cloned()
             .expect("protected candidate fixture");
         let sequence = PROPOSAL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let staging_label = std::env::temp_dir().join(format!(
+        let staging_label = crate::test_temp_dir().join(format!(
             "bir-form-integration-synthetic-candidate-audit-{}-{sequence}",
             std::process::id()
         ));
@@ -3136,7 +3136,7 @@ mod tests {
     #[test]
     fn staging_extras_are_rejected_by_name_before_any_file_capture() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-form-integration-staging-allowlist-test-{}-{sequence}",
             std::process::id()
         ));
@@ -3160,7 +3160,7 @@ mod tests {
     #[test]
     fn final_staging_epoch_recheck_detects_allowlisted_byte_mutation() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-form-integration-staging-epoch-test-{}-{sequence}",
             std::process::id()
         ));
@@ -3187,7 +3187,7 @@ mod tests {
     #[test]
     fn proposal_cleanup_requires_the_exact_owner_marker() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-form-integration-owner-test-{}-{sequence}",
             std::process::id()
         ));
@@ -3213,7 +3213,7 @@ mod tests {
     #[test]
     fn proposal_cleanup_rejects_a_replacement_with_a_copied_owner_marker() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-form-integration-identity-test-{}-{sequence}",
             std::process::id()
         ));
@@ -3348,11 +3348,15 @@ mod tests {
     #[test]
     fn uncooperative_mutation_is_never_overwritten_without_atomic_directory_cas() {
         let sequence = PROPOSAL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        // `refuse_non_atomic_apply` reads through `read_tracked_tree`, which
+        // refuses any path outside the repository root. A temp-dir scratch root
+        // therefore fails on "escapes repository root" before it can ever reach
+        // the mutation check this test is about, so stage inside the repo.
+        let root = crate::test_repo_scratch_dir(&format!(
             "bir-form-integration-cas-refusal-test-{}-{sequence}",
             std::process::id()
         ));
-        fs::create_dir(&root).expect("create lock test root");
+        fs::create_dir_all(&root).expect("create lock test root");
         let target = root.join("v2");
         let expected = BTreeMap::from([(INDEX_PATH.to_owned(), b"expected".to_vec())]);
         let concurrent = BTreeMap::from([(INDEX_PATH.to_owned(), b"uncooperative".to_vec())]);
@@ -3379,7 +3383,7 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let sequence = PROPOSAL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-form-integration-cleanup-symlink-test-{}-{sequence}",
             std::process::id()
         ));

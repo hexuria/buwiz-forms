@@ -191,6 +191,9 @@ pub(crate) fn read_external_tree_bound(
     let mut opened_directories = Vec::new();
     let mut opened_files = Vec::new();
 
+    // `_index` is consumed by the `#[cfg(test)]` read hooks below, so the
+    // index only looks discarded in a non-test build.
+    #[allow(clippy::unused_enumerate_index)]
     for (_index, (relative, entry)) in inventory_before.iter().enumerate() {
         let path = root.join(relative);
         let expected = fs::canonicalize(&path).map_err(|source| {
@@ -402,7 +405,7 @@ fn stable_file_metadata(file: &File, label: &str, path: &Path) -> Result<StableF
     {
         use std::os::unix::fs::MetadataExt;
 
-        return Ok(StableFileMetadata {
+        Ok(StableFileMetadata {
             dev: metadata.dev(),
             ino: metadata.ino(),
             len: metadata.len(),
@@ -410,7 +413,7 @@ fn stable_file_metadata(file: &File, label: &str, path: &Path) -> Result<StableF
             mtime_nsec: metadata.mtime_nsec(),
             ctime: metadata.ctime(),
             ctime_nsec: metadata.ctime_nsec(),
-        });
+        })
     }
     #[cfg(windows)]
     {
@@ -644,6 +647,7 @@ pub fn read_tracked_tree(root: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
     read_tree(&root, ReadScope::Tracked)
 }
 
+#[allow(dead_code, reason = "external counterpart of read_tracked_tree")]
 pub fn read_external_tree(root: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
     let root = absolute_lexically_normalized(root, "external tree root")?;
     read_tree(&root, ReadScope::External)
@@ -1106,7 +1110,7 @@ mod tests {
     };
 
     fn temporary_directory(label: &str) -> std::path::PathBuf {
-        let directory = std::env::temp_dir().join(format!(
+        let directory = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-{label}-{}-{}",
             std::process::id(),
             super::UNIQUE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)

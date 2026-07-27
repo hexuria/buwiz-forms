@@ -291,7 +291,7 @@ fn repin_declared_sources(
                 "a declared source is missing source_id, path or sha256",
             ));
         };
-        let corpus_relative = format!("{relative}");
+        let corpus_relative = relative.to_string();
         let path = resolve_existing_under(rules_root, &corpus_relative, "declared source")?;
         let current = sha256_hex(&read_tracked_bytes(&path)?);
         if current == declared {
@@ -347,6 +347,10 @@ fn substitute_exact(
 
 /// Writes every staged file, restoring all previously written files if any
 /// write fails. A partial roll must fail rather than be patched around.
+// `written` counts committed writes and is reported in both failure messages.
+// The digest roll is an all-or-nothing transaction; its rollback arithmetic is
+// not worth re-expressing as an iterator index for a style lint.
+#[allow(clippy::explicit_counter_loop)]
 fn write_all_or_restore(staged: Vec<(PathBuf, String)>) -> Result<()> {
     let mut backups: Vec<(PathBuf, Vec<u8>)> = Vec::with_capacity(staged.len());
     for (path, _) in &staged {

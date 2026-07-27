@@ -1408,14 +1408,14 @@ fn ensure_fresh_staging_target(
             )));
         }
     }
-    if let Some(source_root) = source_root {
-        if is_same_or_below(source_root, target) {
-            return Err(CodegenError::new(format!(
-                "{label} `{}` is inside its source `{}`",
-                target.display(),
-                source_root.display()
-            )));
-        }
+    if let Some(source_root) = source_root
+        && is_same_or_below(source_root, target)
+    {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` is inside its source `{}`",
+            target.display(),
+            source_root.display()
+        )));
     }
     let mut existing = parent;
     while !existing.exists() {
@@ -1429,14 +1429,14 @@ fn ensure_fresh_staging_target(
     let resolved = fs::canonicalize(existing).map_err(|source| {
         CodegenError::io(&format!("canonicalize {label} ancestor"), existing, source)
     })?;
-    if let Some(source_root) = source_root {
-        if is_same_or_below(source_root, &resolved) {
-            return Err(CodegenError::new(format!(
-                "{label} `{}` resolves inside its source `{}`",
-                target.display(),
-                source_root.display()
-            )));
-        }
+    if let Some(source_root) = source_root
+        && is_same_or_below(source_root, &resolved)
+    {
+        return Err(CodegenError::new(format!(
+            "{label} `{}` resolves inside its source `{}`",
+            target.display(),
+            source_root.display()
+        )));
     }
     if let Some(rules_dir) = canonical_rules_dir {
         let rules_dir = fs::canonicalize(rules_dir).map_err(|source| {
@@ -2017,7 +2017,7 @@ mod tests {
     }
 
     fn temporary_directory(label: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-{label}-{}-{}",
             std::process::id(),
             TEST_COUNTER.fetch_add(1, Ordering::Relaxed)

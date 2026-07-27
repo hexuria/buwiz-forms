@@ -39,6 +39,7 @@ enum VerificationScope {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(not(windows), allow(dead_code))]
 enum VerifiedPathKind {
     RegularFile,
     Directory,
@@ -1174,7 +1175,7 @@ mod tests {
     }
 
     fn temp_root(label: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-verified-file-{label}-{}",
             std::process::id()
         ));

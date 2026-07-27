@@ -1,3 +1,12 @@
+//! Deserialization model for the extracted validation-rules corpus.
+//!
+//! Every field here binds one corpus JSON key. Because these types use
+//! `deny_unknown_fields`, a field Rust never reads is still load-bearing: it is
+//! what makes the parser *accept* — and therefore validate — that key. Dropping
+//! an unread provenance field (`source_refs`, `review_decision`) would silently
+//! stop binding provenance the contract claims to record.
+#![allow(dead_code)]
+
 use serde::Deserialize;
 
 use crate::json::JsonValue;
@@ -508,9 +517,7 @@ pub enum LegacyRecordClassification {
 impl LegacyRecordClassification {
     pub fn artifact(&self) -> LegacyArtifact {
         match self {
-            Self::NonRuntime { artifact, .. } | Self::Unresolved { artifact, .. } => {
-                artifact.clone()
-            }
+            Self::NonRuntime { artifact, .. } | Self::Unresolved { artifact, .. } => *artifact,
         }
     }
 

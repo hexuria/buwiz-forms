@@ -6,6 +6,15 @@
 //! networking, floating-point amount, or runtime JSON-corpus dependency.
 
 #![forbid(unsafe_code)]
+// These contracts are fail-closed: an error carries the offending rule, field
+// instance and revision key so a caller can report exactly why a filing path
+// stayed closed. Boxing those payloads would put the diagnostic surface behind
+// an indirection for a stack-size win this crate does not need.
+#![allow(clippy::result_large_err)]
+// Rule construction and evaluation take the full pinned context (revision key,
+// phase, field instance, provenance) as explicit arguments rather than a
+// loosely-typed bag, which is the point of these contracts.
+#![allow(clippy::too_many_arguments)]
 
 mod context;
 mod evaluation;

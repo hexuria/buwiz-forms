@@ -1,3 +1,9 @@
+//! Layout-only experimental provider for the locked January 2018 revision.
+//!
+//! The reviewed source pack has no exact-revision saved XML. Consequently this
+//! provider supplies semantic preview data but does not make an XML, queue, or
+//! filing-readiness claim. Those gates remain false in the capability manifest.
+
 use bir_core::forms::form_1701q::{
     Form1701QAtc, Form1701QDeductionMethod, Form1701QFilerType, Form1701QParty,
     Form1701QPaymentRow, Form1701QSpouseType, Form1701QTaxRate,
@@ -27,12 +33,6 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
         sha256: "d69c01b30c6f86a92d090b3f81965a6e5f1464444012c425cece6a1ac84e1bf8",
     },
 ];
-
-/// Layout-only experimental provider for the locked January 2018 revision.
-///
-/// The reviewed source pack has no exact-revision saved XML. Consequently this
-/// provider supplies semantic preview data but does not make an XML, queue, or
-/// filing-readiness claim. Those gates remain false in the capability manifest.
 
 // Pinned by scripts/prepare_chromium_reference.mjs from the same official
 // PDF bytes; see references/1701q-2018-chromium-source.json

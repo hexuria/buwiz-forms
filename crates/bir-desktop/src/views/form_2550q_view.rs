@@ -1293,7 +1293,7 @@ impl Form2550QV2View {
         let changed_bindings = candidate_updates
             .iter()
             .map(|(ui_key, _)| RawControlBinding::Singleton {
-                ui_key: *ui_key,
+                ui_key,
                 raw_key: singleton_raw_key(ui_key),
             })
             .collect::<Vec<_>>();
@@ -2367,7 +2367,7 @@ fn singleton_bound_inputs(
             (
                 input.clone(),
                 RawControlBinding::Singleton {
-                    ui_key: *ui_key,
+                    ui_key,
                     raw_key: singleton_raw_key(ui_key),
                 },
             )

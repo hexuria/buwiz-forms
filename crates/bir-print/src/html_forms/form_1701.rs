@@ -1,3 +1,9 @@
+//! Preview-only provider for the exact January 2018 four-page main return.
+//!
+//! The reviewed source pack proves an exact 837-key editable-save round trip,
+//! but not queue/final-flag semantics. The separate Part X attachment stays a
+//! separate, fail-closed workflow and is never appended by this provider.
+
 use bir_core::forms::form_1701::{
     Form1701AmountSection, Form1701Atc, Form1701CivilStatus, Form1701DeductionMethod,
     Form1701Draft, Form1701EmployerRow, Form1701JointFilingStatus, Form1701OverpaymentDisposition,
@@ -38,12 +44,6 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
         sha256: "8597a626381d0a45164fcdc274e3706965b6290870bd320a2ef87723c2b930a0",
     },
 ];
-
-/// Preview-only provider for the exact January 2018 four-page main return.
-///
-/// The reviewed source pack proves an exact 837-key editable-save round trip,
-/// but not queue/final-flag semantics. The separate Part X attachment stays a
-/// separate, fail-closed workflow and is never appended by this provider.
 
 // Pinned by scripts/prepare_chromium_reference.mjs from the same official
 // PDF bytes; see references/1701-2018-chromium-source.json

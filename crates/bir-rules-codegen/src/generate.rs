@@ -203,7 +203,7 @@ fn format_rust_files(
             .spawn()
             .map_err(|source| {
                 CodegenError::with_source(
-                    &format!("failed to start rustfmt for generated `{path}`"),
+                    format!("failed to start rustfmt for generated `{path}`"),
                     source,
                 )
             })?;
@@ -213,10 +213,10 @@ fn format_rust_files(
             .expect("piped rustfmt stdin")
             .write_all(bytes)
             .map_err(|source| {
-                CodegenError::with_source(&format!("write generated `{path}` to rustfmt"), source)
+                CodegenError::with_source(format!("write generated `{path}` to rustfmt"), source)
             })?;
         let output = child.wait_with_output().map_err(|source| {
-            CodegenError::with_source(&format!("wait for rustfmt on generated `{path}`"), source)
+            CodegenError::with_source(format!("wait for rustfmt on generated `{path}`"), source)
         })?;
         if !output.status.success() {
             return Err(CodegenError::new(format!(
@@ -311,8 +311,12 @@ fn render_registry_rs(
         output.push_str("];\n\n");
     }
     if snapshot_modules.is_empty() {
+        // The empty `vec![]` literal is pinned verbatim by the
+        // `reviewed-registry-empty` production boundary; keep it exactly as-is
+        // and silence the style lint instead of rewriting it to `Vec::new`.
         output.push_str(
-            "static REVIEWED_RULE_SET_ENTRIES: LazyLock<Vec<RuleSetRegistryEntry>> = \
+            "#[allow(clippy::redundant_closure)]\n\
+             static REVIEWED_RULE_SET_ENTRIES: LazyLock<Vec<RuleSetRegistryEntry>> = \
              LazyLock::new(|| vec![]);\n\n",
         );
     } else {
@@ -957,7 +961,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock after epoch")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-focused-full-audit-{}-{nonce}",
             std::process::id()
         ));
@@ -1399,7 +1403,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock after epoch")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-candidate-probe-{}-{nonce}",
             std::process::id()
         ));

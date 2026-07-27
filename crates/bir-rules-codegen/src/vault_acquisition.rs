@@ -7,11 +7,18 @@
 //! application version, or timestamp.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File, OpenOptions};
+use std::fs;
+#[cfg(windows)]
+use std::fs::{File, OpenOptions};
+#[cfg(windows)]
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+// Vault write publication is supported only on Windows; the staging counter and
+// the file-identity handles it needs exist only for that target.
+#[cfg(windows)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[cfg(windows)]
 use same_file::Handle;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -24,9 +31,10 @@ use crate::files::{
     read_external_bytes_under, read_tracked_bytes,
 };
 use crate::json::{CANONICALIZATION_ID, canonical_bytes, parse_strict};
+#[cfg(windows)]
+use crate::path::portable_join;
 use crate::path::{
     canonical_repo_root, ensure_under, is_same_or_below, is_same_path, is_symlink_or_reparse_point,
-    portable_join,
 };
 use crate::sensitive::reject_sensitive_text;
 
@@ -39,7 +47,9 @@ pub const EVIDENCE_VAULT_SOURCE_VERIFICATION_DOMAIN: &str =
     "bir-evidence-vault-source-verification-v1";
 
 const CONTENT_ADDRESS_PREFIX: &str = "upstream/sha256/";
+#[cfg(any(windows, test))]
 const STAGING_MARKER: &str = ".bir-vault-acquisition-staging-";
+#[cfg(windows)]
 static STAGING_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Complete, explicit inputs for a vault acquisition or no-write plan.
@@ -253,6 +263,7 @@ struct DeclaredAsset {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(not(windows), allow(dead_code))]
 struct VerifiedContent {
     sha256: String,
     size_bytes: u64,
@@ -273,6 +284,7 @@ struct VerifiedSourceInventory {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(not(windows), allow(dead_code))]
 struct AcquisitionPlan {
     repo_root: PathBuf,
     manifest_count: usize,
@@ -1278,6 +1290,7 @@ fn publish_directory_no_replace(staging: &Path, target: &Path) -> Result<()> {
     })
 }
 
+#[cfg(windows)]
 fn verify_staged_plan(staging: &Path, plan: &AcquisitionPlan) -> Result<()> {
     let expected_staging = fs::canonicalize(staging).map_err(|source| {
         CodegenError::io("canonicalize staged evidence vault root", staging, source)
@@ -1368,6 +1381,7 @@ fn verify_staged_plan(staging: &Path, plan: &AcquisitionPlan) -> Result<()> {
     validate_emitted_catalog(&parsed)
 }
 
+#[cfg(windows)]
 fn copy_verified_regular_file(
     repo_root: &Path,
     content: &VerifiedContent,
@@ -1580,7 +1594,7 @@ fn reject_sensitive_path(path: &Path, label: &str) -> Result<()> {
             .any(|pair| pair[0] == left && pair[1] == right)
     };
     let has_sensitive_component = components.iter().any(|component| {
-        let normalized = component.replace(' ', "-").replace('_', "-");
+        let normalized = component.replace([' ', '_'], "-");
         normalized.contains("taxpayer")
             || normalized.contains("tax-payer")
             || normalized.contains("final-copy")
@@ -1681,6 +1695,7 @@ fn canonical_real_directory(path: &Path, label: &str) -> Result<PathBuf> {
         .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), path, source))
 }
 
+#[cfg(test)]
 fn load_canonical_json<T>(path: &Path, label: &str) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
@@ -1759,6 +1774,7 @@ fn canonical_serialize(value: &impl Serialize, label: &str) -> Result<Vec<u8>> {
     Ok(canonical_bytes(&parsed))
 }
 
+#[cfg(test)]
 fn read_external_file_bytes(path: &Path, label: &str) -> Result<Vec<u8>> {
     let expected = fs::canonicalize(path)
         .map_err(|source| CodegenError::io(&format!("canonicalize {label}"), path, source))?;
@@ -1928,6 +1944,7 @@ fn reject_machine_locator(value: &str, label: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(windows, test))]
 fn collect_regular_tree_paths(root: &Path) -> Result<BTreeSet<String>> {
     fn visit(root: &Path, directory: &Path, paths: &mut BTreeSet<String>) -> Result<()> {
         let entries = fs::read_dir(directory)
@@ -1965,6 +1982,7 @@ fn collect_regular_tree_paths(root: &Path) -> Result<BTreeSet<String>> {
     Ok(paths)
 }
 
+#[cfg(any(windows, test))]
 fn normalized_relative_path(root: &Path, path: &Path) -> Result<String> {
     let relative = path.strip_prefix(root).map_err(|_| {
         CodegenError::new(format!(
@@ -1995,6 +2013,7 @@ fn normalized_relative_path(root: &Path, path: &Path) -> Result<String> {
     Ok(output)
 }
 
+#[cfg(windows)]
 fn sync_directory(path: &Path) -> Result<()> {
     match File::open(path).and_then(|directory| directory.sync_all()) {
         Ok(()) => Ok(()),
@@ -2045,7 +2064,7 @@ mod tests {
 
     impl TestRoot {
         fn new(label: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::test_temp_dir().join(format!(
                 "bir-vault-acquisition-{label}-{}-{}",
                 std::process::id(),
                 TEST_COUNTER.fetch_add(1, Ordering::Relaxed)

@@ -1,3 +1,10 @@
+//! Exact January 2018 semantic HTML provider for the regular-rate corporate return.
+//!
+//! The reviewed editable save proves the fixed capacities represented by the
+//! typed draft. It does not prove an electronic submission contract or any
+//! continuation-sheet geometry, so this provider always emits exactly four
+//! pages and no renderer-owned continuation schedules.
+
 use bir_core::forms::{
     form_1702rt::{
         reviewed_alternate_atc_description, Form1702RTAtcSelection, Form1702RTDate,
@@ -41,13 +48,6 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
         sha256: "f9471368a54efcbe2fcab6744dfbf616111cf690d39438998fe83f9f9fe500a9",
     },
 ];
-
-/// Exact January 2018 semantic HTML provider for the regular-rate corporate return.
-///
-/// The reviewed editable save proves the fixed capacities represented by the
-/// typed draft. It does not prove an electronic submission contract or any
-/// continuation-sheet geometry, so this provider always emits exactly four
-/// pages and no renderer-owned continuation schedules.
 
 // Pinned by scripts/prepare_chromium_reference.mjs from the same official
 // PDF bytes; see references/1702rt-2018c-chromium-source.json

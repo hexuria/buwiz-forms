@@ -930,17 +930,17 @@ fn inspect_candidate(
         );
         return Ok(None);
     }
-    if let Some(search_root) = approved_search_root {
-        if !is_same_or_below(search_root.path(), &canonical) {
-            state.reject(
-                &canonical,
-                format!(
-                    "candidate escaped approved search root `{}`",
-                    search_root.path().display()
-                ),
-            );
-            return Ok(None);
-        }
+    if let Some(search_root) = approved_search_root
+        && !is_same_or_below(search_root.path(), &canonical)
+    {
+        state.reject(
+            &canonical,
+            format!(
+                "candidate escaped approved search root `{}`",
+                search_root.path().display()
+            ),
+        );
+        return Ok(None);
     }
     if let Some(reason) =
         sensitive_path_reason(&canonical, forbidden_leaves, forbidden_absolute_locators)
@@ -987,14 +987,14 @@ fn hash_regular_file(
                 resolved.display()
             )));
         }
-        if let Some(search_root) = approved_search_root {
-            if !is_same_or_below(search_root.path(), resolved) {
-                return Err(CodegenError::new(format!(
-                    "vault source candidate `{}` resolves outside approved search root `{}`",
-                    resolved.display(),
-                    search_root.path().display()
-                )));
-            }
+        if let Some(search_root) = approved_search_root
+            && !is_same_or_below(search_root.path(), resolved)
+        {
+            return Err(CodegenError::new(format!(
+                "vault source candidate `{}` resolves outside approved search root `{}`",
+                resolved.display(),
+                search_root.path().display()
+            )));
         }
         if is_same_or_below(repo_root, resolved) {
             return Err(CodegenError::new(format!(
@@ -1523,7 +1523,7 @@ fn native_absolute_manifest_path(locator: &str) -> Option<PathBuf> {
 
 fn manifest_locator_leaf(locator: &str) -> Option<&str> {
     locator
-        .rsplit(|character| character == '/' || character == '\\')
+        .rsplit(['/', '\\'])
         .find(|component| !component.is_empty())
 }
 
@@ -1547,7 +1547,7 @@ fn sensitive_path_reason(
         return Some("candidate leaf is declared by a metadata-only/zero-size asset");
     }
     let normalized_leaf = leaf
-        .map(|leaf| leaf.replace(' ', "-").replace('_', "-"))
+        .map(|leaf| leaf.replace([' ', '_'], "-"))
         .unwrap_or_default();
     if normalized_leaf.contains("final-copy")
         || normalized_leaf.contains("taxpayer")
@@ -1571,7 +1571,7 @@ fn sensitive_path_reason(
             .any(|pair| pair[0] == left && pair[1] == right)
     };
     let has_sensitive_component = components.iter().any(|component| {
-        let normalized = component.replace(' ', "-").replace('_', "-");
+        let normalized = component.replace([' ', '_'], "-");
         normalized.contains("taxpayer")
             || normalized.contains("tax-payer")
             || normalized.contains("final-copy")
@@ -1847,7 +1847,7 @@ mod tests {
 
     impl TestRoot {
         fn new(label: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::test_temp_dir().join(format!(
                 "bir-vault-source-discovery-{label}-{}-{}",
                 std::process::id(),
                 TEST_COUNTER.fetch_add(1, Ordering::Relaxed)

@@ -1772,7 +1772,7 @@ fn load_canonical_typed<T>(bytes: &[u8], label: &str) -> Result<T>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let value = parse_strict(&bytes, Path::new(label))?;
+    let value = parse_strict(bytes, Path::new(label))?;
     if bytes != canonical_bytes(&value) {
         return Err(CodegenError::new(format!(
             "{label} is not canonical `{CANONICALIZATION_ID}` JSON"
@@ -2098,7 +2098,7 @@ mod tests {
 
     impl TestRoot {
         fn new(label: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::test_temp_dir().join(format!(
                 "bir-evidence-review-scaffold-{label}-{}-{}",
                 std::process::id(),
                 TEST_COUNTER.fetch_add(1, Ordering::Relaxed)

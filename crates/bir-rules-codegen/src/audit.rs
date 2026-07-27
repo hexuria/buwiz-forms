@@ -371,13 +371,13 @@ pub fn audit(options: &AuditOptions) -> Result<AuditReport> {
                     error.message()
                 ))
             })?;
-        if let Some(expected) = &document.identity.source_set_sha256 {
-            if expected != &normalized_source_sha256 {
-                return Err(CodegenError::new(format!(
-                    "snapshot `{}` pins source_set_sha256 `{expected}`, but normalized source is `{normalized_source_sha256}`",
-                    entry.rule_set_id
-                )));
-            }
+        if let Some(expected) = &document.identity.source_set_sha256
+            && expected != &normalized_source_sha256
+        {
+            return Err(CodegenError::new(format!(
+                "snapshot `{}` pins source_set_sha256 `{expected}`, but normalized source is `{normalized_source_sha256}`",
+                entry.rule_set_id
+            )));
         }
 
         snapshots.push(AuditedSnapshot {
@@ -434,7 +434,7 @@ mod snapshot_summary_tests {
     impl LocalRulesFixture {
         fn new() -> Self {
             let source_repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-            let root = std::env::temp_dir().join(format!(
+            let root = crate::test_temp_dir().join(format!(
                 "bir-audit-local-rules-{}-{}",
                 std::process::id(),
                 FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed)
@@ -1680,7 +1680,7 @@ fn validate_legacy_mapping(
         .legacy_v1
         .mappings
         .iter()
-        .map(|mapping| mapping.artifact.clone())
+        .map(|mapping| mapping.artifact)
         .collect::<BTreeSet<_>>();
     if expected_artifacts != actual_artifacts {
         return Err(CodegenError::new(
@@ -3206,7 +3206,7 @@ fn parse_derived_instance_selector(
     }
 }
 
-fn evaluation_scope_group<'a>(scope: &'a EvaluationScope) -> Option<&'a str> {
+fn evaluation_scope_group(scope: &EvaluationScope) -> Option<&str> {
     match scope {
         EvaluationScope::Singleton => None,
         EvaluationScope::EachGroup { group_id } => Some(group_id),
@@ -7147,12 +7147,12 @@ fn validate_fixture_context_values(
         let (expected_type, _) = specifications
             .get(id)
             .ok_or_else(|| CodegenError::new(format!("{path}: unexpected context value `{id}`")))?;
-        if let Some(actual_type) = fixture_canonical_value_type(value, path)? {
-            if actual_type != expected_type {
-                return Err(CodegenError::new(format!(
-                    "{path}: context value `{id}` has type `{actual_type}`, expected `{expected_type}`"
-                )));
-            }
+        if let Some(actual_type) = fixture_canonical_value_type(value, path)?
+            && actual_type != expected_type
+        {
+            return Err(CodegenError::new(format!(
+                "{path}: context value `{id}` has type `{actual_type}`, expected `{expected_type}`"
+            )));
         }
     }
     for (id, (_, required)) in &specifications {
@@ -8033,12 +8033,12 @@ fn validate_string_references(
         let JsonValue::Object(object) = value else {
             return Ok(());
         };
-        if let Some(JsonValue::String(reference)) = object.get(key) {
-            if !definitions.contains(reference.as_str()) {
-                return Err(CodegenError::new(format!(
-                    "{path}/{key}: missing {label} reference `{reference}`"
-                )));
-            }
+        if let Some(JsonValue::String(reference)) = object.get(key)
+            && !definitions.contains(reference.as_str())
+        {
+            return Err(CodegenError::new(format!(
+                "{path}/{key}: missing {label} reference `{reference}`"
+            )));
         }
         Ok(())
     })
@@ -8079,10 +8079,10 @@ fn validate_array_references(
 fn collect_derived_calculation_ids(value: &JsonValue, output: &mut BTreeSet<String>) {
     match value {
         JsonValue::Object(object) => {
-            if object.get("kind").and_then(JsonValue::as_str) == Some("derived") {
-                if let Some(JsonValue::String(calculation)) = object.get("calculation_id") {
-                    output.insert(calculation.clone());
-                }
+            if object.get("kind").and_then(JsonValue::as_str) == Some("derived")
+                && let Some(JsonValue::String(calculation)) = object.get("calculation_id")
+            {
+                output.insert(calculation.clone());
             }
             for value in object.values() {
                 collect_derived_calculation_ids(value, output);
@@ -10650,7 +10650,7 @@ mod reviewed_completeness_tests {
     #[test]
     fn sources_reject_duplicate_physical_evidence_aliases() {
         let root =
-            std::env::temp_dir().join(format!("bir-rules-source-alias-{}", std::process::id()));
+            crate::test_temp_dir().join(format!("bir-rules-source-alias-{}", std::process::id()));
         std::fs::create_dir_all(&root).expect("create source alias test directory");
         let root = root
             .canonicalize()

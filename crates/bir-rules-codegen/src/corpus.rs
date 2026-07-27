@@ -91,7 +91,6 @@ pub fn validate_v1(options: &ValidateV1Options) -> Result<CorpusReport> {
     let legacy: BTreeMap<&String, &JsonValue> = documents
         .iter()
         .filter(|(relative, _)| !is_v2_path(relative))
-        .map(|(relative, value)| (relative, value))
         .collect();
     let legacy_count = legacy.len();
 
@@ -133,7 +132,7 @@ fn is_v2_path(relative: &str) -> bool {
 fn is_under_schema_directory(relative: &str) -> bool {
     let mut components: Vec<&str> = relative.split('/').collect();
     components.pop();
-    components.iter().any(|component| *component == "schema")
+    components.contains(&"schema")
 }
 
 fn load_documents(rules_root: &Path) -> Result<BTreeMap<String, JsonValue>> {

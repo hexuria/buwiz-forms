@@ -1,3 +1,11 @@
+//! Exact April 2024 semantic HTML provider.
+//!
+//! The official form and reviewed editable-save pair establish exactly two
+//! rows for Schedules 1, 3, and 4. Additional sheets are mentioned by the
+//! official labels, but their geometry and transport contract are not present
+//! in the source pack. Consequently this provider is deliberately fixed at two
+//! pages and refuses to invent continuation pages.
+
 use bir_core::{
     forms::{
         form_2550q::{
@@ -32,14 +40,6 @@ const VISUAL_REFERENCE_PAGES: &[VisualReferencePage] = &[
         sha256: "6bcf45b6780789601b4a6a659cad12ef8777f3a61179ee82d9f93c62c85b97f4",
     },
 ];
-
-/// Exact April 2024 semantic HTML provider.
-///
-/// The official form and reviewed editable-save pair establish exactly two
-/// rows for Schedules 1, 3, and 4. Additional sheets are mentioned by the
-/// official labels, but their geometry and transport contract are not present
-/// in the source pack. Consequently this provider is deliberately fixed at two
-/// pages and refuses to invent continuation pages.
 
 // Pinned by scripts/prepare_chromium_reference.mjs from the same official
 // PDF bytes; see references/2550q-2024-chromium-source.json

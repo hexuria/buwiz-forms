@@ -1406,7 +1406,7 @@ mod tests {
     }
 
     fn fixture() -> FactoryFixture {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-form-factory-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)

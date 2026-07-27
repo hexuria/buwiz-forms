@@ -627,10 +627,10 @@ fn count_expression_members(value: &JsonValue, counts: &mut BTreeMap<String, usi
         JsonValue::Object(object) => {
             // Expression objects always declare result_type. This avoids counting
             // nested field-instance selectors and other unrelated `kind` objects.
-            if object.contains_key("result_type") {
-                if let Some(kind) = object.get("kind").and_then(JsonValue::as_str) {
-                    *counts.entry(kind.to_owned()).or_default() += 1;
-                }
+            if object.contains_key("result_type")
+                && let Some(kind) = object.get("kind").and_then(JsonValue::as_str)
+            {
+                *counts.entry(kind.to_owned()).or_default() += 1;
             }
             for child in object.values() {
                 count_expression_members(child, counts);

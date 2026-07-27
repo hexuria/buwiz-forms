@@ -324,31 +324,31 @@ impl SchemaSet {
             }
         }
 
-        if let Some(expected) = schema.get("type") {
-            if !matches_type(expected, instance) {
-                errors.push(format!(
-                    "{instance_path}: expected type {}, found {}",
-                    describe_type_constraint(expected),
-                    type_name(instance)
-                ));
-                return;
-            }
+        if let Some(expected) = schema.get("type")
+            && !matches_type(expected, instance)
+        {
+            errors.push(format!(
+                "{instance_path}: expected type {}, found {}",
+                describe_type_constraint(expected),
+                type_name(instance)
+            ));
+            return;
         }
 
-        if let Some(expected) = schema.get("const") {
-            if expected != instance {
-                errors.push(format!(
-                    "{instance_path}: value does not match schema `const`"
-                ));
-            }
+        if let Some(expected) = schema.get("const")
+            && expected != instance
+        {
+            errors.push(format!(
+                "{instance_path}: value does not match schema `const`"
+            ));
         }
 
-        if let Some(JsonValue::Array(expected)) = schema.get("enum") {
-            if !expected.iter().any(|candidate| candidate == instance) {
-                errors.push(format!(
-                    "{instance_path}: value is not one of the closed enum variants"
-                ));
-            }
+        if let Some(JsonValue::Array(expected)) = schema.get("enum")
+            && !expected.iter().any(|candidate| candidate == instance)
+        {
+            errors.push(format!(
+                "{instance_path}: value is not one of the closed enum variants"
+            ));
         }
 
         match instance {
@@ -434,21 +434,21 @@ impl SchemaSet {
         ref_stack: &mut Vec<String>,
         errors: &mut Vec<String>,
     ) {
-        if let Some(minimum) = integer_property(schema, "minItems") {
-            if array.len() < minimum {
-                errors.push(format!(
-                    "{instance_path}: array length {} is below minItems {minimum}",
-                    array.len()
-                ));
-            }
+        if let Some(minimum) = integer_property(schema, "minItems")
+            && array.len() < minimum
+        {
+            errors.push(format!(
+                "{instance_path}: array length {} is below minItems {minimum}",
+                array.len()
+            ));
         }
-        if let Some(maximum) = integer_property(schema, "maxItems") {
-            if array.len() > maximum {
-                errors.push(format!(
-                    "{instance_path}: array length {} exceeds maxItems {maximum}",
-                    array.len()
-                ));
-            }
+        if let Some(maximum) = integer_property(schema, "maxItems")
+            && array.len() > maximum
+        {
+            errors.push(format!(
+                "{instance_path}: array length {} exceeds maxItems {maximum}",
+                array.len()
+            ));
         }
         if schema.get("uniqueItems") == Some(&JsonValue::Bool(true)) {
             let mut seen = BTreeSet::new();
@@ -496,12 +496,12 @@ impl SchemaSet {
                     "{instance_path}: contains matched {matching} items, below minContains {minimum}"
                 ));
             }
-            if let Some(maximum) = integer_property(schema, "maxContains") {
-                if matching > maximum {
-                    errors.push(format!(
+            if let Some(maximum) = integer_property(schema, "maxContains")
+                && matching > maximum
+            {
+                errors.push(format!(
                         "{instance_path}: contains matched {matching} items, above maxContains {maximum}"
                     ));
-                }
             }
         }
         if let Some(item_schema) = schema.get("items") {
@@ -526,19 +526,19 @@ impl SchemaSet {
         errors: &mut Vec<String>,
     ) {
         let character_count = value.chars().count();
-        if let Some(minimum) = integer_property(schema, "minLength") {
-            if character_count < minimum {
-                errors.push(format!(
-                    "{instance_path}: string length {character_count} is below minLength {minimum}"
-                ));
-            }
+        if let Some(minimum) = integer_property(schema, "minLength")
+            && character_count < minimum
+        {
+            errors.push(format!(
+                "{instance_path}: string length {character_count} is below minLength {minimum}"
+            ));
         }
-        if let Some(maximum) = integer_property(schema, "maxLength") {
-            if character_count > maximum {
-                errors.push(format!(
-                    "{instance_path}: string length {character_count} exceeds maxLength {maximum}"
-                ));
-            }
+        if let Some(maximum) = integer_property(schema, "maxLength")
+            && character_count > maximum
+        {
+            errors.push(format!(
+                "{instance_path}: string length {character_count} exceeds maxLength {maximum}"
+            ));
         }
         if let Some(pattern) = string_property(schema, "pattern") {
             match Regex::new(pattern) {
@@ -566,17 +566,17 @@ impl SchemaSet {
         instance_path: &str,
         errors: &mut Vec<String>,
     ) {
-        if let Some(minimum) = number_property(schema, "minimum") {
-            if number_as_f64(value).is_some_and(|value| value < minimum) {
-                errors.push(format!(
-                    "{instance_path}: number is below minimum {minimum}"
-                ));
-            }
+        if let Some(minimum) = number_property(schema, "minimum")
+            && number_as_f64(value).is_some_and(|value| value < minimum)
+        {
+            errors.push(format!(
+                "{instance_path}: number is below minimum {minimum}"
+            ));
         }
-        if let Some(maximum) = number_property(schema, "maximum") {
-            if number_as_f64(value).is_some_and(|value| value > maximum) {
-                errors.push(format!("{instance_path}: number exceeds maximum {maximum}"));
-            }
+        if let Some(maximum) = number_property(schema, "maximum")
+            && number_as_f64(value).is_some_and(|value| value > maximum)
+        {
+            errors.push(format!("{instance_path}: number exceeds maximum {maximum}"));
         }
     }
 
@@ -1511,7 +1511,7 @@ mod tests {
 
     #[test]
     fn validator_enforces_closed_objects_and_external_refs() {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-schema-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)
@@ -1563,7 +1563,7 @@ mod tests {
                 crate::json::JsonValue::String("date".to_owned()),
             ),
         ]));
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-date-schema-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)

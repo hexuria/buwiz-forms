@@ -1202,7 +1202,7 @@ impl Form2550QDraft {
         quarter: u8,
     ) -> Result<(), Form2550QLegacyDraftMigrationError> {
         self.migration_review_items.clear();
-        self.filing_basis = if legacy_bool(&legacy, "fiscal_no1").unwrap_or(false) {
+        self.filing_basis = if legacy_bool(legacy, "fiscal_no1").unwrap_or(false) {
             Form2550QFilingBasis::Fiscal
         } else {
             Form2550QFilingBasis::Calendar
@@ -1210,11 +1210,11 @@ impl Form2550QDraft {
         self.year_end_month = 12;
         self.quarter = Form2550QQuarter::from_number(quarter);
         let default_period = default_calendar_period(self.taxable_year, self.quarter);
-        self.return_period_from = legacy_return_date(&legacy, "rtn_period_from_no4")
+        self.return_period_from = legacy_return_date(legacy, "rtn_period_from_no4")
             .or_else(|| default_period.map(|(from, _)| from));
-        self.return_period_to = legacy_return_date(&legacy, "rtn_period_to_no4")
+        self.return_period_to = legacy_return_date(legacy, "rtn_period_to_no4")
             .or_else(|| default_period.map(|(_, to)| to));
-        self.is_short_period_return = legacy_bool(&legacy, "opt_short_prd1").unwrap_or(false);
+        self.is_short_period_return = legacy_bool(legacy, "opt_short_prd1").unwrap_or(false);
         self.taxpayer_classification = [
             (
                 "tax_payer_classification1",
@@ -1235,75 +1235,75 @@ impl Form2550QDraft {
         ]
         .into_iter()
         .find_map(|(key, classification)| {
-            legacy_bool(&legacy, key)
+            legacy_bool(legacy, key)
                 .unwrap_or(false)
                 .then_some(classification)
         });
         self.is_availing_tax_relief =
-            legacy_bool(&legacy, "international_treaty_yn").unwrap_or(false);
-        self.tax_relief_details = legacy_text(&legacy, "specify_international_treaty");
+            legacy_bool(legacy, "international_treaty_yn").unwrap_or(false);
+        self.tax_relief_details = legacy_text(legacy, "specify_international_treaty");
 
         self.part_ii = Form2550QPartII {
-            item_18_paid_on_previous_return: legacy_money(&legacy, "vat_paid_return"),
-            item_19_description: legacy_text(&legacy, "add_specify_no19"),
-            item_19_other_credit_or_payment: legacy_money(&legacy, "other_credits_no19"),
-            item_22_surcharge: legacy_money(&legacy, "surcharge"),
-            item_23_interest: legacy_money(&legacy, "interest"),
-            item_24_compromise: legacy_money(&legacy, "compromise"),
+            item_18_paid_on_previous_return: legacy_money(legacy, "vat_paid_return"),
+            item_19_description: legacy_text(legacy, "add_specify_no19"),
+            item_19_other_credit_or_payment: legacy_money(legacy, "other_credits_no19"),
+            item_22_surcharge: legacy_money(legacy, "surcharge"),
+            item_23_interest: legacy_money(legacy, "interest"),
+            item_24_compromise: legacy_money(legacy, "compromise"),
             ..Form2550QPartII::default()
         };
         self.part_iv = Form2550QPartIV {
-            item_31a_vatable_sales: legacy_money(&legacy, "vatable_sales"),
-            item_32a_zero_rated_sales: legacy_money(&legacy, "zero_rated_sales"),
-            item_33a_exempt_sales: legacy_money(&legacy, "exempt_sales"),
-            item_35b_less_output_vat_uncollected: legacy_money(&legacy, "less_output_vat"),
-            item_36b_add_output_vat_recovered: legacy_money(&legacy, "add_output_vat"),
-            item_38b_input_tax_carried: legacy_money(&legacy, "input_tax_carried"),
-            item_40b_transitional_input_tax: legacy_money(&legacy, "transitional_input_tax"),
-            item_41b_presumptive_input_tax: legacy_money(&legacy, "presumptive_input_tax"),
-            item_42_description: legacy_text(&legacy, "add_specify_no42"),
-            item_42b_other_input_tax: legacy_money(&legacy, "other_specify42"),
-            item_44a_domestic_purchases: legacy_money(&legacy, "domestic_purchase"),
-            item_44b_domestic_input_tax: legacy_money(&legacy, "domestic_input_tax"),
-            item_45a_nonresident_services: legacy_money(&legacy, "services_purchase"),
-            item_45b_nonresident_service_input_tax: legacy_money(&legacy, "service_input_tax"),
-            item_46a_importations: legacy_money(&legacy, "import_purchase"),
-            item_46b_import_input_tax: legacy_money(&legacy, "import_input_tax"),
-            item_47_description: legacy_text(&legacy, "add_specify_no47"),
-            item_47a_other_purchases: legacy_money(&legacy, "other_specify47"),
-            item_47b_other_input_tax: legacy_money(&legacy, "other_specify47b"),
+            item_31a_vatable_sales: legacy_money(legacy, "vatable_sales"),
+            item_32a_zero_rated_sales: legacy_money(legacy, "zero_rated_sales"),
+            item_33a_exempt_sales: legacy_money(legacy, "exempt_sales"),
+            item_35b_less_output_vat_uncollected: legacy_money(legacy, "less_output_vat"),
+            item_36b_add_output_vat_recovered: legacy_money(legacy, "add_output_vat"),
+            item_38b_input_tax_carried: legacy_money(legacy, "input_tax_carried"),
+            item_40b_transitional_input_tax: legacy_money(legacy, "transitional_input_tax"),
+            item_41b_presumptive_input_tax: legacy_money(legacy, "presumptive_input_tax"),
+            item_42_description: legacy_text(legacy, "add_specify_no42"),
+            item_42b_other_input_tax: legacy_money(legacy, "other_specify42"),
+            item_44a_domestic_purchases: legacy_money(legacy, "domestic_purchase"),
+            item_44b_domestic_input_tax: legacy_money(legacy, "domestic_input_tax"),
+            item_45a_nonresident_services: legacy_money(legacy, "services_purchase"),
+            item_45b_nonresident_service_input_tax: legacy_money(legacy, "service_input_tax"),
+            item_46a_importations: legacy_money(legacy, "import_purchase"),
+            item_46b_import_input_tax: legacy_money(legacy, "import_input_tax"),
+            item_47_description: legacy_text(legacy, "add_specify_no47"),
+            item_47a_other_purchases: legacy_money(legacy, "other_specify47"),
+            item_47b_other_input_tax: legacy_money(legacy, "other_specify47b"),
             item_48a_domestic_purchases_no_input_tax: legacy_money(
-                &legacy,
+                legacy,
                 "domestic_purchase_no_tax",
             ),
-            item_49a_vat_exempt_importations: legacy_money(&legacy, "vat_exempt_imports"),
-            item_54b_vat_refund_or_tcc_claimed: legacy_money(&legacy, "vat_refund"),
-            item_55b_input_vat_on_unpaid_payables: legacy_money(&legacy, "input_vat_unpaid"),
-            item_56_description: legacy_text(&legacy, "add_specify_no56"),
-            item_56b_other_deduction: legacy_money(&legacy, "other_specify56"),
-            item_58b_input_vat_on_settled_payables: legacy_money(&legacy, "add_input_vat"),
+            item_49a_vat_exempt_importations: legacy_money(legacy, "vat_exempt_imports"),
+            item_54b_vat_refund_or_tcc_claimed: legacy_money(legacy, "vat_refund"),
+            item_55b_input_vat_on_unpaid_payables: legacy_money(legacy, "input_vat_unpaid"),
+            item_56_description: legacy_text(legacy, "add_specify_no56"),
+            item_56b_other_deduction: legacy_money(legacy, "other_specify56"),
+            item_58b_input_vat_on_settled_payables: legacy_money(legacy, "add_input_vat"),
             ..Form2550QPartIV::default()
         };
         self.schedule_1 = [10, 11]
             .into_iter()
-            .map(|suffix| legacy_capital_good_row(&legacy, suffix))
+            .map(|suffix| legacy_capital_good_row(legacy, suffix))
             .collect();
         self.schedule_2 = Form2550QSchedule2 {
             input_tax_directly_attributable_to_exempt_sales: legacy_money(
-                &legacy,
+                legacy,
                 "sched2input_tax_direct",
             ),
-            vat_exempt_sales: legacy_money(&legacy, "sched2vat_exempt_sale"),
-            input_tax_not_directly_attributable: legacy_money(&legacy, "sched2amount_input_tax"),
+            vat_exempt_sales: legacy_money(legacy, "sched2vat_exempt_sale"),
+            input_tax_not_directly_attributable: legacy_money(legacy, "sched2amount_input_tax"),
             ..Form2550QSchedule2::default()
         };
         self.schedule_3 = [30, 31]
             .into_iter()
-            .map(|suffix| legacy_creditable_vat_row(&legacy, suffix))
+            .map(|suffix| legacy_creditable_vat_row(legacy, suffix))
             .collect();
         self.schedule_4 = [40, 41]
             .into_iter()
-            .map(|suffix| legacy_advance_vat_row(&legacy, suffix))
+            .map(|suffix| legacy_advance_vat_row(legacy, suffix))
             .collect();
 
         self.ensure_repeating_row_ids()?;
@@ -1375,7 +1375,7 @@ impl Form2550QDraft {
             ),
         ];
         for (legacy_key, recomputed) in comparisons {
-            if let (Some(old), Some(new)) = (legacy_money(&legacy, legacy_key), recomputed)
+            if let (Some(old), Some(new)) = (legacy_money(legacy, legacy_key), recomputed)
                 && (old - new).abs() > 0.005
             {
                 self.migration_review_items.push(format!(

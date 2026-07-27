@@ -16,6 +16,7 @@ pub struct GeneratedRuleSetMetadata {
 
 pub static REVIEWED_RULE_SET_METADATA: &[GeneratedRuleSetMetadata] = &[];
 
+#[allow(clippy::redundant_closure)]
 static REVIEWED_RULE_SET_ENTRIES: LazyLock<Vec<RuleSetRegistryEntry>> = LazyLock::new(|| vec![]);
 
 pub fn reviewed_rule_set_entries() -> &'static [RuleSetRegistryEntry] {

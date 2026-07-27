@@ -11,6 +11,18 @@
 //! use bir_rules_codegen::build_generated_files;
 //! ```
 //!
+//! This is an offline audit and codegen tool, not shipped code. Its entrypoints
+//! thread many explicit pinned inputs (repo root, source/schema/output dirs,
+//! rule-set id, digests) rather than hiding them in shared mutable state, and
+//! its errors carry full provenance payloads. The shape lints below object to
+//! that deliberately explicit surface.
+#![allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    clippy::large_enum_variant,
+    clippy::result_large_err
+)]
+//!
 //! Audited snapshot internals are not a public construction or mutation API.
 //!
 //! ```compile_fail
@@ -19,6 +31,31 @@
 
 #![forbid(unsafe_code)]
 #![recursion_limit = "256"]
+
+/// Canonicalized process temp directory for tests.
+///
+/// On macOS `std::env::temp_dir()` returns a path under `/var`, which is itself
+/// a symlink to `/private/var`. The vault and evidence writers deliberately
+/// refuse any path that traverses a symlink, so tests that build scratch roots
+/// from the raw temp dir trip that guard on macOS while passing on Linux and
+/// Windows. Canonicalize once, here, so the guard sees a real path.
+#[cfg(test)]
+pub(crate) fn test_temp_dir() -> std::path::PathBuf {
+    std::fs::canonicalize(std::env::temp_dir()).expect("canonicalize process temp dir")
+}
+
+/// Scratch directory *inside* the repository, under the gitignored `target/`.
+///
+/// The tracked-tree readers refuse any path outside the repository root, so a
+/// test that exercises them cannot stage its fixture in the process temp dir.
+#[cfg(test)]
+pub(crate) fn test_repo_scratch_dir(name: &str) -> std::path::PathBuf {
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crates/<crate> is two levels below the repository root");
+    repo_root.join("target").join("test-scratch").join(name)
+}
 
 mod audit;
 mod bindings;

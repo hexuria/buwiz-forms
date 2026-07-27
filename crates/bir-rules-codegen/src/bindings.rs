@@ -796,7 +796,7 @@ fn prefix_bindings(families: &JsonValue) -> Result<Vec<PrefixBinding>> {
         )));
     }
 
-    bindings.sort_by(|left, right| right.prefix.len().cmp(&left.prefix.len()));
+    bindings.sort_by_key(|binding| std::cmp::Reverse(binding.prefix.len()));
     Ok(bindings)
 }
 

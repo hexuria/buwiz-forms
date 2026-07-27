@@ -613,7 +613,7 @@ mod tests {
 
     impl TestRoot {
         fn new(label: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::test_temp_dir().join(format!(
                 "bir-capture-metadata-{label}-{}-{}",
                 std::process::id(),
                 TEST_COUNTER.fetch_add(1, Ordering::Relaxed)

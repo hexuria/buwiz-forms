@@ -450,6 +450,9 @@ impl Database {
     ) -> Result<FormRuleState, FormRuleStateError> {
         let review_details = parse_json("legacy identity repair details", review_details_json)?;
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
+        // The tuple mirrors the selected column list one-for-one; naming it
+        // would hide which column each slot corresponds to.
+        #[allow(clippy::type_complexity)]
         let row: Option<(
             Option<String>,
             i64,

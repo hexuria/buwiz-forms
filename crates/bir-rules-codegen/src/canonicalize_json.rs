@@ -480,7 +480,7 @@ fn contains_dot_component(path: &Path) -> bool {
         || path
             .as_os_str()
             .to_string_lossy()
-            .split(|character| character == '/' || character == '\\')
+            .split(['/', '\\'])
             .any(|component| component == "." || component == "..")
 }
 
@@ -615,7 +615,7 @@ mod tests {
 
     impl TestRoot {
         fn new(label: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
+            let path = crate::test_temp_dir().join(format!(
                 "bir-rules-canonical-json-{label}-{}-{}",
                 std::process::id(),
                 TEST_COUNTER.fetch_add(1, Ordering::Relaxed)

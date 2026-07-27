@@ -158,6 +158,10 @@ impl ProjectStaticSurfaceOptions {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[allow(
+    dead_code,
+    reason = "external-workspace scope is the projector staging seam"
+)]
 enum ProjectionReadScope {
     TrackedCheckout,
     ExternalWorkspace,
@@ -995,7 +999,7 @@ mod tests {
     /// The projector rewrites what it reads, so no test may ever point it at the
     /// tracked corpus.
     fn materialize_scratch_corpus(repo_root: &Path) -> PathBuf {
-        let scratch = std::env::temp_dir().join(format!(
+        let scratch = crate::test_temp_dir().join(format!(
             "bir-rules-codegen-projections-scratch-{}-{}",
             std::process::id(),
             SCRATCH_COUNTER.fetch_add(1, Ordering::Relaxed)
