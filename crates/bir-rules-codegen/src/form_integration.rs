@@ -3221,21 +3221,12 @@ mod tests {
         fs::create_dir_all(&staging).expect("create identity test staging root");
         let mut workspace = ProposalWorkspace::create(&staging).expect("create proposal");
         let container = workspace.container.clone();
-        // Keep every rename inside the container's own parent. `create` places
-        // the container in the process temp root, and the two renames that
-        // succeed here both move *out* of that root while the restore moves
-        // back *into* it - the one asymmetry left after retrying and after
-        // freeing the destination name both failed to help on Windows. Renaming
-        // among siblings removes it, and also makes any remaining failure show
-        // up on the first rename rather than only on the restore.
-        let scratch_parent = container
-            .parent()
-            .expect("proposal container has a parent")
-            .to_path_buf();
-        let displaced = scratch_parent.join(format!(
-            "bir-form-integration-displaced-{}-{sequence}",
-            std::process::id()
-        ));
+        // Displace *out of* the process temp root, into this test's own scratch
+        // root. Creating an entry in the temp root itself is not reliable while
+        // the suite runs in parallel: sibling tests hold retained
+        // `ApprovedExternalRoot` ancestor handles on that directory, and Windows
+        // then refuses the entry with OS error 32.
+        let displaced = root.join("displaced-proposal");
         fs::rename(&container, &displaced).expect("displace owned proposal");
         fs::create_dir(&container).expect("create attacker replacement");
         fs::write(container.join(PROPOSAL_OWNER_FILE), &workspace.owner_marker)
@@ -3249,20 +3240,17 @@ mod tests {
         assert!(error.to_string().contains("replaced"));
         assert_eq!(fs::read(&sentinel).expect("read sentinel"), b"must survive");
 
-        // Do not delete `container` and then reuse the name. On Windows a
-        // deleted directory's name stays reserved until every handle to it is
-        // closed, so renaming onto it fails with a sharing violation (OS error
-        // 32) - and it does not clear on its own, so retrying does not help.
-        // Renaming the replacement away frees the name immediately, on every
-        // platform, with no timing assumption.
-        let parked = scratch_parent.join(format!(
-            "bir-form-integration-parked-{}-{sequence}",
-            std::process::id()
-        ));
-        fs::rename(&container, &parked).expect("park attacker replacement");
-        fs::rename(&displaced, &container).expect("restore owned proposal path");
-        fs::remove_dir_all(&parked).expect("remove parked attacker replacement");
-        workspace.cleanup().expect("clean restored owned proposal");
+        // Teardown deliberately does not restore the container. Putting it back
+        // means recreating an entry in the process temp root, which is exactly
+        // the operation Windows refuses here under parallel tests - it is a
+        // fixture limitation, not behaviour worth asserting. The
+        // "cleanup succeeds on a legitimately owned container" case is already
+        // covered by `proposal_cleanup_rejects_a_tampered_owner_marker`, which
+        // needs no rename at all. Dropping `workspace` re-runs cleanup against
+        // the now-absent container, which is a no-op.
+        fs::remove_dir_all(&container).expect("remove test replacement");
+        fs::remove_dir_all(&displaced).expect("remove displaced owned proposal");
+        drop(workspace);
         fs::remove_dir_all(root).expect("remove identity test root");
     }
 
