@@ -3221,7 +3221,21 @@ mod tests {
         fs::create_dir_all(&staging).expect("create identity test staging root");
         let mut workspace = ProposalWorkspace::create(&staging).expect("create proposal");
         let container = workspace.container.clone();
-        let displaced = root.join("displaced-proposal");
+        // Keep every rename inside the container's own parent. `create` places
+        // the container in the process temp root, and the two renames that
+        // succeed here both move *out* of that root while the restore moves
+        // back *into* it - the one asymmetry left after retrying and after
+        // freeing the destination name both failed to help on Windows. Renaming
+        // among siblings removes it, and also makes any remaining failure show
+        // up on the first rename rather than only on the restore.
+        let scratch_parent = container
+            .parent()
+            .expect("proposal container has a parent")
+            .to_path_buf();
+        let displaced = scratch_parent.join(format!(
+            "bir-form-integration-displaced-{}-{sequence}",
+            std::process::id()
+        ));
         fs::rename(&container, &displaced).expect("displace owned proposal");
         fs::create_dir(&container).expect("create attacker replacement");
         fs::write(container.join(PROPOSAL_OWNER_FILE), &workspace.owner_marker)
@@ -3241,7 +3255,10 @@ mod tests {
         // 32) - and it does not clear on its own, so retrying does not help.
         // Renaming the replacement away frees the name immediately, on every
         // platform, with no timing assumption.
-        let parked = root.join("parked-replacement");
+        let parked = scratch_parent.join(format!(
+            "bir-form-integration-parked-{}-{sequence}",
+            std::process::id()
+        ));
         fs::rename(&container, &parked).expect("park attacker replacement");
         fs::rename(&displaced, &container).expect("restore owned proposal path");
         fs::remove_dir_all(&parked).expect("remove parked attacker replacement");
