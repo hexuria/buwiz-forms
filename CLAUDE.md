@@ -1,6 +1,6 @@
-# CLAUDE.md — bir-print-parity (HTML-only eBIRForms migration)
+# CLAUDE.md — bir (HTML-only eBIRForms migration)
 
-Authoritative checkout: `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity` on branch `codex/print-preview-parity`. Do not work in the sibling `bir/` checkout. Prefix shell commands with the `rtk` wrapper (`rtk git status`, `rtk cargo test --locked -p bir-print`, `rtk npm run test:forms`).
+Authoritative checkout: `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir` on branch `main`. This is the only worktree and the only branch. The former `bir-print-parity` worktree and the 49 auxiliary branches were removed on 2026-07-28; every branch was first pushed to `codeitlikemiley/ebirforms` at its exact commit and tagged `rescue/<branch>`, and that remote was then detached from this clone (re-add it to restore anything). `public` -> `hexuria/buwiz-forms` is the working remote and the only CI that runs. Prefix shell commands with the `rtk` wrapper (`rtk git status`, `rtk cargo test --locked -p bir-print`, `rtk npm run test:forms`).
 
 ## The visual criterion (read before touching any form renderer)
 
@@ -103,7 +103,10 @@ are superseded by the per-form contract-derived lists.
 ## Do not
 
 - Reintroduce Typst, `formtypes/`, legacy viewers, full-page runtime backgrounds, or a packaged Node runtime (`npm run audit:no-legacy` enforces this).
-- Run broad `git clean`, `git reset`, or worktree pruning — many auxiliary worktrees exist and may hold unique commits.
+- Run broad `git clean`, `git reset`, or `git checkout --` sweeps. Only one
+  worktree and one branch remain, so the old "auxiliary worktrees may hold
+  unique commits" hazard is gone, but untracked evidence and scratch trees in
+  this checkout are still not disposable — inspect before removing anything.
 - Delete or commit `tmp/` or `test-results/` contents without inspecting them first.
 - Touch the live encrypted database at `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db` — schema repairs run in-app at startup.
 - Mutate confirmed COR facts directly; the replacement-version + review flow is the designed audit trail.

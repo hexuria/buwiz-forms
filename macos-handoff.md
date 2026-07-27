@@ -16,20 +16,21 @@ The immediate engineering work no longer requires Windows. Continue on macOS
 from:
 
 ```text
-/Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity
+/Volumes/goldcoders/reverse-engineer-ebir-forms/bir
 ```
 
 on branch:
 
 ```text
-codex/print-preview-parity
+main
 ```
 
-Do **not** work in the sibling checkout:
-
-```text
-/Volumes/goldcoders/reverse-engineer-ebir-forms/bir
-```
+**Superseded 2026-07-28.** This section previously pointed at a
+`bir-print-parity` worktree on `codex/print-preview-parity` and told you not to
+work in `bir`. That worktree no longer exists: its branch was fast-forwarded
+into `main`, the worktree was removed, and `bir` - which has always held the
+object database - is now the single checkout on the single branch. There is no
+sibling checkout to avoid any more.
 
 Not every future Windows observation is finished. Windows will be needed again
 for targeted official-application evidence that cannot be derived from the
@@ -47,30 +48,30 @@ At handoff:
 - the documentation checkpoint is the commit containing this file;
 - pre-publication upstream checkpoint:
   `de828fd05ce27afa5c71ffd88c7a8bb2b3f9a8a5`;
-- the checkpoint series is published through the draft PR created by this
-  handoff; verify the branch and PR state rather than inferring it from the
-  pre-publication baseline;
+- the checkpoint series has since been merged into `main` and published to
+  `hexuria/buwiz-forms`, where CI is green on all ten jobs across macOS, Linux
+  and Windows; the draft PR referenced here was on the now-detached
+  `codeitlikemiley/ebirforms` remote and is no longer the place to check state;
 - the working tree retains unrelated user-owned mode changes after the
   checkpoint series;
 - the explicit publication authority covers this checkpoint series only, not
   future unrelated commits or pushes; and
-- no worktree cleanup is authorized during the library objective.
+- worktree cleanup was explicitly authorized and carried out on 2026-07-28,
+  ahead of the point the Worktree policy section below schedules it.
 
 Confirm the checkout before doing anything:
 
 ```sh
-cd /Volumes/goldcoders/reverse-engineer-ebir-forms/bir-print-parity
+cd /Volumes/goldcoders/reverse-engineer-ebir-forms/bir
 rtk git rev-parse --show-toplevel
 rtk git branch --show-current
 rtk git rev-parse HEAD
 rtk git status --short --branch
 ```
 
-Expected top level and branch are the path and branch above. If Git cannot
-resolve the linked-worktree metadata after the operating-system switch, inspect
-the checkout's `.git` pointer and the main checkout's
-`.git/worktrees/bir-print-parity` metadata. Do not rewrite, prune, or recreate
-the worktree as a shortcut.
+Expected top level and branch are the path and branch above. `bir/.git` is now a
+real repository directory rather than a worktree pointer, so there is no
+linked-worktree metadata left to repair.
 
 ## Honest progress against the library-first plan
 
@@ -565,17 +566,23 @@ and provenance have been inspected.
 
 ## Worktree policy
 
-No new worktrees are created before the complete 43-form candidate-library
-baseline. No worktree cleanup occurs during this objective.
+**Amended 2026-07-28.** Cleanup was authorized early and has been done. The
+original rule - no cleanup during the objective - is superseded by that
+decision, not by drift.
 
-After the complete library baseline is accepted, cleanup is a separate macOS
-maintenance operation. It must preserve the main checkout and this checkout,
-inventory every other registration and unique commit, create rescue refs or
-stashes where needed, and never delete auxiliary branches merely because a
-worktree is removed.
+What was carried out, following this section's own safety requirements: all 41
+worktree directories removed except `bir`; every branch pushed to
+`codeitlikemiley/ebirforms` at its exact commit and verified SHA-for-SHA before
+any deletion; a `rescue/<branch>` tag created for all 32 branches carrying
+commits not reachable from `main`; the inventory recorded in
+`docs/validation-rules/worktree-cleanup-inventory-20260728.md`. No branch was
+deleted for lack of a worktree - branches were deleted only after their backup
+was verified.
 
-Future app-integration worktrees must branch from the eventual immutable
-validation-library baseline, not from the older main checkout.
+Going forward: still no new worktrees before the complete 43-form
+candidate-library baseline. Work happens directly in `bir` on `main`. Any future
+app-integration worktree must branch from the eventual immutable
+validation-library baseline.
 
 ## Completion definition
 
