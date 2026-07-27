@@ -35,8 +35,12 @@ pub fn enforce_single_instance() {
                 if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
                     std::process::exit(0);
                 }
-                // Intentionally forget the handle — leak it for process lifetime.
-                std::mem::forget(_handle);
+                // Deliberately keep the handle open for the process lifetime.
+                // In windows 0.62 `HANDLE` is a plain `Copy` wrapper with no
+                // `Drop`, so nothing closes it and there is nothing to leak -
+                // `mem::forget` here was a no-op. Windows releases it at exit,
+                // which is exactly the single-instance guard we want.
+                let _ = _handle;
             }
         }
     }
