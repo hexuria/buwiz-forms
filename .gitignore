@@ -72,6 +72,22 @@ error.log
 clippy_errors.txt
 test_errors.txt
 
+# Local interpreter and frontend build output
+**/__pycache__/
+*.py[cod]
+/.ruff_cache/
+/apps/form-calibration/dist/
+
+# Machine-local Codex settings
+/.claude/settings.local.json
+
+# Validation codegen transaction leftovers
+/crates/bir-rules/src/generated.bir-rules-codegen-backup-*/
+/crates/bir-rules/src/generated.bir-rules-codegen-staging-*/
+
+# Stray local command-output artifact
+/470
+
 # Reverse-engineering workspace artifacts
 strings_bir.txt
 symbols.txt
