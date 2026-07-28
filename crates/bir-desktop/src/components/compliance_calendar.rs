@@ -5,6 +5,7 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::popover::Popover;
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use super::multi_select::{MultiSelect, MultiSelectEvent, MultiSelectOption, MultiSelectState};
 
@@ -112,26 +113,20 @@ impl ComplianceCalendar {
 
     fn render_list_view(&self, _window: &Window, cx: &Context<Self>) -> gpui::Div {
         let deadlines = self.filtered_deadlines();
-        let mut schedule_list = div().flex().flex_col().gap_3();
+        let mut schedule_list = rsx! { <div flex flex_col gap_3 /> };
 
         if deadlines.is_empty() {
-            schedule_list = schedule_list.child(
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .py_8()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("No upcoming deadlines for selected filters."),
-                    ),
-            );
+            schedule_list = schedule_list.child(rsx! {
+                <div w_full flex flex_col items_center justify_center py_8 gap_2>
+                    <div
+                        text_sm
+                        font_weight={FontWeight::MEDIUM}
+                        text_color={cx.theme().muted_foreground}
+                    >
+                        {"No upcoming deadlines for selected filters."}
+                    </div>
+                </div>
+            });
         } else {
             for d in deadlines {
                 let has_update = self
@@ -147,157 +142,155 @@ impl ComplianceCalendar {
                     .map(|date| date.format("%d").to_string())
                     .unwrap_or_else(|| "--".to_string());
 
-                let date_card = div()
-                    .group("list-item")
-                    .flex()
-                    .items_center()
-                    .gap_4()
-                    .p_3()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_lg()
-                    .cursor_pointer()
-                    .hover(|s| {
-                        s.bg(cx.theme().secondary)
-                            .border_color(cx.theme().primary.opacity(0.5))
-                    })
-                    .child(
-                        div()
-                            .w(px(64.))
-                            .h(px(64.))
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .justify_center()
-                            .bg(cx.theme().primary.opacity(0.08))
-                            .border_1()
-                            .border_color(cx.theme().primary.opacity(0.1))
-                            .rounded_md()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().primary)
-                                    .child(date_label),
-                            ) // month
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BLACK)
-                                    .text_color(cx.theme().primary)
-                                    .child(day_label),
-                            ), // day
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(d.display_form_no.clone()),
-                                    )
-                                    .children(if has_update {
-                                        Some(
-                                            div()
-                                                .px_2()
-                                                .py_0p5()
-                                                .bg(cx.theme().warning.opacity(0.1))
-                                                .border_1()
-                                                .border_color(cx.theme().warning.opacity(0.2))
-                                                .rounded_full()
-                                                .flex()
-                                                .items_center()
-                                                .gap_1()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(cx.theme().warning)
-                                                        .child("Updated"),
-                                                ),
-                                        )
-                                    } else {
-                                        None
+                let date_card = rsx! {
+                    <div
+                        group={"list-item"}
+                        flex
+                        items_center
+                        gap_4
+                        p_3
+                        bg={cx.theme().background}
+                        border_1
+                        border_color={cx.theme().border}
+                        rounded_lg
+                        cursor_pointer
+                        hover={|s| {
+                            s.bg(cx.theme().secondary)
+                                .border_color(cx.theme().primary.opacity(0.5))
+                        }}
+                    >
+                        <div
+                            w={px(64.)}
+                            h={px(64.)}
+                            flex
+                            flex_col
+                            items_center
+                            justify_center
+                            bg={cx.theme().primary.opacity(0.08)}
+                            border_1
+                            border_color={cx.theme().primary.opacity(0.1)}
+                            rounded_md
+                        >
+                            <div
+                                text_xs
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().primary}
+                            >
+                                {date_label}
+                            </div> // month
+                            <div
+                                text_xl
+                                font_weight={FontWeight::BLACK}
+                                text_color={cx.theme().primary}
+                            >
+                                {day_label}
+                            </div> // day
+                        </div>
+                        <div flex_1 flex flex_col gap_1>
+                            <div flex items_center gap_2>
+                                <div
+                                    text_base
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().foreground}
+                                >
+                                    {d.display_form_no.clone()}
+                                </div>
+                                {...if has_update {
+                                    Some(rsx! {
+                                        <div
+                                            px_2
+                                            py_0p5
+                                            bg={cx.theme().warning.opacity(0.1)}
+                                            border_1
+                                            border_color={cx.theme().warning.opacity(0.2)}
+                                            rounded_full
+                                            flex
+                                            items_center
+                                            gap_1
+                                        >
+                                            <div
+                                                text_xs
+                                                font_weight={FontWeight::SEMIBOLD}
+                                                text_color={cx.theme().warning}
+                                            >
+                                                {"Updated"}
+                                            </div>
+                                        </div>
                                     })
-                                    .children(if d.status != DeadlineStatus::Normal {
-                                        Some(
-                                            div()
-                                                .px_2()
-                                                .py_0p5()
-                                                .bg(cx.theme().primary.opacity(0.1))
-                                                .border_1()
-                                                .border_color(cx.theme().primary.opacity(0.2))
-                                                .rounded_full()
-                                                .flex()
-                                                .items_center()
-                                                .gap_1()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(cx.theme().primary)
-                                                        .child(d.status.label()),
-                                                ),
-                                        )
-                                    } else {
-                                        None
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(d.form_name.clone()),
-                            )
-                            .children(match &d.deadline {
+                                } else {
+                                    None
+                                }}
+                                {...if d.status != DeadlineStatus::Normal {
+                                    Some(rsx! {
+                                        <div
+                                            px_2
+                                            py_0p5
+                                            bg={cx.theme().primary.opacity(0.1)}
+                                            border_1
+                                            border_color={cx.theme().primary.opacity(0.2)}
+                                            rounded_full
+                                            flex
+                                            items_center
+                                            gap_1
+                                        >
+                                            <div
+                                                text_xs
+                                                font_weight={FontWeight::SEMIBOLD}
+                                                text_color={cx.theme().primary}
+                                            >
+                                                {d.status.label()}
+                                            </div>
+                                        </div>
+                                    })
+                                } else {
+                                    None
+                                }}
+                            </div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {d.form_name.clone()}
+                            </div>
+                            {...match &d.deadline {
                                 DeadlineKind::Dated {
                                     original_deadline,
                                     final_deadline,
-                                } if original_deadline != final_deadline => Some(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!(
+                                } if original_deadline != final_deadline => Some(rsx! {
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!(
                                             "Originally due on: {}",
                                             original_deadline.format("%Y-%m-%d")
-                                        )),
-                                ),
+                                        )}
+                                    </div>
+                                }),
                                 DeadlineKind::EventBased {
                                     trigger,
                                     statutory_window,
-                                } => Some(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!("{trigger} · {statutory_window}")),
-                                ),
+                                } => Some(rsx! {
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!("{trigger} · {statutory_window}")}
+                                    </div>
+                                }),
                                 _ => None,
-                            }),
-                    );
+                            }}
+                        </div>
+                    </div>
+                };
                 schedule_list = schedule_list.child(date_card);
             }
         }
 
-        div()
-            .w_full()
-            .p_4()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_xl()
-            .shadow_sm()
-            .child(schedule_list)
+        rsx! {
+            <div
+                w_full
+                p_4
+                bg={cx.theme().background}
+                border_1
+                border_color={cx.theme().border}
+                rounded_xl
+                shadow_sm
+            >
+                {schedule_list}
+            </div>
+        }
     }
     fn render_grid_view(&self, _window: &Window, cx: &Context<Self>) -> gpui::Div {
         let deadlines = self.filtered_deadlines();
@@ -321,32 +314,30 @@ impl ComplianceCalendar {
 
         let today = chrono::Local::now().date_naive();
 
-        let mut rows_container = div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .border_t_1()
-            .border_l_1()
-            .border_color(cx.theme().border);
+        let mut rows_container = rsx! {
+            <div flex flex_col w_full border_t_1 border_l_1 border_color={cx.theme().border} />
+        };
 
         // Header row
         let headers = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        let mut header_row = div().flex().w_full();
+        let mut header_row = rsx! { <div flex w_full /> };
         for h in headers {
-            header_row = header_row.child(
-                div()
-                    .w(relative(1.0 / 7.0))
-                    .py_2()
-                    .bg(cx.theme().muted)
-                    .border_r_1()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .text_xs()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().muted_foreground)
-                    .text_center()
-                    .child(h),
-            );
+            header_row = header_row.child(rsx! {
+                <div
+                    w={relative(1.0 / 7.0)}
+                    py_2
+                    bg={cx.theme().muted}
+                    border_r_1
+                    border_b_1
+                    border_color={cx.theme().border}
+                    text_xs
+                    font_weight={FontWeight::BOLD}
+                    text_color={cx.theme().muted_foreground}
+                    text_center
+                >
+                    {h}
+                </div>
+            });
         }
         rows_container = rows_container.child(header_row);
 
@@ -355,18 +346,19 @@ impl ComplianceCalendar {
         let all_cells = total_used + trailing;
 
         for week_start in (0..all_cells).step_by(7) {
-            let mut week_row = div().flex().w_full();
+            let mut week_row = rsx! { <div flex w_full /> };
             for slot in week_start..week_start + 7 {
                 if slot < start_weekday || slot >= start_weekday + days_in_month as u32 {
-                    week_row = week_row.child(
-                        div()
-                            .w(relative(1.0 / 7.0))
-                            .aspect_ratio(1.0)
-                            .border_r_1()
-                            .border_b_1()
-                            .border_color(cx.theme().border)
-                            .bg(cx.theme().muted.opacity(0.3)),
-                    );
+                    week_row = week_row.child(rsx! {
+                        <div
+                            w={relative(1.0 / 7.0)}
+                            aspect_ratio={1.0}
+                            border_r_1
+                            border_b_1
+                            border_color={cx.theme().border}
+                            bg={cx.theme().muted.opacity(0.3)}
+                        />
+                    });
                 } else {
                     let day = (slot - start_weekday + 1) as i64;
                     let current_date = NaiveDate::from_ymd_opt(
@@ -385,68 +377,84 @@ impl ComplianceCalendar {
                     let is_selected = self.selected_date == Some(current_date);
 
                     let day_label = if is_selected {
-                        div()
-                            .w(px(24.))
-                            .h(px(24.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .bg(cx.theme().primary)
-                            .text_color(cx.theme().primary_foreground)
-                            .rounded_full()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .child(day.to_string())
+                        rsx! {
+                            <div
+                                w={px(24.)}
+                                h={px(24.)}
+                                flex
+                                items_center
+                                justify_center
+                                bg={cx.theme().primary}
+                                text_color={cx.theme().primary_foreground}
+                                rounded_full
+                                text_xs
+                                font_weight={FontWeight::BOLD}
+                            >
+                                {day.to_string()}
+                            </div>
+                        }
                     } else if is_today {
-                        div()
-                            .w(px(24.))
-                            .h(px(24.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .border_1()
-                            .border_color(cx.theme().primary)
-                            .text_color(cx.theme().primary)
-                            .rounded_full()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .child(day.to_string())
+                        rsx! {
+                            <div
+                                w={px(24.)}
+                                h={px(24.)}
+                                flex
+                                items_center
+                                justify_center
+                                border_1
+                                border_color={cx.theme().primary}
+                                text_color={cx.theme().primary}
+                                rounded_full
+                                text_xs
+                                font_weight={FontWeight::BOLD}
+                            >
+                                {day.to_string()}
+                            </div>
+                        }
                     } else {
-                        div()
-                            .w(px(24.))
-                            .h(px(24.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .text_color(cx.theme().foreground)
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(day.to_string())
+                        rsx! {
+                            <div
+                                w={px(24.)}
+                                h={px(24.)}
+                                flex
+                                items_center
+                                justify_center
+                                text_color={cx.theme().foreground}
+                                text_xs
+                                font_weight={FontWeight::MEDIUM}
+                            >
+                                {day.to_string()}
+                            </div>
+                        }
                     };
 
-                    let mut day_cell = div()
-                        .id(format!("day-{}-{}", self.current_month.month(), day))
-                        .w(relative(1.0 / 7.0))
-                        .aspect_ratio(1.0)
-                        .border_r_1()
-                        .border_b_1()
-                        .border_color(if is_selected {
-                            cx.theme().primary.opacity(0.5)
-                        } else {
-                            cx.theme().border
-                        })
-                        .p_1()
-                        .flex()
-                        .flex_col()
-                        .justify_between()
-                        .bg(if is_selected {
-                            cx.theme().primary.opacity(0.05)
-                        } else if is_today {
-                            cx.theme().primary.opacity(0.02)
-                        } else {
-                            cx.theme().background
-                        })
-                        .child(div().flex().w_full().justify_end().child(day_label));
+                    let mut day_cell = rsx! {
+                        <div
+                            id={format!("day-{}-{}", self.current_month.month(), day)}
+                            w={relative(1.0 / 7.0)}
+                            aspect_ratio={1.0}
+                            border_r_1
+                            border_b_1
+                            border_color={if is_selected {
+                                cx.theme().primary.opacity(0.5)
+                            } else {
+                                cx.theme().border
+                            }}
+                            p_1
+                            flex
+                            flex_col
+                            justify_between
+                            bg={if is_selected {
+                                cx.theme().primary.opacity(0.05)
+                            } else if is_today {
+                                cx.theme().primary.opacity(0.02)
+                            } else {
+                                cx.theme().background
+                            }}
+                        >
+                            <div flex w_full justify_end>{day_label}</div>
+                        </div>
+                    };
 
                     if !day_deadlines.is_empty() {
                         let mut adjusted_deadline = current_date;
@@ -465,26 +473,25 @@ impl ComplianceCalendar {
                             cx.theme().foreground // Safe
                         };
 
-                        let mut dots = div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .justify_center()
-                            .px_1()
-                            .pb_1();
+                        let mut dots = rsx! {
+                            <div flex flex_wrap gap_1 justify_center px_1 pb_1 />
+                        };
                         for _ in day_deadlines.iter().take(4) {
-                            dots =
-                                dots.child(div().w(px(6.)).h(px(6.)).rounded_full().bg(dot_color));
+                            dots = dots.child(
+                                rsx! { <div w={px(6.)} h={px(6.)} rounded_full bg={dot_color} /> },
+                            );
                         }
                         if day_deadlines.len() > 4 {
-                            dots = dots.child(
-                                div()
-                                    .text_xs()
-                                    .line_height(relative(1.0))
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(dot_color)
-                                    .child("+"),
-                            );
+                            dots = dots.child(rsx! {
+                                <div
+                                    text_xs
+                                    line_height={relative(1.0)}
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={dot_color}
+                                >
+                                    {"+"}
+                                </div>
+                            });
                         }
 
                         day_cell = day_cell.child(dots);
@@ -510,180 +517,160 @@ impl ComplianceCalendar {
             rows_container = rows_container.child(week_row);
         }
 
-        div()
-            .w_full()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_xl()
-            .shadow_sm()
-            .overflow_hidden()
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .p_4()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().background)
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(self.current_month.format("%B %Y").to_string()),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_1()
-                            .bg(cx.theme().muted.opacity(0.5))
-                            .rounded_lg()
-                            .p_1()
-                            .child(
-                                div()
-                                    .id("prev-month")
-                                    .px_3()
-                                    .py_1p5()
-                                    .rounded_md()
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().secondary))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        let old_year = this.current_month.year();
-                                        if this.current_month.month() == 1 {
-                                            this.current_month = NaiveDate::from_ymd_opt(
-                                                this.current_month.year() - 1,
-                                                12,
-                                                1,
-                                            )
-                                            .unwrap();
-                                        } else {
-                                            this.current_month = NaiveDate::from_ymd_opt(
-                                                this.current_month.year(),
-                                                this.current_month.month() - 1,
-                                                1,
-                                            )
-                                            .unwrap();
-                                        }
-                                        this.selected_date = None;
-                                        let new_year = this.current_month.year();
-                                        if new_year != old_year {
-                                            cx.emit(ComplianceCalendarEvent::YearChanged {
-                                                year: new_year,
-                                            });
-                                        }
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child("◀"),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .id("next-month")
-                                    .px_3()
-                                    .py_1p5()
-                                    .rounded_md()
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(cx.theme().secondary))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        let old_year = this.current_month.year();
-                                        if this.current_month.month() == 12 {
-                                            this.current_month = NaiveDate::from_ymd_opt(
-                                                this.current_month.year() + 1,
-                                                1,
-                                                1,
-                                            )
-                                            .unwrap();
-                                        } else {
-                                            this.current_month = NaiveDate::from_ymd_opt(
-                                                this.current_month.year(),
-                                                this.current_month.month() + 1,
-                                                1,
-                                            )
-                                            .unwrap();
-                                        }
-                                        this.selected_date = None;
-                                        let new_year = this.current_month.year();
-                                        if new_year != old_year {
-                                            cx.emit(ComplianceCalendarEvent::YearChanged {
-                                                year: new_year,
-                                            });
-                                        }
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child("▶"),
-                                    ),
-                            ),
-                    ),
-            )
-            .child(rows_container)
+        rsx! {
+            <div
+                w_full
+                bg={cx.theme().background}
+                border_1
+                border_color={cx.theme().border}
+                rounded_xl
+                shadow_sm
+                overflow_hidden
+            >
+                <div
+                    flex
+                    justify_between
+                    items_center
+                    p_4
+                    border_b_1
+                    border_color={cx.theme().border}
+                    bg={cx.theme().background}
+                >
+                    <div
+                        text_lg
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {self.current_month.format("%B %Y").to_string()}
+                    </div>
+                    <div flex gap_1 bg={cx.theme().muted.opacity(0.5)} rounded_lg p_1>
+                        <div
+                            id="prev-month"
+                            px_3
+                            py_1p5
+                            rounded_md
+                            cursor_pointer
+                            hover={|s| s.bg(cx.theme().secondary)}
+                            on_click={cx.listener(|this, _, _, cx| {
+                                let old_year = this.current_month.year();
+                                if this.current_month.month() == 1 {
+                                    this.current_month = NaiveDate::from_ymd_opt(
+                                        this.current_month.year() - 1,
+                                        12,
+                                        1,
+                                    )
+                                    .unwrap();
+                                } else {
+                                    this.current_month = NaiveDate::from_ymd_opt(
+                                        this.current_month.year(),
+                                        this.current_month.month() - 1,
+                                        1,
+                                    )
+                                    .unwrap();
+                                }
+                                this.selected_date = None;
+                                let new_year = this.current_month.year();
+                                if new_year != old_year {
+                                    cx.emit(ComplianceCalendarEvent::YearChanged {
+                                        year: new_year,
+                                    });
+                                }
+                                cx.notify();
+                            })}
+                        >
+                            <div
+                                text_sm
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {"◀"}
+                            </div>
+                        </div>
+                        <div
+                            id="next-month"
+                            px_3
+                            py_1p5
+                            rounded_md
+                            cursor_pointer
+                            hover={|s| s.bg(cx.theme().secondary)}
+                            on_click={cx.listener(|this, _, _, cx| {
+                                let old_year = this.current_month.year();
+                                if this.current_month.month() == 12 {
+                                    this.current_month = NaiveDate::from_ymd_opt(
+                                        this.current_month.year() + 1,
+                                        1,
+                                        1,
+                                    )
+                                    .unwrap();
+                                } else {
+                                    this.current_month = NaiveDate::from_ymd_opt(
+                                        this.current_month.year(),
+                                        this.current_month.month() + 1,
+                                        1,
+                                    )
+                                    .unwrap();
+                                }
+                                this.selected_date = None;
+                                let new_year = this.current_month.year();
+                                if new_year != old_year {
+                                    cx.emit(ComplianceCalendarEvent::YearChanged {
+                                        year: new_year,
+                                    });
+                                }
+                                cx.notify();
+                            })}
+                        >
+                            <div
+                                text_sm
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {"▶"}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {rows_container}
+            </div>
+        }
     }
 }
 
 impl Render for ComplianceCalendar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Compliance Calendar"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .items_center()
-                            // Filter Combobox
-                            .child(div().w(px(240.)).child(MultiSelect::new(&self.form_filter))),
-                    ),
-            )
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .justify_center()
-                    .child(self.render_grid_view(window, cx)),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(if let Some(date) = self.selected_date {
-                                format!("Deadlines for {}", date.format("%b %d, %Y"))
-                            } else {
-                                format!("Deadlines for {}", self.current_month.format("%B %Y"))
-                            }),
-                    )
-                    .child(self.render_list_view(window, cx)),
-            )
+        rsx! {
+            <div flex flex_col gap_4>
+                <div flex flex_wrap gap_2 justify_between items_center>
+                    <div
+                        text_xl
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {"Compliance Calendar"}
+                    </div>
+                    <div flex gap_2 items_center>
+                        // Filter Combobox
+                        <div w={px(240.)}>{MultiSelect::new(&self.form_filter)}</div>
+                    </div>
+                </div>
+                <div w_full flex justify_center>
+                    {self.render_grid_view(window, cx)}
+                </div>
+                <div flex flex_col gap_2>
+                    <div
+                        text_lg
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {if let Some(date) = self.selected_date {
+                            format!("Deadlines for {}", date.format("%b %d, %Y"))
+                        } else {
+                            format!("Deadlines for {}", self.current_month.format("%B %Y"))
+                        }}
+                    </div>
+                    {self.render_list_view(window, cx)}
+                </div>
+            </div>
+        }
     }
 }
