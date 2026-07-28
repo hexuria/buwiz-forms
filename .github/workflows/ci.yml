@@ -110,11 +110,33 @@ jobs:
         Xvfb :99 -screen 0 1280x1024x24 &
         echo "DISPLAY=:99" >> "$GITHUB_ENV"
 
+    # `choco install openssl` pulls a 245 MB installer from slproweb.com on every
+    # run - about 88s, and a third-party download inside the build path. Cache the
+    # installed tree instead. Both candidate locations are cached because the
+    # package has used each at different versions.
+    #
+    # The env-var detection below still runs unconditionally: GITHUB_ENV does not
+    # persist between runs, so OPENSSL_DIR/OPENSSL_LIB_DIR must be re-exported
+    # even when the install itself was restored from cache.
+    - name: Cache OpenSSL
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: openssl-${{ runner.os }}-choco-v1
+
     - name: Install Windows Dependencies
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        choco install openssl -y
+        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
+            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
+            Write-Host "OpenSSL restored from cache; skipping choco install"
+        } else {
+            choco install openssl -y
+        }
         $openssl_dir = ""
         if (Test-Path "C:\Program Files\OpenSSL\include") {
             $openssl_dir = "C:\Program Files\OpenSSL"
