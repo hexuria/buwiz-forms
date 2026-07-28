@@ -156,8 +156,23 @@ jobs:
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
 
+    # This filters one test by exact name, and a filter that matches nothing is
+    # not an error to libtest: it prints "0 passed" and exits 0. So if the test
+    # is ever renamed or moved to another crate, this step would go green while
+    # the immutable-corpus census lock silently stopped being checked. Assert the
+    # test actually ran rather than trusting the exit code.
     - name: Lock immutable v1 corpus census
-      run: cargo test --locked -p bir-rules-codegen corpus::tests::landed_v1_corpus_reconciles_its_published_counts -- --exact
+      shell: bash
+      run: |
+        set -euo pipefail
+        output=$(cargo test --locked -p bir-rules-codegen \
+          corpus::tests::landed_v1_corpus_reconciles_its_published_counts -- --exact 2>&1)
+        echo "$output"
+        if ! grep -qE '^test result: ok\. 1 passed' <<<"$output"; then
+          echo "::error::the corpus census test did not run - the filter matched no test." >&2
+          echo "::error::Expected exactly 1 passed. Did the test move crates or get renamed?" >&2
+          exit 1
+        fi
 
     # `audit` is a distinct subcommand from `check` and was never run in CI.
     - name: Audit validation-rules v2 IR
