@@ -1,5 +1,6 @@
 use gpui::*;
 use gpui_component::*;
+use gpui_rsx::rsx;
 use bir_core::profile::TaxpayerProfile;
 
 pub struct NewFormView {
@@ -32,72 +33,85 @@ impl Render for NewFormView {
             return div().child("No profile selected.").into_any_element();
         };
 
-        div()
-            .flex()
-            .flex_col()
-            .size_full()
-            .p_12()
-            .gap_8()
-            .child(
-                div().flex().flex_col().gap_2().child(
-                    div().text_3xl().font_weight(FontWeight::BLACK).text_color(cx.theme().primary).child(format!("Drafting Form {}", form_id))
-                ).child(
-                    div().text_base().text_color(cx.theme().muted_foreground).child("Background information has been pre-filled from your profile vault.")
-                )
-            )
-            .child(
-                div()
-                    .w_full()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_xl()
-                    .p_8()
-                    .flex()
-                    .flex_col()
-                    .gap_6()
-                    .child(
-                        div().text_xl().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child("Part I - Background Information")
-                    )
-                    .child(
-                        div().flex().gap_8().child(
-                            div().flex_1().flex().flex_col().gap_1().child(div().text_xs().text_color(cx.theme().muted_foreground).child("1. TIN")).child(div().font_weight(FontWeight::BOLD).child(profile.tin.full()))
-                        ).child(
-                            div().flex_1().flex().flex_col().gap_1().child(div().text_xs().text_color(cx.theme().muted_foreground).child("2. RDO Code")).child(div().font_weight(FontWeight::BOLD).child(profile.rdo_code.clone()))
-                        )
-                    )
-                    .child(
-                        div().flex().flex_col().gap_1().child(div().text_xs().text_color(cx.theme().muted_foreground).child("3. Taxpayer Name")).child(div().font_weight(FontWeight::BOLD).child(profile.full_name.clone()))
-                    )
-                    .child(
-                        div().flex().flex_col().gap_1().child(div().text_xs().text_color(cx.theme().muted_foreground).child("4. Registered Address")).child(div().font_weight(FontWeight::BOLD).child(profile.registered_address.clone()))
-                    )
-                    .child(
-                        div().flex().gap_8().child(
-                            div().flex_1().flex().flex_col().gap_1().child(div().text_xs().text_color(cx.theme().muted_foreground).child("5. Zip Code")).child(div().font_weight(FontWeight::BOLD).child(profile.zip_code.clone()))
-                        ).child(
-                            div().flex_1().flex().flex_col().gap_1().child(div().text_xs().text_color(cx.theme().muted_foreground).child("6. Telephone Number")).child(div().font_weight(FontWeight::BOLD).child(profile.phone.clone()))
-                        )
-                    )
-                    .child(
-                        div().flex().flex_col().gap_1().child(div().text_xs().text_color(cx.theme().muted_foreground).child("7. Email Address")).child(div().font_weight(FontWeight::BOLD).child(profile.email.clone()))
-                    )
-            )
-            .child(
-                div()
-                    .flex()
-                    .justify_end()
-                    .gap_4()
-                    .mt_4()
-                    .child(
-                        gpui_component::button::Button::new("cancel_form")
-                            .label("Cancel")
-                    )
-                    .child(
-                        gpui_component::button::Button::new("next_step")
-                            .label("Continue to Part II")
-                    )
-            )
-            .into_any_element()
+        let muted = cx.theme().muted_foreground;
+
+        // Bare flags (`flex_col`, `p_12`) expand to the identically-named GPUI
+        // builder methods, so this is a 1:1 rewrite of the previous chain.
+        // Deliberately *not* using rsx's Tailwind `class=`: there `p-12` means
+        // `p(px(12.))`, whereas GPUI's `.p_12()` is 48px.
+        let root = rsx! {
+            <div flex flex_col size_full p_12 gap_8>
+                <div flex flex_col gap_2>
+                    <div text_3xl font_weight={FontWeight::BLACK} text_color={cx.theme().primary}>
+                        {format!("Drafting Form {}", form_id)}
+                    </div>
+                    <div text_base text_color={muted}>
+                        {"Background information has been pre-filled from your profile vault."}
+                    </div>
+                </div>
+
+                <div
+                    w_full
+                    bg={cx.theme().background}
+                    border_1
+                    border_color={cx.theme().border}
+                    rounded_xl
+                    p_8
+                    flex
+                    flex_col
+                    gap_6
+                >
+                    <div text_xl font_weight={FontWeight::BOLD} text_color={cx.theme().foreground}>
+                        {"Part I - Background Information"}
+                    </div>
+
+                    <div flex gap_8>
+                        <div flex_1 flex flex_col gap_1>
+                            <div text_xs text_color={muted}>{"1. TIN"}</div>
+                            <div font_weight={FontWeight::BOLD}>{profile.tin.full()}</div>
+                        </div>
+                        <div flex_1 flex flex_col gap_1>
+                            <div text_xs text_color={muted}>{"2. RDO Code"}</div>
+                            <div font_weight={FontWeight::BOLD}>{profile.rdo_code.clone()}</div>
+                        </div>
+                    </div>
+
+                    <div flex flex_col gap_1>
+                        <div text_xs text_color={muted}>{"3. Taxpayer Name"}</div>
+                        <div font_weight={FontWeight::BOLD}>{profile.full_name.clone()}</div>
+                    </div>
+
+                    <div flex flex_col gap_1>
+                        <div text_xs text_color={muted}>{"4. Registered Address"}</div>
+                        <div font_weight={FontWeight::BOLD}>{profile.registered_address.clone()}</div>
+                    </div>
+
+                    <div flex gap_8>
+                        <div flex_1 flex flex_col gap_1>
+                            <div text_xs text_color={muted}>{"5. Zip Code"}</div>
+                            <div font_weight={FontWeight::BOLD}>{profile.zip_code.clone()}</div>
+                        </div>
+                        <div flex_1 flex flex_col gap_1>
+                            <div text_xs text_color={muted}>{"6. Telephone Number"}</div>
+                            <div font_weight={FontWeight::BOLD}>{profile.phone.clone()}</div>
+                        </div>
+                    </div>
+
+                    <div flex flex_col gap_1>
+                        <div text_xs text_color={muted}>{"7. Email Address"}</div>
+                        <div font_weight={FontWeight::BOLD}>{profile.email.clone()}</div>
+                    </div>
+                </div>
+
+                // gpui-component widgets compose as ordinary `{expr}` children:
+                // anything implementing `IntoElement` becomes a `.child(..)` call.
+                <div flex justify_end gap_4 mt_4>
+                    {gpui_component::button::Button::new("cancel_form").label("Cancel")}
+                    {gpui_component::button::Button::new("next_step").label("Continue to Part II")}
+                </div>
+            </div>
+        };
+
+        root.into_any_element()
     }
 }

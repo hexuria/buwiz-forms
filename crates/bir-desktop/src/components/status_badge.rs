@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use gpui::*;
+use gpui_rsx::rsx;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum FormStatus {
@@ -48,14 +49,22 @@ impl Render for StatusBadge {
             ),
         };
 
-        div()
-            .bg(bg_col)
-            .text_color(text_col)
-            .px_3()
-            .py_1()
-            .rounded_full()
-            .text_sm()
-            .font_weight(FontWeight::BOLD)
-            .child(label)
+        // Bare flags (`px_3`) expand to the identically-named GPUI builder
+        // method, so this is a 1:1 rewrite of the previous builder chain.
+        // Deliberately *not* using rsx's Tailwind `class=`: there `px-3` means
+        // `px(3.0)`, whereas GPUI's `.px_3()` is 12px.
+        rsx! {
+            <div
+                bg={bg_col}
+                text_color={text_col}
+                px_3
+                py_1
+                rounded_full
+                text_sm
+                font_weight={FontWeight::BOLD}
+            >
+                {label}
+            </div>
+        }
     }
 }
