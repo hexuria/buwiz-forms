@@ -48,15 +48,14 @@ jobs:
         components: clippy, rustfmt
 
     # rust-cache keys per job name by default, so ten jobs held ten multi-GB
-    # entries and competed for GitHub's 10 GB per-repo ceiling - four were being
-    # evicted every run. Key by build layout instead: this job is the only one
-    # that passes `--target`, so it writes target/<triple>/ and cannot share
-    # artifacts with the host-layout jobs, which use `host-<os>` below.
+    # entries against GitHub's 10 GB per-repo ceiling and were evicting each
+    # other. Key by build layout instead: every job here now builds for the host,
+    # so all four share one entry per OS.
     # Saving only from main stops pull-request runs churning the shared entries.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        shared-key: check-${{ runner.os }}
+        shared-key: host-${{ runner.os }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Linux Dependencies
@@ -132,11 +131,22 @@ jobs:
     # same target set and reports the same compile errors, so checking first only
     # re-ran the workspace crates through a second, differently-fingerprinted
     # pass. Dependencies were already shared between the two.
+    #
+    # No `--target` either. Every leg of this matrix names its own host triple
+    # (macos-14/aarch64-apple-darwin, ubuntu-22.04/x86_64-unknown-linux-gnu,
+    # windows-latest/x86_64-pc-windows-msvc) and no RUSTFLAGS are set anywhere,
+    # so passing it was semantically identical to a host build while costing
+    # real resources: it forced artifacts into target/<triple>/, rebuilt the
+    # proc-macro and build-script dependencies a second time for the host, and
+    # was the only reason this job could not share the host cache above.
+    # The matrix still pins the toolchain target, so platform coverage is
+    # unchanged. release.yml keeps its `--target` flags - those cross-compile
+    # both macOS architectures for the universal binary and are genuine.
     - name: Clippy
-      run: cargo clippy --locked --workspace --target ${{ matrix.target }} -- -D warnings
+      run: cargo clippy --locked --workspace -- -D warnings
 
     - name: Test
-      run: cargo test --locked --workspace --target ${{ matrix.target }}
+      run: cargo test --locked --workspace
 
   # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
   # PowerShell job, which is exactly why three separate Windows-path defects in
@@ -154,7 +164,7 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    # Host layout (no `--target`), shared with validation-rules-v2 and renderer.
+    # Host layout, shared with check, validation-rules-v2 and renderer.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
@@ -176,7 +186,7 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    # Host layout (no `--target`), shared with validation-rules-v1 and renderer.
+    # Host layout, shared with check, validation-rules-v1 and renderer.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
@@ -260,7 +270,7 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    # Host layout (no `--target`), shared with both validation-rules jobs.
+    # Host layout, shared with check and both validation-rules jobs.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
