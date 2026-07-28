@@ -49,13 +49,27 @@ jobs:
 
     # rust-cache keys per job name by default, so ten jobs held ten multi-GB
     # entries against GitHub's 10 GB per-repo ceiling and were evicting each
-    # other. Key by build layout instead: every job here now builds for the host,
-    # so all four share one entry per OS.
-    # Saving only from main stops pull-request runs churning the shared entries.
+    # other. Every job here builds for the host, so all four share one entry
+    # per OS.
+    #
+    # This job is the SOLE WRITER of that entry, and that is load-bearing:
+    # rust-cache will not overwrite an exact-matching key, so whichever job
+    # saves first defines the cache and the rest can never contribute. When all
+    # four could save, the small validation-rules jobs won the race and `check`
+    # restored a cache missing almost everything it needs - rebuilding the whole
+    # workspace every run (34m on Windows) and then being unable to save it.
+    # `cargo test --workspace` below builds a superset of what the other three
+    # need, so writing only from here keeps the shared entry complete.
+    #
+    # The key is `workspace-<os>`, not the earlier `host-<os>`: rust-cache
+    # skips saving when the exact key already exists, so reusing the old name
+    # would have preserved the wrongly-populated entry forever. The stale
+    # host-* and check-* entries are no longer read by anything and age out.
+    # Saving only from main also stops pull requests churning it.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        shared-key: host-${{ runner.os }}
+        shared-key: workspace-${{ runner.os }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Linux Dependencies
@@ -164,12 +178,14 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    # Host layout, shared with check, validation-rules-v2 and renderer.
+    # Reader only. `check` is the sole writer of host-<os>; see the comment
+    # there. Saving from here too would let this job's much smaller target dir
+    # win the race and define the shared entry for everyone.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        shared-key: host-${{ runner.os }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        shared-key: workspace-${{ runner.os }}
+        save-if: false
 
     - name: Audit legacy v1 rules corpus
       run: cargo run --locked -p bir-rules-codegen -- validate-v1
@@ -186,12 +202,12 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    # Host layout, shared with check, validation-rules-v1 and renderer.
+    # Reader only - see the sole-writer comment in `check`.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        shared-key: host-${{ runner.os }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        shared-key: workspace-${{ runner.os }}
+        save-if: false
 
     # This filters one test by exact name, and a filter that matches nothing is
     # not an error to libtest: it prints "0 passed" and exits 0. So if the test
@@ -270,12 +286,12 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
-    # Host layout, shared with check and both validation-rules jobs.
+    # Reader only - see the sole-writer comment in `check`.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
-        shared-key: host-${{ runner.os }}
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        shared-key: workspace-${{ runner.os }}
+        save-if: false
 
     - name: Install Node.js
       uses: actions/setup-node@v4
