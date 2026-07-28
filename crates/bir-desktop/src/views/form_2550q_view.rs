@@ -26,6 +26,7 @@ use gpui_component::StyledExt;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 use crate::components::form_validation::SemanticFieldTargets;
@@ -1360,34 +1361,28 @@ impl Form2550QV2View {
     }
 
     fn render_input_row(&self, label: &str, key: &'static str) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(div().w_1_2().text_sm().child(label.to_string()))
-            .child(
-                div().w_1_2().child(
-                    Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable()),
-                ),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div w_1_2 text_sm>{label.to_string()}</div>
+                <div w_1_2>
+                    {Input::new(field(&self.fields, key)).disabled(!self.editor_is_editable())}
+                </div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_candidate_raw_text_row(&self, label: &str, key: &'static str) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(div().w_1_2().text_sm().child(label.to_string()))
-            .child(
-                div().w_1_2().child(
-                    Input::new(field(&self.candidate_raw_text_fields, key))
-                        .disabled(!self.editor_is_editable()),
-                ),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div w_1_2 text_sm>{label.to_string()}</div>
+                <div w_1_2>
+                    {Input::new(field(&self.candidate_raw_text_fields, key))
+                        .disabled(!self.editor_is_editable())}
+                </div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_computed_row(
@@ -1396,26 +1391,13 @@ impl Form2550QV2View {
         value: Option<f64>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .p_2()
-            .rounded_md()
-            .bg(cx.theme().muted.opacity(0.5))
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(label.to_string()),
-            )
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .child(format_optional_money(value)),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
+                <div text_sm font_weight={FontWeight::BOLD}>{label.to_string()}</div>
+                <div font_weight={FontWeight::BOLD}>{format_optional_money(value)}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
@@ -1424,21 +1406,15 @@ impl Form2550QV2View {
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
         for (field, message) in &self.validation_errors {
-            list = list.child(div().text_xs().child(format!("{field}: {message}")));
+            list = list.child(rsx! { <div text_xs>{format!("{field}: {message}")}</div> });
         }
-        div()
-            .p_4()
-            .border_1()
-            .border_color(cx.theme().warning)
-            .bg(cx.theme().warning.opacity(0.1))
-            .rounded_lg()
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .child("Draft needs review"),
-            )
-            .child(list)
-            .into_any_element()
+        let root = rsx! {
+            <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
+                <div font_weight={FontWeight::BOLD}>{"Draft needs review"}</div>
+                {list}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_validation_diagnostic(&self, cx: &Context<Self>) -> AnyElement {
@@ -1455,15 +1431,13 @@ impl Form2550QV2View {
                 ("Validation incomplete", message.clone())
             }
         };
-        div()
-            .p_4()
-            .border_1()
-            .border_color(cx.theme().warning)
-            .bg(cx.theme().warning.opacity(0.1))
-            .rounded_lg()
-            .child(div().font_weight(FontWeight::BOLD).child(title))
-            .child(div().mt_1().text_sm().child(message))
-            .into_any_element()
+        let root = rsx! {
+            <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
+                <div font_weight={FontWeight::BOLD}>{title}</div>
+                <div mt_1 text_sm>{message}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_capital_good_row(
@@ -1473,41 +1447,44 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
-        row_card(cx, &format!("Schedule 1 row {}", index + 1))
-            .child(input_pair("Purchase/import date", &row.date, editable))
-            .child(input_pair(
-                "Source code (D or I)",
-                &row.source_code,
-                editable,
-            ))
-            .child(input_pair("Description", &row.description, editable))
-            .child(input_pair(
-                "Purchase/import amount",
-                &row.purchase_amount,
-                editable,
-            ))
-            .child(input_pair("Input tax", &row.input_tax, editable))
-            .child(input_pair(
-                "Estimated useful life (months)",
-                &row.estimated_life,
-                editable,
-            ))
-            .child(input_pair(
-                "Recognized useful life (months)",
-                &row.recognized_life,
-                editable,
-            ))
-            .child(input_pair(
-                "Allowable input tax this period (manual)",
-                &row.allowable_input_tax,
-                editable,
-            ))
-            .child(input_pair(
-                "Balance to next period",
-                &row.balance_next_period,
-                editable,
-            ))
-            .into_any_element()
+        let root = rsx! {
+            <div base={row_card(cx, &format!("Schedule 1 row {}", index + 1))}>
+                {input_pair("Purchase/import date", &row.date, editable)}
+                {input_pair(
+                    "Source code (D or I)",
+                    &row.source_code,
+                    editable,
+                )}
+                {input_pair("Description", &row.description, editable)}
+                {input_pair(
+                    "Purchase/import amount",
+                    &row.purchase_amount,
+                    editable,
+                )}
+                {input_pair("Input tax", &row.input_tax, editable)}
+                {input_pair(
+                    "Estimated useful life (months)",
+                    &row.estimated_life,
+                    editable,
+                )}
+                {input_pair(
+                    "Recognized useful life (months)",
+                    &row.recognized_life,
+                    editable,
+                )}
+                {input_pair(
+                    "Allowable input tax this period (manual)",
+                    &row.allowable_input_tax,
+                    editable,
+                )}
+                {input_pair(
+                    "Balance to next period",
+                    &row.balance_next_period,
+                    editable,
+                )}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_creditable_vat_row(
@@ -1517,17 +1494,20 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
-        row_card(cx, &format!("Schedule 3 row {}", index + 1))
-            .child(input_pair("Period from", &row.period_from, editable))
-            .child(input_pair("Period to", &row.period_to, editable))
-            .child(input_pair("Withholding agent", &row.agent_name, editable))
-            .child(input_pair("Income payment", &row.income_payment, editable))
-            .child(input_pair(
-                "Creditable VAT withheld",
-                &row.tax_withheld,
-                editable,
-            ))
-            .into_any_element()
+        let root = rsx! {
+            <div base={row_card(cx, &format!("Schedule 3 row {}", index + 1))}>
+                {input_pair("Period from", &row.period_from, editable)}
+                {input_pair("Period to", &row.period_to, editable)}
+                {input_pair("Withholding agent", &row.agent_name, editable)}
+                {input_pair("Income payment", &row.income_payment, editable)}
+                {input_pair(
+                    "Creditable VAT withheld",
+                    &row.tax_withheld,
+                    editable,
+                )}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_advance_vat_row(
@@ -1537,18 +1517,21 @@ impl Form2550QV2View {
         cx: &Context<Self>,
     ) -> AnyElement {
         let editable = self.editor_is_editable();
-        row_card(cx, &format!("Schedule 4 row {}", index + 1))
-            .child(input_pair("Period from", &row.period_from, editable))
-            .child(input_pair("Period to", &row.period_to, editable))
-            .child(input_pair("Miller name", &row.miller_name, editable))
-            .child(input_pair("Taxpayer name", &row.taxpayer_name, editable))
-            .child(input_pair(
-                "Official receipt number",
-                &row.receipt_number,
-                editable,
-            ))
-            .child(input_pair("Amount paid", &row.amount_paid, editable))
-            .into_any_element()
+        let root = rsx! {
+            <div base={row_card(cx, &format!("Schedule 4 row {}", index + 1))}>
+                {input_pair("Period from", &row.period_from, editable)}
+                {input_pair("Period to", &row.period_to, editable)}
+                {input_pair("Miller name", &row.miller_name, editable)}
+                {input_pair("Taxpayer name", &row.taxpayer_name, editable)}
+                {input_pair(
+                    "Official receipt number",
+                    &row.receipt_number,
+                    editable,
+                )}
+                {input_pair("Amount paid", &row.amount_paid, editable)}
+            </div>
+        };
+        root.into_any_element()
     }
 }
 
@@ -2101,86 +2084,50 @@ impl Render for Form2550QV2View {
                     .child(self.render_input_row("Machine validation / receipt details", MACHINE_VALIDATION)),
             );
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .bg(cx.theme().background)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("2550q_back")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(Form2550QV2Event::BackToDashboard);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                gpui_component::button::Button::new("2550q_validate")
-                                    .label("Validate")
-                                    .outline()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.run_validation_diagnostic(cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("2550q_save")
-                                    .label("Save Draft")
-                                    .outline()
-                                    .disabled(!editor_is_editable)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_draft(window, cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("2550q_revert")
-                                    .label("Revert to Draft")
-                                    .outline()
-                                    .disabled(is_draft)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.revert_to_draft(window, cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("2550q_manual")
-                                    .label("Manual / External Filing")
-                                    .primary()
-                                    .disabled(true),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .p_6()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().accent)
-                    .child(self.render_header(cx))
-                    .child(div().mt_6().child(self.render_status_pipeline(cx))),
-            )
-            .child(
-                div()
-                    .id("2550q_scroll")
-                    .flex_1()
-                    .w_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .p_8()
-                    .child(content),
-            )
+        rsx! {
+            <div flex flex_col w_full h_full bg={cx.theme().background}>
+                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                    {gpui_component::button::Button::new("2550q_back")
+                        .label("← Back")
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(Form2550QV2Event::BackToDashboard);
+                        }))}
+                    <div flex items_center gap_3>
+                        {gpui_component::button::Button::new("2550q_validate")
+                            .label("Validate")
+                            .outline()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.run_validation_diagnostic(cx);
+                            }))}
+                        {gpui_component::button::Button::new("2550q_save")
+                            .label("Save Draft")
+                            .outline()
+                            .disabled(!editor_is_editable)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.save_draft(window, cx);
+                            }))}
+                        {gpui_component::button::Button::new("2550q_revert")
+                            .label("Revert to Draft")
+                            .outline()
+                            .disabled(is_draft)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.revert_to_draft(window, cx);
+                            }))}
+                        {gpui_component::button::Button::new("2550q_manual")
+                            .label("Manual / External Filing")
+                            .primary()
+                            .disabled(true)}
+                    </div>
+                </div>
+                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().accent}>
+                    {self.render_header(cx)}
+                    <div mt_6>{self.render_status_pipeline(cx)}</div>
+                </div>
+                <div id="2550q_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p_8>
+                    {content}
+                </div>
+            </div>
+        }
     }
 }
 
@@ -2219,43 +2166,29 @@ fn advance_input_revision(revision: &mut InputRevision) -> Result<InputRevision,
 }
 
 fn section_card(cx: &Context<Form2550QV2View>, title: &str) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_4()
-        .p_5()
-        .bg(cx.theme().background)
-        .border_1()
-        .border_color(cx.theme().border)
-        .rounded_lg()
-        .child(
-            div()
-                .text_xl()
-                .font_weight(FontWeight::BOLD)
-                .child(title.to_string()),
-        )
+    rsx! {
+        <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
+            <div text_xl font_weight={FontWeight::BOLD}>{title.to_string()}</div>
+        </div>
+    }
 }
 
 fn row_card(cx: &Context<Form2550QV2View>, title: &str) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .p_4()
-        .border_1()
-        .border_color(cx.theme().border)
-        .rounded_md()
-        .child(div().font_weight(FontWeight::BOLD).child(title.to_string()))
+    rsx! {
+        <div flex flex_col gap_2 p_4 border_1 border_color={cx.theme().border} rounded_md>
+            <div font_weight={FontWeight::BOLD}>{title.to_string()}</div>
+        </div>
+    }
 }
 
 fn input_pair(label: &str, input: &Entity<InputState>, editable: bool) -> AnyElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_3()
-        .child(div().w_1_2().text_sm().child(label.to_string()))
-        .child(div().w_1_2().child(Input::new(input).disabled(!editable)))
-        .into_any_element()
+    let root = rsx! {
+        <div flex items_center gap_3>
+            <div w_1_2 text_sm>{label.to_string()}</div>
+            <div w_1_2>{Input::new(input).disabled(!editable)}</div>
+        </div>
+    };
+    root.into_any_element()
 }
 
 fn text_input(

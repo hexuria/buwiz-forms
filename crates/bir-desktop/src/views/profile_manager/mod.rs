@@ -6,6 +6,7 @@ use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState, OtpInput, OtpState};
 use gpui_component::notification::{Notification, NotificationType};
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
@@ -4336,11 +4337,11 @@ impl ProfileManagerView {
     }
 
     fn field_label(text: &str, cx: &Context<Self>) -> Div {
-        div()
-            .text_sm()
-            .text_color(cx.theme().muted_foreground)
-            .mb_1()
-            .child(text.to_string())
+        rsx! {
+            <div text_sm text_color={cx.theme().muted_foreground} mb_1>
+                {text.to_string()}
+            </div>
+        }
     }
 
     fn render_unsaved_profile_banner(&self, cx: &Context<Self>) -> gpui::AnyElement {
@@ -4349,58 +4350,50 @@ impl ProfileManagerView {
             return div().into_any_element();
         }
 
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .px_4()
-            .py_3()
-            .rounded_lg()
-            .border_1()
-            .border_color(cx.theme().warning.opacity(0.45))
-            .bg(cx.theme().warning.opacity(0.12))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(crate::theme::warning_on_tint(cx.theme()))
-                            .child(dirty_state.title()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(crate::theme::warning_on_tint(cx.theme()))
-                            .child(dirty_state.navigation_message()),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        gpui_component::button::Button::new("discard_profile_changes")
-                            .label("Discard")
-                            .ghost()
-                            .on_click(cx.listener(|this, _event, window, cx| {
-                                this.discard_profile_changes(window, cx);
-                            })),
-                    )
-                    .child(
-                        gpui_component::button::Button::new("save_profile_changes")
-                            .label("Save Changes")
-                            .on_click(cx.listener(|this, _event, window, cx| {
-                                this.save_all_profile_changes(window, cx);
-                            })),
-                    ),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div
+                flex
+                items_center
+                justify_between
+                gap_4
+                px_4
+                py_3
+                rounded_lg
+                border_1
+                border_color={cx.theme().warning.opacity(0.45)}
+                bg={cx.theme().warning.opacity(0.12)}
+            >
+                <div flex flex_col gap_1>
+                    <div
+                        text_sm
+                        font_weight={FontWeight::BOLD}
+                        text_color={crate::theme::warning_on_tint(cx.theme())}
+                    >
+                        {dirty_state.title()}
+                    </div>
+                    <div
+                        text_xs
+                        text_color={crate::theme::warning_on_tint(cx.theme())}
+                    >
+                        {dirty_state.navigation_message()}
+                    </div>
+                </div>
+                <div flex items_center gap_2>
+                    {gpui_component::button::Button::new("discard_profile_changes")
+                        .label("Discard")
+                        .ghost()
+                        .on_click(cx.listener(|this, _event, window, cx| {
+                            this.discard_profile_changes(window, cx);
+                        }))}
+                    {gpui_component::button::Button::new("save_profile_changes")
+                        .label("Save Changes")
+                        .on_click(cx.listener(|this, _event, window, cx| {
+                            this.save_all_profile_changes(window, cx);
+                        }))}
+                </div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn field_error(&self, field: &'static str, _cx: &Context<Self>) -> gpui::Div {
@@ -4410,11 +4403,11 @@ impl ProfileManagerView {
             .find(|err| err.field == field)
             .map(|err| err.message.clone())
             .unwrap_or_default();
-        div()
-            .min_h_5()
-            .text_xs()
-            .text_color(crate::theme::danger_on_tint(_cx.theme()))
-            .child(text)
+        rsx! {
+            <div min_h_5 text_xs text_color={crate::theme::danger_on_tint(_cx.theme())}>
+                {text}
+            </div>
+        }
     }
 
     fn validate_field(&mut self, field: &'static str, value: &str) {
@@ -4572,27 +4565,20 @@ impl Render for ProfileManagerView {
                                 this.max_w(px(960.))
                             })
                             .gap_6()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_3xl()
-                                            .font_weight(FontWeight::BLACK)
-                                            .text_color(cx.theme().foreground)
-                                            .child(title),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(
-                                                "Required information is used to pre-fill 2551Q.",
-                                            ),
-                                    ),
-                            )
+                            .child(rsx! {
+                                <div flex flex_col gap_2>
+                                    <div
+                                        text_3xl
+                                        font_weight={FontWeight::BLACK}
+                                        text_color={cx.theme().foreground}
+                                    >
+                                        {title}
+                                    </div>
+                                    <div text_base text_color={cx.theme().muted_foreground}>
+                                        {"Required information is used to pre-fill 2551Q."}
+                                    </div>
+                                </div>
+                            })
                             .child(self.render_unsaved_profile_banner(cx))
                             .child(
                                 div()
@@ -4606,156 +4592,168 @@ impl Render for ProfileManagerView {
                                             .p_1()
                                             .rounded_lg()
                                             .bg(cx.theme().secondary)
-                                            .child(
-                                                div()
-                                                    .id("tab_0")
-                                                    .px_4()
-                                                    .py_1p5()
-                                                    .rounded_md()
-                                                    .cursor_pointer()
-                                                    .when(self.active_tab == 0, |s| {
+                                            .child(rsx! {
+                                                <div
+                                                    id="tab_0"
+                                                    px_4
+                                                    py_1p5
+                                                    rounded_md
+                                                    cursor_pointer
+                                                    when={(self.active_tab == 0, |s| {
                                                         s.bg(cx.theme().background)
                                                             .shadow_sm()
                                                             .text_color(cx.theme().foreground)
                                                             .font_weight(FontWeight::SEMIBOLD)
-                                                    })
-                                                    .when(self.active_tab != 0, |s| {
+                                                    })}
+                                                    when={(self.active_tab != 0, |s| {
                                                         s.hover(|s| s.bg(cx.theme().muted))
                                                             .text_color(cx.theme().muted_foreground)
                                                             .font_weight(FontWeight::MEDIUM)
-                                                    })
-                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                    })}
+                                                    on_click={cx.listener(|this, _, _, cx| {
                                                         this.active_tab = 0;
                                                         cx.notify();
-                                                    }))
-                                                    .child(div().text_sm().child("Tax Profile")),
-                                            )
-                                            .child(
-                                                div()
-                                                    .id("tab_1")
-                                                    .px_4()
-                                                    .py_1p5()
-                                                    .rounded_md()
-                                                    .cursor_pointer()
-                                                    .when(self.active_tab == 1, |s| {
+                                                    })}
+                                                >
+                                                    <div text_sm>{"Tax Profile"}</div>
+                                                </div>
+                                            })
+                                            .child(rsx! {
+                                                <div
+                                                    id="tab_1"
+                                                    px_4
+                                                    py_1p5
+                                                    rounded_md
+                                                    cursor_pointer
+                                                    when={(self.active_tab == 1, |s| {
                                                         s.bg(cx.theme().background)
                                                             .shadow_sm()
                                                             .text_color(cx.theme().foreground)
                                                             .font_weight(FontWeight::SEMIBOLD)
-                                                    })
-                                                    .when(self.active_tab != 1, |s| {
+                                                    })}
+                                                    when={(self.active_tab != 1, |s| {
                                                         s.hover(|s| s.bg(cx.theme().muted))
                                                             .text_color(cx.theme().muted_foreground)
                                                             .font_weight(FontWeight::MEDIUM)
-                                                    })
-                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                    })}
+                                                    on_click={cx.listener(|this, _, _, cx| {
                                                         this.active_tab = 1;
                                                         this.ocr_selected_version_id = None;
                                                         this.interactive_document_viewer = None;
                                                         cx.notify();
-                                                    }))
-                                                    .child(div().text_sm().child("COR")),
-                                            )
-                                            .child(
-                                                div()
-                                                    .id("tab_2")
-                                                    .px_4()
-                                                    .py_1p5()
-                                                    .rounded_md()
-                                                    .cursor_pointer()
-                                                    .when(self.active_tab == 2, |s| {
+                                                    })}
+                                                >
+                                                    <div text_sm>{"COR"}</div>
+                                                </div>
+                                            })
+                                            .child(rsx! {
+                                                <div
+                                                    id="tab_2"
+                                                    px_4
+                                                    py_1p5
+                                                    rounded_md
+                                                    cursor_pointer
+                                                    when={(self.active_tab == 2, |s| {
                                                         s.bg(cx.theme().background)
                                                             .shadow_sm()
                                                             .text_color(cx.theme().foreground)
                                                             .font_weight(FontWeight::SEMIBOLD)
-                                                    })
-                                                    .when(self.active_tab != 2, |s| {
+                                                    })}
+                                                    when={(self.active_tab != 2, |s| {
                                                         s.hover(|s| s.bg(cx.theme().muted))
                                                             .text_color(cx.theme().muted_foreground)
                                                             .font_weight(FontWeight::MEDIUM)
-                                                    })
-                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                    })}
+                                                    on_click={cx.listener(|this, _, _, cx| {
                                                         this.active_tab = 2;
                                                         cx.notify();
-                                                    }))
-                                                    .child(div().text_sm().child("Email Settings")),
-                                            )
+                                                    })}
+                                                >
+                                                    <div text_sm>{"Email Settings"}</div>
+                                                </div>
+                                            })
                                             .when(global_pins_enabled, |this| {
-                                                this.child(
-                                                    div()
-                                                        .id("tab_3")
-                                                        .px_4()
-                                                        .py_1p5()
-                                                        .rounded_md()
-                                                        .cursor_pointer()
-                                                        .when(self.active_tab == 3, |s| {
+                                                this.child(rsx! {
+                                                    <div
+                                                        id="tab_3"
+                                                        px_4
+                                                        py_1p5
+                                                        rounded_md
+                                                        cursor_pointer
+                                                        when={(self.active_tab == 3, |s| {
                                                             s.bg(cx.theme().background)
                                                                 .shadow_sm()
                                                                 .text_color(cx.theme().foreground)
                                                                 .font_weight(FontWeight::SEMIBOLD)
-                                                        })
-                                                        .when(self.active_tab != 3, |s| {
+                                                        })}
+                                                        when={(self.active_tab != 3, |s| {
                                                             s.hover(|s| s.bg(cx.theme().muted))
                                                                 .text_color(cx.theme().muted_foreground)
                                                                 .font_weight(FontWeight::MEDIUM)
-                                                        })
-                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                        })}
+                                                        on_click={cx.listener(|this, _, _, cx| {
                                                             this.active_tab = 3;
                                                             cx.notify();
-                                                        }))
-                                                        .child(div().text_sm().child("Security")),
-                                                )
+                                                        })}
+                                                    >
+                                                        <div text_sm>{"Security"}</div>
+                                                    </div>
+                                                })
                                             })
                                             .when(self.editing_id.is_some(), |this| {
-                                                this.child(
-                                                    div()
-                                                        .id("tab_4")
-                                                        .px_4()
-                                                        .py_1p5()
-                                                        .rounded_md()
-                                                        .cursor_pointer()
-                                                        .when(self.active_tab == 4, |s| {
+                                                this.child(rsx! {
+                                                    <div
+                                                        id="tab_4"
+                                                        px_4
+                                                        py_1p5
+                                                        rounded_md
+                                                        cursor_pointer
+                                                        when={(self.active_tab == 4, |s| {
                                                             s.bg(cx.theme().background)
                                                                 .shadow_sm()
                                                                 .text_color(cx.theme().foreground)
                                                                 .font_weight(FontWeight::SEMIBOLD)
-                                                        })
-                                                        .when(self.active_tab != 4, |s| {
+                                                        })}
+                                                        when={(self.active_tab != 4, |s| {
                                                             s.hover(|s| s.bg(cx.theme().muted))
                                                                 .text_color(cx.theme().muted_foreground)
                                                                 .font_weight(FontWeight::MEDIUM)
-                                                        })
-                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                        })}
+                                                        on_click={cx.listener(|this, _, _, cx| {
                                                             this.active_tab = 4;
                                                             cx.notify();
-                                                        }))
-                                                        .child(div().text_sm().child("Export")),
-                                                )
+                                                        })}
+                                                    >
+                                                        <div text_sm>{"Export"}</div>
+                                                    </div>
+                                                })
                                                 .when(profile_calendar_available, |this| {
-                                                    this.child(
-                                                        div()
-                                                            .id("tab_6")
-                                                            .px_4()
-                                                            .py_1p5()
-                                                            .rounded_md()
-                                                            .cursor_pointer()
-                                                            .when(self.active_tab == 6, |s| {
+                                                    this.child(rsx! {
+                                                        <div
+                                                            id="tab_6"
+                                                            px_4
+                                                            py_1p5
+                                                            rounded_md
+                                                            cursor_pointer
+                                                            when={(self.active_tab == 6, |s| {
                                                                 s.bg(cx.theme().background)
                                                                     .shadow_sm()
                                                                     .text_color(cx.theme().foreground)
                                                                     .font_weight(FontWeight::SEMIBOLD)
-                                                            })
-                                                            .when(self.active_tab != 6, |s| {
+                                                            })}
+                                                            when={(self.active_tab != 6, |s| {
                                                                 s.hover(|s| s.bg(cx.theme().muted))
                                                                     .text_color(cx.theme().muted_foreground)
                                                                     .font_weight(FontWeight::MEDIUM)
-                                                            })
-                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                            })}
+                                                            on_click={cx.listener(|this, _, _, cx| {
                                                                 this.active_tab = 6;
                                                                 cx.notify();
-                                                            }))
-                                                            .child(div().text_sm().child("Calendar")),
-                                                    )
+                                                            })}
+                                                        >
+                                                            <div text_sm>{"Calendar"}</div>
+                                                        </div>
+                                                    })
                                                 })
                                             }),
                                     ),
@@ -4781,27 +4779,18 @@ impl Render for ProfileManagerView {
                                     })
                             )
                             .when(self.active_tab != 1 && self.active_tab != 6, |this| {
-                                this.child(
-                                    div()
-                                        .mt_4()
-                                        .pb(px(80.))
-                                        .flex()
-                                        .items_center()
-                                        .gap_4()
-                                        .child(
-                                            gpui_component::button::Button::new("save_profile")
-                                                .label("Save Profile")
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.save_all_profile_changes(window, cx);
-                                                })),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(self.save_message.clone().unwrap_or_default())
-                                        )
-                                )
+                                this.child(rsx! {
+                                    <div mt_4 pb={px(80.)} flex items_center gap_4>
+                                        {gpui_component::button::Button::new("save_profile")
+                                            .label("Save Profile")
+                                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                                this.save_all_profile_changes(window, cx);
+                                            }))}
+                                        <div text_sm text_color={cx.theme().muted_foreground}>
+                                            {self.save_message.clone().unwrap_or_default()}
+                                        </div>
+                                    </div>
+                                })
                             })
                     )
             )
@@ -4828,124 +4817,114 @@ impl Render for ProfileManagerView {
                                 .flex_col()
                                 .gap_4()
                                 .shadow_lg()
-                                .child(div().text_lg().font_weight(FontWeight::BOLD).child("Connect your authenticator app"))
+                                .child(rsx! {
+                                    <div text_lg font_weight={FontWeight::BOLD}>
+                                        {"Connect your authenticator app"}
+                                    </div>
+                                })
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
                                         .gap_2()
-                                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(
-                                            if self.show_totp_secret_text {
-                                                "Step 1: Enter the secret code below in your authenticator app:"
-                                            } else {
-                                                "Step 1: Scan the QR code using your authenticator app:"
-                                            }
-                                        ))
+                                        .child(rsx! {
+                                            <div text_sm font_weight={FontWeight::MEDIUM}>
+                                                {if self.show_totp_secret_text {
+                                                    "Step 1: Enter the secret code below in your authenticator app:"
+                                                } else {
+                                                    "Step 1: Scan the QR code using your authenticator app:"
+                                                }}
+                                            </div>
+                                        })
                                         .when(!self.show_totp_secret_text, |this| {
                                             this.when_some(self.totp_qr_path.clone(), |this, path| {
-                                                this.child(
-                                                    div()
-                                                        .w_full()
-                                                        .flex()
-                                                        .justify_center()
-                                                        .child(
-                                                            gpui::img(path)
-                                                                .w(px(200.))
-                                                                .h(px(200.))
-                                                                .object_fit(gpui::ObjectFit::Contain)
-                                                        )
-                                                )
+                                                this.child(rsx! {
+                                                    <div w_full flex justify_center>
+                                                        {gpui::img(path)
+                                                            .w(px(200.))
+                                                            .h(px(200.))
+                                                            .object_fit(gpui::ObjectFit::Contain)}
+                                                    </div>
+                                                })
                                             })
-                                            .child(
-                                                div()
-                                                    .w_full()
-                                                    .flex()
-                                                    .justify_center()
-                                                    .mt_2()
-                                                    .child(
-                                                        div()
-                                                            .id("trouble_scanning_btn")
-                                                            .text_sm()
-                                                            .text_color(cx.theme().primary)
-                                                            .cursor_pointer()
-                                                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                                this.show_totp_secret_text = true;
-                                                                cx.notify();
-                                                            }))
-                                                            .child("Trouble scanning?")
-                                                    )
-                                            )
+                                            .child(rsx! {
+                                                <div w_full flex justify_center mt_2>
+                                                    <div
+                                                        id="trouble_scanning_btn"
+                                                        text_sm
+                                                        text_color={cx.theme().primary}
+                                                        cursor_pointer
+                                                        on_click={cx.listener(|this, _ev, _window, cx| {
+                                                            this.show_totp_secret_text = true;
+                                                            cx.notify();
+                                                        })}
+                                                    >
+                                                        {"Trouble scanning?"}
+                                                    </div>
+                                                </div>
+                                            })
                                         })
                                         .when(self.show_totp_secret_text, |this| {
                                             this.when_some(self.totp_secret_temp.clone(), |this, secret| {
-                                                this.child(
-                                                    div()
-                                                        .flex()
-                                                        .flex_col()
-                                                        .items_center()
-                                                        .gap_4()
-                                                        .mt_2()
-                                                        .child(
-                                                            div()
-                                                                .flex()
-                                                                .items_center()
-                                                                .gap_2()
-                                                                .p_3()
-                                                                .rounded_md()
-                                                                .bg(cx.theme().secondary)
-                                                                .border_1()
-                                                                .border_color(cx.theme().border)
-                                                                .child(div().text_sm().font_family(".SF NS Mono").child(secret.clone()))
-                                                                .child(
-                                                                    gpui_component::clipboard::Clipboard::new("totp-secret-clipboard-profile")
-                                                                        .value(secret)
-                                                                )
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .id("show_qr_btn")
-                                                                .text_sm()
-                                                                .text_color(cx.theme().primary)
-                                                                .cursor_pointer()
-                                                                .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                                    this.show_totp_secret_text = false;
-                                                                    cx.notify();
-                                                                }))
-                                                                .child("Show QR code instead")
-                                                        )
-                                                )
+                                                this.child(rsx! {
+                                                    <div flex flex_col items_center gap_4 mt_2>
+                                                        <div
+                                                            flex
+                                                            items_center
+                                                            gap_2
+                                                            p_3
+                                                            rounded_md
+                                                            bg={cx.theme().secondary}
+                                                            border_1
+                                                            border_color={cx.theme().border}
+                                                        >
+                                                            <div text_sm font_family={".SF NS Mono"}>
+                                                                {secret.clone()}
+                                                            </div>
+                                                            {gpui_component::clipboard::Clipboard::new("totp-secret-clipboard-profile")
+                                                                .value(secret)}
+                                                        </div>
+                                                        <div
+                                                            id="show_qr_btn"
+                                                            text_sm
+                                                            text_color={cx.theme().primary}
+                                                            cursor_pointer
+                                                            on_click={cx.listener(|this, _ev, _window, cx| {
+                                                                this.show_totp_secret_text = false;
+                                                                cx.notify();
+                                                            })}
+                                                        >
+                                                            {"Show QR code instead"}
+                                                        </div>
+                                                    </div>
+                                                })
                                             })
                                         })
                                 )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_1()
-                                        .mt_2()
-                                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Step 2: Enter the 6-digit code to verify"))
-                                        .child(OtpInput::new(&self.setup_totp_state).groups(1).large())
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .justify_end()
-                                        .mt_4()
-                                        .child(
-                                            gpui_component::button::Button::new("cancel_totp_profile_btn")
-                                                .label("Cancel")
-                                                .small()
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.show_totp_setup = false;
-                                                    this.show_totp_secret_text = false;
-                                                    this.totp_secret_temp = None;
-                                                    this.totp_qr_path = None;
-                                                    this.setup_totp_state.update(cx, |s, cx| s.set_value("", window, cx));
-                                                    this.is_totp_enabled = false;
-                                                    cx.notify();
-                                                }))
-                                        )
-                                )
+                                .child(rsx! {
+                                    <div flex flex_col gap_1 mt_2>
+                                        <div text_sm font_weight={FontWeight::MEDIUM}>
+                                            {"Step 2: Enter the 6-digit code to verify"}
+                                        </div>
+                                        {OtpInput::new(&self.setup_totp_state).groups(1).large()}
+                                    </div>
+                                })
+                                .child(rsx! {
+                                    <div flex justify_end mt_4>
+                                        {gpui_component::button::Button::new("cancel_totp_profile_btn")
+                                            .label("Cancel")
+                                            .small()
+                                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                                this.show_totp_setup = false;
+                                                this.show_totp_secret_text = false;
+                                                this.totp_secret_temp = None;
+                                                this.totp_qr_path = None;
+                                                this.setup_totp_state.update(cx, |s, cx| s.set_value("", window, cx));
+                                                this.is_totp_enabled = false;
+                                                cx.notify();
+                                            }))}
+                                    </div>
+                                })
                         )
                 )
             })
@@ -4955,152 +4934,133 @@ impl Render for ProfileManagerView {
                     let plan_for_confirm = plan.clone();
                     let closes_multiple_versions = plan.auto_close_consequences.len() > 1;
                     let consequences = plan.auto_close_consequences.iter().enumerate().fold(
-                        div().flex().flex_col().gap_2(),
+                        rsx! { <div flex flex_col gap_2 /> },
                         |list, (index, consequence)| {
                             let prior_effective_from = consequence
                                 .effective_from
                                 .map(|date| date.format("%Y-%m-%d").to_string())
                                 .unwrap_or_else(|| "Needs review (no effective date)".to_string());
-                            list.child(
-                                div()
-                                    .id(format!("profile-version-auto-close-{index}"))
-                                    .p_3()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(cx.theme().danger.opacity(0.5))
-                                    .bg(cx.theme().danger.opacity(0.08))
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .child(format!(
-                                                "Prior version: {}",
-                                                consequence.version_label
-                                            )),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!(
-                                                "Version ID: {}",
-                                                consequence.version_id
-                                            )),
-                                    )
-                                    .child(
-                                        div().text_sm().child(format!(
+                            list.child(rsx! {
+                                <div
+                                    id={format!("profile-version-auto-close-{index}")}
+                                    p_3
+                                    rounded_md
+                                    border_1
+                                    border_color={cx.theme().danger.opacity(0.5)}
+                                    bg={cx.theme().danger.opacity(0.08)}
+                                    flex
+                                    flex_col
+                                    gap_1
+                                >
+                                    <div text_sm font_weight={FontWeight::SEMIBOLD}>
+                                        {format!(
+                                            "Prior version: {}",
+                                            consequence.version_label
+                                        )}
+                                    </div>
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!(
+                                            "Version ID: {}",
+                                            consequence.version_id
+                                        )}
+                                    </div>
+                                    <div text_sm>
+                                        {format!(
                                             "Effective From: {prior_effective_from}"
-                                        )),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(cx.theme().danger)
-                                            .child(format!(
-                                                "Effective Until: Open (no end date) → {}",
-                                                consequence.effective_until.format("%Y-%m-%d")
-                                            )),
-                                    ),
-                            )
+                                        )}
+                                    </div>
+                                    <div
+                                        text_sm
+                                        font_weight={FontWeight::SEMIBOLD}
+                                        text_color={cx.theme().danger}
+                                    >
+                                        {format!(
+                                            "Effective Until: Open (no end date) → {}",
+                                            consequence.effective_until.format("%Y-%m-%d")
+                                        )}
+                                    </div>
+                                </div>
+                            })
                         },
                     );
 
-                    this.child(
-                        div()
-                            .absolute()
-                            .inset_0()
-                            .occlude()
-                            .bg(gpui::rgba(0x000000b2))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .w_full()
-                                    .max_w(px(560.))
-                                    .bg(cx.theme().background)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_xl()
-                                    .p_6()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_4()
-                                    .shadow_lg()
-                                    .child(
-                                        div()
-                                            .text_lg()
-                                            .font_weight(FontWeight::BOLD)
-                                            .child("Confirm profile timeline change"),
+                    this.child(rsx! {
+                        <div
+                            absolute
+                            inset_0
+                            occlude
+                            bg={gpui::rgba(0x000000b2)}
+                            flex
+                            items_center
+                            justify_center
+                        >
+                            <div
+                                w_full
+                                max_w={px(560.)}
+                                bg={cx.theme().background}
+                                border_1
+                                border_color={cx.theme().border}
+                                rounded_xl
+                                p_6
+                                flex
+                                flex_col
+                                gap_4
+                                shadow_lg
+                            >
+                                <div text_lg font_weight={FontWeight::BOLD}>
+                                    {"Confirm profile timeline change"}
+                                </div>
+                                <div text_sm>
+                                    {format!(
+                                        "Confirm “{}” with Effective From {}?",
+                                        plan.version_label,
+                                        plan.effective_from.format("%Y-%m-%d")
+                                    )}
+                                </div>
+                                <div text_xs text_color={cx.theme().muted_foreground}>
+                                    {format!("Version ID: {}", plan.version_id)}
+                                </div>
+                                <div text_sm text_color={cx.theme().muted_foreground}>
+                                    {if closes_multiple_versions {
+                                        "This will close the currently open confirmed profile versions shown below. Profile data and the yearly Forms Set will not change unless you confirm."
+                                    } else {
+                                        "This will close the currently open confirmed profile version shown below. Profile data and the yearly Forms Set will not change unless you confirm."
+                                    }}
+                                </div>
+                                {consequences}
+                                <div flex justify_end gap_2>
+                                    {gpui_component::button::Button::new(
+                                        "cancel-profile-version-confirmation",
                                     )
-                                    .child(
-                                        div().text_sm().child(format!(
-                                            "Confirm “{}” with Effective From {}?",
-                                            plan.version_label,
-                                            plan.effective_from.format("%Y-%m-%d")
-                                        )),
+                                    .label("Cancel")
+                                    .ghost()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.pending_profile_version_confirmation =
+                                            None;
+                                        cx.notify();
+                                    }))}
+                                    {gpui_component::button::Button::new(
+                                        "confirm-profile-version-timeline-change",
                                     )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!("Version ID: {}", plan.version_id)),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(if closes_multiple_versions {
-                                                "This will close the currently open confirmed profile versions shown below. Profile data and the yearly Forms Set will not change unless you confirm."
-                                            } else {
-                                                "This will close the currently open confirmed profile version shown below. Profile data and the yearly Forms Set will not change unless you confirm."
-                                            }),
-                                    )
-                                    .child(consequences)
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .justify_end()
-                                            .gap_2()
-                                            .child(
-                                                gpui_component::button::Button::new(
-                                                    "cancel-profile-version-confirmation",
-                                                )
-                                                .label("Cancel")
-                                                .ghost()
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.pending_profile_version_confirmation =
-                                                        None;
-                                                    cx.notify();
-                                                })),
-                                            )
-                                            .child(
-                                                gpui_component::button::Button::new(
-                                                    "confirm-profile-version-timeline-change",
-                                                )
-                                                .label(if closes_multiple_versions {
-                                                    "Confirm and Close Prior Versions"
-                                                } else {
-                                                    "Confirm and Close Prior Version"
-                                                })
-                                                .danger()
-                                                .on_click(cx.listener(
-                                                    move |this, _, window, cx| {
-                                                        this.apply_cor_version_confirmation(
-                                                            plan_for_confirm.clone(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    },
-                                                )),
-                                            ),
-                                    ),
-                            ),
-                    )
+                                    .label(if closes_multiple_versions {
+                                        "Confirm and Close Prior Versions"
+                                    } else {
+                                        "Confirm and Close Prior Version"
+                                    })
+                                    .danger()
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.apply_cor_version_confirmation(
+                                                plan_for_confirm.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    })
                 },
             )
             .into_any_element()

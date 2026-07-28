@@ -19,6 +19,7 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 
@@ -668,45 +669,44 @@ impl Form1701View {
         cx: &Context<Self>,
         on_click: impl Fn(&mut Self) + 'static,
     ) -> AnyElement {
-        div()
-            .id(id)
-            .px_3()
-            .py_2()
-            .border_1()
-            .border_color(if selected {
-                cx.theme().primary
-            } else {
-                cx.theme().border
-            })
-            .bg(if selected {
-                cx.theme().primary.opacity(0.15)
-            } else {
-                cx.theme().background
-            })
-            .rounded_md()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if this.draft.is_editable() {
-                    on_click(this);
-                    this.sync_from_inputs(cx);
-                }
-            }))
-            .child(label.into())
-            .into_any_element()
+        let root = rsx! {
+            <div
+                id={id}
+                px_3
+                py_2
+                border_1
+                border_color={if selected {
+                    cx.theme().primary
+                } else {
+                    cx.theme().border
+                }}
+                bg={if selected {
+                    cx.theme().primary.opacity(0.15)
+                } else {
+                    cx.theme().background
+                }}
+                rounded_md
+                on_click={cx.listener(move |this, _, _, cx| {
+                    if this.draft.is_editable() {
+                        on_click(this);
+                        this.sync_from_inputs(cx);
+                    }
+                })}
+            >
+                {label.into()}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_input_row(&self, label: &str, input: &Entity<InputState>) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(div().w_1_2().text_sm().child(label.to_string()))
-            .child(
-                div()
-                    .w_1_2()
-                    .child(Input::new(input).disabled(!self.draft.is_editable())),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div w_1_2 text_sm>{label.to_string()}</div>
+                <div w_1_2>{Input::new(input).disabled(!self.draft.is_editable())}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_error_summary(&self, cx: &Context<Self>) -> AnyElement {
@@ -715,126 +715,131 @@ impl Form1701View {
         }
         let mut list = div().mt_2().flex().flex_col().gap_1();
         for (field, message) in &self.validation_errors {
-            list = list.child(div().text_xs().child(format!("{field}: {message}")));
+            list = list.child(rsx! { <div text_xs>{format!("{field}: {message}")}</div> });
         }
-        div()
-            .p_4()
-            .border_1()
-            .border_color(cx.theme().warning)
-            .bg(cx.theme().warning.opacity(0.1))
-            .rounded_lg()
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .child("Draft needs review"),
-            )
-            .child(list)
-            .into_any_element()
+        let root = rsx! {
+            <div
+                p_4
+                border_1
+                border_color={cx.theme().warning}
+                bg={cx.theme().warning.opacity(0.1)}
+                rounded_lg
+            >
+                <div font_weight={FontWeight::BOLD}>{"Draft needs review"}</div>
+                {list}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_filing_and_taxpayer(&self, cx: &Context<Self>) -> AnyElement {
         let mut choices = div().flex().flex_col().gap_3();
-        choices = choices.child(div().flex().flex_wrap().gap_2().children(
-            Form1701TaxpayerType::ALL.into_iter().map(|value| {
-                self.render_choice(
-                    format!("1701_type_{value:?}"),
-                    format!("6 {}", value.label()),
-                    self.draft.taxpayer_type == Some(value),
-                    cx,
-                    move |this| this.draft.taxpayer_type = Some(value),
-                )
-            }),
-        ));
-        choices = choices.child(div().flex().flex_wrap().gap_2().children(
-            Form1701Atc::ALL.into_iter().map(|value| {
-                self.render_choice(
-                    format!("1701_atc_{}", value.code()),
-                    format!("7 {} · {}", value.code(), value.label()),
-                    self.draft.atc == Some(value),
-                    cx,
-                    move |this| {
-                        this.draft.atc = Some(value);
-                        this.draft.tax_rate = value.tax_rate();
-                        if this.draft.tax_rate != Some(Form1701TaxRate::Graduated) {
-                            this.draft.deduction_method = None;
-                        }
-                    },
-                )
-            }),
-        ));
+        choices = choices.child(rsx! {
+            <div flex flex_wrap gap_2>
+                {...Form1701TaxpayerType::ALL.into_iter().map(|value| {
+                    self.render_choice(
+                        format!("1701_type_{value:?}"),
+                        format!("6 {}", value.label()),
+                        self.draft.taxpayer_type == Some(value),
+                        cx,
+                        move |this| this.draft.taxpayer_type = Some(value),
+                    )
+                })}
+            </div>
+        });
+        choices = choices.child(rsx! {
+            <div flex flex_wrap gap_2>
+                {...Form1701Atc::ALL.into_iter().map(|value| {
+                    self.render_choice(
+                        format!("1701_atc_{}", value.code()),
+                        format!("7 {} · {}", value.code(), value.label()),
+                        self.draft.atc == Some(value),
+                        cx,
+                        move |this| {
+                            this.draft.atc = Some(value);
+                            this.draft.tax_rate = value.tax_rate();
+                            if this.draft.tax_rate != Some(Form1701TaxRate::Graduated) {
+                                this.draft.deduction_method = None;
+                            }
+                        },
+                    )
+                })}
+            </div>
+        });
         choices = choices.child(choice_group_taxpayer(self, cx));
 
-        section_card(cx, "ITEMS 1-21 — FILING AND BACKGROUND INFORMATION")
-            .child(div().text_sm().child(format!(
-                "Taxable year {} · TIN {} · RDO {} · Taxpayer {}",
-                self.draft.taxable_year,
-                self.draft.tin,
-                self.draft.rdo_code,
-                self.draft.taxpayer_name
-            )))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .child(self.render_choice(
+        let root = rsx! {
+            <div base={section_card(cx, "ITEMS 1-21 — FILING AND BACKGROUND INFORMATION")}>
+                <div text_sm>{format!(
+                    "Taxable year {} · TIN {} · RDO {} · Taxpayer {}",
+                    self.draft.taxable_year,
+                    self.draft.tin,
+                    self.draft.rdo_code,
+                    self.draft.taxpayer_name
+                )}</div>
+                <div flex flex_wrap gap_2>
+                    {self.render_choice(
                         "1701_amended_yes",
                         "2 Amended: Yes",
                         self.draft.is_amended,
                         cx,
                         |this| this.draft.is_amended = true,
-                    ))
-                    .child(self.render_choice(
+                    )}
+                    {self.render_choice(
                         "1701_amended_no",
                         "2 Amended: No",
                         !self.draft.is_amended,
                         cx,
                         |this| this.draft.is_amended = false,
-                    ))
-                    .child(self.render_choice(
+                    )}
+                    {self.render_choice(
                         "1701_short_yes",
                         "3 Short Period: Yes",
                         self.draft.is_short_period,
                         cx,
                         |this| this.draft.is_short_period = true,
-                    ))
-                    .child(self.render_choice(
+                    )}
+                    {self.render_choice(
                         "1701_short_no",
                         "3 Short Period: No",
                         !self.draft.is_short_period,
                         cx,
                         |this| this.draft.is_short_period = false,
-                    )),
-            )
-            .child(self.render_input_row(
-                "Return period end month (annual return is December)",
-                &self.period_end_month,
-            ))
-            .child(self.render_input_row("9 Registered address", &self.registered_address))
-            .child(self.render_input_row("9A ZIP code", &self.zip_code))
-            .child(self.render_input_row("10 Date of birth", &self.date_of_birth))
-            .child(self.render_input_row("11 Email address", &self.email))
-            .child(self.render_input_row("12 Citizenship", &self.citizenship))
-            .child(self.render_input_row("14 Foreign tax number", &self.foreign_tax_number))
-            .child(self.render_input_row("15 Contact number", &self.contact_number))
-            .child(choices)
-            .into_any_element()
+                    )}
+                </div>
+                {self.render_input_row(
+                    "Return period end month (annual return is December)",
+                    &self.period_end_month,
+                )}
+                {self.render_input_row("9 Registered address", &self.registered_address)}
+                {self.render_input_row("9A ZIP code", &self.zip_code)}
+                {self.render_input_row("10 Date of birth", &self.date_of_birth)}
+                {self.render_input_row("11 Email address", &self.email)}
+                {self.render_input_row("12 Citizenship", &self.citizenship)}
+                {self.render_input_row("14 Foreign tax number", &self.foreign_tax_number)}
+                {self.render_input_row("15 Contact number", &self.contact_number)}
+                {choices}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_spouse(&self, cx: &Context<Self>) -> AnyElement {
-        let mut card = section_card(cx, "SPOUSE BACKGROUND INFORMATION").child(
-            div().flex().gap_2().child(self.render_choice(
-                "1701_spouse_enabled",
-                if self.draft.spouse.enabled {
-                    "Spouse section enabled"
-                } else {
-                    "Enable spouse section"
-                },
-                self.draft.spouse.enabled,
-                cx,
-                |this| this.draft.spouse.enabled = !this.draft.spouse.enabled,
-            )),
-        );
+        let mut card = section_card(cx, "SPOUSE BACKGROUND INFORMATION").child(rsx! {
+            <div flex gap_2>
+                {self.render_choice(
+                    "1701_spouse_enabled",
+                    if self.draft.spouse.enabled {
+                        "Spouse section enabled"
+                    } else {
+                        "Enable spouse section"
+                    },
+                    self.draft.spouse.enabled,
+                    cx,
+                    |this| this.draft.spouse.enabled = !this.draft.spouse.enabled,
+                )}
+            </div>
+        });
         if self.draft.spouse.enabled {
             card =
                 card.child(self.render_input_row("Spouse TIN", &self.spouse_tin))
@@ -846,36 +851,40 @@ impl Form1701View {
                         "Spouse foreign tax number",
                         &self.spouse_foreign_tax_number,
                     ))
-                    .child(div().flex().flex_wrap().gap_2().children(
-                        Form1701SpouseType::ALL.into_iter().map(|value| {
-                            self.render_choice(
-                                format!("1701_spouse_type_{value:?}"),
-                                value.label(),
-                                self.draft.spouse.filer_type == Some(value),
-                                cx,
-                                move |this| this.draft.spouse.filer_type = Some(value),
-                            )
-                        }),
-                    ))
-                    .child(div().flex().flex_wrap().gap_2().children(
-                        Form1701Atc::ALL.into_iter().map(|value| {
-                            self.render_choice(
-                                format!("1701_spouse_atc_{}", value.code()),
-                                format!("{} · {}", value.code(), value.label()),
-                                self.draft.spouse.atc == Some(value),
-                                cx,
-                                move |this| {
-                                    this.draft.spouse.atc = Some(value);
-                                    this.draft.spouse.tax_rate = value.tax_rate();
-                                    if this.draft.spouse.tax_rate
-                                        != Some(Form1701TaxRate::Graduated)
-                                    {
-                                        this.draft.spouse.deduction_method = None;
-                                    }
-                                },
-                            )
-                        }),
-                    ))
+                    .child(rsx! {
+                        <div flex flex_wrap gap_2>
+                            {...Form1701SpouseType::ALL.into_iter().map(|value| {
+                                self.render_choice(
+                                    format!("1701_spouse_type_{value:?}"),
+                                    value.label(),
+                                    self.draft.spouse.filer_type == Some(value),
+                                    cx,
+                                    move |this| this.draft.spouse.filer_type = Some(value),
+                                )
+                            })}
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div flex flex_wrap gap_2>
+                            {...Form1701Atc::ALL.into_iter().map(|value| {
+                                self.render_choice(
+                                    format!("1701_spouse_atc_{}", value.code()),
+                                    format!("{} · {}", value.code(), value.label()),
+                                    self.draft.spouse.atc == Some(value),
+                                    cx,
+                                    move |this| {
+                                        this.draft.spouse.atc = Some(value);
+                                        this.draft.spouse.tax_rate = value.tax_rate();
+                                        if this.draft.spouse.tax_rate
+                                            != Some(Form1701TaxRate::Graduated)
+                                        {
+                                            this.draft.spouse.deduction_method = None;
+                                        }
+                                    },
+                                )
+                            })}
+                        </div>
+                    })
                     .child(choice_group_spouse(self, cx));
         }
         card.into_any_element()
@@ -885,56 +894,45 @@ impl Form1701View {
         let mut card = section_card(cx, "SCHEDULE 1 — COMPENSATION INCOME");
         for (index, inputs) in self.employer_inputs.iter().enumerate() {
             let row = &self.draft.employers[index];
-            card = card.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .p_3()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .child(format!("Employer row {}", index + 1)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(self.render_choice(
-                                format!("1701_employer_{}_taxpayer", index),
-                                "Taxpayer/Filer",
-                                row.owner == Some(Form1701Party::Taxpayer),
-                                cx,
-                                move |this| {
-                                    this.draft.employers[index].owner =
-                                        Some(Form1701Party::Taxpayer)
-                                },
-                            ))
-                            .child(self.render_choice(
-                                format!("1701_employer_{}_spouse", index),
-                                "Spouse",
-                                row.owner == Some(Form1701Party::Spouse),
-                                cx,
-                                move |this| {
-                                    this.draft.employers[index].owner = Some(Form1701Party::Spouse)
-                                },
-                            ))
-                            .child(self.render_choice(
-                                format!("1701_employer_{}_clear", index),
-                                "Unused",
-                                row.owner.is_none(),
-                                cx,
-                                move |this| this.draft.employers[index].owner = None,
-                            )),
-                    )
-                    .child(self.render_input_row("Employer name", &inputs.name))
-                    .child(self.render_input_row("Employer TIN", &inputs.tin))
-                    .child(self.render_input_row("Compensation income", &inputs.compensation))
-                    .child(self.render_input_row("Tax withheld", &inputs.withheld)),
-            );
+            card = card.child(rsx! {
+                <div flex flex_col gap_2 p_3 border_1 border_color={cx.theme().border} rounded_md>
+                    <div font_weight={FontWeight::BOLD}>
+                        {format!("Employer row {}", index + 1)}
+                    </div>
+                    <div flex gap_2>
+                        {self.render_choice(
+                            format!("1701_employer_{}_taxpayer", index),
+                            "Taxpayer/Filer",
+                            row.owner == Some(Form1701Party::Taxpayer),
+                            cx,
+                            move |this| {
+                                this.draft.employers[index].owner =
+                                    Some(Form1701Party::Taxpayer)
+                            },
+                        )}
+                        {self.render_choice(
+                            format!("1701_employer_{}_spouse", index),
+                            "Spouse",
+                            row.owner == Some(Form1701Party::Spouse),
+                            cx,
+                            move |this| {
+                                this.draft.employers[index].owner = Some(Form1701Party::Spouse)
+                            },
+                        )}
+                        {self.render_choice(
+                            format!("1701_employer_{}_clear", index),
+                            "Unused",
+                            row.owner.is_none(),
+                            cx,
+                            move |this| this.draft.employers[index].owner = None,
+                        )}
+                    </div>
+                    {self.render_input_row("Employer name", &inputs.name)}
+                    {self.render_input_row("Employer TIN", &inputs.tin)}
+                    {self.render_input_row("Compensation income", &inputs.compensation)}
+                    {self.render_input_row("Tax withheld", &inputs.withheld)}
+                </div>
+            });
         }
         card.into_any_element()
     }
@@ -951,45 +949,28 @@ impl Form1701View {
             .filter(|(candidate, _, _)| *candidate == section)
         {
             let inputs = &self.amount_inputs[&(section, *item)];
-            card = card.child(
-                div()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_3()
-                    .items_center()
-                    .p_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(div().text_sm().child(format!("{item} {label}")))
-                    .child(Input::new(&inputs.taxpayer).disabled(!self.draft.is_editable()))
-                    .child(Input::new(&inputs.spouse).disabled(!self.draft.is_editable())),
-            );
+            card = card.child(rsx! {
+                <div grid grid_cols={3} gap_3 items_center p_2 border_b_1 border_color={cx.theme().border}>
+                    <div text_sm>{format!("{item} {label}")}</div>
+                    {Input::new(&inputs.taxpayer).disabled(!self.draft.is_editable())}
+                    {Input::new(&inputs.spouse).disabled(!self.draft.is_editable())}
+                </div>
+            });
         }
         for (item, label) in computed_rows(section) {
-            card = card.child(
-                div()
-                    .grid()
-                    .grid_cols(3)
-                    .gap_3()
-                    .items_center()
-                    .p_2()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::BOLD)
-                            .child(format!("{item} {label}")),
-                    )
-                    .child(computed_amount(
+            card = card.child(rsx! {
+                <div grid grid_cols={3} gap_3 items_center p_2 border_b_1 border_color={cx.theme().border}>
+                    <div text_sm font_weight={FontWeight::BOLD}>{format!("{item} {label}")}</div>
+                    {computed_amount(
                         self.draft.amount(section, *item, Form1701Party::Taxpayer),
                         cx,
-                    ))
-                    .child(computed_amount(
+                    )}
+                    {computed_amount(
                         self.draft.amount(section, *item, Form1701Party::Spouse),
                         cx,
-                    )),
-            );
+                    )}
+                </div>
+            });
         }
         card.into_any_element()
     }
@@ -1001,40 +982,32 @@ impl Form1701View {
             "36 Tax Debit Memo",
             "37 Others",
         ];
-        let mut card = section_card(cx, "PART III — DETAILS OF PAYMENT").child(
-            div()
-                .text_xs()
-                .child("The reviewed XML has no drawee-bank/agency field for Item 36."),
-        );
+        let mut card = section_card(cx, "PART III — DETAILS OF PAYMENT").child(rsx! {
+            <div text_xs>
+                {"The reviewed XML has no drawee-bank/agency field for Item 36."}
+            </div>
+        });
         for (index, inputs) in self.payment_inputs.iter().enumerate() {
-            card = card.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .p_3()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .child(div().font_weight(FontWeight::BOLD).child(labels[index]))
-                    .child(
-                        div()
-                            .grid()
-                            .grid_cols(4)
-                            .gap_2()
-                            .child(
-                                Input::new(&inputs.agency)
-                                    .disabled(index == 2 || !self.draft.is_editable()),
-                            )
-                            .child(Input::new(&inputs.number).disabled(!self.draft.is_editable()))
-                            .child(Input::new(&inputs.date).disabled(!self.draft.is_editable()))
-                            .child(Input::new(&inputs.amount).disabled(!self.draft.is_editable())),
-                    ),
-            );
+            card = card.child(rsx! {
+                <div flex flex_col gap_2 p_3 border_1 border_color={cx.theme().border} rounded_md>
+                    <div font_weight={FontWeight::BOLD}>{labels[index]}</div>
+                    <div grid grid_cols={4} gap_2>
+                        {Input::new(&inputs.agency)
+                            .disabled(index == 2 || !self.draft.is_editable())}
+                        {Input::new(&inputs.number).disabled(!self.draft.is_editable())}
+                        {Input::new(&inputs.date).disabled(!self.draft.is_editable())}
+                        {Input::new(&inputs.amount).disabled(!self.draft.is_editable())}
+                    </div>
+                </div>
+            });
         }
-        card.child(self.render_input_row("37 Others description", &self.payment_37_description))
-            .child(self.render_input_row("Machine validation / receipt", &self.machine_validation))
-            .into_any_element()
+        let root = rsx! {
+            <div base={card}>
+                {self.render_input_row("37 Others description", &self.payment_37_description)}
+                {self.render_input_row("Machine validation / receipt", &self.machine_validation)}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_editor_sections(&self, cx: &Context<Self>) -> Vec<AnyElement> {
@@ -1052,11 +1025,16 @@ impl Form1701View {
                 "SCHEDULE 3 — BUSINESS/PROFESSION INCOME",
                 cx,
             ),
-            section_card(cx, "SCHEDULE 3 — SPECIFY LINES")
-                .child(self.render_input_row("19 Description", &self.schedule_3_description_19))
-                .child(self.render_input_row("20 Description", &self.schedule_3_description_20))
-                .child(self.render_input_row("27 Description", &self.schedule_3_description_27))
-                .into_any_element(),
+            {
+                let root = rsx! {
+                    <div base={section_card(cx, "SCHEDULE 3 — SPECIFY LINES")}>
+                        {self.render_input_row("19 Description", &self.schedule_3_description_19)}
+                        {self.render_input_row("20 Description", &self.schedule_3_description_20)}
+                        {self.render_input_row("27 Description", &self.schedule_3_description_27)}
+                    </div>
+                };
+                root.into_any_element()
+            },
             self.render_amount_section(
                 Form1701AmountSection::Schedule4,
                 "SCHEDULE 4 — ORDINARY ALLOWABLE ITEMIZED DEDUCTIONS",
@@ -1073,9 +1051,14 @@ impl Form1701View {
                 "PART VII — TAX CREDITS/PAYMENTS",
                 cx,
             ),
-            section_card(cx, "PART VII — OTHER CREDIT")
-                .child(self.render_input_row("Item 9 description", &self.part_vii_description_9))
-                .into_any_element(),
+            {
+                let root = rsx! {
+                    <div base={section_card(cx, "PART VII — OTHER CREDIT")}>
+                        {self.render_input_row("Item 9 description", &self.part_vii_description_9)}
+                    </div>
+                };
+                root.into_any_element()
+            },
             self.render_amount_section(
                 Form1701AmountSection::PartViii,
                 "PART VIII — TAX RELIEF",
@@ -1097,14 +1080,14 @@ impl Form1701View {
     }
 
     fn render_overpayment_and_attachments(&self, cx: &Context<Self>) -> AnyElement {
-        section_card(cx, "ITEMS 32-33 — OVERPAYMENT AND ATTACHMENTS")
-            .child(div().text_sm().child(format!(
-                "Item 32 aggregate: {}",
-                format_optional_amount(self.draft.computations.part_ii_item_32_aggregate)
-            )))
-            .child(
-                div().flex().flex_wrap().gap_2().children(
-                    [
+        let root = rsx! {
+            <div base={section_card(cx, "ITEMS 32-33 — OVERPAYMENT AND ATTACHMENTS")}>
+                <div text_sm>{format!(
+                    "Item 32 aggregate: {}",
+                    format_optional_amount(self.draft.computations.part_ii_item_32_aggregate)
+                )}</div>
+                <div flex flex_wrap gap_2>
+                    {...[
                         Form1701OverpaymentDisposition::None,
                         Form1701OverpaymentDisposition::Refund,
                         Form1701OverpaymentDisposition::TaxCreditCertificate,
@@ -1119,11 +1102,12 @@ impl Form1701View {
                             cx,
                             move |this| this.draft.overpayment_disposition = value,
                         )
-                    }),
-                ),
-            )
-            .child(self.render_input_row("33 Number of attachments", &self.number_of_attachments))
-            .into_any_element()
+                    })}
+                </div>
+                {self.render_input_row("33 Number of attachments", &self.number_of_attachments)}
+            </div>
+        };
+        root.into_any_element()
     }
 }
 
@@ -1311,127 +1295,96 @@ impl Render for Form1701View {
             .flex()
             .flex_col()
             .gap_6()
-            .child(
-                div()
-                    .p_4()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(cx.theme().warning)
-                    .bg(cx.theme().warning.opacity(0.1))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .child("Evidence boundary"),
-                    )
-                    .children(
-                        evidence_warnings
-                            .into_iter()
-                            .map(|warning| div().mt_1().text_sm().child(format!("• {warning}"))),
-                    ),
-            );
+            .child(rsx! {
+                <div
+                    p_4
+                    rounded_lg
+                    border_1
+                    border_color={cx.theme().warning}
+                    bg={cx.theme().warning.opacity(0.1)}
+                >
+                    <div font_weight={FontWeight::BOLD}>{"Evidence boundary"}</div>
+                    {...evidence_warnings
+                        .into_iter()
+                        .map(|warning| rsx! {
+                            <div mt_1 text_sm>{format!("• {warning}")}</div>
+                        })}
+                </div>
+            });
         if let Some(message) = status_message {
-            content = content.child(
-                div()
-                    .p_3()
-                    .rounded_md()
-                    .bg(cx.theme().muted.opacity(0.5))
-                    .child(message),
-            );
+            content = content.child(rsx! {
+                <div p_3 rounded_md bg={cx.theme().muted.opacity(0.5)}>
+                    {message}
+                </div>
+            });
         }
         content = content
             .child(self.render_error_summary(cx))
             .children(self.render_editor_sections(cx));
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .bg(cx.theme().background)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("1701_back")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(Form1701Event::BackToDashboard);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_3()
-                            .child(
-                                gpui_component::button::Button::new("1701_save")
-                                    .label("Save Draft")
-                                    .outline()
-                                    .disabled(!is_draft)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_draft(window, cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("1701_manual")
-                                    .label("Manual / External Filing")
-                                    .primary()
-                                    .disabled(true),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .p_6()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().accent)
-                    .child(self.render_header(cx))
-                    .child(div().mt_6().child(self.render_status_pipeline(cx))),
-            )
-            .child(
-                div()
-                    .id("1701_scroll")
-                    .flex_1()
-                    .w_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .p_8()
-                    .child(content),
-            )
+        rsx! {
+            <div flex flex_col w_full h_full bg={cx.theme().background}>
+                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                    {gpui_component::button::Button::new("1701_back")
+                        .label("← Back")
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(Form1701Event::BackToDashboard);
+                        }))}
+                    <div flex gap_3>
+                        {gpui_component::button::Button::new("1701_save")
+                            .label("Save Draft")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.save_draft(window, cx);
+                            }))}
+                        {gpui_component::button::Button::new("1701_manual")
+                            .label("Manual / External Filing")
+                            .primary()
+                            .disabled(true)}
+                    </div>
+                </div>
+                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().accent}>
+                    {self.render_header(cx)}
+                    <div mt_6>{self.render_status_pipeline(cx)}</div>
+                </div>
+                <div
+                    id="1701_scroll"
+                    flex_1
+                    w_full
+                    overflow_y_scroll
+                    track_scroll={&self.scroll_handle}
+                    p_8
+                >
+                    {content}
+                </div>
+            </div>
+        }
     }
 }
 
 fn choice_group_taxpayer(view: &Form1701View, cx: &Context<Form1701View>) -> AnyElement {
-    let rates = div()
-        .flex()
-        .flex_wrap()
-        .gap_2()
-        .children(Form1701TaxRate::ALL.into_iter().map(|value| {
-            view.render_choice(
-                format!("1701_rate_{value:?}"),
-                value.label(),
-                view.draft.tax_rate == Some(value),
-                cx,
-                move |this| {
-                    this.draft.tax_rate = Some(value);
-                    if value == Form1701TaxRate::EightPercent {
-                        this.draft.deduction_method = None;
-                    }
-                },
-            )
-        }));
-    let deductions =
-        div()
-            .flex()
-            .flex_wrap()
-            .gap_2()
-            .children(Form1701DeductionMethod::ALL.into_iter().map(|value| {
+    let rates = rsx! {
+        <div flex flex_wrap gap_2>
+            {...Form1701TaxRate::ALL.into_iter().map(|value| {
+                view.render_choice(
+                    format!("1701_rate_{value:?}"),
+                    value.label(),
+                    view.draft.tax_rate == Some(value),
+                    cx,
+                    move |this| {
+                        this.draft.tax_rate = Some(value);
+                        if value == Form1701TaxRate::EightPercent {
+                            this.draft.deduction_method = None;
+                        }
+                    },
+                )
+            })}
+        </div>
+    };
+    let deductions = rsx! {
+        <div flex flex_wrap gap_2>
+            {...Form1701DeductionMethod::ALL.into_iter().map(|value| {
                 view.render_choice(
                     format!("1701_deduction_{value:?}"),
                     value.label(),
@@ -1439,27 +1392,23 @@ fn choice_group_taxpayer(view: &Form1701View, cx: &Context<Form1701View>) -> Any
                     cx,
                     move |this| this.draft.deduction_method = Some(value),
                 )
-            }));
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(rates)
-        .child(deductions)
-        .child(boolean_choices(
-            view,
-            cx,
-            "1701_ftc",
-            "13 Foreign tax credits",
-            view.draft.claims_foreign_tax_credits,
-            |this, value| this.draft.claims_foreign_tax_credits = Some(value),
-        ))
-        .child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_2()
-                .children(Form1701CivilStatus::ALL.into_iter().map(|value| {
+            })}
+        </div>
+    };
+    let root = rsx! {
+        <div flex flex_col gap_2>
+            {rates}
+            {deductions}
+            {boolean_choices(
+                view,
+                cx,
+                "1701_ftc",
+                "13 Foreign tax credits",
+                view.draft.claims_foreign_tax_credits,
+                |this, value| this.draft.claims_foreign_tax_credits = Some(value),
+            )}
+            <div flex flex_wrap gap_2>
+                {...Form1701CivilStatus::ALL.into_iter().map(|value| {
                     view.render_choice(
                         format!("1701_civil_{value:?}"),
                         format!("16 {}", value.label()),
@@ -1467,28 +1416,25 @@ fn choice_group_taxpayer(view: &Form1701View, cx: &Context<Form1701View>) -> Any
                         cx,
                         move |this| this.draft.civil_status = Some(value),
                     )
-                })),
-        )
-        .child(boolean_choices(
-            view,
-            cx,
-            "1701_spouse_income",
-            "17 Spouse has income",
-            view.draft.spouse_has_income,
-            |this, value| this.draft.spouse_has_income = Some(value),
-        ))
-        .child(
-            div()
-                .flex()
-                .gap_2()
-                .child(view.render_choice(
+                })}
+            </div>
+            {boolean_choices(
+                view,
+                cx,
+                "1701_spouse_income",
+                "17 Spouse has income",
+                view.draft.spouse_has_income,
+                |this, value| this.draft.spouse_has_income = Some(value),
+            )}
+            <div flex gap_2>
+                {view.render_choice(
                     "1701_joint",
                     "18 Joint filing",
                     view.draft.joint_filing_status == Some(Form1701JointFilingStatus::Joint),
                     cx,
                     |this| this.draft.joint_filing_status = Some(Form1701JointFilingStatus::Joint),
-                ))
-                .child(view.render_choice(
+                )}
+                {view.render_choice(
                     "1701_separate",
                     "18 Separate filing",
                     view.draft.joint_filing_status == Some(Form1701JointFilingStatus::Separate),
@@ -1496,38 +1442,34 @@ fn choice_group_taxpayer(view: &Form1701View, cx: &Context<Form1701View>) -> Any
                     |this| {
                         this.draft.joint_filing_status = Some(Form1701JointFilingStatus::Separate)
                     },
-                )),
-        )
-        .child(boolean_choices(
-            view,
-            cx,
-            "1701_exempt",
-            "19 Exempt income",
-            view.draft.has_exempt_income,
-            |this, value| this.draft.has_exempt_income = Some(value),
-        ))
-        .child(boolean_choices(
-            view,
-            cx,
-            "1701_special",
-            "20 Special-rate income",
-            view.draft.has_special_rate_income,
-            |this, value| this.draft.has_special_rate_income = Some(value),
-        ))
-        .into_any_element()
+                )}
+            </div>
+            {boolean_choices(
+                view,
+                cx,
+                "1701_exempt",
+                "19 Exempt income",
+                view.draft.has_exempt_income,
+                |this, value| this.draft.has_exempt_income = Some(value),
+            )}
+            {boolean_choices(
+                view,
+                cx,
+                "1701_special",
+                "20 Special-rate income",
+                view.draft.has_special_rate_income,
+                |this, value| this.draft.has_special_rate_income = Some(value),
+            )}
+        </div>
+    };
+    root.into_any_element()
 }
 
 fn choice_group_spouse(view: &Form1701View, cx: &Context<Form1701View>) -> AnyElement {
-    div()
-        .flex()
-        .flex_col()
-        .gap_2()
-        .child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap_2()
-                .children(Form1701TaxRate::ALL.into_iter().map(|value| {
+    let root = rsx! {
+        <div flex flex_col gap_2>
+            <div flex flex_wrap gap_2>
+                {...Form1701TaxRate::ALL.into_iter().map(|value| {
                     view.render_choice(
                         format!("1701_spouse_rate_{value:?}"),
                         value.label(),
@@ -1540,44 +1482,46 @@ fn choice_group_spouse(view: &Form1701View, cx: &Context<Form1701View>) -> AnyEl
                             }
                         },
                     )
-                })),
-        )
-        .child(div().flex().flex_wrap().gap_2().children(
-            Form1701DeductionMethod::ALL.into_iter().map(|value| {
-                view.render_choice(
-                    format!("1701_spouse_deduction_{value:?}"),
-                    value.label(),
-                    view.draft.spouse.deduction_method == Some(value),
-                    cx,
-                    move |this| this.draft.spouse.deduction_method = Some(value),
-                )
-            }),
-        ))
-        .child(boolean_choices(
-            view,
-            cx,
-            "1701_spouse_ftc",
-            "Foreign tax credits",
-            view.draft.spouse.claims_foreign_tax_credits,
-            |this, value| this.draft.spouse.claims_foreign_tax_credits = Some(value),
-        ))
-        .child(boolean_choices(
-            view,
-            cx,
-            "1701_spouse_exempt",
-            "Exempt income",
-            view.draft.spouse.has_exempt_income,
-            |this, value| this.draft.spouse.has_exempt_income = Some(value),
-        ))
-        .child(boolean_choices(
-            view,
-            cx,
-            "1701_spouse_special",
-            "Special-rate income",
-            view.draft.spouse.has_special_rate_income,
-            |this, value| this.draft.spouse.has_special_rate_income = Some(value),
-        ))
-        .into_any_element()
+                })}
+            </div>
+            <div flex flex_wrap gap_2>
+                {...Form1701DeductionMethod::ALL.into_iter().map(|value| {
+                    view.render_choice(
+                        format!("1701_spouse_deduction_{value:?}"),
+                        value.label(),
+                        view.draft.spouse.deduction_method == Some(value),
+                        cx,
+                        move |this| this.draft.spouse.deduction_method = Some(value),
+                    )
+                })}
+            </div>
+            {boolean_choices(
+                view,
+                cx,
+                "1701_spouse_ftc",
+                "Foreign tax credits",
+                view.draft.spouse.claims_foreign_tax_credits,
+                |this, value| this.draft.spouse.claims_foreign_tax_credits = Some(value),
+            )}
+            {boolean_choices(
+                view,
+                cx,
+                "1701_spouse_exempt",
+                "Exempt income",
+                view.draft.spouse.has_exempt_income,
+                |this, value| this.draft.spouse.has_exempt_income = Some(value),
+            )}
+            {boolean_choices(
+                view,
+                cx,
+                "1701_spouse_special",
+                "Special-rate income",
+                view.draft.spouse.has_special_rate_income,
+                |this, value| this.draft.spouse.has_special_rate_income = Some(value),
+            )}
+        </div>
+    };
+    root.into_any_element()
 }
 
 fn boolean_choices(
@@ -1588,65 +1532,69 @@ fn boolean_choices(
     selected: Option<bool>,
     set: impl Fn(&mut Form1701View, bool) + Copy + 'static,
 ) -> AnyElement {
-    div()
-        .flex()
-        .gap_2()
-        .child(view.render_choice(
-            format!("{id}_yes"),
-            format!("{label}: Yes"),
-            selected == Some(true),
-            cx,
-            move |this| set(this, true),
-        ))
-        .child(view.render_choice(
-            format!("{id}_no"),
-            format!("{label}: No"),
-            selected == Some(false),
-            cx,
-            move |this| set(this, false),
-        ))
-        .into_any_element()
+    let root = rsx! {
+        <div flex gap_2>
+            {view.render_choice(
+                format!("{id}_yes"),
+                format!("{label}: Yes"),
+                selected == Some(true),
+                cx,
+                move |this| set(this, true),
+            )}
+            {view.render_choice(
+                format!("{id}_no"),
+                format!("{label}: No"),
+                selected == Some(false),
+                cx,
+                move |this| set(this, false),
+            )}
+        </div>
+    };
+    root.into_any_element()
 }
 
 fn section_card(cx: &Context<Form1701View>, title: &str) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_4()
-        .p_5()
-        .bg(cx.theme().background)
-        .border_1()
-        .border_color(cx.theme().border)
-        .rounded_lg()
-        .child(
-            div()
-                .text_xl()
-                .font_weight(FontWeight::BOLD)
-                .child(title.to_string()),
-        )
+    rsx! {
+        <div
+            flex
+            flex_col
+            gap_4
+            p_5
+            bg={cx.theme().background}
+            border_1
+            border_color={cx.theme().border}
+            rounded_lg
+        >
+            <div text_xl font_weight={FontWeight::BOLD}>{title.to_string()}</div>
+        </div>
+    }
 }
 
 fn amount_header(cx: &Context<Form1701View>) -> AnyElement {
-    div()
-        .grid()
-        .grid_cols(3)
-        .gap_3()
-        .p_2()
-        .bg(cx.theme().muted.opacity(0.5))
-        .font_weight(FontWeight::BOLD)
-        .child("Particulars")
-        .child("A) Taxpayer/Filer")
-        .child("B) Spouse")
-        .into_any_element()
+    let root = rsx! {
+        <div
+            grid
+            grid_cols={3}
+            gap_3
+            p_2
+            bg={cx.theme().muted.opacity(0.5)}
+            font_weight={FontWeight::BOLD}
+        >
+            {"Particulars"}
+            {"A) Taxpayer/Filer"}
+            {"B) Spouse"}
+        </div>
+    };
+    root.into_any_element()
 }
 
 fn computed_amount(value: Option<f64>, cx: &Context<Form1701View>) -> AnyElement {
-    div()
-        .p_2()
-        .rounded_md()
-        .bg(cx.theme().muted.opacity(0.5))
-        .child(format_optional_amount(value))
-        .into_any_element()
+    let root = rsx! {
+        <div p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
+            {format_optional_amount(value)}
+        </div>
+    };
+    root.into_any_element()
 }
 
 fn format_optional_amount(value: Option<f64>) -> String {

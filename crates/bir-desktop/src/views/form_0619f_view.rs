@@ -16,6 +16,7 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use crate::components::form_engine::FormViewTrait;
@@ -334,19 +335,13 @@ impl Form0619FView {
         for (field, message) in &self.validation_errors {
             list = list.child(div().text_xs().child(format!("{field}: {message}")));
         }
-        div()
-            .p_4()
-            .border_1()
-            .border_color(cx.theme().warning)
-            .bg(cx.theme().warning.opacity(0.1))
-            .rounded_lg()
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .child("Draft needs review"),
-            )
-            .child(list)
-            .into_any_element()
+        let root = rsx! {
+            <div p_4 border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)} rounded_lg>
+                <div font_weight={FontWeight::BOLD}>{"Draft needs review"}</div>
+                {list}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_toggle(
@@ -358,14 +353,10 @@ impl Form0619FView {
         on_click: impl Fn(&mut Self) + 'static,
     ) -> AnyElement {
         let is_draft = self.draft.is_editable();
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(div().text_sm().child(label))
-            .child(
-                div()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div text_sm>{label}</div>
+                {div()
                     .id(id)
                     .px_3()
                     .py_2()
@@ -388,66 +379,42 @@ impl Form0619FView {
                             this.sync_from_inputs(cx);
                         }
                     }))
-                    .child(if selected { "Yes" } else { "No" }),
-            )
-            .into_any_element()
+                    .child(if selected { "Yes" } else { "No" })}
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_fixed_row(&self, label: &str, value: &str, cx: &Context<Self>) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(div().text_sm().child(label.to_string()))
-            .child(
-                div()
-                    .w_1_2()
-                    .p_2()
-                    .rounded_md()
-                    .bg(cx.theme().muted.opacity(0.5))
-                    .font_weight(FontWeight::BOLD)
-                    .child(value.to_string()),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div text_sm>{label.to_string()}</div>
+                <div w_1_2 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)} font_weight={FontWeight::BOLD}>
+                    {value.to_string()}
+                </div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_input_row(&self, label: &str, input: &Entity<InputState>) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(div().w_1_2().text_sm().child(label.to_string()))
-            .child(
-                div()
-                    .w_1_2()
-                    .child(Input::new(input).disabled(!self.draft.is_editable())),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div w_1_2 text_sm>{label.to_string()}</div>
+                <div w_1_2>{Input::new(input).disabled(!self.draft.is_editable())}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_computed_row(&self, label: &str, value: f64, cx: &Context<Self>) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .p_2()
-            .rounded_md()
-            .bg(cx.theme().muted.opacity(0.5))
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(label.to_string()),
-            )
-            .child(
-                div()
-                    .font_weight(FontWeight::BOLD)
-                    .child(format!("₱ {value:.2}")),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4 p_2 rounded_md bg={cx.theme().muted.opacity(0.5)}>
+                <div text_sm font_weight={FontWeight::BOLD}>{label.to_string()}</div>
+                <div font_weight={FontWeight::BOLD}>{format!("₱ {value:.2}")}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_payment_row(
@@ -457,46 +424,18 @@ impl Form0619FView {
         row: &PaymentRowInputs,
         cx: &Context<Self>,
     ) -> AnyElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .p_3()
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_md()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(format!("{item} {label}")),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&row.agency).disabled(!self.draft.is_editable())),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&row.number).disabled(!self.draft.is_editable())),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&row.date).disabled(!self.draft.is_editable())),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&row.amount).disabled(!self.draft.is_editable())),
-                    ),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex flex_col gap_2 p_3 border_1 border_color={cx.theme().border} rounded_md>
+                <div text_sm font_weight={FontWeight::BOLD}>{format!("{item} {label}")}</div>
+                <div flex gap_2>
+                    <div flex_1>{Input::new(&row.agency).disabled(!self.draft.is_editable())}</div>
+                    <div flex_1>{Input::new(&row.number).disabled(!self.draft.is_editable())}</div>
+                    <div flex_1>{Input::new(&row.date).disabled(!self.draft.is_editable())}</div>
+                    <div flex_1>{Input::new(&row.amount).disabled(!self.draft.is_editable())}</div>
+                </div>
+            </div>
+        };
+        root.into_any_element()
     }
 }
 
@@ -659,310 +598,245 @@ impl Render for Form0619FView {
         let status_message = self.status_message.clone();
         let xml_evidence_message = self.draft.xml_evidence_warnings().join(" ");
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .bg(cx.theme().background)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("0619f_back")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(Form0619FEvent::BackToDashboard);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                gpui_component::button::Button::new("0619f_save")
-                                    .label("Save Draft")
-                                    .outline()
-                                    .disabled(!is_draft)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_draft(window, cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("0619f_manual")
-                                    .label("Manual / External Filing")
-                                    .primary()
-                                    .disabled(true),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .p_6()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().accent)
-                    .child(self.render_header(cx))
-                    .child(div().mt_6().child(self.render_status_pipeline(cx))),
-            )
-            .child(
-                div()
-                    .id("0619f_scroll")
-                    .flex_1()
-                    .w_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .p_8()
-                    .child(
-                        div()
-                            .max_w(px(1000.0))
-                            .mx_auto()
-                            .flex()
-                            .flex_col()
-                            .gap_6()
-                            .child(
-                                div()
-                                    .p_4()
-                                    .rounded_lg()
-                                    .border_1()
-                                    .border_color(cx.theme().warning)
-                                    .bg(cx.theme().warning.opacity(0.1))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::BOLD)
-                                            .child("Evidence boundary"),
-                                    )
-                                    .child(
-                                        div().mt_1().text_sm().child(
-                                            "Due day and all penalties are manual. The app does not queue or submit 0619-F until those rules and the transport channel are certified.",
-                                        ),
-                                    )
-                                    .child(div().mt_2().text_xs().child(xml_evidence_message)),
-                            )
-                            .when_some(status_message, |element, message| {
-                                element.child(
-                                    div()
-                                        .p_3()
-                                        .rounded_md()
-                                        .bg(cx.theme().muted.opacity(0.5))
-                                        .child(message),
-                                )
+        let root = rsx! {
+            <div flex flex_col w_full h_full bg={cx.theme().background}>
+                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                    {gpui_component::button::Button::new("0619f_back")
+                        .label("← Back")
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(Form0619FEvent::BackToDashboard);
+                        }))}
+                    <div flex items_center gap_3>
+                        {gpui_component::button::Button::new("0619f_save")
+                            .label("Save Draft")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.save_draft(window, cx);
+                            }))}
+                        {gpui_component::button::Button::new("0619f_manual")
+                            .label("Manual / External Filing")
+                            .primary()
+                            .disabled(true)}
+                    </div>
+                </div>
+                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().accent}>
+                    {self.render_header(cx)}
+                    <div mt_6>{self.render_status_pipeline(cx)}</div>
+                </div>
+                <div id="0619f_scroll" flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p_8>
+                    {div()
+                        .max_w(px(1000.0))
+                        .mx_auto()
+                        .flex()
+                        .flex_col()
+                        .gap_6()
+                        .child(rsx! {
+                            <div p_4 rounded_lg border_1 border_color={cx.theme().warning} bg={cx.theme().warning.opacity(0.1)}>
+                                <div font_weight={FontWeight::BOLD}>{"Evidence boundary"}</div>
+                                <div mt_1 text_sm>
+                                    {"Due day and all penalties are manual. The app does not queue or submit 0619-F until those rules and the transport channel are certified."}
+                                </div>
+                                <div mt_2 text_xs>{xml_evidence_message}</div>
+                            </div>
+                        })
+                        .when_some(status_message, |element, message| {
+                            element.child(rsx! {
+                                <div p_3 rounded_md bg={cx.theme().muted.opacity(0.5)}>{message}</div>
                             })
-                            .child(self.render_error_summary(cx))
-                            .child(
-                                section_card(cx, "PART I — BACKGROUND INFORMATION")
-                                    .child(
-                                        div()
-                                            .text_lg()
-                                            .font_weight(FontWeight::BOLD)
-                                            .child(self.draft.taxpayer_name.clone()),
-                                    )
-                                    .child(div().text_sm().child(format!(
-                                        "TIN: {} · RDO: {}",
-                                        self.draft.tin, self.draft.rdo_code
-                                    )))
-                                    .child(div().text_sm().child(format!(
-                                        "Address: {}",
-                                        self.draft.registered_address
-                                    )))
-                                    .child(div().text_sm().child(format!(
-                                        "ZIP: {} · Contact: {} · Email: {}",
-                                        self.draft.zip_code,
-                                        self.draft.contact_number,
-                                        self.draft.email
-                                    )))
-                                    .child(
-                                        div()
-                                            .mt_3()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_3()
-                                            .child(self.render_toggle(
-                                                "0619f_amended",
-                                                "3 Amended Form?",
-                                                self.is_amended,
-                                                cx,
-                                                |this| this.is_amended = !this.is_amended,
-                                            ))
-                                            .child(self.render_toggle(
-                                                "0619f_withheld",
-                                                "4 Any Taxes Withheld?",
-                                                self.any_taxes_withheld,
-                                                cx,
-                                                |this| {
-                                                    this.any_taxes_withheld =
-                                                        !this.any_taxes_withheld
-                                                },
-                                            ))
-                                            .child(self.render_toggle(
-                                                "0619f_government",
-                                                "11 Government withholding agent?",
-                                                self.is_category_government,
-                                                cx,
-                                                |this| {
-                                                    this.is_category_government =
-                                                        !this.is_category_government
-                                                },
-                                            ))
-                                            .child(self.render_fixed_row(
-                                                "1 For the Month of (MM/YYYY)",
-                                                &format!(
-                                                    "{:02}/{}",
-                                                    self.draft.month, self.draft.taxable_year
-                                                ),
-                                                cx,
-                                            ))
-                                            .child(self.render_fixed_row(
-                                                "5 Tax Type Code",
-                                                TAX_TYPE_CODE,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                &format!(
-                                                    "2 Due date day (month/year fixed at {due_month:02}/{due_year})"
-                                                ),
-                                                &self.due_day,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "Line of business (XML semantic value)",
-                                                &self.line_of_business,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "9 Registered Address Line 2",
-                                                &self.registered_address_2,
-                                            )),
+                        })
+                        .child(self.render_error_summary(cx))
+                        .child(rsx! {
+                            <div base={section_card(cx, "PART I — BACKGROUND INFORMATION")}>
+                                <div text_lg font_weight={FontWeight::BOLD}>{self.draft.taxpayer_name.clone()}</div>
+                                <div text_sm>{format!(
+                                    "TIN: {} · RDO: {}",
+                                    self.draft.tin, self.draft.rdo_code
+                                )}</div>
+                                <div text_sm>{format!(
+                                    "Address: {}",
+                                    self.draft.registered_address
+                                )}</div>
+                                <div text_sm>{format!(
+                                    "ZIP: {} · Contact: {} · Email: {}",
+                                    self.draft.zip_code,
+                                    self.draft.contact_number,
+                                    self.draft.email
+                                )}</div>
+                                <div mt_3 flex flex_col gap_3>
+                                    {self.render_toggle(
+                                        "0619f_amended",
+                                        "3 Amended Form?",
+                                        self.is_amended,
+                                        cx,
+                                        |this| this.is_amended = !this.is_amended,
+                                    )}
+                                    {self.render_toggle(
+                                        "0619f_withheld",
+                                        "4 Any Taxes Withheld?",
+                                        self.any_taxes_withheld,
+                                        cx,
+                                        |this| {
+                                            this.any_taxes_withheld =
+                                                !this.any_taxes_withheld
+                                        },
+                                    )}
+                                    {self.render_toggle(
+                                        "0619f_government",
+                                        "11 Government withholding agent?",
+                                        self.is_category_government,
+                                        cx,
+                                        |this| {
+                                            this.is_category_government =
+                                                !this.is_category_government
+                                        },
+                                    )}
+                                    {self.render_fixed_row(
+                                        "1 For the Month of (MM/YYYY)",
+                                        &format!(
+                                            "{:02}/{}",
+                                            self.draft.month, self.draft.taxable_year
+                                        ),
+                                        cx,
+                                    )}
+                                    {self.render_fixed_row(
+                                        "5 Tax Type Code",
+                                        TAX_TYPE_CODE,
+                                        cx,
+                                    )}
+                                    {self.render_input_row(
+                                        &format!(
+                                            "2 Due date day (month/year fixed at {due_month:02}/{due_year})"
+                                        ),
+                                        &self.due_day,
+                                    )}
+                                    {self.render_input_row(
+                                        "Line of business (XML semantic value)",
+                                        &self.line_of_business,
+                                    )}
+                                    {self.render_input_row(
+                                        "9 Registered Address Line 2",
+                                        &self.registered_address_2,
+                                    )}
+                                </div>
+                            </div>
+                        })
+                        .child(rsx! {
+                            <div base={section_card(cx, "PART II — TAX REMITTANCE")}>
+                                {self.render_input_row(
+                                    &format!(
+                                        "13 {ITEM_13_ATC_CODE} — Final tax withheld on interest/deposits/trusts"
                                     ),
-                            )
-                            .child(
-                                section_card(cx, "PART II — TAX REMITTANCE")
-                                    .child(self.render_input_row(
-                                        &format!(
-                                            "13 {ITEM_13_ATC_CODE} — Final tax withheld on interest/deposits/trusts"
-                                        ),
-                                        &self.item_13_interest_final_tax_withheld,
-                                    ))
-                                    .child(self.render_input_row(
-                                        &format!(
-                                            "14 {ITEM_14_ATC_CODE} — Other final income taxes withheld"
-                                        ),
-                                        &self.item_14_other_final_tax_withheld,
-                                    ))
-                                    .child(self.render_computed_row(
-                                        "15 Total (13 + 14)",
-                                        self.draft.item_15_total,
-                                        cx,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "16 Less: Amount Remitted from Previously Filed Form",
-                                        &self.item_16_remitted_previously,
-                                    ))
-                                    .child(self.render_computed_row(
-                                        "17 Net Amount of Remittance (15 − 16)",
-                                        self.draft.item_17_net_amount_of_remittance,
-                                        cx,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "18A Surcharge (manual)",
-                                        &self.item_18a_surcharge,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "18B Interest (manual)",
-                                        &self.item_18b_interest,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "18C Compromise (manual)",
-                                        &self.item_18c_compromise,
-                                    ))
-                                    .child(self.render_computed_row(
-                                        "18D Total Penalties (18A + 18B + 18C)",
-                                        self.draft.item_18d_total_penalties,
-                                        cx,
-                                    ))
-                                    .child(self.render_computed_row(
-                                        "19 Total Amount of Remittance (17 + 18D)",
-                                        self.draft.item_19_total_amount_of_remittance,
-                                        cx,
-                                    )),
-                            )
-                            .child(
-                                section_card(cx, "TAX AGENT / SIGNATURE DETAILS")
-                                    .child(self.render_input_row(
-                                        "Tax Agent Accreditation / Attorney Roll No.",
-                                        &self.tax_agent_number,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "Date of Issue",
-                                        &self.tax_agent_date_issue,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "Date of Expiry",
-                                        &self.tax_agent_date_expiry,
-                                    )),
-                            )
-                            .child(
-                                section_card(cx, "PART III — DETAILS OF PAYMENT")
-                                    .child(
-                                        div().text_xs().child(
-                                            "Columns: Drawee Bank/Agency · Number · Date (MM/DD/YYYY) · Amount",
-                                        ),
-                                    )
-                                    .child(self.render_payment_row(
-                                        20,
-                                        "Cash/Bank Debit Memo",
-                                        &self.payment_20,
-                                        cx,
-                                    ))
-                                    .child(self.render_payment_row(
-                                        21,
-                                        "Check",
-                                        &self.payment_21,
-                                        cx,
-                                    ))
-                                    .child(self.render_payment_row(
-                                        22,
-                                        "Tax Debit Memo",
-                                        &self.payment_22,
-                                        cx,
-                                    ))
-                                    .child(self.render_payment_row(
-                                        23,
-                                        "Others",
-                                        &self.payment_23,
-                                        cx,
-                                    ))
-                                    .child(self.render_input_row(
-                                        "23 Others description",
-                                        &self.payment_23_description,
-                                    )),
-                            ),
-                    ),
-            )
+                                    &self.item_13_interest_final_tax_withheld,
+                                )}
+                                {self.render_input_row(
+                                    &format!(
+                                        "14 {ITEM_14_ATC_CODE} — Other final income taxes withheld"
+                                    ),
+                                    &self.item_14_other_final_tax_withheld,
+                                )}
+                                {self.render_computed_row(
+                                    "15 Total (13 + 14)",
+                                    self.draft.item_15_total,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "16 Less: Amount Remitted from Previously Filed Form",
+                                    &self.item_16_remitted_previously,
+                                )}
+                                {self.render_computed_row(
+                                    "17 Net Amount of Remittance (15 − 16)",
+                                    self.draft.item_17_net_amount_of_remittance,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "18A Surcharge (manual)",
+                                    &self.item_18a_surcharge,
+                                )}
+                                {self.render_input_row(
+                                    "18B Interest (manual)",
+                                    &self.item_18b_interest,
+                                )}
+                                {self.render_input_row(
+                                    "18C Compromise (manual)",
+                                    &self.item_18c_compromise,
+                                )}
+                                {self.render_computed_row(
+                                    "18D Total Penalties (18A + 18B + 18C)",
+                                    self.draft.item_18d_total_penalties,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "19 Total Amount of Remittance (17 + 18D)",
+                                    self.draft.item_19_total_amount_of_remittance,
+                                    cx,
+                                )}
+                            </div>
+                        })
+                        .child(rsx! {
+                            <div base={section_card(cx, "TAX AGENT / SIGNATURE DETAILS")}>
+                                {self.render_input_row(
+                                    "Tax Agent Accreditation / Attorney Roll No.",
+                                    &self.tax_agent_number,
+                                )}
+                                {self.render_input_row(
+                                    "Date of Issue",
+                                    &self.tax_agent_date_issue,
+                                )}
+                                {self.render_input_row(
+                                    "Date of Expiry",
+                                    &self.tax_agent_date_expiry,
+                                )}
+                            </div>
+                        })
+                        .child(rsx! {
+                            <div base={section_card(cx, "PART III — DETAILS OF PAYMENT")}>
+                                <div text_xs>
+                                    {"Columns: Drawee Bank/Agency · Number · Date (MM/DD/YYYY) · Amount"}
+                                </div>
+                                {self.render_payment_row(
+                                    20,
+                                    "Cash/Bank Debit Memo",
+                                    &self.payment_20,
+                                    cx,
+                                )}
+                                {self.render_payment_row(
+                                    21,
+                                    "Check",
+                                    &self.payment_21,
+                                    cx,
+                                )}
+                                {self.render_payment_row(
+                                    22,
+                                    "Tax Debit Memo",
+                                    &self.payment_22,
+                                    cx,
+                                )}
+                                {self.render_payment_row(
+                                    23,
+                                    "Others",
+                                    &self.payment_23,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "23 Others description",
+                                    &self.payment_23_description,
+                                )}
+                            </div>
+                        })}
+                </div>
+            </div>
+        };
+        root
     }
 }
 
 fn section_card(cx: &Context<Form0619FView>, title: &str) -> Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap_4()
-        .p_5()
-        .bg(cx.theme().background)
-        .border_1()
-        .border_color(cx.theme().border)
-        .rounded_lg()
-        .child(
-            div()
-                .text_xl()
-                .font_weight(FontWeight::BOLD)
-                .child(title.to_string()),
-        )
+    rsx! {
+        <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
+            <div text_xl font_weight={FontWeight::BOLD}>{title.to_string()}</div>
+        </div>
+    }
 }
 
 fn text_input(

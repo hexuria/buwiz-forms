@@ -16,12 +16,26 @@ Usage:
 import re, sys
 
 # Differences that are expected and semantically inert.
+#
+# Deliberately NOT listed: rsx's auto-injected source-location `.id(..)`. When
+# an element carries a stateful attribute but rsx did not see an `id=`
+# attribute, it injects its own id - which SILENTLY OVERRIDES an explicit
+# `.id()` the original chain had, changing element identity and any state keyed
+# to it. That must surface as a diff, not be normalised away.
 BENIGN = [
     # the macro import the migration has to add; affects no element tree
     (re.compile(r'usegpui_rsx::rsx;'), ''),
-    # rsx injects a source-location id on elements carrying stateful handlers
-    (re.compile(r'\.id\(concat!\([^)]*\)\)'), '.id(<AUTO>)'),
-    (re.compile(r'\.id\(format!\([^)]*\)\)'), '.id(<AUTO>)'),
+    # rule 7: `let root = <expr>; root.m()` is the same value as `<expr>.m()`.
+    # Chaining onto a brace-delimited macro does not parse, so the binding is
+    # forced by syntax rather than chosen.
+    (re.compile(r'letroot='), ''),
+    (re.compile(r';root\.'), '.'),
+    (re.compile(r';root\}'), '}'),
+    # tracing!/log! bake __FILE__ and __LINE__ into call-site metadata, so
+    # adding an import line shifts every line number below it. Anchored to the
+    # file-then-line pair so unrelated integer literals are never touched.
+    (re.compile(r'(\.rs",\),::tracing_core::__macro_support::Option::Some\()\d+(u32\))'), r'\1<LINE>\2'),
+    (re.compile(r'\.rs:\d+"'), '.rs:<LINE>"'),
 ]
 
 def normalise(src: str) -> str:

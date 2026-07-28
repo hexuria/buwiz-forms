@@ -8,6 +8,7 @@ use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputState};
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use crate::components::date_input::{DateInput, DateInputState};
@@ -315,333 +316,288 @@ impl AdminCalendarDashboard {
         cx: &mut Context<'_, Self>,
     ) -> impl IntoElement {
         let is_active = self.active_tab == tab;
-        div()
-            .id(SharedString::from(format!("tab-{label}")))
-            .px_4()
-            .py_2()
-            .bg(if is_active {
-                cx.theme().primary
-            } else {
-                cx.theme().secondary
-            })
-            .text_color(if is_active {
-                cx.theme().primary_foreground
-            } else {
-                cx.theme().foreground
-            })
-            .rounded_md()
-            .font_weight(FontWeight::BOLD)
-            .cursor_pointer()
-            .hover(|s| s.opacity(0.8))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.active_tab = tab;
-                cx.notify();
-            }))
-            .child(label)
+        rsx! {
+            <div
+                id={SharedString::from(format!("tab-{label}"))}
+                px_4
+                py_2
+                bg={if is_active {
+                    cx.theme().primary
+                } else {
+                    cx.theme().secondary
+                }}
+                text_color={if is_active {
+                    cx.theme().primary_foreground
+                } else {
+                    cx.theme().foreground
+                }}
+                rounded_md
+                font_weight={FontWeight::BOLD}
+                cursor_pointer
+                hover={|s| s.opacity(0.8)}
+                on_click={cx.listener(move |this, _, _, cx| {
+                    this.active_tab = tab;
+                    cx.notify();
+                })}
+            >
+                {label}
+            </div>
+        }
     }
 
     fn render_deadlines_tab(&self, cx: &mut Context<'_, Self>) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .pb(px(96.))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_4()
-                    .child(
-                        gpui_component::button::Button::new("prev-year")
-                            .icon(IconName::ChevronLeft)
-                            .small()
-                            .on_click(cx.listener(|this, _, _, cx| this.change_year(-1, cx))),
-                    )
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(format!("{} Calendar-Year Deadlines", self.selected_year)),
-                    )
-                    .child(
-                        gpui_component::button::Button::new("next-year")
-                            .icon(IconName::ChevronRight)
-                            .small()
-                            .on_click(cx.listener(|this, _, _, cx| this.change_year(1, cx))),
-                    ),
-            )
-            .children(self.deadlines.iter().enumerate().map(|(idx, d)| {
-                div()
-                    .id(SharedString::from(format!("deadline-{}", idx)))
-                    .w_full()
-                    .p_4()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_xl()
-                    .shadow_sm()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(format!("{} - {}", d.display_form_no, d.form_name)),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(d.period.label()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_end()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().primary)
-                                    .child(format!("Due: {}", d.final_deadline_string())),
-                            )
-                            .child(
-                                div()
-                                    .px_2()
-                                    .py_1()
-                                    .bg(cx.theme().secondary)
-                                    .text_color(cx.theme().foreground)
-                                    .rounded_full()
-                                    .text_xs()
-                                    .child(d.status.label()),
-                            ),
-                    )
-            }))
+        rsx! {
+            <div flex flex_col gap_4 pb={px(96.)}>
+                <div flex items_center gap_4>
+                    {gpui_component::button::Button::new("prev-year")
+                        .icon(IconName::ChevronLeft)
+                        .small()
+                        .on_click(cx.listener(|this, _, _, cx| this.change_year(-1, cx)))}
+                    <div
+                        text_xl
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {format!("{} Calendar-Year Deadlines", self.selected_year)}
+                    </div>
+                    {gpui_component::button::Button::new("next-year")
+                        .icon(IconName::ChevronRight)
+                        .small()
+                        .on_click(cx.listener(|this, _, _, cx| this.change_year(1, cx)))}
+                </div>
+                {...self.deadlines.iter().enumerate().map(|(idx, d)| {
+                    rsx! {
+                        <div
+                            id={SharedString::from(format!("deadline-{}", idx))}
+                            w_full
+                            p_4
+                            bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_xl
+                            shadow_sm
+                            flex
+                            justify_between
+                            items_center
+                        >
+                            <div flex flex_col gap_1>
+                                <div
+                                    text_lg
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().foreground}
+                                >
+                                    {format!("{} - {}", d.display_form_no, d.form_name)}
+                                </div>
+                                <div text_sm text_color={cx.theme().muted_foreground}>
+                                    {d.period.label()}
+                                </div>
+                            </div>
+                            <div flex flex_col items_end gap_1>
+                                <div
+                                    text_lg
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().primary}
+                                >
+                                    {format!("Due: {}", d.final_deadline_string())}
+                                </div>
+                                <div
+                                    px_2
+                                    py_1
+                                    bg={cx.theme().secondary}
+                                    text_color={cx.theme().foreground}
+                                    rounded_full
+                                    text_xs
+                                >
+                                    {d.status.label()}
+                                </div>
+                            </div>
+                        </div>
+                    }
+                })}
+            </div>
+        }
     }
 
     fn render_rules_tab(&self, cx: &mut Context<'_, Self>) -> Div {
-        div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .pb(px(96.))
-            .child(
-                div()
-                    .text_xl()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().foreground)
-                    .child("Official BIR Tax Rules (Compile-Time)"),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("These rules are seeded statically from official BIR guidelines and cannot be modified dynamically."),
-            )
-            .children(self.rules.iter().enumerate().map(|(idx, rule)| {
-                div()
-                    .id(SharedString::from(format!("rule-{}", idx)))
-                    .w_full()
-                    .p_4()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_xl()
-                    .shadow_sm()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_lg()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(rule.form_name),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(format!("Forms: {}", rule.form_nos.join(", "))),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .items_center()
-                            .child(
-                                div()
-                                    .px_2()
-                                    .py_1()
-                                    .bg(cx.theme().primary)
-                                    .text_color(cx.theme().primary_foreground)
-                                    .rounded_md()
-                                    .text_xs()
-                                    .child(format!("{:?}", rule.frequency)),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().foreground)
-                                    .child(rule.description),
-                            ),
-                    )
-            }))
+        rsx! {
+            <div flex flex_col gap_4 pb={px(96.)}>
+                <div
+                    text_xl
+                    font_weight={FontWeight::BOLD}
+                    text_color={cx.theme().foreground}
+                >
+                    {"Official BIR Tax Rules (Compile-Time)"}
+                </div>
+                <div text_sm text_color={cx.theme().muted_foreground}>
+                    {"These rules are seeded statically from official BIR guidelines and cannot be modified dynamically."}
+                </div>
+                {...self.rules.iter().enumerate().map(|(idx, rule)| {
+                    rsx! {
+                        <div
+                            id={SharedString::from(format!("rule-{}", idx))}
+                            w_full
+                            p_4
+                            bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_xl
+                            shadow_sm
+                            flex
+                            flex_col
+                            gap_2
+                        >
+                            <div
+                                text_lg
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {rule.form_name}
+                            </div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {format!("Forms: {}", rule.form_nos.join(", "))}
+                            </div>
+                            <div flex gap_2 items_center>
+                                <div
+                                    px_2
+                                    py_1
+                                    bg={cx.theme().primary}
+                                    text_color={cx.theme().primary_foreground}
+                                    rounded_md
+                                    text_xs
+                                >
+                                    {format!("{:?}", rule.frequency)}
+                                </div>
+                                <div text_sm text_color={cx.theme().foreground}>
+                                    {rule.description}
+                                </div>
+                            </div>
+                        </div>
+                    }
+                })}
+            </div>
+        }
     }
 
     fn render_overrides_tab(&self, cx: &mut Context<'_, Self>) -> Div {
         let mut container = div().flex().flex_col().gap_4().pb(px(96.));
 
-        container = container.child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .child(
-                    div()
-                        .text_xl()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(cx.theme().foreground)
-                        .child("Deadline Overrides (BIR Advisories)"),
-                )
-                .child(
-                    gpui_component::button::Button::new("new-override")
-                        .label("New Override")
-                        .primary()
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.open_new_override_editor(window, cx);
-                        })),
-                ),
-        );
+        container = container.child(rsx! {
+            <div flex items_center justify_between gap_3>
+                <div
+                    text_xl
+                    font_weight={FontWeight::BOLD}
+                    text_color={cx.theme().foreground}
+                >
+                    {"Deadline Overrides (BIR Advisories)"}
+                </div>
+                {gpui_component::button::Button::new("new-override")
+                    .label("New Override")
+                    .primary()
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_new_override_editor(window, cx);
+                    }))}
+            </div>
+        });
 
-        container = container.child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Holiday moves and deadline extensions issued by the BIR. These override the compiled base rules for matching form codes and dates."),
-        );
+        container = container.child(rsx! {
+            <div text_sm text_color={cx.theme().muted_foreground}>
+                {"Holiday moves and deadline extensions issued by the BIR. These override the compiled base rules for matching form codes and dates."}
+            </div>
+        });
 
         // Status message
         if let Some(msg) = &self.status_message {
-            container = container.child(
-                div()
-                    .p_3()
-                    .bg(cx.theme().primary.opacity(0.1))
-                    .border_1()
-                    .border_color(cx.theme().primary.opacity(0.2))
-                    .rounded_lg()
-                    .text_sm()
-                    .text_color(cx.theme().primary)
-                    .child(msg.clone()),
-            );
+            container = container.child(rsx! {
+                <div
+                    p_3
+                    bg={cx.theme().primary.opacity(0.1)}
+                    border_1
+                    border_color={cx.theme().primary.opacity(0.2)}
+                    rounded_lg
+                    text_sm
+                    text_color={cx.theme().primary}
+                >
+                    {msg.clone()}
+                </div>
+            });
         }
 
         // Existing overrides
         for (idx, ovr) in self.overrides.iter().enumerate() {
             let delete_idx = idx;
             let edit_id = ovr.id.clone();
-            container =
-                container.child(
-                    div()
-                        .id(SharedString::from(format!("override-{}", idx)))
-                        .w_full()
-                        .p_4()
-                        .bg(cx.theme().background)
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .rounded_xl()
-                        .shadow_sm()
-                        .flex()
-                        .justify_between()
-                        .items_center()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_lg()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().foreground)
-                                        .child(ovr.title.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!(
-                                            "Source: {} | Forms: {}",
-                                            ovr.source_reference,
-                                            ovr.affected_form_codes.join(", ")
-                                        )),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!(
-                                            "{} → {}",
-                                            ovr.original_deadline.format("%Y-%m-%d"),
-                                            ovr.adjusted_deadline.format("%Y-%m-%d")
-                                        )),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    gpui_component::button::Button::new(SharedString::from(
-                                        format!("edit-override-{}", idx),
-                                    ))
-                                    .label("Edit")
-                                    .small()
-                                    .on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            this.open_edit_override_editor(&edit_id, window, cx);
-                                        },
-                                    )),
-                                )
-                                .child(
-                                    gpui_component::button::Button::new(SharedString::from(
-                                        format!("del-override-{}", idx),
-                                    ))
-                                    .icon(IconName::Close)
-                                    .ghost()
-                                    .small()
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.delete_override(delete_idx, cx);
-                                        },
-                                    )),
-                                ),
-                        ),
-                );
+            container = container.child(rsx! {
+                <div
+                    id={SharedString::from(format!("override-{}", idx))}
+                    w_full
+                    p_4
+                    bg={cx.theme().background}
+                    border_1
+                    border_color={cx.theme().border}
+                    rounded_xl
+                    shadow_sm
+                    flex
+                    justify_between
+                    items_center
+                >
+                    <div flex flex_col gap_1>
+                        <div
+                            text_lg
+                            font_weight={FontWeight::BOLD}
+                            text_color={cx.theme().foreground}
+                        >
+                            {ovr.title.clone()}
+                        </div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {format!(
+                                "Source: {} | Forms: {}",
+                                ovr.source_reference,
+                                ovr.affected_form_codes.join(", ")
+                            )}
+                        </div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {format!(
+                                "{} → {}",
+                                ovr.original_deadline.format("%Y-%m-%d"),
+                                ovr.adjusted_deadline.format("%Y-%m-%d")
+                            )}
+                        </div>
+                    </div>
+                    <div flex items_center gap_2>
+                        {gpui_component::button::Button::new(SharedString::from(
+                            format!("edit-override-{}", idx),
+                        ))
+                        .label("Edit")
+                        .small()
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                this.open_edit_override_editor(&edit_id, window, cx);
+                            },
+                        ))}
+                        {gpui_component::button::Button::new(SharedString::from(
+                            format!("del-override-{}", idx),
+                        ))
+                        .icon(IconName::Close)
+                        .ghost()
+                        .small()
+                        .on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                this.delete_override(delete_idx, cx);
+                            },
+                        ))}
+                    </div>
+                </div>
+            });
         }
 
         if self.overrides.is_empty() {
-            container = container.child(
-                div().w_full().py_8().flex().justify_center().child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("No overrides configured. Base rules apply."),
-                ),
-            );
+            container = container.child(rsx! {
+                <div w_full py_8 flex justify_center>
+                    <div text_sm text_color={cx.theme().muted_foreground}>
+                        {"No overrides configured. Base rules apply."}
+                    </div>
+                </div>
+            });
         }
 
         container
@@ -656,59 +612,60 @@ impl AdminCalendarDashboard {
         let mut chips = div().flex().flex_wrap().gap_1();
         for code in &selected_codes {
             let code_for_remove = code.clone();
-            chips = chips.child(
-                div()
-                    .id(SharedString::from(format!("override-form-chip-{code}")))
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .px_2()
-                    .py_1()
-                    .bg(cx.theme().secondary)
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .text_xs()
-                    .text_color(cx.theme().foreground)
-                    .child(code.clone())
-                    .child(
-                        div()
-                            .cursor_pointer()
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                cx.listener(move |this, _, _, cx| {
-                                    this.new_override_form_codes
-                                        .retain(|existing| existing != &code_for_remove);
-                                    let codes = this.new_override_form_codes.clone();
-                                    this.new_override_forms_select.update(cx, |select, cx| {
-                                        select.set_selected_ids(codes, cx);
-                                    });
-                                    cx.notify();
-                                }),
-                            )
-                            .child(Icon::new(IconName::Close).xsmall()),
-                    ),
-            );
+            chips = chips.child(rsx! {
+                <div
+                    id={SharedString::from(format!("override-form-chip-{code}"))}
+                    flex
+                    items_center
+                    gap_1
+                    px_2
+                    py_1
+                    bg={cx.theme().secondary}
+                    border_1
+                    border_color={cx.theme().border}
+                    rounded_md
+                    text_xs
+                    text_color={cx.theme().foreground}
+                >
+                    {code.clone()}
+                    {div()
+                        .cursor_pointer()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _, _, cx| {
+                                this.new_override_form_codes
+                                    .retain(|existing| existing != &code_for_remove);
+                                let codes = this.new_override_form_codes.clone();
+                                this.new_override_forms_select.update(cx, |select, cx| {
+                                    select.set_selected_ids(codes, cx);
+                                });
+                                cx.notify();
+                            }),
+                        )
+                        .child(Icon::new(IconName::Close).xsmall())}
+                </div>
+            });
         }
 
         let field_label = |text: &'static str, cx: &Context<'_, Self>| {
-            div()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
-                .mb_1()
-                .child(text)
+            rsx! {
+                <div text_xs text_color={cx.theme().muted_foreground} mb_1>
+                    {text}
+                </div>
+            }
         };
 
-        div()
-            .absolute()
-            .inset_0()
-            .occlude()
-            .bg(gpui::rgba(0x000000b2))
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(
-                div()
+        rsx! {
+            <div
+                absolute
+                inset_0
+                occlude
+                bg={gpui::rgba(0x000000b2)}
+                flex
+                items_center
+                justify_center
+            >
+                {div()
                     .w_full()
                     .max_w(px(640.))
                     .bg(cx.theme().background)
@@ -732,35 +689,32 @@ impl AdminCalendarDashboard {
                             }),
                     )
                     .when_some(self.override_editor_error.clone(), |this, message| {
-                        this.child(
-                            div()
-                                .p_3()
-                                .rounded_md()
-                                .bg(cx.theme().danger.opacity(0.08))
-                                .border_1()
-                                .border_color(cx.theme().danger.opacity(0.5))
-                                .text_sm()
-                                .text_color(cx.theme().danger)
-                                .child(message),
-                        )
+                        this.child(rsx! {
+                            <div
+                                p_3
+                                rounded_md
+                                bg={cx.theme().danger.opacity(0.08)}
+                                border_1
+                                border_color={cx.theme().danger.opacity(0.5)}
+                                text_sm
+                                text_color={cx.theme().danger}
+                            >
+                                {message}
+                            </div>
+                        })
                     })
-                    .child(
-                        div()
-                            .flex()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .child(field_label("Title", cx))
-                                    .child(Input::new(&self.new_override_title)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .child(field_label("Source Reference", cx))
-                                    .child(Input::new(&self.new_override_source)),
-                            ),
-                    )
+                    .child(rsx! {
+                        <div flex gap_3>
+                            <div flex_1>
+                                {field_label("Title", cx)}
+                                {Input::new(&self.new_override_title)}
+                            </div>
+                            <div flex_1>
+                                {field_label("Source Reference", cx)}
+                                {Input::new(&self.new_override_source)}
+                            </div>
+                        </div>
+                    })
                     .child(
                         div()
                             .flex()
@@ -768,62 +722,52 @@ impl AdminCalendarDashboard {
                             .child(field_label("Affected Forms", cx))
                             .child(MultiSelect::new(&self.new_override_forms_select))
                             .when(!selected_codes.is_empty(), |this| {
-                                this.child(div().mt_2().child(chips))
+                                this.child(rsx! {
+                                    <div mt_2>
+                                        {chips}
+                                    </div>
+                                })
                             })
-                            .child(
-                                div()
-                                    .mt_1()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(
-                                        "Type to filter and check every official form this advisory covers.",
-                                    ),
-                            ),
+                            .child(rsx! {
+                                <div mt_1 text_xs text_color={cx.theme().muted_foreground}>
+                                    {"Type to filter and check every official form this advisory covers."}
+                                </div>
+                            }),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .child(field_label("Original Deadline", cx))
-                                    .child(DateInput::new(&self.new_override_orig_date)),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .child(field_label("Adjusted Deadline", cx))
-                                    .child(DateInput::new(&self.new_override_adj_date)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .justify_end()
-                            .gap_2()
-                            .child(
-                                gpui_component::button::Button::new("cancel-override-editor")
-                                    .label("Cancel")
-                                    .ghost()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.close_override_editor(cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("save-override")
-                                    .label(if is_editing {
-                                        "Save Changes"
-                                    } else {
-                                        "Add Override"
-                                    })
-                                    .primary()
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_override(window, cx);
-                                    })),
-                            ),
-                    ),
-            )
+                    .child(rsx! {
+                        <div flex gap_3>
+                            <div flex_1>
+                                {field_label("Original Deadline", cx)}
+                                {DateInput::new(&self.new_override_orig_date)}
+                            </div>
+                            <div flex_1>
+                                {field_label("Adjusted Deadline", cx)}
+                                {DateInput::new(&self.new_override_adj_date)}
+                            </div>
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div flex justify_end gap_2>
+                            {gpui_component::button::Button::new("cancel-override-editor")
+                                .label("Cancel")
+                                .ghost()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.close_override_editor(cx);
+                                }))}
+                            {gpui_component::button::Button::new("save-override")
+                                .label(if is_editing {
+                                    "Save Changes"
+                                } else {
+                                    "Add Override"
+                                })
+                                .primary()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.save_override(window, cx);
+                                }))}
+                        </div>
+                    })}
+            </div>
+        }
     }
 }
 
@@ -835,31 +779,30 @@ impl Render for AdminCalendarDashboard {
             .flex()
             .flex_col()
             .bg(cx.theme().background)
-            .child(
-                div()
-                    .w_full()
-                    .p_6()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_2xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Tax Calendar Explorer"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_2()
-                            .child(self.render_tab_button(AdminTab::Deadlines, "Deadlines", cx))
-                            .child(self.render_tab_button(AdminTab::Rules, "Rules", cx))
-                            .child(self.render_tab_button(AdminTab::Overrides, "Overrides", cx)),
-                    ),
-            )
+            .child(rsx! {
+                <div
+                    w_full
+                    p_6
+                    border_b_1
+                    border_color={cx.theme().border}
+                    flex
+                    justify_between
+                    items_center
+                >
+                    <div
+                        text_2xl
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {"Tax Calendar Explorer"}
+                    </div>
+                    <div flex gap_2>
+                        {self.render_tab_button(AdminTab::Deadlines, "Deadlines", cx)}
+                        {self.render_tab_button(AdminTab::Rules, "Rules", cx)}
+                        {self.render_tab_button(AdminTab::Overrides, "Overrides", cx)}
+                    </div>
+                </div>
+            })
             .child(div().w_full().flex_1().overflow_y_scrollbar().p_6().child(
                 match self.active_tab {
                     AdminTab::Deadlines => self.render_deadlines_tab(cx),
