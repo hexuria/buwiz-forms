@@ -56,10 +56,15 @@ IGNORED_DIRECTORY_NAMES = {
     "dist",
     "tests",
 }
+# Auditors have to name the tokens they detect. Exempting them is not a
+# weakening of the audit: each of these files exists to *find* legacy artifacts,
+# and every occurrence below is either a detector pattern or a self-test
+# asserting the detector fires.
 IGNORED_FILE_NAMES = {
     "audit_no_legacy.py",
     "audit_html_form_migration.py",
     "verify_offline_form_renderer.py",
+    "verify_form_conversion.py",
 }
 OFFICIAL_REFERENCE_ROOTS = (
     PurePosixPath("packages/form-renderer/references"),

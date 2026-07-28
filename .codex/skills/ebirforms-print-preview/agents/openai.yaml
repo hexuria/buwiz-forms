@@ -1,4 +1,0 @@
-interface:
-  display_name: "eBIRForms HTML Print Preview"
-  short_description: "Maintain verified HTML form print previews"
-  default_prompt: "Use $ebirforms-print-preview to diagnose and fix an existing HTML form preview or export issue."
