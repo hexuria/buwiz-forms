@@ -52,8 +52,14 @@ At handoff:
   `hexuria/buwiz-forms`, where CI is green on all ten jobs across macOS, Linux
   and Windows; the draft PR referenced here was on the now-detached
   `codeitlikemiley/ebirforms` remote and is no longer the place to check state;
-- the working tree retains unrelated user-owned mode changes after the
-  checkpoint series;
+- the three checkpoint SHAs above are **post-rewrite**: `main` was rewritten on
+  2026-07-28 to strip `Co-Authored-By:` trailers, so any hash quoted in an older
+  note must be translated through `docs/commit-sha-remap-20260728.md`;
+- the working tree is clean and `main` tracks `public/main`; two pre-existing
+  stashes remain (`0605-partial-from-stopped-driver`,
+  `wave0-weight-batch-REGRESSED-25-tests-including-clipping`) and are **not**
+  covered by any remote backup - they reference the deleted
+  `codex/print-preview-parity` branch and live only in this clone;
 - the explicit publication authority covers this checkpoint series only, not
   future unrelated commits or pushes; and
 - worktree cleanup was explicitly authorized and carried out on 2026-07-28,
@@ -233,6 +239,39 @@ rtk rg -n \
   crates/bir-rules-codegen/src
 ```
 
+Measured 2026-07-28, so the migration can be scoped before it starts. Hits per
+file (production and test combined):
+
+| File | Hits |
+| --- | ---: |
+| `form_integration.rs` | 15 — **the target** |
+| `verified_file.rs` | 13 — the capability implementation itself; expected |
+| `files.rs` | 11 — the capability implementation itself; expected |
+| `evidence_set.rs` | 10 |
+| `vault_acquisition.rs` | 6 |
+| `evidence.rs` | 6 |
+| `vault_source_discovery.rs` | 4 |
+| `evidence_review_scaffold.rs` | 4 |
+| `capture_metadata.rs` | 4 |
+| `canonicalize_json.rs` | 4 |
+| `projections.rs` | 2 — `#[cfg(test)]` only, not a production reader |
+
+The concrete entry points in `form_integration.rs`: `use same_file::Handle` at
+line 19, `approve_external_directory` at 342 and 2080, bare `Handle::from_path`
+at 906, 910, 927 and 983, and `read_tree_stably` taking `approved_packet_identity:
+&Handle` at 1124-1139.
+
+Note the retained `Handle` in `ProposalWorkspace` is the same one that made the
+Windows teardown in `proposal_cleanup_rejects_a_replacement_with_a_copied_owner_marker`
+unfixable: the restore had to recreate an entry in the process temp root, which
+Windows refuses while sibling tests hold `ApprovedExternalRoot` ancestor handles
+there. That teardown was dropped rather than worked around (the fail-closed
+assertions it exists to prove are untouched, and the
+"cleanup succeeds on an owned container" case is covered by
+`proposal_cleanup_rejects_a_tampered_owner_marker`). Migrating this file changes
+those handle lifetimes, so **check whether the restore can be reinstated properly
+once the migration lands** rather than leaving it dropped by default.
+
 `projections.rs` has a path-only external read under `#[cfg(test)]`; it is not a
 production reader. Once production use is zero, make the path-only convenience
 readers test-only/private or remove them. Separately audit remaining
@@ -272,6 +311,43 @@ Known prior results:
   and
 - the final full cargo check was not rerun after the last test-fixture and
   vault-reader edits.
+
+**Resolved 2026-07-28.** Everything above is now closed; the block is kept as
+the record of what was open at handoff, not as current state.
+
+| Suite | macOS result |
+| --- | --- |
+| `files::tests` | 22 passed |
+| `verified_file::tests` | 5 passed |
+| `evidence::tests` | 25 passed |
+| `evidence_set::tests` | 16 passed |
+| `evidence_review_scaffold::tests` | 23 passed |
+| `form_factory::tests` | 3 passed |
+| `schema::tests` | 20 passed |
+| `check::tests` | 2 passed |
+| `bir-rules-platform` | 0 passed - **expected**, the crate is entirely `#[cfg(windows)]`; the 4 recorded above were a Windows run |
+| whole workspace | 1,448 passed / 0 failed |
+
+- `cargo fmt --all -- --check` clean and `cargo check --locked -p bir-rules-codegen
+  --tests` passing, so the "final full cargo check" gap is closed;
+- `evidence_set::tests` now completes, including
+  `exact_43_packet_set_is_byte_stable_and_vault_checkable` - the test that was
+  interrupted at the machine switch has run to completion on macOS, Linux **and**
+  Windows;
+- CI is green on all ten jobs across the three platforms, which also earns the
+  completion criterion "generation is deterministic on macOS, Linux, and Windows":
+  `check` byte-compares generated output and passes on each; and
+- the Windows-only defects found while getting there were real, not test noise: a
+  read-only `sync_all` that would have failed **every real PDF export on Windows**
+  (`FlushFileBuffers` needs write access), a `windows` 0.62 API migration, and a
+  temp-path form that had to satisfy macOS symlink resolution and Windows 8.3
+  short paths at once.
+
+Two build-side changes landed alongside, neither altering any documented command:
+`[profile.dev]` now drops debuginfo for the 1,036 external dependencies, and the
+CI corpus-census step fails when its test filter matches nothing (it previously
+exited 0 on a filter that matched no test, so the census lock could have been
+switched off silently).
 
 Treat the Mac results as authoritative for the current working tree. Fix code,
 not expectations, if a safety test fails. Do not weaken Windows-specific
