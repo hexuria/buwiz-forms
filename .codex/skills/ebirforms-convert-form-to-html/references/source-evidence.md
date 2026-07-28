@@ -22,7 +22,7 @@ must never become a runtime resource. Inventory it before selecting a PDF or
 XML sample:
 
 ```sh
-rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/inventory_form.py \
+rtk python3 scripts/reference/inventory_form.py \
   --repo . --form-code 0619F --revision 2018 \
   --source-dir /Users/uriah/Downloads/forms/0619F --output -
 ```

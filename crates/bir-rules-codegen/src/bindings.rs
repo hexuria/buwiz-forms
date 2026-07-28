@@ -235,7 +235,7 @@ pub struct BindingsReport {
 /// invariant of `validate-v1`; keeping them genuinely invariant matters more
 /// than filing this next to the inventory it reconciles.
 pub const DEFAULT_RECONCILIATION_PATH: &str =
-    "docs/validation-rules/generated/static-occurrence-reconciliation-v796.json";
+    "schemas/validation-rules/generated/static-occurrence-reconciliation-v796.json";
 
 pub fn build_2550q_bindings(options: &BuildBindingsOptions) -> Result<BindingsReport> {
     let repo_root = canonical_repo_root(&options.repo_root)?;

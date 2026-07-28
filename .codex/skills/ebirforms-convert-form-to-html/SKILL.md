@@ -67,7 +67,7 @@ a masked, structure-only or text-excluded number is never parity. See
 
 ## Workflow
 
-1. **Lock identity and source.** Record the canonical code, exact revision, official source URL, source SHA-256, page count, and page geometry. Run `scripts/inventory_form.py` before editing. Read [source-evidence.md](references/source-evidence.md) and [conversion-contract.md](references/conversion-contract.md).
+1. **Lock identity and source.** Record the canonical code, exact revision, official source URL, source SHA-256, page count, and page geometry. Run `scripts/reference/inventory_form.py` before editing. Read [source-evidence.md](references/source-evidence.md) and [conversion-contract.md](references/conversion-contract.md).
 2. **Prove tax behavior.** Audit or implement the Rust model, formulas, validation, XML round-trip, persistence, queue/submission behavior, carry-over, and repeatable-row limits. Stop when evidence is insufficient.
 3. **Add the render provider.** Map the typed Rust draft into `RenderEnvelopeV1`. Provide minimum, normal, long-value, validation-edge, and maximum-capacity fixtures. Inventory plain fields separately from guided fields. For every adaptive character field pattern, prove empty, short, exact-capacity, and capacity-plus-one behavior; for every reviewed plain-field pattern, prove that empty and populated values render without comb cells or guide backgrounds. Use component-level fixtures only when the domain intentionally exposes no printable value for that field. Do not repair or calculate values in TypeScript.
 4. **Build semantic HTML.** Add the form component, exact-revision dispatch, scoped CSS, form specification, and pagination policy. Reuse shared paper, table, comb, checkbox, and amount primitives only when their official behavior matches.
@@ -78,9 +78,9 @@ a masked, structure-only or text-excluded number is never parity. See
    PDF contains no machine-readable symbol, record an audited explicit absence and
    render none; never fabricate one from the form identity. Read
    [discrete-artwork.md](references/discrete-artwork.md).
-6. **Calibrate visually.** Use `scripts/prepare_official_reference.py` to render the pinned official PDF into the Poppler raster, then repo-root `scripts/prepare_chromium_reference.mjs` to add the same-rasterizer chromium gate reference with its pinned noise floor, and pin both in the Rust provider (`npm run references:generate`). Read [visual-calibration.md](references/visual-calibration.md). Inspect both full pages and critical regions.
+6. **Calibrate visually.** Use `scripts/reference/prepare_official_reference.py` to render the pinned official PDF into the Poppler raster, then repo-root `scripts/prepare_chromium_reference.mjs` to add the same-rasterizer chromium gate reference with its pinned noise floor, and pin both in the Rust provider (`npm run references:generate`). Read [visual-calibration.md](references/visual-calibration.md). Inspect both full pages and critical regions.
 7. **Prove output behavior.** Verify preview, system print, direct PDF export, page count, 612 x 936 point geometry where applicable, clipping detection, offline packaging, and platform evidence. Read [native-print-export.md](references/native-print-export.md).
-8. **Audit and promote.** Run `scripts/verify_form_conversion.py` at `preview`, then `release` stage. Update migration/release evidence only after every named gate passes.
+8. **Audit and promote.** Run `scripts/reference/verify_form_conversion.py` at `preview`, then `release` stage. Update migration/release evidence only after every named gate passes.
 
 Use [architecture.md](references/architecture.md) when changing cross-form interfaces. Use [2551q-gold-standard.md](references/2551q-gold-standard.md) as the repository example, while respecting its current incomplete release status.
 
@@ -90,15 +90,15 @@ Use [architecture.md](references/architecture.md) when changing cross-form inter
 rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/quick_validate.py \
   .codex/skills/ebirforms-convert-form-to-html
 
-rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/inventory_form.py \
+rtk python3 scripts/reference/inventory_form.py \
   --repo . --form-code 1601C --revision 2018 --output -
 
-rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/prepare_official_reference.py \
+rtk python3 scripts/reference/prepare_official_reference.py \
   --repo . --form-code 1601C --revision 2018 \
   --pdf /absolute/path/1601Cv2018.pdf --expected-sha256 <sha256> \
   --source-url <official-url>
 
-rtk python3 .codex/skills/ebirforms-convert-form-to-html/scripts/verify_form_conversion.py \
+rtk python3 scripts/reference/verify_form_conversion.py \
   --repo . --form-code 1601C --revision 2018 --stage preview
 
 rtk python3 -m unittest discover -s .codex/skills/tests -p 'test_*.py'
