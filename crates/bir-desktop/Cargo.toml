@@ -16,9 +16,13 @@ inspector = []
 # both a direct/notarized build and a sandboxed App Store build, so no
 # `cfg(target_os)` can tell them apart. This selects the sandboxed one, which
 # gives up the `global_hotkey` subsystem because App Store sandboxing forbids
-# the entitlements it needs. `bir-core/mas_build` was a passthrough to an empty
-# feature with no `cfg` behind it and is dropped.
-mas_build = ["gpui_platform/macos_app_store"]
+# the entitlements it needs.
+#
+# The list is empty by design. `bir-core/mas_build` was a passthrough to an
+# empty feature with no `cfg` behind it. `gpui_platform/macos_app_store` is gone
+# because gpui-ce removes the private CoreGraphics Services APIs outright rather
+# than gating them, so there is no renderer-side feature left to enable.
+mas_build = []
 
 
 [dependencies]
@@ -54,7 +58,7 @@ global-hotkey = "0.8"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
-gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "be0f5488a7050f14ed90081f68f450b07761ce93" }
+gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "277f220a6196572116a8fd84fba6c36187094cab" }
 wry = { version = "0.53.3", package = "lb-wry" }
 raw-window-handle = { version = "0.6", features = ["std"] }
 url = "2"
@@ -89,7 +93,7 @@ windows = { version = "0.62.2", features = [
 # Wry's raw child host is X11-only.  The Linux preview uses it when the GPUI
 # window has an X11 handle and uses an application-owned GTK/WebKit window on
 # Wayland.  Both paths render the same locked-down offline document.
-gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "be0f5488a7050f14ed90081f68f450b07761ce93" }
+gpui-wry = { git = "https://github.com/longbridge/gpui-component", rev = "277f220a6196572116a8fd84fba6c36187094cab" }
 wry = { version = "0.53.3", package = "lb-wry" }
 raw-window-handle = { version = "0.6", features = ["std"] }
 url = "2"
