@@ -28,20 +28,28 @@ BENIGN = [
     # rule 7: `let root = <expr>; root.m()` is the same value as `<expr>.m()`.
     # Chaining onto a brace-delimited macro does not parse, so the binding is
     # forced by syntax rather than chosen.
-    # rule 7 binding under any name: `let X = <expr>; X.into_any_element()` is
-    # the same value as `<expr>.into_any_element()`. Anchored on the terminal
-    # method and using a backreference, so it only collapses a binding that is
-    # consumed immediately by the call it was created for.
-    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);return\1\.into_any_element\(\)', re.S),
+    # Rule-7 binding under any name: `let X = <expr>; X.into_any_element()` is
+    # the same value as `<expr>.into_any_element()`. The binding is forced by
+    # syntax - you cannot chain a method onto a brace-delimited macro call.
+    #
+    # `(?:(?!let\1=).)*?` is load-bearing. A plain `.*?` lets the FIRST `let X =`
+    # pair with a LATER `; X.into_any_element()`, swallowing everything between
+    # and silently masking real differences. Files here contain up to 5 bindings
+    # of the same name, so that mis-pairing is reachable, not theoretical. The
+    # negative lookahead confines each binding to its own consumption site.
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);return\1\.into_any_element\(\)', re.S),
      r'return\2.into_any_element()'),
-    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);\1\.into_any_element\(\)', re.S),
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);Some\(\1\.into_any_element\(\)\)', re.S),
+     r'Some(\2.into_any_element())'),
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);\1\.into_any_element\(\)', re.S),
      r'\2.into_any_element()'),
     # same binding, returned directly instead of chained
-    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);return\1;', re.S), r'return\2;'),
-    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);return\1\}', re.S), r'return\2}'),
-    (re.compile(r'letroot='), ''),
-    (re.compile(r';root\.'), '.'),
-    (re.compile(r';root\}'), '}'),
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);return\1;', re.S), r'return\2;'),
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);return\1\}', re.S), r'return\2}'),
+    # ...or left as the block/function tail expression: `let X = <e>; X }`
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);\1\}', re.S), r'\2}'),
+    # the import, whether on its own line or merged into an existing use-group
+    (re.compile(r'gpui_rsx::rsx,'), ''),
     # tracing!/log! bake __FILE__ and __LINE__ into call-site metadata, so
     # adding an import line shifts every line number below it. Anchored to the
     # file-then-line pair so unrelated integer literals are never touched.

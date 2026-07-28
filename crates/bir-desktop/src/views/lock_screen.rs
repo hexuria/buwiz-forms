@@ -6,6 +6,7 @@ use gpui_component::Disableable;
 use gpui_component::Sizable;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{InputEvent, OtpInput, OtpState};
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use crate::components::otp_paste::paste_otp_value;
@@ -345,57 +346,61 @@ impl Render for LockScreenView {
             self.ensure_tick(cx);
         }
 
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .bg(cx.theme().background)
-            // Intercept Cmd+V / Ctrl+V for OTP paste support
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                let dominated_by = &event.keystroke.modifiers;
-                let is_paste = event.keystroke.key.as_str() == "v"
-                    && (dominated_by.platform || dominated_by.control);
-                if is_paste && this.phase == AuthPhase::CodeEntry {
-                    let expected_len = match this.auth_method {
-                        ActiveAuthMethod::Pin => 4,
-                        ActiveAuthMethod::Totp => 6,
-                    };
-                    paste_otp_value(&this.otp_state, expected_len, window, cx);
-                }
-            }))
-            .child(
-                div()
+        // Intercept Cmd+V / Ctrl+V for OTP paste support
+        let root = rsx! {
+            <div
+                size_full
+                flex
+                flex_col
+                items_center
+                justify_center
+                bg={cx.theme().background}
+                on_key_down={cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    let dominated_by = &event.keystroke.modifiers;
+                    let is_paste = event.keystroke.key.as_str() == "v"
+                        && (dominated_by.platform || dominated_by.control);
+                    if is_paste && this.phase == AuthPhase::CodeEntry {
+                        let expected_len = match this.auth_method {
+                            ActiveAuthMethod::Pin => 4,
+                            ActiveAuthMethod::Totp => 6,
+                        };
+                        paste_otp_value(&this.otp_state, expected_len, window, cx);
+                    }
+                })}
+            >
+                {div()
                     .flex()
                     .flex_col()
                     .items_center()
                     .gap_6()
-                    .child(
-                        gpui::img("images/ebirforms.png")
-                            .w(px(200.))
-                            .h(px(60.))
-                            .object_fit(gpui::ObjectFit::Contain),
-                    )
+                    .child(rsx! {
+                        <div
+                            base={gpui::img("images/ebirforms.png")}
+                            w={px(200.)}
+                            h={px(60.)}
+                            object_fit={gpui::ObjectFit::Contain}
+                        />
+                    })
                     // ── Phase: Biometric ──
                     .when(self.phase == AuthPhase::Biometric, |this| {
-                        this.child(
-                            div()
-                                .text_xl()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().foreground)
-                                .child("Unlock e-BIRForms"),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(if self.os_auth_triggered {
+                        this.child(rsx! {
+                            <div
+                                text_xl
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {"Unlock e-BIRForms"}
+                            </div>
+                        })
+                        .child(rsx! {
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {if self.os_auth_triggered {
                                     "Waiting for biometric authentication..."
                                 } else {
                                     "Use Touch ID, Windows Hello, or your computer password."
-                                }),
-                        )
+                                }}
+                            </div>
+                        })
                         .child(
                             gpui_component::button::Button::new("biometric_retry_btn")
                                 .label(if self.os_auth_triggered {
@@ -433,26 +438,30 @@ impl Render for LockScreenView {
 
                         let disable_pin_input = self.auth_method == ActiveAuthMethod::Pin && !self.has_pin_configured;
 
-                        this.child(
-                            div()
-                                .text_xl()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().foreground)
-                                .child(if disable_pin_input { "No Master PIN Configured" } else { title }),
-                        )
+                        this.child(rsx! {
+                            <div
+                                text_xl
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {if disable_pin_input { "No Master PIN Configured" } else { title }}
+                            </div>
+                        })
                         // TOTP time-remaining indicator
                         .when(self.auth_method == ActiveAuthMethod::Totp, |this| {
                             let secs = Self::totp_seconds_remaining();
-                            this.child(
-                                div()
-                                    .text_sm()
-                                    .text_color(if secs <= 5 {
+                            this.child(rsx! {
+                                <div
+                                    text_sm
+                                    text_color={if secs <= 5 {
                                         cx.theme().danger
                                     } else {
                                         cx.theme().muted_foreground
-                                    })
-                                    .child(format!("Code expires in {}s", secs)),
-                            )
+                                    }}
+                                >
+                                    {format!("Code expires in {}s", secs)}
+                                </div>
+                            })
                         })
                         .when(!disable_pin_input, |this| {
                             this.child(
@@ -463,22 +472,26 @@ impl Render for LockScreenView {
                             )
                         })
                         .when(disable_pin_input, |this| {
-                            this.child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .mt_4()
-                                    .mb_2()
-                                    .child("Please authenticate using Windows Hello or your device password."),
-                            )
+                            this.child(rsx! {
+                                <div
+                                    text_sm
+                                    text_color={cx.theme().muted_foreground}
+                                    mt_4
+                                    mb_2
+                                >
+                                    {"Please authenticate using Windows Hello or your device password."}
+                                </div>
+                            })
                         })
                         .when(self.has_error && !disable_pin_input, |this| {
-                            this.child(div().text_sm().text_color(cx.theme().danger).child(
-                                match self.auth_method {
-                                    ActiveAuthMethod::Totp => "Incorrect code. Please try again.",
-                                    ActiveAuthMethod::Pin => "Incorrect PIN. Please try again.",
-                                },
-                            ))
+                            this.child(rsx! {
+                                <div text_sm text_color={cx.theme().danger}>
+                                    {match self.auth_method {
+                                        ActiveAuthMethod::Totp => "Incorrect code. Please try again.",
+                                        ActiveAuthMethod::Pin => "Incorrect PIN. Please try again.",
+                                    }}
+                                </div>
+                            })
                         })
                         .child(
                             gpui_component::button::Button::new("forgot_pin_btn")
@@ -492,15 +505,19 @@ impl Render for LockScreenView {
                     })
                     // ── Phase: Locked Out ──
                     .when(self.phase == AuthPhase::LockedOut, |this| {
-                        this.child(
-                            div()
-                                .text_xl()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().danger)
-                                .child("Account Locked"),
-                        )
+                        this.child(rsx! {
+                            <div
+                                text_xl
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().danger}
+                            >
+                                {"Account Locked"}
+                            </div>
+                        })
                         .when_some(lockout_msg, |this, msg| {
-                            this.child(div().text_sm().text_color(cx.theme().danger).child(msg))
+                            this.child(rsx! {
+                                <div text_sm text_color={cx.theme().danger}>{msg}</div>
+                            })
                         })
                         .child(
                             OtpInput::new(&self.otp_state)
@@ -523,17 +540,16 @@ impl Render for LockScreenView {
                         .when_some(
                             self.os_auth_error.clone(),
                             |this, err| {
-                                this.child(
-                                    div()
-                                        .text_sm()
-                                        .mt_2()
-                                        .text_color(cx.theme().danger)
-                                        .child(err),
-                                )
+                                this.child(rsx! {
+                                    <div text_sm mt_2 text_color={cx.theme().danger}>
+                                        {err}
+                                    </div>
+                                })
                             },
                         )
-                    }),
-            )
-            .into_any_element()
+                    })}
+            </div>
+        };
+        root.into_any_element()
     }
 }

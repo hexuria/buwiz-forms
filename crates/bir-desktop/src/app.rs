@@ -19,6 +19,7 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{InputEvent, InputState, OtpState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use crate::components::rate_limiter::RateLimiter;
 use bir_core::db::Database;
@@ -930,70 +931,80 @@ impl AppState {
                 if let Some(view) = &self.form_2551q_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1701Q => {
                 if let Some(view) = &self.form_1701q_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1601C => {
                 if let Some(view) = &self.form_1601c_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form0619E => {
                 if let Some(view) = &self.form_0619e_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form0619F => {
                 if let Some(view) = &self.form_0619f_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form0605 => {
                 if let Some(view) = &self.form_0605_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form2550Q => {
                 if let Some(view) = &self.form_2550q_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1701 => {
                 if let Some(view) = &self.form_1701_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1702RT => {
                 if let Some(view) = &self.form_1702rt_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1702MX => {
                 if let Some(view) = &self.form_1702mx_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
         }
@@ -1719,10 +1730,8 @@ impl Render for AppState {
         if self.is_locked
             && let Some(lock_screen) = &self.lock_screen_view
         {
-            return div()
-                .size_full()
-                .child(lock_screen.clone())
-                .into_any_element();
+            let root = rsx! { <div size_full>{lock_screen.clone()}</div> };
+            return root.into_any_element();
         }
 
         div()
@@ -1747,25 +1756,21 @@ impl Render for AppState {
             .on_action(cx.listener(Self::handle_minimize_window))
             .on_action(cx.listener(Self::handle_zoom_window))
             .on_action(cx.listener(Self::handle_toggle_fullscreen))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_1()
-                    .min_h_0()
-                    .when(!self.is_sidebar_hidden, |this| {
+            .child(rsx! {
+                <div
+                    flex
+                    flex_row
+                    flex_1
+                    min_h_0
+                    when={(!self.is_sidebar_hidden, |this| {
                         this.child(self.render_sidebar(window, cx))
-                    })
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .h_full()
-                            .overflow_hidden()
-                            .child(self.render_active_view(cx)),
-                    ),
-            )
+                    })}
+                >
+                    <div flex_1 flex flex_col h_full overflow_hidden>
+                        {self.render_active_view(cx)}
+                    </div>
+                </div>
+            })
             .child(crate::components::footer::render_footer(cx))
             .children(notification_layer)
             .children(self.render_profile_auth_overlay(window, cx))

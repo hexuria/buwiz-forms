@@ -57,6 +57,7 @@ use {
     gpui_component::ActiveTheme,
     gpui_component::Disableable,
     gpui_component::button::{Button, ButtonVariants},
+    gpui_rsx::rsx,
     gpui_wry::WebView,
     std::collections::{HashMap, HashSet},
     std::sync::{Arc, Mutex},
@@ -3355,107 +3356,104 @@ impl Render for HtmlFormPreviewView {
         // never when it failed — the user must be able to click to retry.
         let refreshing = !self.renderer_state.ready && self.renderer_state.error.is_none();
 
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            // Without an explicit background the preview window falls through
-            // to black in both themes; follow the app theme instead.
-            .bg(cx.theme().background)
-            .text_color(cx.theme().foreground)
-            .child(
-                div()
-                    .h(px(48.))
-                    .px_3()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .bg(cx.theme().secondary)
-                    .text_sm()
-                    .text_color(cx.theme().foreground)
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(self.status.clone())
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                Button::new("html-export-pdf")
-                                    .label("Export PDF")
-                                    .primary()
-                                    .disabled(!native_output_enabled)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.choose_pdf_destination(cx);
-                                    })),
-                            )
-                            .child(
-                                Button::new("html-print")
-                                    .label("Print")
-                                    .primary()
-                                    .disabled(!native_output_enabled)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        match native_print_decision(
-                                            this.renderer_state.ready,
-                                            this.renderer_state.page_count,
-                                            this.renderer_state.error.as_deref(),
-                                            this.webview.is_some(),
+        // Bare flags (`flex_col`) expand to the identically-named GPUI builder
+        // method, so this is a 1:1 rewrite of the previous builder chain.
+        // Deliberately *not* using rsx's Tailwind `class=`: there `p-6` means
+        // `p(px(6.))`, whereas GPUI's `.p_6()` is 24px.
+        rsx! {
+            <div
+                size_full
+                flex
+                flex_col
+                // Without an explicit background the preview window falls through
+                // to black in both themes; follow the app theme instead.
+                bg={cx.theme().background}
+                text_color={cx.theme().foreground}
+            >
+                <div
+                    h={px(48.)}
+                    px_3
+                    flex
+                    items_center
+                    justify_between
+                    bg={cx.theme().secondary}
+                    text_sm
+                    text_color={cx.theme().foreground}
+                    border_b_1
+                    border_color={cx.theme().border}
+                >
+                    {self.status.clone()}
+                    <div flex items_center gap_2>
+                        {Button::new("html-export-pdf")
+                            .label("Export PDF")
+                            .primary()
+                            .disabled(!native_output_enabled)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.choose_pdf_destination(cx);
+                            }))}
+                        {Button::new("html-print")
+                            .label("Print")
+                            .primary()
+                            .disabled(!native_output_enabled)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                match native_print_decision(
+                                    this.renderer_state.ready,
+                                    this.renderer_state.page_count,
+                                    this.renderer_state.error.as_deref(),
+                                    this.webview.is_some(),
+                                ) {
+                                    NativePrintDecision::WaitForRenderer => {
+                                        this.status =
+                                            "HTML renderer is not ready to print".to_string();
+                                        cx.notify();
+                                    }
+                                    NativePrintDecision::Fallback(reason) => {
+                                        this.status = reason;
+                                        cx.notify();
+                                    }
+                                    NativePrintDecision::StartPrint => {
+                                        if let Err(error) = this.begin_native_output(
+                                            HtmlOutputKind::SystemPrint,
+                                            None,
+                                            cx,
                                         ) {
-                                            NativePrintDecision::WaitForRenderer => {
-                                                this.status = "HTML renderer is not ready to print"
-                                                    .to_string();
-                                                cx.notify();
-                                            }
-                                            NativePrintDecision::Fallback(reason) => {
-                                                this.status = reason;
-                                                cx.notify();
-                                            }
-                                            NativePrintDecision::StartPrint => {
-                                                if let Err(error) = this.begin_native_output(
-                                                    HtmlOutputKind::SystemPrint,
-                                                    None,
-                                                    cx,
-                                                ) {
-                                                    this.fail_pending_output(error, cx);
-                                                    cx.notify();
-                                                }
-                                            }
+                                            this.fail_pending_output(error, cx);
+                                            cx.notify();
                                         }
-                                    })),
-                            )
-                            // Refresh re-renders the preview. While the
-                            // renderer is still working the button shows a
-                            // rotating spinner and is not clickable; on error
-                            // it stays clickable so the user can retry.
-                            // The window's own close control replaces the
-                            // former Close button.
-                            .child(
-                                Button::new("html-preview-retry")
-                                    .icon(gpui_component::Icon::empty().path("svg/refresh.svg"))
-                                    .tooltip("Refresh preview")
-                                    .outline()
-                                    .loading(refreshing)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.request_retry(window, cx);
-                                    })),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .when_some(self.webview.clone(), |this, webview| this.child(webview))
-                    .when(self.webview.is_none(), |this| {
+                                    }
+                                }
+                            }))}
+                        // Refresh re-renders the preview. While the
+                        // renderer is still working the button shows a
+                        // rotating spinner and is not clickable; on error
+                        // it stays clickable so the user can retry.
+                        // The window's own close control replaces the
+                        // former Close button.
+                        {Button::new("html-preview-retry")
+                            .icon(gpui_component::Icon::empty().path("svg/refresh.svg"))
+                            .tooltip("Refresh preview")
+                            .outline()
+                            .loading(refreshing)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.request_retry(window, cx);
+                            }))}
+                    </div>
+                </div>
+                <div
+                    flex_1
+                    min_h_0
+                    whenSome={(self.webview.clone(), |this, webview| this.child(webview))}
+                    when={(self.webview.is_none(), |this| {
                         this.p_6().child(
                             self.renderer_state
                                 .error
                                 .clone()
                                 .unwrap_or_else(|| "HTML preview could not be initialized".into()),
                         )
-                    }),
-            )
+                    })}
+                />
+            </div>
+        }
     }
 }
 
