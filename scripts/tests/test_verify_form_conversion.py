@@ -11,10 +11,10 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = (
     ROOT
-    / ".codex/skills/ebirforms-convert-form-to-html/scripts/verify_form_conversion.py"
+    / "scripts/reference/verify_form_conversion.py"
 )
 SPEC = importlib.util.spec_from_file_location("conversion_verify_form", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None

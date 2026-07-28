@@ -4,7 +4,7 @@
 // pdftocairo and rasterized by the same Chromium/Playwright environment that
 // captures the parity screenshots, eliminating cross-rasterizer noise from
 // the visual gate. The Poppler raster prepared by
-// .codex/skills/ebirforms-convert-form-to-html/scripts/prepare_official_reference.py
+// scripts/reference/prepare_official_reference.py
 // remains the pinned secondary diagnostic; this script computes and records
 // the per-page noise floor between the two rasters.
 

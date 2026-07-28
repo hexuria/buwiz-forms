@@ -2652,7 +2652,7 @@ mod tests {
     #[test]
     fn checked_in_schema_requires_provenance_and_the_closed_kind_surface() {
         let schema: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../docs/validation-rules/evidence-packet-v1.schema.json"
+            "../../../schemas/validation-rules/evidence-packet-v1.schema.json"
         ))
         .expect("evidence packet schema must be JSON");
         let required = schema["required"]
@@ -2794,7 +2794,8 @@ mod tests {
             }
         }
 
-        let schema_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/validation-rules");
+        let schema_root =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas/validation-rules");
         let mut documents = BTreeMap::<String, serde_json::Value>::new();
         for entry in fs::read_dir(&schema_root).expect("read supporting schema directory") {
             let entry = entry.expect("read supporting schema entry");

@@ -3057,7 +3057,7 @@ fn check_remaining_plan_deliverables(repo_root: &Path, criteria: &mut Vec<Criter
         repo_root,
         criteria,
         "validation-rules-skill",
-        ".codex/skills/ebirforms-validation-rules/SKILL.md",
+        "rules/agent-boundaries/SKILL.md",
         |source| {
             source.contains("name: ebirforms-validation-rules")
                 && source.contains("Read [boundaries](references/boundaries.md)")
@@ -3131,7 +3131,8 @@ fn check_text_deliverable(
 }
 
 fn check_occurrence_reconciliation_table(repo_root: &Path, criteria: &mut Vec<Criterion>) {
-    const PATH: &str = "docs/validation-rules/generated/static-occurrence-reconciliation-v796.json";
+    const PATH: &str =
+        "schemas/validation-rules/generated/static-occurrence-reconciliation-v796.json";
     let document = match read_json(repo_root, PATH) {
         Ok(document) => document,
         Err(error) => {

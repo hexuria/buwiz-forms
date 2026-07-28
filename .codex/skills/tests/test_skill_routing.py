@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 CONVERSION = ROOT / ".codex/skills/ebirforms-convert-form-to-html/SKILL.md"
 MAINTENANCE = ROOT / ".codex/skills/ebirforms-print-preview/SKILL.md"
-VALIDATION_RULES = ROOT / ".codex/skills/ebirforms-validation-rules/SKILL.md"
+VALIDATION_RULES = ROOT / "rules/agent-boundaries/SKILL.md"
 ARTWORK = (
     ROOT
     / ".codex/skills/ebirforms-convert-form-to-html/references/discrete-artwork.md"

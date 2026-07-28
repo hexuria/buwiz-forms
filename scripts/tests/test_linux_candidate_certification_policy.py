@@ -18,8 +18,7 @@ class LinuxCandidateCertificationPolicyTests(unittest.TestCase):
             REPOSITORY_ROOT / "scripts/linux_candidate_collector.py"
         ).read_text(encoding="utf-8")
         cls.documentation = (
-            REPOSITORY_ROOT
-            / "docs/form-print-readiness/linux-candidate-certification.md"
+            REPOSITORY_ROOT / "scripts/linux_candidate_certification.md"
         ).read_text(encoding="utf-8")
         cls.workflow = (
             REPOSITORY_ROOT / ".github/workflows/html-candidate-certification.yml"
