@@ -18,6 +18,7 @@ import struct
 import subprocess
 import sys
 import zlib
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -226,15 +227,45 @@ def png_dimensions(path: Path) -> tuple[int, int]:
     return struct.unpack(">II", header[16:24])
 
 
+# A decoded page is roughly 8.7 MiB (1224x1872 RGBA), so this is bounded rather
+# than unlimited: sixteen entries cap the cache near 140 MiB, which comfortably
+# covers the handful of distinct references compared within one audit while
+# staying small enough for a CI runner.
+_PNG_DECODE_CACHE_LIMIT = 16
+_png_decode_cache: OrderedDict[bytes, PngRgba] = OrderedDict()
+
+
 def read_png_rgba(path: Path) -> PngRgba:
     """Decode the evidence PNG subset without trusting its reported metrics.
 
     Playwright and pngjs emit non-interlaced, 8-bit RGB/RGBA PNGs.  Keeping the
     decoder here makes the promotion audit independent of the TypeScript
     evidence producer and its changed-pixel counters.
+
+    Decoding is pure Python and costs ~2.5s per page, and the same references are
+    re-read many times across a run, so successful decodes are memoised.  The key
+    is the SHA-256 of the file's own bytes - never its path or mtime - so any
+    content change misses the cache and is validated and decoded from scratch.
+    The file is still read from disk on every call, and a payload that fails
+    validation is never stored, so failures re-raise identically each time.
     """
 
     payload = path.read_bytes()
+    digest = hashlib.sha256(payload).digest()
+    cached = _png_decode_cache.get(digest)
+    if cached is not None:
+        _png_decode_cache.move_to_end(digest)
+        return cached
+    decoded = _decode_png_rgba(payload)
+    _png_decode_cache[digest] = decoded
+    if len(_png_decode_cache) > _PNG_DECODE_CACHE_LIMIT:
+        _png_decode_cache.popitem(last=False)
+    return decoded
+
+
+def _decode_png_rgba(payload: bytes) -> PngRgba:
+    """Validate and decode one PNG payload.  Pure: same bytes, same result."""
+
     if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
         raise ValueError("not a PNG file")
     offset = 8
@@ -469,17 +500,56 @@ def _antialiased(
     )
 
 
+# A mask is the same size as the image it describes (~8.7 MiB per page), so this
+# is kept smaller than the decode cache above.  Eight entries cover the distinct
+# comparisons a run performs while capping this near 70 MiB.
+_PIXELMATCH_CACHE_LIMIT = 8
+_pixelmatch_cache: OrderedDict[tuple[bytes, bytes, float], tuple[int, bytes]] = (
+    OrderedDict()
+)
+
+
 def pixelmatch_mask(
     expected: PngRgba,
     actual: PngRgba,
     threshold: float,
 ) -> tuple[int, bytes]:
-    """Recompute pixelmatch's default anti-alias-aware count and diff mask."""
+    """Recompute pixelmatch's default anti-alias-aware count and diff mask.
+
+    Memoised on the SHA-256 of both pixel buffers plus the threshold, because the
+    comparison is pure and a run repeats the same handful of pairs many times
+    (measured: 28 calls, 6 distinct).  The count and mask are both immutable, so
+    a cached result is safe to hand back.  Caching happens only after the two
+    validations below, so mismatched inputs raise identically every time.
+    """
 
     if (expected.width, expected.height) != (actual.width, actual.height):
         raise ValueError("image dimensions do not match")
     if len(expected.pixels) != len(actual.pixels):
         raise ValueError("image pixel buffers do not match")
+    key = (
+        hashlib.sha256(expected.pixels).digest(),
+        hashlib.sha256(actual.pixels).digest(),
+        threshold,
+    )
+    memoised = _pixelmatch_cache.get(key)
+    if memoised is not None:
+        _pixelmatch_cache.move_to_end(key)
+        return memoised
+    result = _compute_pixelmatch_mask(expected, actual, threshold)
+    _pixelmatch_cache[key] = result
+    if len(_pixelmatch_cache) > _PIXELMATCH_CACHE_LIMIT:
+        _pixelmatch_cache.popitem(last=False)
+    return result
+
+
+def _compute_pixelmatch_mask(
+    expected: PngRgba,
+    actual: PngRgba,
+    threshold: float,
+) -> tuple[int, bytes]:
+    """Pure comparison kernel.  Same inputs, same (count, mask)."""
+
     mask = bytearray(len(expected.pixels))
     if expected.pixels == actual.pixels:
         return 0, bytes(mask)
