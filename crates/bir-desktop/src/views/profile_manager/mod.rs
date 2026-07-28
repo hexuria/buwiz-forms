@@ -61,6 +61,25 @@ enum ProfileSaveDispatchAction {
     QueueBehindInFlight,
 }
 
+/// Builds the duplicate-TIN error shown when creating a profile whose TIN is
+/// already taken.
+///
+/// The uniqueness check queries the database directly, but the sidebar list is
+/// filtered - by the archive toggle, and by the `hide_tax_profiles` privacy
+/// setting, which shows only the active session profile while the search box is
+/// empty. So the offending profile is frequently *not visible*, and a bare
+/// "already exists" leaves the user unable to find or reach it.
+///
+/// The lookup already returns the profile, so say which case it is.
+fn duplicate_tin_message(formatted_tin: &str, existing_is_archived: bool) -> String {
+    let hint = if existing_is_archived {
+        "It is archived - use the archive toggle in the sidebar to show it."
+    } else {
+        "If it is not listed in the sidebar, search that TIN there to open it."
+    };
+    format!("A profile with TIN {formatted_tin} already exists. Each TIN must be unique. {hint}")
+}
+
 fn profile_save_dispatch_action(
     active: Option<&ProfileSaveRequest>,
     requested: &ProfileSaveRequest,
@@ -1855,10 +1874,10 @@ impl ProfileManagerView {
 
         // Check DB for existing profile with same TIN
         if let Ok(db) = self.db.lock() {
-            if let Ok(Some(_existing)) = db.get_profile(&tin_val) {
-                self.tin_duplicate_error = Some(format!(
-                    "A profile with TIN {} already exists. Each TIN must be unique.",
-                    self.tin_input.read(cx).formatted_value(cx)
+            if let Ok(Some(existing)) = db.get_profile(&tin_val) {
+                self.tin_duplicate_error = Some(duplicate_tin_message(
+                    &self.tin_input.read(cx).formatted_value(cx),
+                    existing.is_archived,
                 ));
             } else {
                 self.tin_duplicate_error = None;
@@ -4017,11 +4036,11 @@ impl ProfileManagerView {
         if self.editing_id.is_none() {
             let tin_str = profile.tin.full();
             if let Ok(db) = self.db.lock()
-                && let Ok(Some(_)) = db.get_profile(&tin_str)
+                && let Ok(Some(existing)) = db.get_profile(&tin_str)
             {
-                self.tin_duplicate_error = Some(format!(
-                    "A profile with TIN {} already exists.",
-                    profile.tin.formatted()
+                self.tin_duplicate_error = Some(duplicate_tin_message(
+                    &profile.tin.formatted(),
+                    existing.is_archived,
                 ));
                 self.errors.push(ValidationError::new(
                     "tin",
@@ -5118,6 +5137,43 @@ fn save_completion_is_current(save_revision: u64, current_revision: u64) -> bool
 /// which makes cross-profile completions detectable.
 fn save_completion_matches_profile_session(save_epoch: u64, current_epoch: u64) -> bool {
     save_epoch == current_epoch
+}
+
+#[cfg(test)]
+mod duplicate_tin_message_tests {
+    use super::duplicate_tin_message;
+
+    // The uniqueness check sees every profile, but the sidebar list does not:
+    // it is filtered by the archive toggle and by `hide_tax_profiles`. So the
+    // message has to explain why the offending profile may be invisible,
+    // otherwise the user is told a TIN is taken by something they cannot find.
+    #[test]
+    fn archived_profile_points_at_the_archive_toggle() {
+        let msg = duplicate_tin_message("000-000-000-00000", true);
+        assert!(msg.contains("000-000-000-00000"), "{msg}");
+        assert!(msg.contains("archived"), "{msg}");
+        assert!(msg.contains("archive toggle"), "{msg}");
+    }
+
+    #[test]
+    fn visible_or_hidden_profile_points_at_the_sidebar_search() {
+        let msg = duplicate_tin_message("123-456-789-00000", false);
+        assert!(msg.contains("123-456-789-00000"), "{msg}");
+        assert!(msg.contains("search that TIN"), "{msg}");
+        assert!(
+            !msg.contains("archived"),
+            "must not claim a live profile is archived: {msg}"
+        );
+    }
+
+    #[test]
+    fn both_variants_keep_the_uniqueness_explanation() {
+        for archived in [true, false] {
+            let msg = duplicate_tin_message("000-000-000-00000", archived);
+            assert!(msg.contains("already exists"), "{msg}");
+            assert!(msg.contains("Each TIN must be unique"), "{msg}");
+        }
+    }
 }
 
 #[cfg(test)]
