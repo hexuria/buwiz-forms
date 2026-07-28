@@ -58,6 +58,23 @@ gpui = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf5
 gpui_platform = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e", features = ["font-kit"] }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "be0f5488a7050f14ed90081f68f450b07761ce93" }
 
+# Cargo resolves 1042 packages here: 1036 external dependencies against 6
+# workspace crates. Full debuginfo on all of them is what made target/ grow to
+# 90 GiB. "line-tables-only" keeps file/line in backtraces and panic messages -
+# what is actually read during development - and drops the rest.
+[profile.dev]
+debug = "line-tables-only"
+
+# Dependencies are never stepped through, so they need no debuginfo at all.
+# opt-level = 1 also makes the heavy ones (image/raster/PDF work in the test
+# suites) materially faster to execute for a small one-off build cost.
+# Deliberately not set: incremental. sccache refuses to cache anything built
+# with -C incremental, but turning it off would gut the edit-rebuild loop, and
+# dependencies are cached regardless because they do not use it.
+[profile.dev.package."*"]
+debug = false
+opt-level = 1
+
 [profile.release]
 lto = true
 codegen-units = 1
