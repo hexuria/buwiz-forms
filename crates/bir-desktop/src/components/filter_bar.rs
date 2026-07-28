@@ -7,6 +7,7 @@ use gpui_component::popover::Popover;
 use gpui_component::tag::Tag;
 use gpui_component::{ActiveTheme, Sizable};
 use gpui_component::{Icon, IconName};
+use gpui_rsx::rsx;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct FilterChip {
@@ -309,178 +310,147 @@ impl FilterState {
         let active_chips = state.active_chips.clone();
         let has_annual = state.has_annual_filter();
 
-        div()
-            .flex()
-            .flex_col()
-            .id("filter_popover_scroll")
-            .w(px(300.))
-            .max_h(px(500.))
-            .overflow_y_scroll()
-            .p_3()
-            .gap_4()
-            // Form Type section
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("FORM TYPE"),
-                    )
-                    .children(form_types.into_iter().map(|t| {
+        rsx! {
+            <div flex flex_col id={"filter_popover_scroll"} w={px(300.)} max_h={px(500.)} overflow_y_scroll p_3 gap_4>
+                // Form Type section
+                <div flex flex_col gap_2>
+                    <div text_xs font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().muted_foreground}>
+                        {"FORM TYPE"}
+                    </div>
+                    {...form_types.into_iter().map(|t| {
                         let is_active = active_chips
                             .iter()
                             .any(|c| c.id == format!("form_type_{}", t));
                         let t_clone = t.clone();
-                        div()
-                            .flex()
-                            .id(format!("popover_ft_{}", t))
-                            .items_center()
-                            .gap_2()
-                            .py_0p5()
-                            .cursor_pointer()
-                            .hover(|s| s.bg(cx.theme().secondary).rounded_md())
-                            .on_click({
-                                let entity = entity.clone();
-                                move |_, _, cx| {
-                                    entity.update(cx, |this, cx| {
-                                        if is_active {
-                                            this.remove_chip(&format!("form_type_{}", t_clone), cx);
-                                        } else {
-                                            this.add_chip(
-                                                FilterChip {
-                                                    id: format!("form_type_{}", t_clone),
-                                                    label: t_clone.clone(),
-                                                    group: "Form Type".to_string(),
-                                                },
-                                                cx,
-                                            );
-                                        }
-                                    });
-                                }
-                            })
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_sm()
-                                    .when(is_active, |s| {
+                        rsx! {
+                            <div
+                                flex
+                                id={format!("popover_ft_{}", t)}
+                                items_center
+                                gap_2
+                                py_0p5
+                                cursor_pointer
+                                hover={|s| s.bg(cx.theme().secondary).rounded_md()}
+                                on_click={{
+                                    let entity = entity.clone();
+                                    move |_, _, cx| {
+                                        entity.update(cx, |this, cx| {
+                                            if is_active {
+                                                this.remove_chip(&format!("form_type_{}", t_clone), cx);
+                                            } else {
+                                                this.add_chip(
+                                                    FilterChip {
+                                                        id: format!("form_type_{}", t_clone),
+                                                        label: t_clone.clone(),
+                                                        group: "Form Type".to_string(),
+                                                    },
+                                                    cx,
+                                                );
+                                            }
+                                        });
+                                    }
+                                }}
+                            >
+                                <div
+                                    w_4
+                                    h_4
+                                    border_1
+                                    border_color={cx.theme().border}
+                                    rounded_sm
+                                    when={(is_active, |s| {
                                         s.bg(cx.theme().primary).border_color(cx.theme().primary)
-                                    })
-                                    .when(!is_active, |s| s.bg(cx.theme().background)),
-                            )
-                            .child(div().text_sm().child(t))
-                    })),
-            )
-            // Annual section
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("ANNUAL"),
-                    )
-                    .child(
-                        div()
-                            .id("popover_annual")
-                            .flex()
-                            .justify_center()
-                            .py_1p5()
-                            .text_sm()
-                            .rounded_md()
-                            .cursor_pointer()
-                            .when(has_annual, |s| {
-                                s.bg(cx.theme().primary)
-                                    .text_color(cx.theme().primary_foreground)
-                                    .font_weight(FontWeight::BOLD)
-                            })
-                            .when(!has_annual, |s| {
-                                s.bg(cx.theme().secondary)
-                                    .text_color(cx.theme().secondary_foreground)
-                                    .hover(|s| s.bg(cx.theme().accent))
-                            })
-                            .on_click({
-                                let entity = entity.clone();
-                                move |_, _, cx| {
-                                    entity.update(cx, |this, cx| {
-                                        if has_annual {
-                                            this.remove_chip("annual", cx);
-                                        } else {
-                                            this.add_chip(
-                                                FilterChip {
-                                                    id: "annual".to_string(),
-                                                    label: "Annual".to_string(),
-                                                    group: "Annual".to_string(),
-                                                },
-                                                cx,
-                                            );
-                                        }
-                                    });
-                                }
-                            })
-                            .child("Annual"),
-                    ),
-            )
-            // Quarter section
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("QUARTER"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .children(quarters.into_iter().map(|q| {
-                                let is_active = active_chips
-                                    .iter()
-                                    .any(|c| c.id == format!("quarter_{}", q));
-                                let q_clone = q.clone();
-                                let mut is_disabled = false;
-                                if let Some(reg_d) = state.profile_registration_date {
-                                    if state.selected_year == reg_d.year() as u16 {
-                                        let q_num = q
-                                            .strip_prefix('Q')
-                                            .and_then(|n| n.parse::<u32>().ok())
-                                            .unwrap_or(1);
-                                        let reg_q = (reg_d.month() - 1) / 3 + 1;
-                                        if q_num < reg_q {
-                                            is_disabled = true;
-                                        }
+                                    })}
+                                    when={(!is_active, |s| s.bg(cx.theme().background))}
+                                />
+                                <div text_sm>{t}</div>
+                            </div>
+                        }
+                    })}
+                </div>
+                // Annual section
+                <div flex flex_col gap_2>
+                    <div text_xs font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().muted_foreground}>
+                        {"ANNUAL"}
+                    </div>
+                    <div
+                        id={"popover_annual"}
+                        flex
+                        justify_center
+                        py_1p5
+                        text_sm
+                        rounded_md
+                        cursor_pointer
+                        when={(has_annual, |s| {
+                            s.bg(cx.theme().primary)
+                                .text_color(cx.theme().primary_foreground)
+                                .font_weight(FontWeight::BOLD)
+                        })}
+                        when={(!has_annual, |s| {
+                            s.bg(cx.theme().secondary)
+                                .text_color(cx.theme().secondary_foreground)
+                                .hover(|s| s.bg(cx.theme().accent))
+                        })}
+                        on_click={{
+                            let entity = entity.clone();
+                            move |_, _, cx| {
+                                entity.update(cx, |this, cx| {
+                                    if has_annual {
+                                        this.remove_chip("annual", cx);
+                                    } else {
+                                        this.add_chip(
+                                            FilterChip {
+                                                id: "annual".to_string(),
+                                                label: "Annual".to_string(),
+                                                group: "Annual".to_string(),
+                                            },
+                                            cx,
+                                        );
+                                    }
+                                });
+                            }
+                        }}
+                    >
+                        {"Annual"}
+                    </div>
+                </div>
+                // Quarter section
+                <div flex flex_col gap_2>
+                    <div text_xs font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().muted_foreground}>
+                        {"QUARTER"}
+                    </div>
+                    <div flex items_center gap_1>
+                        {...quarters.into_iter().map(|q| {
+                            let is_active = active_chips
+                                .iter()
+                                .any(|c| c.id == format!("quarter_{}", q));
+                            let q_clone = q.clone();
+                            let mut is_disabled = false;
+                            if let Some(reg_d) = state.profile_registration_date {
+                                if state.selected_year == reg_d.year() as u16 {
+                                    let q_num = q
+                                        .strip_prefix('Q')
+                                        .and_then(|n| n.parse::<u32>().ok())
+                                        .unwrap_or(1);
+                                    let reg_q = (reg_d.month() - 1) / 3 + 1;
+                                    if q_num < reg_q {
+                                        is_disabled = true;
                                     }
                                 }
-                                div()
-                                    .id(format!("popover_q_{}", q))
-                                    .flex_1()
-                                    .flex()
-                                    .justify_center()
-                                    .py_1p5()
-                                    .text_sm()
-                                    .rounded_md()
-                                    .when(is_disabled, |s| {
+                            }
+                            rsx! {
+                                <div
+                                    id={format!("popover_q_{}", q)}
+                                    flex_1
+                                    flex
+                                    justify_center
+                                    py_1p5
+                                    text_sm
+                                    rounded_md
+                                    when={(is_disabled, |s| {
                                         s.text_color(cx.theme().border)
                                             .bg(cx.theme().secondary.opacity(0.4))
-                                    })
-                                    .when(!is_disabled, |s| {
+                                    })}
+                                    when={(!is_disabled, |s| {
                                         s.cursor_pointer()
                                             .when(is_active, |s| {
                                                 s.bg(cx.theme().primary)
@@ -517,55 +487,47 @@ impl FilterState {
                                                     });
                                                 }
                                             })
-                                    })
-                                    .child(q)
-                            })),
-                    ),
-            )
-            // Month section
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("MONTH"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .children(months.into_iter().map(|m| {
-                                let is_active =
-                                    active_chips.iter().any(|c| c.id == format!("month_{}", m));
-                                let m_clone = m.clone();
-                                let mut is_disabled = false;
-                                if let Some(reg_d) = state.profile_registration_date {
-                                    if state.selected_year == reg_d.year() as u16 {
-                                        let m_num = Self::month_label_to_num(&m).unwrap_or(1);
-                                        if m_num < reg_d.month() {
-                                            is_disabled = true;
-                                        }
+                                    })}
+                                >
+                                    {q}
+                                </div>
+                            }
+                        })}
+                    </div>
+                </div>
+                // Month section
+                <div flex flex_col gap_2>
+                    <div text_xs font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().muted_foreground}>
+                        {"MONTH"}
+                    </div>
+                    <div flex flex_wrap gap_1>
+                        {...months.into_iter().map(|m| {
+                            let is_active =
+                                active_chips.iter().any(|c| c.id == format!("month_{}", m));
+                            let m_clone = m.clone();
+                            let mut is_disabled = false;
+                            if let Some(reg_d) = state.profile_registration_date {
+                                if state.selected_year == reg_d.year() as u16 {
+                                    let m_num = Self::month_label_to_num(&m).unwrap_or(1);
+                                    if m_num < reg_d.month() {
+                                        is_disabled = true;
                                     }
                                 }
-                                div()
-                                    .id(format!("popover_m_{}", m))
-                                    .w(px(60.))
-                                    .flex()
-                                    .justify_center()
-                                    .py_1p5()
-                                    .text_xs()
-                                    .rounded_md()
-                                    .when(is_disabled, |s| {
+                            }
+                            rsx! {
+                                <div
+                                    id={format!("popover_m_{}", m)}
+                                    w={px(60.)}
+                                    flex
+                                    justify_center
+                                    py_1p5
+                                    text_xs
+                                    rounded_md
+                                    when={(is_disabled, |s| {
                                         s.text_color(cx.theme().border)
                                             .bg(cx.theme().secondary.opacity(0.4))
-                                    })
-                                    .when(!is_disabled, |s| {
+                                    })}
+                                    when={(!is_disabled, |s| {
                                         s.cursor_pointer()
                                             .when(is_active, |s| {
                                                 s.bg(cx.theme().primary)
@@ -602,23 +564,24 @@ impl FilterState {
                                                     });
                                                 }
                                             })
-                                    })
-                                    .child(m)
-                            })),
-                    ),
-            )
+                                    })}
+                                >
+                                    {m}
+                                </div>
+                            }
+                        })}
+                    </div>
+                </div>
+            </div>
+        }
     }
 }
 
 impl Render for FilterState {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .flex()
-            .w_full()
-            .items_center()
-            .gap_2()
-            .child(
-                div()
+        rsx! {
+            <div flex w_full items_center gap_2>
+                {div()
                     .flex()
                     .flex_grow()
                     .items_center()
@@ -653,10 +616,10 @@ impl Render for FilterState {
                                 ),
                         )
                     }))
-                    .child(
-                        div()
-                            .flex_grow()
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+                    .child(rsx! {
+                        <div
+                            flex_grow
+                            on_key_down={cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                                 let key = event.keystroke.key.as_str();
                                 if (key == "backspace" || key == "delete")
                                     && this.input_state.read(cx).value().is_empty()
@@ -665,9 +628,11 @@ impl Render for FilterState {
                                     let id = chip.id.clone();
                                     this.remove_chip(&id, cx);
                                 }
-                            }))
-                            .child(Input::new(&self.input_state).appearance(false)),
-                    )
+                            })}
+                        >
+                            {Input::new(&self.input_state).appearance(false)}
+                        </div>
+                    })
                     .when(
                         !self.active_chips.is_empty()
                             || !self.input_state.read(cx).value().is_empty(),
@@ -691,10 +656,8 @@ impl Render for FilterState {
                                     ),
                             )
                         },
-                    ),
-            )
-            .child(
-                Popover::new("filter-popover")
+                    )}
+                {Popover::new("filter-popover")
                     .open(self.popover_open)
                     .on_open_change(cx.listener(|this, open: &bool, _, cx| {
                         this.set_popover_open(*open, cx);
@@ -709,8 +672,9 @@ impl Render for FilterState {
                     .content({
                         let entity = cx.entity().clone();
                         move |_, _, cx| Self::render_popover(&entity, cx).into_any_element()
-                    }),
-            )
+                    })}
+            </div>
+        }
     }
 }
 

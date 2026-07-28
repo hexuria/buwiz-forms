@@ -1,6 +1,7 @@
 //! Per-profile Google Calendar creation and synchronization.
 
 use super::*;
+use gpui_rsx::rsx;
 
 impl ProfileManagerView {
     pub(super) fn render_calendar_tab(&self, cx: &Context<Self>) -> gpui::AnyElement {
@@ -38,59 +39,39 @@ impl ProfileManagerView {
             .gap_5()
             .w_full()
             .min_w_0()
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_start()
-                    .gap_4()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Google Filing Calendar"),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(
-                                        "Create a separately toggleable Google calendar from this profile's Forms Sets.",
-                                    ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(if linked {
-                                cx.theme().success
-                            } else {
-                                cx.theme().muted_foreground
-                            })
-                            .child(if linked { "Linked" } else { "Not linked" }),
-                    ),
-            )
+            .child(rsx! {
+                <div flex justify_between items_start gap_4>
+                    <div flex flex_col gap_1>
+                        <div font_weight={FontWeight::SEMIBOLD}>{"Google Filing Calendar"}</div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {"Create a separately toggleable Google calendar from this profile's Forms Sets."}
+                        </div>
+                    </div>
+                    <div
+                        text_sm
+                        text_color={if linked {
+                            cx.theme().success
+                        } else {
+                            cx.theme().muted_foreground
+                        }}
+                    >
+                        {if linked { "Linked" } else { "Not linked" }}
+                    </div>
+                </div>
+            })
             .when(forms_years.is_empty(), |this| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().danger)
-                        .child(
-                            "No Forms Set is configured. Add forms in COR > Forms & Elections before creating a calendar.",
-                        ),
-                )
+                this.child(rsx! {
+                    <div text_sm text_color={cx.theme().danger}>
+                        {"No Forms Set is configured. Add forms in COR > Forms & Elections before creating a calendar."}
+                    </div>
+                })
             })
             .when_some(connection.connected_email.clone(), |this, email| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(format!("Google account: {email}")),
-                )
+                this.child(rsx! {
+                    <div text_sm text_color={cx.theme().muted_foreground}>
+                        {format!("Google account: {email}")}
+                    </div>
+                })
             })
             .when_some(link.clone(), |this, link| {
                 this.child(
@@ -98,16 +79,12 @@ impl ProfileManagerView {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(
-                            div()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(link.calendar_name),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(format!(
+                        .child(rsx! {
+                            <div font_weight={FontWeight::MEDIUM}>{link.calendar_name}</div>
+                        })
+                        .child(rsx! {
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {format!(
                                     "Years: {} · Last sync: {}",
                                     forms_years
                                         .iter()
@@ -116,42 +93,42 @@ impl ProfileManagerView {
                                         .join(", "),
                                     link.last_synced_at
                                         .unwrap_or_else(|| "Not synced yet".to_string())
-                                )),
-                        )
+                                )}
+                            </div>
+                        })
                         .when_some(link.last_error, |this, error| {
-                            this.child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().danger)
-                                    .child(format!("Last error: {error}")),
-                            )
+                            this.child(rsx! {
+                                <div text_sm text_color={cx.theme().danger}>
+                                    {format!("Last error: {error}")}
+                                </div>
+                            })
                         }),
                 )
             })
             .when(!linked, |this| {
-                this.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(Self::field_label("Calendar Name", cx))
-                        .child(Input::new(&self.calendar_name_input)),
-                )
+                this.child(rsx! {
+                    <div flex flex_col gap_2>
+                        {Self::field_label("Calendar Name", cx)}
+                        {Input::new(&self.calendar_name_input)}
+                    </div>
+                })
             })
             .when(!forms_years.is_empty(), |this| {
                 this.child(self.render_calendar_form_selection(cx))
             })
             .when_some(self.calendar_action_message.clone(), |this, message| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(if message.0 {
+                this.child(rsx! {
+                    <div
+                        text_sm
+                        text_color={if message.0 {
                             cx.theme().success
                         } else {
                             cx.theme().danger
-                        })
-                        .child(message.1),
-                )
+                        }}
+                    >
+                        {message.1}
+                    </div>
+                })
             })
             .child(
                 div()
@@ -407,45 +384,43 @@ impl ProfileManagerView {
                         this.persist_calendar_form_selection(cx);
                         cx.notify();
                     }))
-                    .child(
-                        div()
-                            .w_4()
-                            .h_4()
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .bg(if allowed {
+                    .child(rsx! {
+                        <div
+                            w_4
+                            h_4
+                            rounded_sm
+                            border_1
+                            border_color={cx.theme().border}
+                            bg={if allowed {
                                 cx.theme().primary
                             } else {
                                 cx.theme().background
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(cx.theme().foreground)
-                            .child(code.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .flex_1()
-                            .min_w_0()
-                            .child(format!("{title} · {frequency}")),
-                    )
+                            }}
+                        />
+                    })
+                    .child(rsx! {
+                        <div text_sm font_weight={FontWeight::MEDIUM} text_color={cx.theme().foreground}>
+                            {code.clone()}
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div text_xs text_color={cx.theme().muted_foreground} flex_1 min_w_0>
+                            {format!("{title} · {frequency}")}
+                        </div>
+                    })
                     .when(overridden, |this| {
-                        this.child(
-                            div()
-                                .text_xs()
-                                .px_1p5()
-                                .py_0p5()
-                                .rounded_sm()
-                                .bg(cx.theme().secondary)
-                                .text_color(cx.theme().muted_foreground)
-                                .child("override"),
-                        )
+                        this.child(rsx! {
+                            <div
+                                text_xs
+                                px_1p5
+                                py_0p5
+                                rounded_sm
+                                bg={cx.theme().secondary}
+                                text_color={cx.theme().muted_foreground}
+                            >
+                                {"override"}
+                            </div>
+                        })
                     }),
             );
         }
@@ -459,45 +434,32 @@ impl ProfileManagerView {
             .border_1()
             .border_color(cx.theme().border)
             .bg(cx.theme().secondary.opacity(0.4))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Notified Forms"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(preset_button(
-                                "calendar_preset_all",
-                                "All forms",
-                                CalendarFormPreset::AllForms,
-                                cx,
-                            ))
-                            .child(preset_button(
-                                "calendar_preset_recurring",
-                                "Recurring only",
-                                CalendarFormPreset::RecurringOnly,
-                                cx,
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(
-                        "Checked forms create deadline events and reminders on the Google calendar. The preset sets the default; clicking a form records a manual override. Changes apply on the next sync.",
-                    ),
-            )
+            .child(rsx! {
+                <div flex items_center justify_between gap_3>
+                    <div font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().foreground}>
+                        {"Notified Forms"}
+                    </div>
+                    <div flex items_center gap_1>
+                        {preset_button(
+                            "calendar_preset_all",
+                            "All forms",
+                            CalendarFormPreset::AllForms,
+                            cx,
+                        )}
+                        {preset_button(
+                            "calendar_preset_recurring",
+                            "Recurring only",
+                            CalendarFormPreset::RecurringOnly,
+                            cx,
+                        )}
+                    </div>
+                </div>
+            })
+            .child(rsx! {
+                <div text_xs text_color={cx.theme().muted_foreground}>
+                    {"Checked forms create deadline events and reminders on the Google calendar. The preset sets the default; clicking a form records a manual override. Changes apply on the next sync."}
+                </div>
+            })
             .child(rows)
             .when(any_overrides, |this| {
                 this.child(

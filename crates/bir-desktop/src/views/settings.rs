@@ -7,6 +7,7 @@ use gpui_component::button::ButtonVariants;
 use gpui_component::input::{InputEvent, OtpInput, OtpState};
 use gpui_component::switch::Switch;
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 pub enum SettingsEvent {
@@ -208,75 +209,37 @@ impl SettingsView {
             .rounded_xl()
             .p_6()
             .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_start()
-                    .gap_4()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Google Calendar"),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(
-                                        "Connect one Google account, then create a separate filing calendar for each tax profile.",
-                                    ),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(if connected {
-                                cx.theme().success
-                            } else {
-                                cx.theme().muted_foreground
-                            })
-                            .child(
-                                self.google_calendar_email
-                                    .clone()
-                                    .unwrap_or_else(|| "Not connected".to_string()),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(
-                        "eBIRForms requests access only to calendars it creates. Deadline events use email reminders 7 days and 1 day before filing.",
-                    ),
-            )
+            .child(rsx! {
+                <div flex justify_between items_start gap_4>
+                    <div flex flex_col gap_1>
+                        <div font_weight={FontWeight::SEMIBOLD}>{"Google Calendar"}</div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {"Connect one Google account, then create a separate filing calendar for each tax profile."}
+                        </div>
+                    </div>
+                    <div text_sm text_color={if connected { cx.theme().success } else { cx.theme().muted_foreground }}>
+                        {self.google_calendar_email.clone().unwrap_or_else(|| "Not connected".to_string())}
+                    </div>
+                </div>
+            })
+            .child(rsx! {
+                <div text_sm text_color={cx.theme().muted_foreground}>
+                    {"eBIRForms requests access only to calendars it creates. Deadline events use email reminders 7 days and 1 day before filing."}
+                </div>
+            })
             .when(!self.google_calendar_configured, |this| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().danger)
-                        .child(
-                            "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (e.g. copy .env.example to .env and fill it in), then restart the app.",
-                        ),
-                )
+                this.child(rsx! {
+                    <div text_sm text_color={cx.theme().danger}>
+                        {"Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (e.g. copy .env.example to .env and fill it in), then restart the app."}
+                    </div>
+                })
             })
             .when_some(self.google_calendar_message.clone(), |this, message| {
-                this.child(
-                    div()
-                        .text_sm()
-                        .text_color(if message.0 {
-                            cx.theme().success
-                        } else {
-                            cx.theme().danger
-                        })
-                        .child(message.1),
-                )
+                this.child(rsx! {
+                    <div text_sm text_color={if message.0 { cx.theme().success } else { cx.theme().danger }}>
+                        {message.1}
+                    </div>
+                })
             })
             .child(
                 div()
@@ -382,66 +345,33 @@ impl SettingsView {
                     ),
             )
             .when(self.show_google_calendar_setup_guide, |this| {
-                this.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .p_4()
-                        .rounded_lg()
-                        .bg(cx.theme().secondary)
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .child(
-                            div()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child("Google Calendar setup"),
+                this.child(rsx! {
+                    <div flex flex_col gap_2 p_4 rounded_lg bg={cx.theme().secondary} border_1 border_color={cx.theme().border}>
+                        <div font_weight={FontWeight::SEMIBOLD}>{"Google Calendar setup"}</div>
+                        <div text_sm text_color={cx.theme().foreground}>
+                            {"1. The app build must include a Google Desktop OAuth client and have the Google Calendar API enabled."}
+                        </div>
+                        <div text_sm text_color={cx.theme().foreground}>
+                            {"2. Connect the Calendar account here in Settings. Email receipt tracking uses a separate Google connection."}
+                        </div>
+                        <div text_sm text_color={cx.theme().foreground}>
+                            {"3. After connection, edit a saved tax profile. Its Calendar tab will appear so you can create a filing calendar."}
+                        </div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {"Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in a .env file (see .env.example) and restart, or bake them in at build time for release builds. Tokens are stored in the operating-system credential store, not in the project environment."}
+                        </div>
+                        {gpui_component::button::Button::new(
+                            "google_calendar_official_oauth_docs",
                         )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().foreground)
-                                .child(
-                                    "1. The app build must include a Google Desktop OAuth client and have the Google Calendar API enabled.",
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().foreground)
-                                .child(
-                                    "2. Connect the Calendar account here in Settings. Email receipt tracking uses a separate Google connection.",
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().foreground)
-                                .child(
-                                    "3. After connection, edit a saved tax profile. Its Calendar tab will appear so you can create a filing calendar.",
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(
-                                    "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in a .env file (see .env.example) and restart, or bake them in at build time for release builds. Tokens are stored in the operating-system credential store, not in the project environment.",
-                                ),
-                        )
-                        .child(
-                            gpui_component::button::Button::new(
-                                "google_calendar_official_oauth_docs",
-                            )
-                            .label("Open official Google OAuth guide")
-                            .ghost()
-                            .on_click(|_, _, _| {
-                                let _ = open::that(
-                                    "https://developers.google.com/identity/protocols/oauth2/native-app",
-                                );
-                            }),
-                        ),
-                )
+                        .label("Open official Google OAuth guide")
+                        .ghost()
+                        .on_click(|_, _, _| {
+                            let _ = open::that(
+                                "https://developers.google.com/identity/protocols/oauth2/native-app",
+                            );
+                        })}
+                    </div>
+                })
             })
     }
 }
@@ -476,18 +406,14 @@ impl Render for SettingsView {
                     .p_8()
                     .gap_6()
                     .overflow_y_scroll()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                    .gap_1()
-                    .child(div().text_2xl().font_weight(FontWeight::BOLD).child("Settings"))
-                    .child(
-                        div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Configure security, privacy, and global application preferences."),
-                            ),
-                    )
+                    .child(rsx! {
+                        <div flex flex_col gap_1>
+                            <div text_2xl font_weight={FontWeight::BOLD}>{"Settings"}</div>
+                            <div text_color={cx.theme().muted_foreground}>
+                                {"Configure security, privacy, and global application preferences."}
+                            </div>
+                        </div>
+                    })
                     .child(self.render_google_calendar_settings(cx))
             .child(
                 div()
@@ -508,147 +434,59 @@ impl Render for SettingsView {
                             .gap_4()
                             .border_b_1()
                             .border_color(border)
-                            .child(
-                                div()
-                                    .flex()
-                                    .w_full()
-                                    .justify_between()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Master PIN"))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Require a 4-digit PIN to unlock the app. If forgotten, your OS login password will be required."),
-                                            ),
-                                    )
-                                    .child(
-                                        Switch::new("app_lock_switch")
-                                            .checked(self.is_app_lock_enabled)
-                                            .disabled(self.is_app_totp_enabled)
-                                            .on_click(cx.listener(|this, checked, _window, cx| {
-                                                if this.is_app_totp_enabled { return; }
-                                                if !checked {
-                                                    if let Ok(db) = this.db.lock() {
-                                                        let _ = db.set_setting("app_lock_enabled", "false");
-                                                    }
-                                                    this.is_app_lock_enabled = false;
-                                                    this.show_pin_setup = false;
-                                                } else {
-                                                    this.show_pin_setup = true;
+                            .child(rsx! {
+                                <div flex w_full justify_between items_center>
+                                    <div flex flex_col gap_1>
+                                        <div font_weight={FontWeight::SEMIBOLD}>{"Master PIN"}</div>
+                                        <div text_sm text_color={cx.theme().muted_foreground}>
+                                            {"Require a 4-digit PIN to unlock the app. If forgotten, your OS login password will be required."}
+                                        </div>
+                                    </div>
+                                    {Switch::new("app_lock_switch")
+                                        .checked(self.is_app_lock_enabled)
+                                        .disabled(self.is_app_totp_enabled)
+                                        .on_click(cx.listener(|this, checked, _window, cx| {
+                                            if this.is_app_totp_enabled { return; }
+                                            if !checked {
+                                                if let Ok(db) = this.db.lock() {
+                                                    let _ = db.set_setting("app_lock_enabled", "false");
                                                 }
-                                                cx.notify();
-                                            }))
-                                    )
-                            )
+                                                this.is_app_lock_enabled = false;
+                                                this.show_pin_setup = false;
+                                            } else {
+                                                this.show_pin_setup = true;
+                                            }
+                                            cx.notify();
+                                        }))}
+                                </div>
+                            })
                             .when(self.is_app_totp_enabled, |this| {
-                                this.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("Disable Authenticator App first to use 4-digit PIN.")
-                                )
+                                this.child(rsx! {
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {"Disable Authenticator App first to use 4-digit PIN."}
+                                    </div>
+                                })
                             })
                             .when(self.show_pin_setup, |this| {
-                                this.child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_4()
-                                        .mt_4()
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap_1()
-                                                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Set your 4-digit PIN"))
-                                                .child(OtpInput::new(&self.setup_otp).groups(1))
-                                        )
-                                        .child(
-                                            gpui_component::button::Button::new("cancel_pin_btn")
-                                                .label("Cancel")
-                                                .small()
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.show_pin_setup = false;
-                                                    this.setup_otp.update(cx, |s, cx| s.set_value("", window, cx));
-                                                    this.is_app_lock_enabled = false;
-                                                    cx.notify();
-                                                }))
-                                        )
-                                )
-                            })
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
-                            .border_b_1()
-                            .border_color(border)
-                            .child(
-                                div()
-                                    .flex()
-                                    .w_full()
-                                    .justify_between()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Master Authenticator App"))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Use a 6-digit TOTP code from an authenticator app (e.g. Google Authenticator) for enhanced security."),
-                                            ),
-                                    )
-                                    .child(
-                                        Switch::new("app_totp_switch")
-                                            .checked(self.is_app_totp_enabled)
-                                            .disabled(self.is_app_lock_enabled)
-                                            .on_click(cx.listener(|this, checked, window, cx| {
-                                                if this.is_app_lock_enabled { return; }
-                                                if !checked {
-                                                    if let Ok(db) = this.db.lock() {
-                                                        let _ = db.delete_setting("app_totp_secret");
-                                                    }
-                                                    this.is_app_totp_enabled = false;
-                                                    this.show_totp_setup = false;
-                                                    this.show_totp_secret_text = false;
-                                                    this.totp_secret_temp = None;
-                                                    this.totp_qr_path = None;
-                                                    cx.emit(SettingsEvent::ReloadApp);
-                                                } else {
-                                                    let (secret, qr_path) = bir_core::crypto::generate_totp_secret("e-BIRForms (Master)");
-                                                    this.totp_secret_temp = Some(secret);
-                                                    this.totp_qr_path = Some(qr_path);
-                                                    this.show_totp_setup = true;
-                                                    this.setup_totp_state.update(cx, |s, cx| s.focus(window, cx));
-                                                }
+                                this.child(rsx! {
+                                    <div flex flex_col gap_4 mt_4>
+                                        <div flex flex_col gap_1>
+                                            <div text_sm font_weight={FontWeight::MEDIUM}>{"Set your 4-digit PIN"}</div>
+                                            {OtpInput::new(&self.setup_otp).groups(1)}
+                                        </div>
+                                        {gpui_component::button::Button::new("cancel_pin_btn")
+                                            .label("Cancel")
+                                            .small()
+                                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                                this.show_pin_setup = false;
+                                                this.setup_otp.update(cx, |s, cx| s.set_value("", window, cx));
+                                                this.is_app_lock_enabled = false;
                                                 cx.notify();
-                                            }))
-                                    )
-                            )
-                            .when(self.is_app_lock_enabled, |this| {
-                                this.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("Disable 4-digit PIN first to use Authenticator App.")
-                                )
+                                            }))}
+                                    </div>
+                                })
                             })
-
                     )
-
                     .child(
                         div()
                             .flex()
@@ -658,151 +496,131 @@ impl Render for SettingsView {
                             .gap_4()
                             .border_b_1()
                             .border_color(border)
-                            .child(
-                                div()
-                                    .flex()
-                                    .w_full()
-                                    .justify_between()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Enable Profile PINs"))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Allow securing individual tax profiles with a separate 4-digit PIN."),
-                                            ),
-                                    )
-                                    .child(
-                                        Switch::new("enable_profile_pins_switch")
-                                            .checked(self.enable_profile_pins)
-                                            .on_click(cx.listener(|this, checked, _window, cx| {
-                                                this.enable_profile_pins = *checked;
+                            .child(rsx! {
+                                <div flex w_full justify_between items_center>
+                                    <div flex flex_col gap_1>
+                                        <div font_weight={FontWeight::SEMIBOLD}>{"Master Authenticator App"}</div>
+                                        <div text_sm text_color={cx.theme().muted_foreground}>
+                                            {"Use a 6-digit TOTP code from an authenticator app (e.g. Google Authenticator) for enhanced security."}
+                                        </div>
+                                    </div>
+                                    {Switch::new("app_totp_switch")
+                                        .checked(self.is_app_totp_enabled)
+                                        .disabled(self.is_app_lock_enabled)
+                                        .on_click(cx.listener(|this, checked, window, cx| {
+                                            if this.is_app_lock_enabled { return; }
+                                            if !checked {
                                                 if let Ok(db) = this.db.lock() {
-                                                    let _ = db.set_setting("enable_profile_pins", if *checked { "true" } else { "false" });
-                                                    if !*checked && this.hide_tax_profiles {
-                                                        this.hide_tax_profiles = false;
-                                                        let _ = db.set_setting("hide_tax_profiles", "false");
-                                                    }
+                                                    let _ = db.delete_setting("app_totp_secret");
                                                 }
+                                                this.is_app_totp_enabled = false;
+                                                this.show_totp_setup = false;
+                                                this.show_totp_secret_text = false;
+                                                this.totp_secret_temp = None;
+                                                this.totp_qr_path = None;
                                                 cx.emit(SettingsEvent::ReloadApp);
-                                                cx.notify();
-                                            }))
-                                    )
-                            )
+                                            } else {
+                                                let (secret, qr_path) = bir_core::crypto::generate_totp_secret("e-BIRForms (Master)");
+                                                this.totp_secret_temp = Some(secret);
+                                                this.totp_qr_path = Some(qr_path);
+                                                this.show_totp_setup = true;
+                                                this.setup_totp_state.update(cx, |s, cx| s.focus(window, cx));
+                                            }
+                                            cx.notify();
+                                        }))}
+                                </div>
+                            })
+                            .when(self.is_app_lock_enabled, |this| {
+                                this.child(rsx! {
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {"Disable 4-digit PIN first to use Authenticator App."}
+                                    </div>
+                                })
+                            })
+
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
-                            .border_b_1()
-                            .border_color(border)
-                            .when(!self.enable_profile_pins, |this| this.opacity(0.5))
-                            .child(
-                                div()
-                                    .flex()
-                                    .w_full()
-                                    .justify_between()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Hide Tax Profiles from Sidebar"))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("Prevent profiles from being listed in the sidebar. Useful in public spaces. Requires Profile PINs to be enabled."),
-                                            ),
-                                    )
-                                    .child(
-                                        div().child(
-                                            Switch::new("hide_tax_profiles_switch")
-                                                .checked(self.hide_tax_profiles)
-                                                .on_click(cx.listener(|this, checked, _window, cx| {
-                                                    if !this.enable_profile_pins { return; }
-                                                    this.hide_tax_profiles = *checked;
-                                                    if let Ok(db) = this.db.lock() {
-                                                        let _ = db.set_setting("hide_tax_profiles", if *checked { "true" } else { "false" });
-                                                    }
-                                                    cx.emit(SettingsEvent::ReloadApp);
-                                                    cx.notify();
-                                                }))
-                                        )
-                                    )
-                            )
-                    )
+
+                    .child(rsx! {
+                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
+                            <div flex w_full justify_between items_center>
+                                <div flex flex_col gap_1>
+                                    <div font_weight={FontWeight::SEMIBOLD}>{"Enable Profile PINs"}</div>
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {"Allow securing individual tax profiles with a separate 4-digit PIN."}
+                                    </div>
+                                </div>
+                                {Switch::new("enable_profile_pins_switch")
+                                    .checked(self.enable_profile_pins)
+                                    .on_click(cx.listener(|this, checked, _window, cx| {
+                                        this.enable_profile_pins = *checked;
+                                        if let Ok(db) = this.db.lock() {
+                                            let _ = db.set_setting("enable_profile_pins", if *checked { "true" } else { "false" });
+                                            if !*checked && this.hide_tax_profiles {
+                                                this.hide_tax_profiles = false;
+                                                let _ = db.set_setting("hide_tax_profiles", "false");
+                                            }
+                                        }
+                                        cx.emit(SettingsEvent::ReloadApp);
+                                        cx.notify();
+                                    }))}
+                            </div>
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}
+                            when={(!self.enable_profile_pins, |this| this.opacity(0.5))}>
+                            <div flex w_full justify_between items_center>
+                                <div flex flex_col gap_1>
+                                    <div font_weight={FontWeight::SEMIBOLD}>{"Hide Tax Profiles from Sidebar"}</div>
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {"Prevent profiles from being listed in the sidebar. Useful in public spaces. Requires Profile PINs to be enabled."}
+                                    </div>
+                                </div>
+                                <div>
+                                    {Switch::new("hide_tax_profiles_switch")
+                                        .checked(self.hide_tax_profiles)
+                                        .on_click(cx.listener(|this, checked, _window, cx| {
+                                            if !this.enable_profile_pins { return; }
+                                            this.hide_tax_profiles = *checked;
+                                            if let Ok(db) = this.db.lock() {
+                                                let _ = db.set_setting("hide_tax_profiles", if *checked { "true" } else { "false" });
+                                            }
+                                            cx.emit(SettingsEvent::ReloadApp);
+                                            cx.notify();
+                                        }))}
+                                </div>
+                            </div>
+                        </div>
+                    })
                     // Global Toggle Hotkey
                     .child({
                         let description =
                             "Toggle eBIRForms from anywhere. Click the shortcut, then press your desired modifiers (Ctrl / Option / Shift / Cmd) together with a letter, number, or F-key.".to_string();
 
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
-                            .border_b_1()
-                            .border_color(border)
-                            .child(
-                                div()
-                                    .flex()
-                                    .w_full()
-                                    .justify_between()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_1()
-                                            .child(div().font_weight(FontWeight::SEMIBOLD).child("Global Toggle Hotkey"))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(description),
-                                            ),
-                                    )
-                                    .child(self.hotkey_recorder.clone())
-                            )
+                        rsx! {
+                            <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
+                                <div flex w_full justify_between items_center>
+                                    <div flex flex_col gap_1>
+                                        <div font_weight={FontWeight::SEMIBOLD}>{"Global Toggle Hotkey"}</div>
+                                        <div text_sm text_color={cx.theme().muted_foreground}>
+                                            {description}
+                                        </div>
+                                    </div>
+                                    {self.hotkey_recorder.clone()}
+                                </div>
+                            </div>
+                        }
                     })
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
-                            .border_b_1()
-                            .border_color(border)
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Export Data"))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Create a complete backup of your entire application database or all profiles."),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_4()
-                                    .child(
+                    .child(rsx! {
+                        <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
+                            <div flex flex_col gap_1>
+                                <div font_weight={FontWeight::SEMIBOLD}>{"Export Data"}</div>
+                                <div text_sm text_color={cx.theme().muted_foreground}>
+                                    {"Create a complete backup of your entire application database or all profiles."}
+                                </div>
+                            </div>
+                            <div flex gap_4>
+                                    {
                                         gpui_component::button::Button::new("export_database_btn")
                                             .label("Export Full Database")
                                             .on_click(cx.listener(|_this, _ev, _window, cx| {
@@ -854,9 +672,9 @@ impl Render for SettingsView {
                                                         _ => {}
                                                     }
                                                 }).detach();
-                                            })),
-                                    )
-                                    .child(
+                                            }))
+                                    }
+                                    {
                                         gpui_component::button::Button::new("export_all_profiles_btn")
                                             .label("Export All Profiles (JSON)")
                                             .on_click(cx.listener(|_this, _ev, _window, cx| {
@@ -904,33 +722,20 @@ impl Render for SettingsView {
                                                         _ => {}
                                                     }
                                                 }).detach();
-                                            })),
-                                    )
-                            )
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
-                            .w_full()
-                            .bg(cx.theme().danger.opacity(0.1))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(div().font_weight(FontWeight::SEMIBOLD).text_color(cx.theme().danger).child("Danger Zone: Factory Reset"))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Permanently delete all profiles, submissions, drafts, and settings. This cannot be undone."),
-                                    ),
-                            )
-                            .child(
+                                            }))
+                                    }
+                            </div>
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div flex flex_col items_start p_6 gap_4 w_full bg={cx.theme().danger.opacity(0.1)}>
+                            <div flex flex_col gap_1>
+                                <div font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().danger}>{"Danger Zone: Factory Reset"}</div>
+                                <div text_sm text_color={cx.theme().muted_foreground}>
+                                    {"Permanently delete all profiles, submissions, drafts, and settings. This cannot be undone."}
+                                </div>
+                            </div>
+                            {
                                 gpui_component::button::Button::new("factory_reset_btn")
                                     .label("Zero Out Everything")
                                     .on_click(cx.listener(|_this, _ev, _window, cx| {
@@ -1025,152 +830,96 @@ impl Render for SettingsView {
                                                 }
                                             }
                                         }).detach();
-                                    })),
-                            )
-                    )
+                                    }))
+                            }
+                        </div>
+                    })
             )
             )
             .when(self.show_totp_setup, |this| {
-                this.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .bg(gpui::rgba(0x000000b2))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(
-                            div()
-                                .w(px(400.))
-                                .bg(bg)
-                                .border_1()
-                                .border_color(border)
-                                .rounded_xl()
-                                .p_6()
-                                .flex()
-                                .flex_col()
-                                .gap_4()
-                                .shadow_lg()
-                                .child(div().text_lg().font_weight(FontWeight::BOLD).child("Connect your authenticator app"))
-                                .child(
+                this.child(rsx! {
+                    <div absolute inset_0 bg={gpui::rgba(0x000000b2)} flex items_center justify_center>
+                        <div w={px(400.)} bg={bg} border_1 border_color={border} rounded_xl p_6 flex flex_col gap_4 shadow_lg>
+                            <div text_lg font_weight={FontWeight::BOLD}>{"Connect your authenticator app"}</div>
+                            {
                                     div()
                                         .flex()
                                         .flex_col()
                                         .gap_2()
-                                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(
-                                            if self.show_totp_secret_text {
-                                                "Step 1: Enter the secret code below in your authenticator app:"
-                                            } else {
-                                                "Step 1: Scan the QR code using your authenticator app:"
-                                            }
-                                        ))
+                                        .child(rsx! {
+                                            <div text_sm font_weight={FontWeight::MEDIUM}>
+                                                {if self.show_totp_secret_text {
+                                                    "Step 1: Enter the secret code below in your authenticator app:"
+                                                } else {
+                                                    "Step 1: Scan the QR code using your authenticator app:"
+                                                }}
+                                            </div>
+                                        })
                                         .when(!self.show_totp_secret_text, |this| {
                                             this.when_some(self.totp_qr_path.clone(), |this, path| {
-                                                this.child(
-                                                    div()
-                                                        .w_full()
-                                                        .flex()
-                                                        .justify_center()
-                                                        .child(
-                                                            gpui::img(path)
-                                                                .w(px(200.))
-                                                                .h(px(200.))
-                                                                .object_fit(gpui::ObjectFit::Contain)
-                                                        )
-                                                )
+                                                this.child(rsx! {
+                                                    <div w_full flex justify_center>
+                                                        {gpui::img(path)
+                                                            .w(px(200.))
+                                                            .h(px(200.))
+                                                            .object_fit(gpui::ObjectFit::Contain)}
+                                                    </div>
+                                                })
                                             })
-                                            .child(
-                                                div()
-                                                    .w_full()
-                                                    .flex()
-                                                    .justify_center()
-                                                    .mt_2()
-                                                    .child(
-                                                        div()
-                                                            .id("trouble_scanning_btn")
-                                                            .text_sm()
-                                                            .text_color(cx.theme().primary)
-                                                            .cursor_pointer()
-                                                            .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                                this.show_totp_secret_text = true;
-                                                                cx.notify();
-                                                            }))
-                                                            .child("Trouble scanning?")
-                                                    )
-                                            )
+                                            .child(rsx! {
+                                                <div w_full flex justify_center mt_2>
+                                                    <div id={"trouble_scanning_btn"} text_sm text_color={cx.theme().primary} cursor_pointer
+                                                        on_click={cx.listener(|this, _ev, _window, cx| {
+                                                            this.show_totp_secret_text = true;
+                                                            cx.notify();
+                                                        })}>
+                                                        {"Trouble scanning?"}
+                                                    </div>
+                                                </div>
+                                            })
                                         })
                                         .when(self.show_totp_secret_text, |this| {
                                             this.when_some(self.totp_secret_temp.clone(), |this, secret| {
-                                                this.child(
-                                                    div()
-                                                        .flex()
-                                                        .flex_col()
-                                                        .items_center()
-                                                        .gap_4()
-                                                        .mt_2()
-                                                        .child(
-                                                            div()
-                                                                .flex()
-                                                                .items_center()
-                                                                .gap_2()
-                                                                .p_3()
-                                                                .rounded_md()
-                                                                .bg(cx.theme().secondary)
-                                                                .border_1()
-                                                                .border_color(border)
-                                                                .child(div().text_sm().font_family(".SF NS Mono").child(secret.clone()))
-                                                                .child(
-                                                                    gpui_component::clipboard::Clipboard::new("totp-secret-clipboard")
-                                                                        .value(secret)
-                                                                )
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .id("show_qr_btn")
-                                                                .text_sm()
-                                                                .text_color(cx.theme().primary)
-                                                                .cursor_pointer()
-                                                                .on_click(cx.listener(|this, _ev, _window, cx| {
-                                                                    this.show_totp_secret_text = false;
-                                                                    cx.notify();
-                                                                }))
-                                                                .child("Show QR code instead")
-                                                        )
-                                                )
+                                                this.child(rsx! {
+                                                    <div flex flex_col items_center gap_4 mt_2>
+                                                        <div flex items_center gap_2 p_3 rounded_md bg={cx.theme().secondary} border_1 border_color={border}>
+                                                            <div text_sm font_family={".SF NS Mono"}>{secret.clone()}</div>
+                                                            {gpui_component::clipboard::Clipboard::new("totp-secret-clipboard")
+                                                                .value(secret)}
+                                                        </div>
+                                                        <div id={"show_qr_btn"} text_sm text_color={cx.theme().primary} cursor_pointer
+                                                            on_click={cx.listener(|this, _ev, _window, cx| {
+                                                                this.show_totp_secret_text = false;
+                                                                cx.notify();
+                                                            })}>
+                                                            {"Show QR code instead"}
+                                                        </div>
+                                                    </div>
+                                                })
                                             })
                                         })
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_1()
-                                        .mt_2()
-                                        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child("Step 2: Enter the 6-digit code to verify"))
-                                        .child(OtpInput::new(&self.setup_totp_state).groups(1).large())
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .justify_end()
-                                        .mt_4()
-                                        .child(
-                                            gpui_component::button::Button::new("cancel_totp_btn")
-                                                .label("Cancel")
-                                                .small()
-                                                .on_click(cx.listener(|this, _ev, window, cx| {
-                                                    this.show_totp_setup = false;
-                                                    this.show_totp_secret_text = false;
-                                                    this.totp_secret_temp = None;
-                                                    this.totp_qr_path = None;
-                                                    this.setup_totp_state.update(cx, |s, cx| s.set_value("", window, cx));
-                                                    this.is_app_totp_enabled = false;
-                                                    cx.notify();
-                                                }))
-                                        )
-                                )
-                        )
-                )
+                            }
+                            <div flex flex_col gap_1 mt_2>
+                                <div text_sm font_weight={FontWeight::MEDIUM}>{"Step 2: Enter the 6-digit code to verify"}</div>
+                                {OtpInput::new(&self.setup_totp_state).groups(1).large()}
+                            </div>
+                            <div flex justify_end mt_4>
+                                {gpui_component::button::Button::new("cancel_totp_btn")
+                                    .label("Cancel")
+                                    .small()
+                                    .on_click(cx.listener(|this, _ev, window, cx| {
+                                        this.show_totp_setup = false;
+                                        this.show_totp_secret_text = false;
+                                        this.totp_secret_temp = None;
+                                        this.totp_qr_path = None;
+                                        this.setup_totp_state.update(cx, |s, cx| s.set_value("", window, cx));
+                                        this.is_app_totp_enabled = false;
+                                        cx.notify();
+                                    }))}
+                            </div>
+                        </div>
+                    </div>
+                })
             })
             .into_any_element()
     }

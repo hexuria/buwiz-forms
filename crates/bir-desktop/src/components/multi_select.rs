@@ -12,6 +12,7 @@ use gpui_component::{
     tag::Tag,
     v_flex,
 };
+use gpui_rsx::rsx;
 
 /// Approximate height of each option row (used for dropdown max_h sizing).
 const ITEM_HEIGHT: f32 = 32.0;
@@ -292,30 +293,24 @@ impl Render for MultiSelectState {
         // -- Build the trigger area (chips or placeholder) --
         let trigger_content = if self.hide_trigger_chips || selected_count == 0 {
             // Placeholder
-            h_flex()
-                .gap_1()
-                .flex_wrap()
-                .items_center()
-                .py_1()
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(self.placeholder.clone()),
-                )
-                .into_any_element()
+            let root = rsx! {
+                <div base={h_flex()} gap_1 flex_wrap items_center py_1>
+                    <div text_sm text_color={cx.theme().muted_foreground}>
+                        {self.placeholder.clone()}
+                    </div>
+                </div>
+            };
+            root.into_any_element()
         } else if selected_count > self.max_visible_chips {
             // Collapsed count badge
-            h_flex()
-                .gap_1()
-                .items_center()
-                .py_1()
-                .child(
-                    Tag::primary()
+            let root = rsx! {
+                <div base={h_flex()} gap_1 items_center py_1>
+                    {Tag::primary()
                         .small()
-                        .child(format!("{} selected", selected_count)),
-                )
-                .into_any_element()
+                        .child(format!("{} selected", selected_count))}
+                </div>
+            };
+            root.into_any_element()
         } else {
             // Individual chips
             let chip_ids: Vec<(String, String)> = self
@@ -329,51 +324,52 @@ impl Render for MultiSelectState {
                 })
                 .collect();
 
-            h_flex()
-                .gap_1()
-                .flex_wrap()
-                .items_center()
-                .py_1()
-                .children(chip_ids.into_iter().map(|(id, label)| {
-                    // Each chip: label + ✕ remove button
-                    div()
-                        .id(SharedString::from(format!("chip_{}", id)))
-                        .flex()
-                        .items_center()
-                        .gap_0p5()
-                        .pl_2()
-                        .pr_1()
-                        .py_0p5()
-                        .rounded_md()
-                        .bg(cx.theme().secondary)
-                        .text_xs()
-                        .text_color(cx.theme().secondary_foreground)
-                        .child(label)
-                        .child(
-                            div()
-                                .id(SharedString::from(format!("chip_remove_{}", id)))
-                                .cursor_pointer()
-                                .rounded_sm()
-                                .p_0p5()
-                                .hover(|d| d.bg(cx.theme().danger.opacity(0.15)))
-                                .child(
-                                    Icon::new(IconName::Close)
-                                        .xsmall()
-                                        .text_color(cx.theme().muted_foreground),
-                                )
-                                .on_click(cx.listener({
-                                    let id = id.clone();
-                                    move |this, _, _, cx| {
-                                        this.remove_selection(&id);
-                                        cx.emit(MultiSelectEvent {
-                                            selected: this.selected_ids.clone(),
-                                        });
-                                        cx.notify();
-                                    }
-                                })),
-                        )
-                }))
-                .into_any_element()
+            let root = rsx! {
+                <div base={h_flex()} gap_1 flex_wrap items_center py_1>
+                    {...chip_ids.into_iter().map(|(id, label)| {
+                        // Each chip: label + ✕ remove button
+                        rsx! {
+                            <div
+                                id={SharedString::from(format!("chip_{}", id))}
+                                flex
+                                items_center
+                                gap_0p5
+                                pl_2
+                                pr_1
+                                py_0p5
+                                rounded_md
+                                bg={cx.theme().secondary}
+                                text_xs
+                                text_color={cx.theme().secondary_foreground}
+                            >
+                                {label}
+                                {div()
+                                    .id(SharedString::from(format!("chip_remove_{}", id)))
+                                    .cursor_pointer()
+                                    .rounded_sm()
+                                    .p_0p5()
+                                    .hover(|d| d.bg(cx.theme().danger.opacity(0.15)))
+                                    .child(
+                                        Icon::new(IconName::Close)
+                                            .xsmall()
+                                            .text_color(cx.theme().muted_foreground),
+                                    )
+                                    .on_click(cx.listener({
+                                        let id = id.clone();
+                                        move |this, _, _, cx| {
+                                            this.remove_selection(&id);
+                                            cx.emit(MultiSelectEvent {
+                                                selected: this.selected_ids.clone(),
+                                            });
+                                            cx.notify();
+                                        }
+                                    }))}
+                            </div>
+                        }
+                    })}
+                </div>
+            };
+            root.into_any_element()
         };
 
         // -- Build the dropdown options --
@@ -388,74 +384,76 @@ impl Render for MultiSelectState {
                     let id = option.id.clone();
                     let label = option.label.clone();
 
-                    div()
-                        .id(SharedString::from(format!("ms_opt_{}", id)))
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .px_3()
-                        .py(px(6.))
-                        .cursor_pointer()
-                        .when(is_highlighted, |d| d.bg(cx.theme().secondary))
-                        .hover(|d| d.bg(cx.theme().secondary.opacity(0.7)))
-                        .on_click(cx.listener({
-                            let id = id.clone();
-                            move |this, _, _, cx| {
-                                this.toggle_selection(&id);
-                                cx.emit(MultiSelectEvent {
-                                    selected: this.selected_ids.clone(),
-                                });
-                                cx.notify();
-                            }
-                        }))
-                        // Checkbox indicator
-                        .child(
-                            div()
-                                .w(px(16.))
-                                .h(px(16.))
-                                .rounded_sm()
-                                .border_1()
-                                .border_color(if checked {
+                    let row = rsx! {
+                        <div
+                            id={SharedString::from(format!("ms_opt_{}", id))}
+                            flex
+                            items_center
+                            gap_2
+                            px_3
+                            py={px(6.)}
+                            cursor_pointer
+                            when={(is_highlighted, |d| d.bg(cx.theme().secondary))}
+                            hover={|d| d.bg(cx.theme().secondary.opacity(0.7))}
+                            on_click={cx.listener({
+                                let id = id.clone();
+                                move |this, _, _, cx| {
+                                    this.toggle_selection(&id);
+                                    cx.emit(MultiSelectEvent {
+                                        selected: this.selected_ids.clone(),
+                                    });
+                                    cx.notify();
+                                }
+                            })}
+                        >
+                            // Checkbox indicator
+                            <div
+                                w={px(16.)}
+                                h={px(16.)}
+                                rounded_sm
+                                border_1
+                                border_color={if checked {
                                     cx.theme().primary
                                 } else {
                                     cx.theme().muted_foreground
-                                })
-                                .bg(if checked {
+                                }}
+                                bg={if checked {
                                     cx.theme().primary
                                 } else {
                                     cx.theme().background
-                                })
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .when(checked, |d| {
+                                }}
+                                flex
+                                items_center
+                                justify_center
+                                when={(checked, |d| {
                                     d.child(
                                         Icon::new(IconName::Check)
                                             .xsmall()
                                             .text_color(cx.theme().primary_foreground),
                                     )
-                                }),
-                        )
-                        // Label
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().foreground)
-                                .child(label),
-                        )
-                        .into_any_element()
+                                })}
+                            />
+                            // Label
+                            <div text_sm text_color={cx.theme().foreground}>
+                                {label}
+                            </div>
+                        </div>
+                    };
+                    row.into_any_element()
                 })
                 .collect();
 
             // "Select All" / "Clear All" action bar
-            let action_bar = h_flex()
-                .px_3()
-                .py(px(6.))
-                .justify_between()
-                .border_b_1()
-                .border_color(cx.theme().border)
-                .child(
-                    div()
+            let action_bar = rsx! {
+                <div
+                    base={h_flex()}
+                    px_3
+                    py={px(6.)}
+                    justify_between
+                    border_b_1
+                    border_color={cx.theme().border}
+                >
+                    {div()
                         .id("ms_select_all")
                         .cursor_pointer()
                         .text_xs()
@@ -476,48 +474,45 @@ impl Render for MultiSelectState {
                                 selected: this.selected_ids.clone(),
                             });
                             cx.notify();
-                        })),
-                )
-                .child(
-                    div()
-                        .id("ms_clear_all")
-                        .cursor_pointer()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .hover(|d| d.text_color(cx.theme().danger))
-                        .when(selected_count > 0, |d| d.child("Clear All"))
-                        .on_click(cx.listener(|this, _, _, cx| {
+                        }))}
+                    <div
+                        id={"ms_clear_all"}
+                        cursor_pointer
+                        text_xs
+                        text_color={cx.theme().muted_foreground}
+                        hover={|d| d.text_color(cx.theme().danger)}
+                        when={(selected_count > 0, |d| d.child("Clear All"))}
+                        on_click={cx.listener(|this, _, _, cx| {
                             this.clear_all();
                             cx.emit(MultiSelectEvent {
                                 selected: this.selected_ids.clone(),
                             });
                             cx.notify();
-                        })),
-                );
+                        })}
+                    />
+                </div>
+            };
 
             // Empty state
             let empty_state = if option_rows.is_empty() {
-                Some(
-                    div()
-                        .px_3()
-                        .py_4()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("No matching options"),
-                )
+                Some(rsx! {
+                    <div px_3 py_4 text_sm text_color={cx.theme().muted_foreground}>
+                        {"No matching options"}
+                    </div>
+                })
             } else {
                 None
             };
 
             Some(
-                deferred(
-                    div()
-                        .absolute()
-                        .left_0()
-                        .w_full()
-                        .when(!self.drop_down, |d| d.bottom(px(0.)))
-                        .child(
-                            v_flex()
+                deferred(rsx! {
+                    <div
+                        absolute
+                        left_0
+                        w_full
+                        when={(!self.drop_down, |d| d.bottom(px(0.)))}
+                    >
+                        {v_flex()
                                 .occlude()
                                 // Dismiss when the user clicks anywhere outside
                                 // the dropdown (including empty modal space).
@@ -536,23 +531,18 @@ impl Render for MultiSelectState {
                                 .bg(cx.theme().popover)
                                 .text_color(cx.theme().popover_foreground)
                                 // Sticky search bar
-                                .child(
-                                    div()
-                                        .px_2()
-                                        .py_1p5()
-                                        .border_b_1()
-                                        .border_color(cx.theme().border)
-                                        .child(
-                                            Input::new(&self.search_input)
-                                                .small()
-                                                .prefix(
-                                                    Icon::new(IconName::Search)
-                                                        .xsmall()
-                                                        .text_color(cx.theme().muted_foreground),
-                                                )
-                                                .appearance(false),
-                                        ),
-                                )
+                                .child(rsx! {
+                                    <div px_2 py_1p5 border_b_1 border_color={cx.theme().border}>
+                                        {Input::new(&self.search_input)
+                                            .small()
+                                            .prefix(
+                                                Icon::new(IconName::Search)
+                                                    .xsmall()
+                                                    .text_color(cx.theme().muted_foreground),
+                                            )
+                                            .appearance(false)}
+                                    </div>
+                                })
                                 // Action bar
                                 .child(action_bar)
                                 // Options list (scrollable)
@@ -567,9 +557,9 @@ impl Render for MultiSelectState {
                                         .track_scroll(&self.scroll_handle)
                                         .children(option_rows)
                                         .when_some(empty_state, |d, empty| d.child(empty)),
-                                ),
-                        ),
-                )
+                                )}
+                    </div>
+                })
                 .with_priority(3),
             )
         } else {
@@ -612,23 +602,23 @@ impl Render for MultiSelectState {
                 }),
             )
             // The trigger / input area
-            .child(
-                div()
-                    .id("ms_trigger")
-                    .w_full()
-                    .min_h(px(36.))
-                    .px_2()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_1()
-                    .rounded_md()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().background)
-                    .cursor_pointer()
-                    .hover(|d| d.border_color(cx.theme().ring))
-                    .on_click(cx.listener(|this, _, window, cx| {
+            .child(rsx! {
+                <div
+                    id={"ms_trigger"}
+                    w_full
+                    min_h={px(36.)}
+                    px_2
+                    flex
+                    items_center
+                    justify_between
+                    gap_1
+                    rounded_md
+                    border_1
+                    border_color={cx.theme().border}
+                    bg={cx.theme().background}
+                    cursor_pointer
+                    hover={|d| d.border_color(cx.theme().ring)}
+                    on_click={cx.listener(|this, _, window, cx| {
                         this.open = !this.open;
                         if this.open {
                             // Reset filter when opening
@@ -647,20 +637,16 @@ impl Render for MultiSelectState {
                             });
                         }
                         cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .child(trigger_content),
-                    )
-                    .child(
-                        Icon::new(IconName::ChevronDown)
-                            .xsmall()
-                            .text_color(cx.theme().muted_foreground),
-                    ),
-            )
+                    })}
+                >
+                    <div flex_1 min_w_0 overflow_hidden>
+                        {trigger_content}
+                    </div>
+                    {Icon::new(IconName::ChevronDown)
+                        .xsmall()
+                        .text_color(cx.theme().muted_foreground)}
+                </div>
+            })
             // Dropdown
             .when_some(dropdown, |d, dropdown| d.child(dropdown))
     }
