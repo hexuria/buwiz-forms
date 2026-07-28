@@ -62,5 +62,4 @@ temp-env = "0.3"
 tokio = { workspace = true, features = ["test-util"] }
 
 [features]
-mas_build = []
 erp-integration = []

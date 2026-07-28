@@ -12,7 +12,13 @@ path = "src/main.rs"
 [features]
 dev-tools = ["bir-print/native-output-evidence"]
 inspector = []
-mas_build = ["bir-core/mas_build", "gpui_platform/macos_app_store"]
+# Mac App Store variant. Not a platform: the same `target_os = "macos"` ships
+# both a direct/notarized build and a sandboxed App Store build, so no
+# `cfg(target_os)` can tell them apart. This selects the sandboxed one, which
+# gives up the `global_hotkey` subsystem because App Store sandboxing forbids
+# the entitlements it needs. `bir-core/mas_build` was a passthrough to an empty
+# feature with no `cfg` behind it and is dropped.
+mas_build = ["gpui_platform/macos_app_store"]
 
 
 [dependencies]

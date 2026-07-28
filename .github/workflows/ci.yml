@@ -181,6 +181,21 @@ jobs:
     - name: Clippy
       run: cargo clippy --locked --workspace -- -D warnings
 
+    # The Mac App Store variant is a feature configuration nothing else in this
+    # workflow compiles: the step above builds `bir-desktop` with default
+    # features, so every `#[cfg(not(feature = "mas_build"))]` block is taken and
+    # the sandboxed configuration is never type-checked. `mas_build` disables the
+    # `global_hotkey` subsystem - manager, its DB handle, and the event loop -
+    # because App Store sandboxing forbids the entitlements it needs. Without
+    # this step, adding hotkey code without the matching `cfg` compiles green
+    # here and only fails when someone cuts an App Store build.
+    #
+    # macOS only: the variant exists solely to be submitted to Apple, and it is
+    # only ever built from a Mac.
+    - name: Clippy (Mac App Store variant)
+      if: runner.os == 'macOS'
+      run: cargo clippy --locked -p bir-desktop --features mas_build -- -D warnings
+
     - name: Test
       run: cargo test --locked --workspace
 
