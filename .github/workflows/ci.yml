@@ -9,6 +9,15 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Superseded runs were previously left to finish: pushing three times in fifteen
+# minutes ran three full ten-job matrices, and only the last one's result was ever
+# read. Cancel the older run on the same ref instead. `main` is included
+# deliberately - a push to main immediately followed by another means the first
+# commit's result is already stale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     strategy:
@@ -38,8 +47,17 @@ jobs:
         targets: ${{ matrix.target }}
         components: clippy, rustfmt
 
+    # rust-cache keys per job name by default, so ten jobs held ten multi-GB
+    # entries and competed for GitHub's 10 GB per-repo ceiling - four were being
+    # evicted every run. Key by build layout instead: this job is the only one
+    # that passes `--target`, so it writes target/<triple>/ and cannot share
+    # artifacts with the host-layout jobs, which use `host-<os>` below.
+    # Saving only from main stops pull-request runs churning the shared entries.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: check-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
@@ -110,9 +128,10 @@ jobs:
     - name: Format
       run: cargo fmt --all -- --check
 
-    - name: Check
-      run: cargo check --locked --workspace --target ${{ matrix.target }}
-
+    # No separate `cargo check` step: clippy performs the same analysis over the
+    # same target set and reports the same compile errors, so checking first only
+    # re-ran the workspace crates through a second, differently-fingerprinted
+    # pass. Dependencies were already shared between the two.
     - name: Clippy
       run: cargo clippy --locked --workspace --target ${{ matrix.target }} -- -D warnings
 
@@ -135,8 +154,12 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
+    # Host layout (no `--target`), shared with validation-rules-v2 and renderer.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: host-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Audit legacy v1 rules corpus
       run: cargo run --locked -p bir-rules-codegen -- validate-v1
@@ -153,8 +176,12 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
+    # Host layout (no `--target`), shared with validation-rules-v1 and renderer.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: host-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     # This filters one test by exact name, and a filter that matches nothing is
     # not an error to libtest: it prints "0 passed" and exits 0. So if the test
@@ -214,8 +241,16 @@ jobs:
       if: ${{ hashFiles('evidence/validation-rules/packets/v1/packet-set.json') != '' }}
       run: cargo run -q --locked -p bir-rules-codegen -- status
 
-    - name: Test validation rules
-      run: cargo test --locked -p bir-rules -p bir-rules-codegen -p bir-rules-platform
+    # No `cargo test -p bir-rules -p bir-rules-codegen -p bir-rules-platform` here.
+    # The `check` job's `cargo test --locked --workspace` already runs exactly those
+    # tests, and on all three OSes - so cross-platform coverage is unchanged, which
+    # matters because a Windows-only job is what previously hid three path defects.
+    # Running them twice per OS meant six executions of bir-rules-codegen's
+    # generate::tests, each of which spawns a nested cargo build.
+    #
+    # The targeted steps above are NOT duplicates and stay: they are `cargo run`
+    # subcommands plus the exact-name corpus census, none of which `cargo test
+    # --workspace` performs.
 
   renderer:
     runs-on: ubuntu-22.04
@@ -225,8 +260,12 @@ jobs:
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
 
+    # Host layout (no `--target`), shared with both validation-rules jobs.
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: host-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install Node.js
       uses: actions/setup-node@v4
@@ -240,9 +279,29 @@ jobs:
         python-version: '3.13'
 
     - name: Install renderer dependencies
+      run: npm ci
+
+    # Chromium is re-downloaded on every run otherwise. Keyed on the lockfile
+    # rather than on a resolved Playwright version, because resolving that
+    # version means invoking the JS runtime to read a manifest, and the
+    # no-legacy audit correctly rejects that shape. Keying on the lockfile
+    # over-invalidates slightly - any npm change re-downloads the browser once -
+    # which is the cheaper trade. `--with-deps` also apt-installs system
+    # libraries a cache cannot hold, so a hit still needs install-deps.
+    - name: Cache Playwright browsers
+      id: playwright-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+    - name: Install Playwright browsers
       run: |
-        npm ci
-        npx playwright install --with-deps chromium
+        if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+          npx playwright install-deps chromium
+        else
+          npx playwright install --with-deps chromium
+        fi
 
     - name: Check generated contracts and official references
       run: |

@@ -8,6 +8,14 @@ on:
 permissions:
   contents: write
 
+# Serialise per tag, but never cancel: a release job that is signing, notarizing
+# or publishing must be allowed to finish. This only prevents the same tag being
+# built concurrently (for example on a re-push), which is why cancel-in-progress
+# is false here and true in ci.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
   APP_NAME: eBIRForms
@@ -93,10 +101,25 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install renderer and browser dependencies
+      - name: Install renderer dependencies
+        run: npm ci
+
+      # Same browser cache as ci.yml, keyed on the lockfile. A cache hit still
+      # needs install-deps for the apt-level libraries the cache cannot hold.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
         run: |
-          npm ci
-          npx playwright install --with-deps chromium
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Verify Rust workspace
         run: |
