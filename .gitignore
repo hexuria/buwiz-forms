@@ -78,9 +78,6 @@ test_errors.txt
 /.ruff_cache/
 /apps/form-calibration/dist/
 
-# Machine-local Codex settings
-/.claude/settings.local.json
-
 # Validation codegen transaction leftovers
 /crates/bir-rules/src/generated.bir-rules-codegen-backup-*/
 /crates/bir-rules/src/generated.bir-rules-codegen-staging-*/
@@ -118,6 +115,27 @@ node_modules/
 .scripts/
 .impl/
 .formfields/
+
+# Agent configuration and internal research — stowed, not published.
+# These stay on disk so local tooling keeps working; they are tracked in the
+# stow repository instead. Build-critical files formerly under docs/ and
+# .codex/ now live in schemas/validation-rules/, scripts/reference/ and
+# rules/agent-boundaries/ — see .stow-README.md.
+/.claude/
+/.codex/
+/docs/
+/AGENT.md
+/AGENTS.md
+/CLAUDE.md
+/FORM_BUILD_PRIORITY.md
+/HANDOVER_HTML_ONLY_EBIRFORMS_2026-07-19.md
+/api_integration_plan.md
+/form_scaffold.md
+/handoff.md
+/macos-handoff.md
+/prioritized_form.md
+/steps.md
+/.stow-README.md
 
 .keys/
 *.p8

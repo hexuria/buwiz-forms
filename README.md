@@ -51,7 +51,7 @@ Open [http://127.0.0.1:4175](http://127.0.0.1:4175). The viewer now:
 - provides HTML, Overlay, Difference, and reference-opacity controls;
 - labels HTML-enabled forms separately from scaffold-only forms.
 
-Fixture JSON contains form identity, taxpayer/period data, typed field values, schedules, and validation messages. React components and print CSS own the visual structure; form specifications own paper size and pagination. See [HTML Form Renderer](docs/form-print-readiness/html-form-renderer.md) for the complete workflow and release gates.
+Fixture JSON contains form identity, taxpayer/period data, typed field values, schedules, and validation messages. React components and print CSS own the visual structure; form specifications own paper size and pagination. The complete workflow and release gates are enforced by `npm run audit:forms:migration`, which is the authoritative statement of what a form must satisfy before promotion.
 
 ## 🌟 Key Features
 
@@ -311,25 +311,31 @@ Adding a new BIR tax form now crosses two separately gated tracks:
    pass; HTML release changes only after visual, native print/export, and
    packaged-offline evidence pass.
 
-See [Building BIR Tax Forms](docs/adding-a-new-form.md) for the implementation
-checklist, [Form Tooling Guide](docs/form-tooling-guide.md) for renderer-path
-selection, and [HTML Form Renderer](docs/form-print-readiness/html-form-renderer.md)
-for semantic HTML migration and release gates.
+Each of these three concerns is machine-checked. `npm run audit:forms:migration`
+states what a form must satisfy before promotion, `cargo run -p
+bir-rules-codegen -- status` states the validation-rules boundary conditions,
+and `npm run audit:no-legacy` states what must stay absent. Read those three
+rather than any prose description of them.
 
 ---
 
-## 🧠 Local Agent Tooling
+## 🧠 Reference and Boundary Tooling
 
-This repository keeps its canonical, versioned agent workflows under `.codex/skills/`:
+- `scripts/reference/` — deterministic form provenance tooling.
+  `inventory_form.py` pins an exact revision, `prepare_official_reference.py`
+  renders a pinned official PDF into calibration-only rasters, and
+  `verify_form_conversion.py` audits a conversion at the `preview` and
+  `release` stages. Reference hashes are pinned in Rust; regenerate the
+  manifest with `npm run references:generate`.
+- `rules/agent-boundaries/` — the fail-closed boundary record for the 2550Q
+  candidate rule set. `cargo run -p bir-rules-codegen -- status` asserts on its
+  contents, so it is a safety contract rather than documentation.
 
-- Use `ebirforms-convert-form-to-html` to migrate an exact BIR form revision into the Rust-contract + semantic HTML pipeline.
-- Use `ebirforms-print-preview` to maintain or calibrate a form that is already HTML-enabled.
-- Treat `.codex/skills/` as the single source of truth. If user-level discovery is needed, use a symlink back to the repository skill rather than a copied second source.
-- Snapshot-overlay and generated-tax-behavior workflows are unsupported and have been removed.
-
-README and runbook examples use standard `npm`, `python3`, and `cargo`
-commands so developers can run the workflow without an agent-specific command
-wrapper.
+Narrative design notes, migration research, and agent workflow definitions are
+maintained in a separate private repository and are deliberately not published
+here. Paths of the form `docs/...` in source comments refer to that repository.
+README and runbook examples use standard `npm`, `python3`, and `cargo` commands
+so developers can run the workflow without an agent-specific command wrapper.
 
 ---
 
