@@ -1890,9 +1890,23 @@ mod tests {
         );
     }
 
+    /// Auditing the landed v2 corpus reads and validates 659 JSON files (~41 MiB) and
+    /// costs about 7 seconds. Twenty tests in this module need that report, and each
+    /// call used to redo the whole parse: ~140s locally and ~480s on the Windows CI
+    /// runner, which walks the filesystem far more slowly.
+    ///
+    /// The corpus is tracked source and cannot change while the test binary runs, so
+    /// audit it once and hand every caller its own clone. Callers mutate what they get
+    /// (`let mut report = landed_audit()`), so returning a clone rather than a shared
+    /// reference keeps each test independent - the behaviour is identical, only the
+    /// repeated parsing is gone.
     fn landed_audit() -> crate::audit::AuditReport {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        audit(&AuditOptions::external_workspace(root)).expect("audit landed v2 corpus")
+        static LANDED: std::sync::LazyLock<crate::audit::AuditReport> =
+            std::sync::LazyLock::new(|| {
+                let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+                audit(&AuditOptions::external_workspace(root)).expect("audit landed v2 corpus")
+            });
+        LANDED.clone()
     }
 
     fn synthetic_audit(snapshots: Vec<AuditedSnapshot>) -> AuditReport {
