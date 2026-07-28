@@ -208,6 +208,10 @@ pub struct PenaltyCache {
 // =========================================================================
 
 /// `security(1)` exit code for "the specified item could not be found".
+///
+/// macOS-only: the `security` CLI, and the read-then-create dance this guards,
+/// exist only on that platform.
+#[cfg(target_os = "macos")]
 const SECURITY_ERR_ITEM_NOT_FOUND: i32 = 44;
 
 /// Whether a failed keychain read means the master key is genuinely absent.
@@ -224,6 +228,7 @@ const SECURITY_ERR_ITEM_NOT_FOUND: i32 = 44;
 ///
 /// Defaults to `false` for `None` (terminated by a signal), because an unknown
 /// failure must never be read as "absent".
+#[cfg(target_os = "macos")]
 fn keychain_miss_is_genuine(exit_code: Option<i32>) -> bool {
     exit_code == Some(SECURITY_ERR_ITEM_NOT_FOUND)
 }
@@ -808,7 +813,7 @@ pub fn parse_2551q_period(period: &str) -> Option<(u16, u8)> {
 // Tests
 // =========================================================================
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod keychain_miss_tests {
     use super::{SECURITY_ERR_ITEM_NOT_FOUND, keychain_miss_is_genuine};
 
