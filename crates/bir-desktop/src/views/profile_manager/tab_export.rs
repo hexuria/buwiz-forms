@@ -1,6 +1,7 @@
 //! Export tab — Profile data export to ZIP and profile deletion.
 
 use super::*;
+use gpui_rsx::rsx;
 
 impl ProfileManagerView {
     /// Render the "Export" tab (tab index 4).
@@ -12,36 +13,26 @@ impl ProfileManagerView {
             return div().into_any_element();
         }
 
-        div()
-            .p_4()
-            .rounded_lg()
-            .border_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
-            .flex()
-            .flex_col()
-            .gap_4()
-            .w_full()
-            .min_w_0()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child("Export Profile"),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Create a complete backup of this profile (JSON)."),
-                    ),
-            )
-            .child(
-                gpui_component::button::Button::new("export_profile_btn")
+        let root = rsx! {
+            <div
+                p_4
+                rounded_lg
+                border_1
+                border_color={cx.theme().border}
+                bg={cx.theme().background}
+                flex
+                flex_col
+                gap_4
+                w_full
+                min_w_0
+            >
+                <div flex flex_col gap_1>
+                    <div font_weight={FontWeight::SEMIBOLD}>{"Export Profile"}</div>
+                    <div text_sm text_color={cx.theme().muted_foreground}>
+                        {"Create a complete backup of this profile (JSON)."}
+                    </div>
+                </div>
+                {gpui_component::button::Button::new("export_profile_btn")
                     .label("Export Profile Data")
                     .on_click(cx.listener(|this, _ev, _window, cx| {
                         let tin = this.tin_input.read(cx).value(cx).to_string();
@@ -98,8 +89,9 @@ impl ProfileManagerView {
                             }
                         })
                         .detach();
-                    })),
-            )
-            .into_any_element()
+                    }))}
+            </div>
+        };
+        root.into_any_element()
     }
 }

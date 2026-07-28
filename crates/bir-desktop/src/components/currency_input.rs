@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use gpui::*;
 use gpui_component::input::*;
+use gpui_rsx::rsx;
 
 pub struct CurrencyInput {
     pub label: String,
@@ -32,27 +33,28 @@ impl CurrencyInput {
 impl Render for CurrencyInput {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         use gpui_component::ActiveTheme as _;
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .gap_2()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().foreground)
-                    .child(self.label.clone()),
-            )
-            .child(
-                Input::new(&self.input_state).text_right().prefix(
-                    div()
-                        .p_2()
-                        .border_r_1()
-                        .border_color(cx.theme().border)
-                        .text_color(cx.theme().muted_foreground)
-                        .child("₱"),
-                ),
-            )
+        rsx! {
+            <div flex flex_col w_full gap_2>
+                <div
+                    text_sm
+                    font_weight={FontWeight::BOLD}
+                    text_color={cx.theme().foreground}
+                >
+                    {self.label.clone()}
+                </div>
+                {Input::new(&self.input_state).text_right().prefix(
+                    rsx! {
+                        <div
+                            p_2
+                            border_r_1
+                            border_color={cx.theme().border}
+                            text_color={cx.theme().muted_foreground}
+                        >
+                            {"₱"}
+                        </div>
+                    }
+                )}
+            </div>
+        }
     }
 }

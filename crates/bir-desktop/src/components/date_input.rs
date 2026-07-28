@@ -9,6 +9,7 @@ use gpui_component::{
     input::{Input, InputEvent, InputState},
     v_flex,
 };
+use gpui_rsx::rsx;
 
 pub struct DateInputEvent {
     pub date: Option<NaiveDate>,
@@ -218,70 +219,57 @@ impl Render for DateInputState {
 
         v_flex()
             .w_full()
-            .child(
-                div()
-                    .relative()
-                    .flex()
-                    .w_full()
-                    .items_center()
-                    .child(div().flex_1().min_w_0().child(Input::new(&input_view)))
-                    .child(
-                        div()
-                            .id("calendar_icon")
-                            .absolute()
-                            .right_2()
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.open = !this.open;
-                                cx.notify();
-                            }))
-                            .child(
-                                Icon::new(IconName::Calendar)
-                                    .small()
-                                    .text_color(cx.theme().muted_foreground),
-                            ),
-                    ),
-            )
+            .child(rsx! {
+                <div relative flex w_full items_center>
+                    <div flex_1 min_w_0>{Input::new(&input_view)}</div>
+                    <div
+                        id="calendar_icon"
+                        absolute
+                        right_2
+                        flex
+                        items_center
+                        cursor_pointer
+                        on_click={cx.listener(|this, _, _, cx| {
+                            this.open = !this.open;
+                            cx.notify();
+                        })}
+                    >
+                        {Icon::new(IconName::Calendar)
+                            .small()
+                            .text_color(cx.theme().muted_foreground)}
+                    </div>
+                </div>
+            })
             .when(self.open, |this| {
                 this.child(
-                    deferred(
-                        div()
-                            .absolute()
-                            .top_0()
-                            .left_0()
-                            .w_full()
-                            .h_full()
-                            .flex()
-                            .justify_center()
-                            .items_center()
-                            .child(
-                                div()
-                                    .id("calendar_backdrop")
-                                    .absolute()
-                                    .inset_0()
-                                    .bg(gpui::rgba(0x000000AA))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.open = false;
-                                        cx.notify();
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .id("calendar_container")
-                                    .occlude()
-                                    .on_click(|_, _, _| {}) // absorb click
-                                    .p_4()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .shadow_lg()
-                                    .rounded_lg()
-                                    .bg(cx.theme().popover)
-                                    .text_color(cx.theme().popover_foreground)
-                                    .child(Calendar::new(&self.calendar)),
-                            ),
-                    )
+                    deferred(rsx! {
+                        <div absolute top_0 left_0 w_full h_full flex justify_center items_center>
+                            <div
+                                id="calendar_backdrop"
+                                absolute
+                                inset_0
+                                bg={gpui::rgba(0x000000AA)}
+                                on_click={cx.listener(|this, _, _, cx| {
+                                    this.open = false;
+                                    cx.notify();
+                                })}
+                            />
+                            <div
+                                id="calendar_container"
+                                occlude
+                                on_click={|_, _, _| {}} // absorb click
+                                p_4
+                                border_1
+                                border_color={cx.theme().border}
+                                shadow_lg
+                                rounded_lg
+                                bg={cx.theme().popover}
+                                text_color={cx.theme().popover_foreground}
+                            >
+                                {Calendar::new(&self.calendar)}
+                            </div>
+                        </div>
+                    })
                     .with_priority(2),
                 )
             })

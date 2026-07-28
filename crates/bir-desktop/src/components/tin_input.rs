@@ -1,6 +1,7 @@
 use gpui::*;
 use gpui_component::input::{Input, InputEvent as ComponentInputEvent, InputState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 pub struct TinInput {
     pub inputs: [Entity<InputState>; 4],
@@ -214,62 +215,37 @@ impl Render for TinInput {
         let val = self.value(cx);
         let show_error = !is_valid && !val.is_empty();
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Taxpayer Identification Number (TIN)"),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(if show_error {
-                                gpui::rgba(0xFF0000FF).into()
-                            } else {
-                                cx.theme().transparent
-                            })
-                            .child("Invalid TIN format (14 digits: 3-3-3-5)"),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .child(Input::new(&self.inputs[0]).w(px(70.)).text_center())
-                    .child(
-                        div()
-                            .text_lg()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("-"),
-                    )
-                    .child(Input::new(&self.inputs[1]).w(px(70.)).text_center())
-                    .child(
-                        div()
-                            .text_lg()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("-"),
-                    )
-                    .child(Input::new(&self.inputs[2]).w(px(70.)).text_center())
-                    .child(
-                        div()
-                            .text_lg()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("-"),
-                    )
-                    .child(Input::new(&self.inputs[3]).w(px(90.)).text_center()),
-            )
+        rsx! {
+            <div flex flex_col w_full gap_2>
+                <div flex flex_col justify_between>
+                    <div
+                        text_sm
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {"Taxpayer Identification Number (TIN)"}
+                    </div>
+                    <div
+                        text_sm
+                        text_color={if show_error {
+                            gpui::rgba(0xFF0000FF).into()
+                        } else {
+                            cx.theme().transparent
+                        }}
+                    >
+                        {"Invalid TIN format (14 digits: 3-3-3-5)"}
+                    </div>
+                </div>
+                <div flex flex_row items_center gap_2>
+                    {Input::new(&self.inputs[0]).w(px(70.)).text_center()}
+                    <div text_lg text_color={cx.theme().muted_foreground}>{"-"}</div>
+                    {Input::new(&self.inputs[1]).w(px(70.)).text_center()}
+                    <div text_lg text_color={cx.theme().muted_foreground}>{"-"}</div>
+                    {Input::new(&self.inputs[2]).w(px(70.)).text_center()}
+                    <div text_lg text_color={cx.theme().muted_foreground}>{"-"}</div>
+                    {Input::new(&self.inputs[3]).w(px(90.)).text_center()}
+                </div>
+            </div>
+        }
     }
 }
