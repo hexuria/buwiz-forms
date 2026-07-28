@@ -57,6 +57,10 @@ keyring = { version = "3" }
 gpui = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
 gpui_platform = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5", features = ["font-kit"] }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "277f220a6196572116a8fd84fba6c36187094cab" }
+# Pure proc-macro (syn/quote/proc-macro2 only, no gpui dependency of its own),
+# so it inherits whatever `gpui` is in scope at the call site and cannot
+# introduce a second GPUI crate instance.
+gpui-rsx = "0.6"
 
 # Cargo resolves 1042 packages here: 1036 external dependencies against 6
 # workspace crates. Full debuginfo on all of them is what made target/ grow to

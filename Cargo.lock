@@ -859,6 +859,7 @@ dependencies = [
  "global-hotkey",
  "gpui",
  "gpui-component",
+ "gpui-rsx",
  "gpui-wry",
  "gpui_platform",
  "gtk",
@@ -3426,6 +3427,17 @@ dependencies = [
 name = "gpui-component-macros"
 version = "0.5.1"
 source = "git+https://github.com/longbridge/gpui-component?rev=277f220a6196572116a8fd84fba6c36187094cab#277f220a6196572116a8fd84fba6c36187094cab"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "gpui-rsx"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4687ab0632dbfd52b45bb67e484ede47d9f437f7be0b96166b61ca69f43601ee"
 dependencies = [
  "proc-macro2",
  "quote",
