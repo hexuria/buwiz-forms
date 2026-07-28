@@ -28,6 +28,17 @@ BENIGN = [
     # rule 7: `let root = <expr>; root.m()` is the same value as `<expr>.m()`.
     # Chaining onto a brace-delimited macro does not parse, so the binding is
     # forced by syntax rather than chosen.
+    # rule 7 binding under any name: `let X = <expr>; X.into_any_element()` is
+    # the same value as `<expr>.into_any_element()`. Anchored on the terminal
+    # method and using a backreference, so it only collapses a binding that is
+    # consumed immediately by the call it was created for.
+    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);return\1\.into_any_element\(\)', re.S),
+     r'return\2.into_any_element()'),
+    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);\1\.into_any_element\(\)', re.S),
+     r'\2.into_any_element()'),
+    # same binding, returned directly instead of chained
+    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);return\1;', re.S), r'return\2;'),
+    (re.compile(r'let([a-z_][a-z0-9_]*)=(.*?);return\1\}', re.S), r'return\2}'),
     (re.compile(r'letroot='), ''),
     (re.compile(r';root\.'), '.'),
     (re.compile(r';root\}'), '}'),

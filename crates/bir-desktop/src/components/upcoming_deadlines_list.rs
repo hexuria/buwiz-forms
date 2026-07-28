@@ -4,6 +4,7 @@ use chrono::{Datelike, Local};
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 pub enum UpcomingDeadlinesListEvent {
     DeadlineClicked {
@@ -48,23 +49,17 @@ impl UpcomingDeadlinesList {
         let today = chrono::Local::now().date_naive();
 
         if dated.is_empty() && event_based.is_empty() {
-            schedule_list = schedule_list.child(
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .py_8()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("No upcoming deadlines for selected filters."),
-                    ),
-            );
+            schedule_list = schedule_list.child(rsx! {
+                <div w_full flex flex_col items_center justify_center py_8 gap_2>
+                    <div
+                        text_sm
+                        font_weight={FontWeight::MEDIUM}
+                        text_color={cx.theme().muted_foreground}
+                    >
+                        {"No upcoming deadlines for selected filters."}
+                    </div>
+                </div>
+            });
         } else {
             for d in &dated {
                 let has_update = self
@@ -140,288 +135,268 @@ impl UpcomingDeadlinesList {
                 }
 
                 let date_card = date_card
-                    .child(
-                        div()
-                            .w(px(64.))
-                            .h(px(64.))
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .justify_center()
-                            .bg(bg_color)
-                            .border_1()
-                            .border_color(border_color)
-                            .rounded_md()
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(text_color)
-                                    .child(month_label),
-                            ) // month
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BLACK)
-                                    .text_color(text_color)
-                                    .child(day_label),
-                            ), // day
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(d.display_form_no.clone()),
-                                    )
-                                    .children(if has_update {
-                                        Some(
-                                            div()
-                                                .px_2()
-                                                .py_0p5()
-                                                .bg(cx.theme().warning.opacity(0.1))
-                                                .border_1()
-                                                .border_color(cx.theme().warning.opacity(0.2))
-                                                .rounded_full()
-                                                .flex()
-                                                .items_center()
-                                                .gap_1()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(cx.theme().warning)
-                                                        .child("Updated"),
-                                                ),
-                                        )
-                                    } else {
-                                        None
+                    .child(rsx! {
+                        <div
+                            w={px(64.)}
+                            h={px(64.)}
+                            flex
+                            flex_col
+                            items_center
+                            justify_center
+                            bg={bg_color}
+                            border_1
+                            border_color={border_color}
+                            rounded_md
+                        >
+                            <div text_xs font_weight={FontWeight::BOLD} text_color={text_color}>
+                                {month_label}
+                            </div> // month
+                            <div text_xl font_weight={FontWeight::BLACK} text_color={text_color}>
+                                {day_label}
+                            </div> // day
+                        </div>
+                    })
+                    .child(rsx! {
+                        <div flex_1 flex flex_col gap_1>
+                            <div flex items_center gap_2>
+                                <div
+                                    text_base
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().foreground}
+                                >
+                                    {d.display_form_no.clone()}
+                                </div>
+                                {...if has_update {
+                                    Some(rsx! {
+                                        <div
+                                            px_2
+                                            py_0p5
+                                            bg={cx.theme().warning.opacity(0.1)}
+                                            border_1
+                                            border_color={cx.theme().warning.opacity(0.2)}
+                                            rounded_full
+                                            flex
+                                            items_center
+                                            gap_1
+                                        >
+                                            <div
+                                                text_xs
+                                                font_weight={FontWeight::SEMIBOLD}
+                                                text_color={cx.theme().warning}
+                                            >
+                                                {"Updated"}
+                                            </div>
+                                        </div>
                                     })
-                                    .children(if d.status != DeadlineStatus::Normal {
-                                        Some(
-                                            div()
-                                                .px_2()
-                                                .py_0p5()
-                                                .bg(cx.theme().primary.opacity(0.1))
-                                                .border_1()
-                                                .border_color(cx.theme().primary.opacity(0.2))
-                                                .rounded_full()
-                                                .flex()
-                                                .items_center()
-                                                .gap_1()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(cx.theme().primary)
-                                                        .child(d.status.label()),
-                                                ),
-                                        )
-                                    } else {
-                                        None
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(d.form_name.clone()),
-                            )
-                            .children(match &d.deadline {
+                                } else {
+                                    None
+                                }}
+                                {...if d.status != DeadlineStatus::Normal {
+                                    Some(rsx! {
+                                        <div
+                                            px_2
+                                            py_0p5
+                                            bg={cx.theme().primary.opacity(0.1)}
+                                            border_1
+                                            border_color={cx.theme().primary.opacity(0.2)}
+                                            rounded_full
+                                            flex
+                                            items_center
+                                            gap_1
+                                        >
+                                            <div
+                                                text_xs
+                                                font_weight={FontWeight::SEMIBOLD}
+                                                text_color={cx.theme().primary}
+                                            >
+                                                {d.status.label()}
+                                            </div>
+                                        </div>
+                                    })
+                                } else {
+                                    None
+                                }}
+                            </div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {d.form_name.clone()}
+                            </div>
+                            {...match &d.deadline {
                                 DeadlineKind::Dated {
                                     original_deadline,
                                     final_deadline,
-                                } if original_deadline != final_deadline => Some(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!(
+                                } if original_deadline != final_deadline => Some(rsx! {
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!(
                                             "Originally due on: {}",
                                             original_deadline.format("%Y-%m-%d")
-                                        )),
-                                ),
+                                        )}
+                                    </div>
+                                }),
                                 DeadlineKind::EventBased {
                                     trigger,
                                     statutory_window,
-                                } => Some(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!("{trigger} · {statutory_window}")),
-                                ),
+                                } => Some(rsx! {
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!("{trigger} · {statutory_window}")}
+                                    </div>
+                                }),
                                 _ => None,
-                            }),
-                    );
+                            }}
+                        </div>
+                    });
                 schedule_list = schedule_list.child(date_card);
             }
 
             // Ongoing obligations (event-based forms with no fixed date)
             if !event_based.is_empty() {
-                schedule_list = schedule_list.child(
-                    div()
-                        .pt_4()
-                        .pb_2()
-                        .border_t_1()
-                        .border_color(cx.theme().border)
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_base()
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(cx.theme().foreground)
-                                .child("Ongoing Obligations"),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child("Event-based forms without fixed deadlines"),
-                        ),
-                );
+                schedule_list = schedule_list.child(rsx! {
+                    <div
+                        pt_4
+                        pb_2
+                        border_t_1
+                        border_color={cx.theme().border}
+                        flex
+                        items_center
+                        gap_2
+                    >
+                        <div
+                            text_base
+                            font_weight={FontWeight::BOLD}
+                            text_color={cx.theme().foreground}
+                        >
+                            {"Ongoing Obligations"}
+                        </div>
+                        <div text_xs text_color={cx.theme().muted_foreground}>
+                            {"Event-based forms without fixed deadlines"}
+                        </div>
+                    </div>
+                });
 
                 for d in &event_based {
                     let date_id = format!("evt-{}", d.form_code);
 
-                    let date_card = div()
-                        .id(format!("deadline-{}-{}", d.form_code, date_id))
-                        .group("list-item")
-                        .flex()
-                        .items_center()
-                        .gap_4()
-                        .p_3()
-                        .bg(cx.theme().background)
-                        .border_1()
-                        .border_color(cx.theme().border)
-                        .rounded_lg()
-                        .cursor_default()
-                        .child(
-                            div()
-                                .w(px(64.))
-                                .h(px(64.))
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .justify_center()
-                                .bg(cx.theme().secondary)
-                                .border_1()
-                                .border_color(cx.theme().border)
-                                .rounded_md()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("EVT"),
-                                )
-                                .child(
-                                    div()
-                                        .text_xl()
-                                        .font_weight(FontWeight::BLACK)
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child("--"),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_2()
-                                        .child(
-                                            div()
-                                                .text_base()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child(d.display_form_no.clone()),
-                                        )
-                                        .child(
-                                            div()
-                                                .px_2()
-                                                .py_0p5()
-                                                .bg(cx.theme().secondary)
-                                                .border_1()
-                                                .border_color(cx.theme().border)
-                                                .rounded_full()
-                                                .flex()
-                                                .items_center()
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child("Event Based"),
-                                                ),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(d.form_name.clone()),
-                                )
-                                .children(match &d.deadline {
+                    let date_card = rsx! {
+                        <div
+                            id={format!("deadline-{}-{}", d.form_code, date_id)}
+                            group={"list-item"}
+                            flex
+                            items_center
+                            gap_4
+                            p_3
+                            bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_lg
+                            cursor_default
+                        >
+                            <div
+                                w={px(64.)}
+                                h={px(64.)}
+                                flex
+                                flex_col
+                                items_center
+                                justify_center
+                                bg={cx.theme().secondary}
+                                border_1
+                                border_color={cx.theme().border}
+                                rounded_md
+                            >
+                                <div
+                                    text_xs
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().muted_foreground}
+                                >
+                                    {"EVT"}
+                                </div>
+                                <div
+                                    text_xl
+                                    font_weight={FontWeight::BLACK}
+                                    text_color={cx.theme().muted_foreground}
+                                >
+                                    {"--"}
+                                </div>
+                            </div>
+                            <div flex_1 flex flex_col gap_1>
+                                <div flex items_center gap_2>
+                                    <div
+                                        text_base
+                                        font_weight={FontWeight::BOLD}
+                                        text_color={cx.theme().foreground}
+                                    >
+                                        {d.display_form_no.clone()}
+                                    </div>
+                                    <div
+                                        px_2
+                                        py_0p5
+                                        bg={cx.theme().secondary}
+                                        border_1
+                                        border_color={cx.theme().border}
+                                        rounded_full
+                                        flex
+                                        items_center
+                                    >
+                                        <div
+                                            text_xs
+                                            font_weight={FontWeight::SEMIBOLD}
+                                            text_color={cx.theme().muted_foreground}
+                                        >
+                                            {"Event Based"}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div text_sm text_color={cx.theme().muted_foreground}>
+                                    {d.form_name.clone()}
+                                </div>
+                                {...match &d.deadline {
                                     DeadlineKind::EventBased {
                                         trigger,
                                         statutory_window,
-                                    } => Some(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!("{trigger} · {statutory_window}")),
-                                    ),
+                                    } => Some(rsx! {
+                                        <div text_xs text_color={cx.theme().muted_foreground}>
+                                            {format!("{trigger} · {statutory_window}")}
+                                        </div>
+                                    }),
                                     _ => None,
-                                }),
-                        );
+                                }}
+                            </div>
+                        </div>
+                    };
                     schedule_list = schedule_list.child(date_card);
                 }
             }
         }
 
-        div()
-            .w_full()
-            .p_4()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_xl()
-            .shadow_sm()
-            .child(schedule_list)
+        rsx! {
+            <div
+                w_full
+                p_4
+                bg={cx.theme().background}
+                border_1
+                border_color={cx.theme().border}
+                rounded_xl
+                shadow_sm
+            >
+                {schedule_list}
+            </div>
+        }
     }
 }
 
 impl Render for UpcomingDeadlinesList {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div().flex().flex_col().gap_4().child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xl()
-                        .font_weight(FontWeight::BOLD)
-                        .text_color(cx.theme().foreground)
-                        .child("Upcoming Deadlines"),
-                )
-                .child(self.render_list_view(window, cx)),
-        )
+        rsx! {
+            <div flex flex_col gap_4>
+                <div flex flex_col gap_2>
+                    <div
+                        text_xl
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {"Upcoming Deadlines"}
+                    </div>
+                    {self.render_list_view(window, cx)}
+                </div>
+            </div>
+        }
     }
 }

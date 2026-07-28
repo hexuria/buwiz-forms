@@ -18,6 +18,7 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 
@@ -270,24 +271,13 @@ impl Form1702MXView {
             .inputs
             .get(key)
             .expect("1702MX editor input registry is complete");
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(
-                div()
-                    .w_1_2()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label),
-            )
-            .child(
-                div()
-                    .w_1_2()
-                    .child(Input::new(input).disabled(!self.draft.is_editable())),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div w_1_2 text_sm font_weight={FontWeight::MEDIUM}>{label}</div>
+                <div w_1_2>{Input::new(input).disabled(!self.draft.is_editable())}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_computed_row(
@@ -296,27 +286,13 @@ impl Form1702MXView {
         value: impl Into<SharedString>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .p_2()
-            .bg(cx.theme().muted.opacity(0.5))
-            .rounded_md()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.into()),
-            )
-            .child(
-                div()
-                    .text_right()
-                    .font_weight(FontWeight::BOLD)
-                    .child(value.into()),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
+                <div text_sm font_weight={FontWeight::MEDIUM}>{label.into()}</div>
+                <div text_right font_weight={FontWeight::BOLD}>{value.into()}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_section(
@@ -325,18 +301,13 @@ impl Form1702MXView {
         children: Vec<AnyElement>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .p_5()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_lg()
-            .child(div().text_xl().font_weight(FontWeight::BOLD).child(title))
-            .children(children)
-            .into_any_element()
+        let root = rsx! {
+            <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
+                <div text_xl font_weight={FontWeight::BOLD}>{title}</div>
+                {...children}
+            </div>
+        };
+        root.into_any_element()
     }
 }
 
@@ -491,73 +462,38 @@ impl Render for Form1702MXView {
             .map(|(key, label)| self.render_input_row(key, label))
             .collect::<Vec<_>>();
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .bg(cx.theme().background)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("1702mx_back")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(Form1702MXEvent::BackToDashboard)
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                gpui_component::button::Button::new("1702mx_save")
-                                    .label("Save Local Draft")
-                                    .outline()
-                                    .disabled(!editable)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_draft(window, cx)
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("1702mx_submit")
-                                    .label(if QUEUE_SUBMISSION_SUPPORTED {
-                                        "Queue"
-                                    } else {
-                                        "XML save only"
-                                    })
-                                    .primary()
-                                    .disabled(true),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .p_6()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().accent)
-                    .child(self.render_header(cx))
-                    .child(div().mt_6().child(self.render_status_pipeline(cx))),
-            )
-            .child(
-                div()
-                    .id("1702mx_scroll")
-                    .flex_1()
-                    .w_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .p_8()
-                    .child(
-                        div()
+        rsx! {
+            <div flex flex_col w_full h_full bg={cx.theme().background}>
+                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                    {gpui_component::button::Button::new("1702mx_back")
+                        .label("← Back")
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(Form1702MXEvent::BackToDashboard)
+                        }))}
+                    <div flex items_center gap_3>
+                        {gpui_component::button::Button::new("1702mx_save")
+                            .label("Save Local Draft")
+                            .outline()
+                            .disabled(!editable)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.save_draft(window, cx)
+                            }))}
+                        {gpui_component::button::Button::new("1702mx_submit")
+                            .label(if QUEUE_SUBMISSION_SUPPORTED {
+                                "Queue"
+                            } else {
+                                "XML save only"
+                            })
+                            .primary()
+                            .disabled(true)}
+                    </div>
+                </div>
+                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().accent}>
+                    {self.render_header(cx)}
+                    <div mt_6>{self.render_status_pipeline(cx)}</div>
+                </div>
+                <div id={"1702mx_scroll"} flex_1 w_full overflow_y_scroll track_scroll={&self.scroll_handle} p_8>
+                    {div()
                             .max_w(px(960.))
                             .mx_auto()
                             .flex()
@@ -859,8 +795,9 @@ impl Render for Form1702MXView {
                                     div().text_sm().child("The semantic Rust draft preserves every typed schedule value in local JSON even where the reviewed editable XML stores only descriptions or derived inputs.").into_any_element(),
                                 ],
                                 cx,
-                            )),
-                    ),
-            )
+                            ))}
+                </div>
+            </div>
+        }
     }
 }

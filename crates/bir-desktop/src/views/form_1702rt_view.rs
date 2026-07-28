@@ -18,6 +18,7 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use crate::components::form_engine::FormViewTrait;
 
@@ -200,20 +201,13 @@ impl Form1702RTView {
             .inputs
             .get(key)
             .expect("editor input registry is complete");
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .child(
-                div()
-                    .w_1_2()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label),
-            )
-            .child(div().w_1_2().child(Input::new(input).disabled(disabled)))
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4>
+                <div w_1_2 text_sm font_weight={FontWeight::MEDIUM}>{label}</div>
+                <div w_1_2>{Input::new(input).disabled(disabled)}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_computed_row(
@@ -222,27 +216,13 @@ impl Form1702RTView {
         value: impl Into<SharedString>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap_4()
-            .p_2()
-            .bg(cx.theme().muted.opacity(0.5))
-            .rounded_md()
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.into()),
-            )
-            .child(
-                div()
-                    .text_right()
-                    .font_weight(FontWeight::BOLD)
-                    .child(value.into()),
-            )
-            .into_any_element()
+        let root = rsx! {
+            <div flex items_center justify_between gap_4 p_2 bg={cx.theme().muted.opacity(0.5)} rounded_md>
+                <div text_sm font_weight={FontWeight::MEDIUM}>{label.into()}</div>
+                <div text_right font_weight={FontWeight::BOLD}>{value.into()}</div>
+            </div>
+        };
+        root.into_any_element()
     }
 
     fn render_section(
@@ -251,18 +231,13 @@ impl Form1702RTView {
         children: Vec<AnyElement>,
         cx: &Context<Self>,
     ) -> AnyElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .p_5()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_lg()
-            .child(div().text_xl().font_weight(FontWeight::BOLD).child(title))
-            .children(children)
-            .into_any_element()
+        let root = rsx! {
+            <div flex flex_col gap_4 p_5 bg={cx.theme().background} border_1 border_color={cx.theme().border} rounded_lg>
+                <div text_xl font_weight={FontWeight::BOLD}>{title}</div>
+                {...children}
+            </div>
+        };
+        root.into_any_element()
     }
 }
 
@@ -423,49 +398,30 @@ impl Render for Form1702RTView {
             .w_full()
             .h_full()
             .bg(cx.theme().background)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("1702rt_back")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| cx.emit(Form1702RTEvent::BackToDashboard))),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                gpui_component::button::Button::new("1702rt_save")
-                                    .label("Save Draft")
-                                    .outline()
-                                    .disabled(!is_draft)
-                                    .on_click(cx.listener(|this, _, window, cx| this.save_draft(window, cx))),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("1702rt_submit")
-                                    .label(if QUEUE_SUBMISSION_SUPPORTED { "Queue" } else { "XML save only" })
-                                    .primary()
-                                    .disabled(true),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .p_6()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().accent)
-                    .child(self.render_header(cx))
-                    .child(div().mt_6().child(self.render_status_pipeline(cx))),
-            )
+            .child(rsx! {
+                <div flex items_center justify_between px_8 py_4 border_b_1 border_color={cx.theme().border}>
+                    {gpui_component::button::Button::new("1702rt_back")
+                        .label("← Back")
+                        .on_click(cx.listener(|_, _, _, cx| cx.emit(Form1702RTEvent::BackToDashboard)))}
+                    <div flex items_center gap_3>
+                        {gpui_component::button::Button::new("1702rt_save")
+                            .label("Save Draft")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(cx.listener(|this, _, window, cx| this.save_draft(window, cx)))}
+                        {gpui_component::button::Button::new("1702rt_submit")
+                            .label(if QUEUE_SUBMISSION_SUPPORTED { "Queue" } else { "XML save only" })
+                            .primary()
+                            .disabled(true)}
+                    </div>
+                </div>
+            })
+            .child(rsx! {
+                <div p_6 border_b_1 border_color={cx.theme().border} bg={cx.theme().accent}>
+                    {self.render_header(cx)}
+                    <div mt_6>{self.render_status_pipeline(cx)}</div>
+                </div>
+            })
             .child(
                 div()
                     .id("1702rt_scroll")
@@ -522,22 +478,19 @@ impl Render for Form1702RTView {
                                     .collect(),
                                 cx,
                             ))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_2()
-                                    .child(div().text_sm().font_weight(FontWeight::BOLD).child("Overpayment disposition (one only)"))
-                                    .child(
-                                        div().flex().gap_2()
-                                            .child(gpui_component::button::Button::new("1702rt_refund").label(if matches!(disposition, Some(Form1702RTOverpaymentDisposition::Refund)) { "✓ Refund" } else { "Refund" }).outline().disabled(!is_draft).on_click(cx.listener(|this, _, _, cx| this.set_overpayment_disposition(Form1702RTOverpaymentDisposition::Refund, cx))))
-                                            .child(gpui_component::button::Button::new("1702rt_tcc").label(if matches!(disposition, Some(Form1702RTOverpaymentDisposition::TaxCreditCertificate)) { "✓ TCC" } else { "TCC" }).outline().disabled(!is_draft).on_click(cx.listener(|this, _, _, cx| this.set_overpayment_disposition(Form1702RTOverpaymentDisposition::TaxCreditCertificate, cx))))
-                                            .child(gpui_component::button::Button::new("1702rt_carry").label(if matches!(disposition, Some(Form1702RTOverpaymentDisposition::CarryOver)) { "✓ Carry over" } else { "Carry over" }).outline().disabled(!is_draft).on_click(cx.listener(|this, _, _, cx| this.set_overpayment_disposition(Form1702RTOverpaymentDisposition::CarryOver, cx)))),
-                                    ),
-                            )
+                            .child(rsx! {
+                                <div flex flex_col gap_2>
+                                    <div text_sm font_weight={FontWeight::BOLD}>{"Overpayment disposition (one only)"}</div>
+                                    <div flex gap_2>
+                                        {gpui_component::button::Button::new("1702rt_refund").label(if matches!(disposition, Some(Form1702RTOverpaymentDisposition::Refund)) { "✓ Refund" } else { "Refund" }).outline().disabled(!is_draft).on_click(cx.listener(|this, _, _, cx| this.set_overpayment_disposition(Form1702RTOverpaymentDisposition::Refund, cx)))}
+                                        {gpui_component::button::Button::new("1702rt_tcc").label(if matches!(disposition, Some(Form1702RTOverpaymentDisposition::TaxCreditCertificate)) { "✓ TCC" } else { "TCC" }).outline().disabled(!is_draft).on_click(cx.listener(|this, _, _, cx| this.set_overpayment_disposition(Form1702RTOverpaymentDisposition::TaxCreditCertificate, cx)))}
+                                        {gpui_component::button::Button::new("1702rt_carry").label(if matches!(disposition, Some(Form1702RTOverpaymentDisposition::CarryOver)) { "✓ Carry over" } else { "Carry over" }).outline().disabled(!is_draft).on_click(cx.listener(|this, _, _, cx| this.set_overpayment_disposition(Form1702RTOverpaymentDisposition::CarryOver, cx)))}
+                                    </div>
+                                </div>
+                            })
                             .when(!self.parse_errors.is_empty() || !self.validation_errors.is_empty(), |container| {
                                 let errors = self.parse_errors.iter().chain(self.validation_errors.iter()).take(12).map(|(field, message)| {
-                                    div().text_sm().text_color(cx.theme().danger).child(format!("{field}: {message}"))
+                                    rsx! { <div text_sm text_color={cx.theme().danger}>{format!("{field}: {message}")}</div> }
                                 }).collect::<Vec<_>>();
                                 container.child(self.render_section("Needs Review", errors.into_iter().map(IntoElement::into_any_element).collect(), cx))
                             })
