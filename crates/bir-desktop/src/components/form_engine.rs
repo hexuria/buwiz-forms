@@ -1,6 +1,7 @@
 use bir_core::forms::FilingStatus;
 use gpui::*;
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 #[allow(dead_code)]
 pub trait FormViewTrait: 'static + Sized {
@@ -56,33 +57,39 @@ pub trait FormViewTrait: 'static + Sized {
             // Connector line
             if i > 0 {
                 if idx <= current_idx {
-                    row = row.child(
-                        div()
-                            .flex_1()
-                            .max_w(px(80.))
-                            .h(px(2.))
-                            .bg(cx.theme().success.opacity(0.5)),
-                    );
+                    row = row.child(rsx! {
+                        <div
+                            flex_1
+                            max_w={px(80.)}
+                            h={px(2.)}
+                            bg={cx.theme().success.opacity(0.5)}
+                        />
+                    });
                 } else {
-                    row = row.child(
-                        div()
-                            .flex_1()
-                            .max_w(px(80.))
-                            .border_t_2()
-                            .border_dashed()
-                            .border_color(cx.theme().muted_foreground),
-                    );
+                    row = row.child(rsx! {
+                        <div
+                            flex_1
+                            max_w={px(80.)}
+                            border_t_2
+                            border_dashed
+                            border_color={cx.theme().muted_foreground}
+                        />
+                    });
                 }
             }
 
             // Circle content
             let circle_content = if is_completed {
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().success_foreground)
-                    .child("✓")
-                    .into_any_element()
+                let el = rsx! {
+                    <div
+                        text_xs
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().success_foreground}
+                    >
+                        {"✓"}
+                    </div>
+                };
+                el.into_any_element()
             } else {
                 let num_color = if is_current {
                     match step_status {
@@ -95,12 +102,12 @@ pub trait FormViewTrait: 'static + Sized {
                 } else {
                     cx.theme().muted_foreground
                 };
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(num_color)
-                    .child(format!("{}", step_num))
-                    .into_any_element()
+                let el = rsx! {
+                    <div text_xs font_weight={FontWeight::BOLD} text_color={num_color}>
+                        {format!("{}", step_num)}
+                    </div>
+                };
+                el.into_any_element()
             };
 
             // Circle colors
@@ -134,38 +141,42 @@ pub trait FormViewTrait: 'static + Sized {
                 cx.theme().muted_foreground
             };
 
-            let mut circle = div()
-                .size(px(28.))
-                .rounded_full()
-                .border_2()
-                .border_color(circle_border)
-                .bg(circle_bg)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(circle_content);
+            let mut circle = rsx! {
+                <div
+                    size={px(28.)}
+                    rounded_full
+                    border_2
+                    border_color={circle_border}
+                    bg={circle_bg}
+                    flex
+                    items_center
+                    justify_center
+                >
+                    {circle_content}
+                </div>
+            };
 
             if !is_completed && !is_current {
                 circle = circle.border_dashed();
             }
 
-            let mut step_group = div()
-                .id(format!("step_{}", idx))
-                .flex()
-                .items_center()
-                .gap_2();
+            let mut step_group = rsx! {
+                <div id={format!("step_{}", idx)} flex items_center gap_2 />
+            };
 
-            step_group = step_group.child(circle).child(
-                div()
-                    .text_xs()
-                    .text_color(label_color)
-                    .font_weight(if is_current {
+            step_group = step_group.child(circle).child(rsx! {
+                <div
+                    text_xs
+                    text_color={label_color}
+                    font_weight={if is_current {
                         FontWeight::BOLD
                     } else {
                         FontWeight::MEDIUM
-                    })
-                    .child(*label),
-            );
+                    }}
+                >
+                    {*label}
+                </div>
+            });
 
             if matches!(step_status, FilingStatus::Submitted)
                 || matches!(step_status, FilingStatus::Confirmed)
@@ -228,53 +239,42 @@ pub trait FormViewTrait: 'static + Sized {
             )
             .outline();
 
-        let action_buttons = div()
-            .flex()
-            .justify_end()
-            .gap_2()
-            .w_full()
-            .child(if generating {
-                btn.disabled(true).into_any_element()
-            } else {
-                btn.on_click(cx.listener(move |this, _, window, cx| {
-                    this.preview_pdf(window, cx);
-                }))
-                .into_any_element()
-            });
+        let action_buttons = rsx! {
+            <div flex justify_end gap_2 w_full>
+                {if generating {
+                    btn.disabled(true).into_any_element()
+                } else {
+                    btn.on_click(cx.listener(move |this, _, window, cx| {
+                        this.preview_pdf(window, cx);
+                    }))
+                    .into_any_element()
+                }}
+            </div>
+        };
 
-        div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(action_buttons)
-            .child(
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        div()
-                            .text_2xl()
-                            .font_weight(FontWeight::BLACK)
-                            .text_color(cx.theme().foreground)
-                            .child(self.form_title()),
-                    )
-                    .child(
-                        div()
-                            .text_base()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(self.form_subtitle()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(self.form_version()),
-                    ),
-            )
+        rsx! {
+            <div w_full flex flex_col gap_2>
+                {action_buttons}
+                <div w_full flex flex_col items_center gap_1>
+                    <div
+                        text_2xl
+                        font_weight={FontWeight::BLACK}
+                        text_color={cx.theme().foreground}
+                    >
+                        {self.form_title()}
+                    </div>
+                    <div
+                        text_base
+                        font_weight={FontWeight::SEMIBOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {self.form_subtitle()}
+                    </div>
+                    <div text_xs text_color={cx.theme().muted_foreground}>
+                        {self.form_version()}
+                    </div>
+                </div>
+            </div>
+        }
     }
 }

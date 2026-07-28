@@ -4,6 +4,7 @@ use gpui_component::{
     ActiveTheme, StyledExt,
     input::{Input, InputEvent, InputState},
 };
+use gpui_rsx::rsx;
 
 /// Approximate height of each dropdown option row (used for max_h sizing).
 const ITEM_HEIGHT: f32 = 38.0;
@@ -239,37 +240,37 @@ impl Render for ComboboxState {
             .child(Input::new(&input_view))
             .when(is_open, |this| {
                 this.child(
-                    deferred(
-                        div().absolute().top(px(36.)).left_0().w_full().child(
-                            div()
-                                .occlude()
-                                .mt_1p5()
+                    deferred(rsx! {
+                        <div absolute top={px(36.)} left_0 w_full>
+                            <div
+                                occlude
+                                mt_1p5
+                                w_full
+                                border_1
+                                border_color={cx.theme().border}
+                                shadow_lg
+                                rounded_md
+                                bg={cx.theme().popover}
+                                text_color={cx.theme().popover_foreground}
+                            >
+                                {uniform_list(
+                                    dropdown_id,
+                                    filtered_count,
+                                    cx.processor(
+                                        |this, range: std::ops::Range<usize>, window, cx| {
+                                            range
+                                                .map(|ix| this.render_option(ix, window, cx))
+                                                .collect()
+                                        },
+                                    ),
+                                )
+                                .with_sizing_behavior(ListSizingBehavior::Infer)
                                 .w_full()
-                                .border_1()
-                                .border_color(cx.theme().border)
-                                .shadow_lg()
-                                .rounded_md()
-                                .bg(cx.theme().popover)
-                                .text_color(cx.theme().popover_foreground)
-                                .child(
-                                    uniform_list(
-                                        dropdown_id,
-                                        filtered_count,
-                                        cx.processor(
-                                            |this, range: std::ops::Range<usize>, window, cx| {
-                                                range
-                                                    .map(|ix| this.render_option(ix, window, cx))
-                                                    .collect()
-                                            },
-                                        ),
-                                    )
-                                    .with_sizing_behavior(ListSizingBehavior::Infer)
-                                    .w_full()
-                                    .max_h(px(self.max_visible_items as f32 * ITEM_HEIGHT))
-                                    .track_scroll(&self.scroll_handle),
-                                ),
-                        ),
-                    )
+                                .max_h(px(self.max_visible_items as f32 * ITEM_HEIGHT))
+                                .track_scroll(&self.scroll_handle)}
+                            </div>
+                        </div>
+                    })
                     .with_priority(2),
                 )
             })

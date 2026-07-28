@@ -11,6 +11,7 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::OtpInput;
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use crate::app::{ActiveView, AppState};
 use crate::components::otp_paste::paste_otp_value;
@@ -39,17 +40,17 @@ impl AppState {
             None
         };
 
-        Some(
-            div()
-                .absolute()
-                .inset_0()
-                .bg(cx.theme().background)
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
+        let root = rsx! {
+            <div
+                absolute
+                inset_0
+                bg={cx.theme().background}
+                flex
+                flex_col
+                items_center
+                justify_center
                 // Intercept Cmd+V / Ctrl+V for OTP paste support
-                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                on_key_down={cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                     let mods = &event.keystroke.modifiers;
                     let is_paste = event.keystroke.key.as_str() == "v"
                         && (mods.platform || mods.control);
@@ -62,9 +63,9 @@ impl AppState {
                             paste_otp_value(&this.profile_otp_state, 4, window, cx);
                         }
                     }
-                }))
-                .child(
-                    div()
+                })}
+            >
+                {div()
                         .flex()
                         .flex_col()
                         .items_center()
@@ -75,14 +76,9 @@ impl AppState {
                                 .h(px(60.))
                                 .object_fit(gpui::ObjectFit::Contain),
                         )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_1()
-                                .child(
-                                    div()
+                        .child(rsx! {
+                            <div flex flex_col items_center gap_1>
+                                {div()
                                         .text_xl()
                                         .font_weight(FontWeight::BOLD)
                                         .text_color(cx.theme().foreground)
@@ -90,15 +86,12 @@ impl AppState {
                                             "Enter Authenticator Code"
                                         } else {
                                             "Enter PIN to unlock Tax Profile"
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!("Profile: {}", profile.tin.full())),
-                                ),
-                        )
+                                        })}
+                                <div text_sm text_color={cx.theme().muted_foreground}>
+                                    {format!("Profile: {}", profile.tin.full())}
+                                </div>
+                            </div>
+                        })
                         // TOTP time-remaining indicator
                         .when(use_totp, |this| {
                             let secs = totp_seconds_remaining();
@@ -130,31 +123,20 @@ impl AppState {
                         )
                         .when_some(error_msg.clone(), |this, msg| {
                             this.when(!is_locked_out, |this| {
-                                this.child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().danger)
-                                        .child(msg),
-                                )
+                                this.child(rsx! {
+                                    <div text_sm text_color={cx.theme().danger}>{msg}</div>
+                                })
                             })
                         })
                         // Lockout message (PIN only)
                         .when_some(lockout_msg, |this, msg| {
-                            this.child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().danger)
-                                    .child(msg),
-                            )
+                            this.child(rsx! {
+                                <div text_sm text_color={cx.theme().danger}>{msg}</div>
+                            })
                         })
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_4()
-                                .child(
-                                    gpui_component::button::Button::new("admin_override")
+                        .child(rsx! {
+                            <div flex flex_col items_center gap_4>
+                                {gpui_component::button::Button::new("admin_override")
                                         .label(if os_triggered {
                                             "Waiting for OS..."
                                         } else {
@@ -253,10 +235,8 @@ impl AppState {
                                                 );
                                                 cx.notify();
                                             }
-                                        })),
-                                )
-                                .child(
-                                    gpui_component::button::Button::new("cancel_profile_pin")
+                                        }))}
+                                {gpui_component::button::Button::new("cancel_profile_pin")
                                         .label("Cancel")
                                         .ghost()
                                         .small()
@@ -272,12 +252,14 @@ impl AppState {
                                             this.profile_rate_limiter.reset();
                                             this.focus_handle.focus(window, cx);
                                             cx.notify();
-                                        })),
-                                ),
-                        ),
-                )
-                .into_any_element(),
-        )
+                                        }))}
+                            </div>
+                        })
+                }
+            </div>
+        };
+
+        Some(root.into_any_element())
     }
 
     /// Render the admin PIN authentication overlay (if an admin-gated view is pending).
@@ -295,17 +277,17 @@ impl AppState {
         let is_locked_out = self.admin_rate_limiter.is_locked();
         let lockout_msg = self.admin_rate_limiter.lockout_message();
 
-        Some(
-            div()
-                .absolute()
-                .inset_0()
-                .bg(cx.theme().background)
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
+        let root = rsx! {
+            <div
+                absolute
+                inset_0
+                bg={cx.theme().background}
+                flex
+                flex_col
+                items_center
+                justify_center
                 // Intercept Cmd+V / Ctrl+V for OTP paste support
-                .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+                on_key_down={cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                     let mods = &event.keystroke.modifiers;
                     let is_paste = event.keystroke.key.as_str() == "v"
                         && (mods.platform || mods.control);
@@ -315,9 +297,9 @@ impl AppState {
                     } else {
                         paste_otp_value(&this.admin_otp_state, 4, window, cx);
                     }
-                }))
-                .child(
-                    div()
+                })}
+            >
+                {div()
                         .flex()
                         .flex_col()
                         .items_center()
@@ -328,21 +310,16 @@ impl AppState {
                                 .h(px(60.))
                                 .object_fit(gpui::ObjectFit::Contain),
                         )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_1()
-                                .child(
-                                    div()
-                                        .text_xl()
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(cx.theme().foreground)
-                                        .child("Admin Access Required"),
-                                )
-                                .child(
-                                    div()
+                        .child(rsx! {
+                            <div flex flex_col items_center gap_1>
+                                <div
+                                    text_xl
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().foreground}
+                                >
+                                    {"Admin Access Required"}
+                                </div>
+                                {div()
                                         .text_sm()
                                         .text_color(cx.theme().muted_foreground)
                                         .child(match target {
@@ -367,9 +344,9 @@ impl AppState {
                                                     "Enter App Lock PIN to continue"
                                                 }
                                             },
-                                        }),
-                                ),
-                        )
+                                        })}
+                            </div>
+                        })
                         // TOTP time-remaining indicator
                         .when(use_totp && !is_locked_out, |this| {
                             let secs = totp_seconds_remaining();
@@ -401,31 +378,20 @@ impl AppState {
                         )
                         .when_some(error_msg.clone(), |this, msg| {
                             this.when(!is_locked_out, |this| {
-                                this.child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().danger)
-                                        .child(msg),
-                                )
+                                this.child(rsx! {
+                                    <div text_sm text_color={cx.theme().danger}>{msg}</div>
+                                })
                             })
                         })
                         // Lockout message
                         .when_some(lockout_msg, |this, msg| {
-                            this.child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().danger)
-                                    .child(msg),
-                            )
+                            this.child(rsx! {
+                                <div text_sm text_color={cx.theme().danger}>{msg}</div>
+                            })
                         })
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap_4()
-                                .child(
-                                    gpui_component::button::Button::new("admin_os_override")
+                        .child(rsx! {
+                            <div flex flex_col items_center gap_4>
+                                {gpui_component::button::Button::new("admin_os_override")
                                         .label(if os_triggered {
                                             "Waiting for OS..."
                                         } else if is_locked_out {
@@ -535,10 +501,8 @@ impl AppState {
                                                 );
                                                 cx.notify();
                                             }
-                                        })),
-                                )
-                                .child(
-                                    gpui_component::button::Button::new("cancel_admin_pin")
+                                        }))}
+                                {gpui_component::button::Button::new("cancel_admin_pin")
                                         .label("Cancel")
                                         .ghost()
                                         .small()
@@ -554,12 +518,14 @@ impl AppState {
                                             this.admin_rate_limiter.reset();
                                             this.focus_handle.focus(window, cx);
                                             cx.notify();
-                                        })),
-                                ),
-                        ),
-                )
-                .into_any_element(),
-        )
+                                        }))}
+                            </div>
+                        })
+                }
+            </div>
+        };
+
+        Some(root.into_any_element())
     }
 }
 
