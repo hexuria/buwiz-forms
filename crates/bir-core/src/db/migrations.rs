@@ -137,6 +137,38 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+        -- Actionable application health events surfaced in the Notifications
+        -- page. Distinct from `bir_notices`, which carries BIR's own external
+        -- announcements; these are conditions THIS app hit and the user can act
+        -- on (an expired Google token, a profile row this build cannot read).
+        --
+        -- `tin` scopes an alert to one taxpayer profile; NULL means it applies
+        -- to the whole application.
+        --
+        -- The UNIQUE(tin, kind) index is load-bearing. Sources fire repeatedly -
+        -- the email cron retries every 60 seconds - so alerts are upserted:
+        -- `occurrences` counts, `last_seen_at` moves, and the row stays single.
+        -- Without it the table would gain 1,440 rows a day from one broken token.
+        CREATE TABLE IF NOT EXISTS app_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tin TEXT,
+            kind TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            title TEXT NOT NULL,
+            detail TEXT NOT NULL,
+            action TEXT,
+            occurrences INTEGER NOT NULL DEFAULT 1,
+            first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+            last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+            resolved_at TEXT
+        );
+
+        -- COALESCE keeps the uniqueness working for application-wide alerts;
+        -- SQLite treats NULLs as distinct in a plain UNIQUE index, which would
+        -- let every app-wide alert duplicate freely.
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_app_alerts_scope_kind
+            ON app_alerts (COALESCE(tin, ''), kind);
+
         CREATE TABLE IF NOT EXISTS job_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
