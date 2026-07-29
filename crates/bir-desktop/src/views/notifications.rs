@@ -65,6 +65,21 @@ impl NotificationsView {
             alerts: Vec::new(),
             scroll_handle: ScrollHandle::new(),
         };
+
+        // Opt-in sample data for checking this page renders. Real alerts only
+        // exist when something is broken, so verifying the layout otherwise
+        // means waiting for a genuine failure — and an empty screen does not
+        // distinguish "working" from "broken".
+        //
+        // Env-gated rather than automatic so ordinary debug runs stay clean,
+        // and `debug_assertions` on the seeder means it cannot ship at all.
+        #[cfg(debug_assertions)]
+        if std::env::var_os("BIR_SEED_EXAMPLE_ALERTS").is_some()
+            && let Ok(db) = view.db.lock()
+        {
+            let _ = db.seed_example_alerts(view.active_session_tin.as_deref());
+        }
+
         view.reload();
         view
     }

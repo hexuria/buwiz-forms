@@ -307,15 +307,19 @@ pub fn fetch_and_process_emails_for_address(
                 // Surface it where the user will see it. This path runs every
                 // 60 seconds while broken, which is exactly why `record_alert`
                 // upserts instead of inserting.
-                if let Ok(db_guard) = db.lock() {
-                    let _ = db_guard.record_alert(
+                const TITLE: &str = "Email confirmation checking has stopped";
+                if let Ok(db_guard) = db.lock()
+                    && let Ok(outcome) = db_guard.record_alert(
                         Some(&profile.tin.full()),
                         crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
                         crate::db::AlertSeverity::Error,
-                        "Email confirmation checking has stopped",
+                        TITLE,
                         &err_msg,
                         crate::db::AlertAction::ReconnectGoogleAccount,
-                    );
+                    )
+                {
+                    // Only when newly active - this runs every 60 seconds.
+                    crate::notification::notify_alert_if_newly_active(outcome, TITLE, &err_msg);
                 }
                 (false, still_pending, Some(err_msg))
             }

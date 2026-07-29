@@ -13,7 +13,7 @@
 //! - `notices` — BIR notices, announcements, deadlines, penalties
 
 mod alerts;
-pub use alerts::{AlertAction, AlertSeverity, AppAlert, kinds as alert_kinds};
+pub use alerts::{AlertAction, AlertRecordOutcome, AlertSeverity, AppAlert, kinds as alert_kinds};
 mod drafts;
 pub(crate) use drafts::{Claim1601CSubmissionResult, Claim2551QSubmissionResult};
 mod form_rule_state;
