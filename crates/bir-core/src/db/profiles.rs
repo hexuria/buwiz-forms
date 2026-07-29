@@ -537,6 +537,27 @@ impl Database {
                          profiles are unaffected. This usually means the database was \
                          written by a newer version of the app."
                     );
+                    // Application-wide rather than profile-scoped: the row is
+                    // unreadable, so its TIN is precisely what we do not have.
+                    // Errors here are swallowed - a profile listing must not
+                    // fail because recording an alert about it failed.
+                    const TITLE: &str = "A taxpayer profile could not be read";
+                    let detail = format!(
+                        "Profile #{id} was skipped and is not shown in the sidebar. \
+                         This usually means the database was written by a newer version \
+                         of the app. Details: {error}"
+                    );
+                    if let Ok(outcome) = self.record_alert(
+                        None,
+                        super::alert_kinds::PROFILE_ROW_UNREADABLE,
+                        super::AlertSeverity::Warning,
+                        TITLE,
+                        &detail,
+                        super::AlertAction::OpenProfileManager,
+                    ) {
+                        // Listing runs on every sidebar refresh, so gate it.
+                        crate::notification::notify_alert_if_newly_active(outcome, TITLE, &detail);
+                    }
                     continue;
                 }
             };
@@ -664,6 +685,58 @@ mod tests {
 
         assert_eq!(listed.len(), 1, "the readable profile must survive");
         assert_eq!(listed[0].tin.full(), "111456789000");
+    }
+
+    /// The skip must also become something the user can see. Logging alone is
+    /// how this went unnoticed: profiles silently vanished from the sidebar
+    /// while the log filled up where nobody was looking.
+    #[test]
+    fn skipping_a_row_raises_a_visible_alert() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111")).unwrap();
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1",
+                params![r#"{"status":"AVariantThisBuildLacks"}"#],
+            )
+            .unwrap();
+
+        assert!(
+            db.list_active_alerts(None).unwrap().is_empty(),
+            "precondition: no alerts before the bad row is read"
+        );
+
+        let _ = db.list_profiles().expect("listing must not fail");
+
+        let alerts = db.list_active_alerts(None).unwrap();
+        assert_eq!(alerts.len(), 1, "the skip must surface as an alert");
+        assert_eq!(
+            alerts[0].kind,
+            crate::db::alert_kinds::PROFILE_ROW_UNREADABLE
+        );
+        assert_eq!(alerts[0].action, crate::db::AlertAction::OpenProfileManager);
+    }
+
+    /// Listing runs constantly - the sidebar re-reads on every refresh - so the
+    /// alert must not multiply.
+    #[test]
+    fn repeated_listings_do_not_multiply_the_alert() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111")).unwrap();
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1",
+                params![r#"{"status":"AVariantThisBuildLacks"}"#],
+            )
+            .unwrap();
+
+        for _ in 0..25 {
+            let _ = db.list_profiles().unwrap();
+        }
+
+        let alerts = db.list_active_alerts(None).unwrap();
+        assert_eq!(alerts.len(), 1, "25 listings must not make 25 alerts");
+        assert_eq!(alerts[0].occurrences, 25);
     }
 
     #[test]
