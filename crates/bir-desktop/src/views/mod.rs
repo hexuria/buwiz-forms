@@ -19,5 +19,6 @@ pub mod html_form_preview;
 pub mod import_export;
 pub mod linux_html_preview;
 pub mod lock_screen;
+pub mod notifications;
 pub mod profile_manager;
 pub mod settings;

@@ -13,6 +13,7 @@ use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
 use crate::views::lock_screen::{LockScreenEvent, LockScreenView};
+use crate::views::notifications::{NotificationsEvent, NotificationsView};
 use crate::views::profile_manager::ProfileManagerView;
 use crate::views::settings::{SettingsEvent, SettingsView};
 use gpui::prelude::FluentBuilder;
@@ -62,6 +63,7 @@ pub enum ActiveView {
     Form1702MX,
     ProfileManager,
     CronTasks,
+    Notifications,
     ImportExport,
     Settings,
     AdminCalendarDashboard,
@@ -81,6 +83,7 @@ pub struct AppState {
     pub(crate) dashboard_view: Entity<DashboardView>,
     pub(crate) global_dashboard_view: Entity<GlobalDashboardView>,
     pub(crate) cron_tasks_view: Entity<CronTasksView>,
+    pub(crate) notifications_view: Entity<NotificationsView>,
     pub(crate) import_export_view: Entity<ImportExportView>,
     pub(crate) settings_view: Entity<SettingsView>,
     pub(crate) admin_calendar_dashboard_view:
@@ -411,6 +414,29 @@ impl AppState {
         let db_clone_cron = Arc::clone(&db);
         let cron_tasks_view = cx.new(|cx| CronTasksView::new(db_clone_cron, window, cx));
 
+        let db_clone_notifications = Arc::clone(&db);
+        let notifications_view =
+            cx.new(|cx| NotificationsView::new(db_clone_notifications, window, cx));
+
+        // The view emits rather than navigating itself, so routing stays here
+        // with the rest of the shell's knowledge of how views connect.
+        cx.subscribe_in(
+            &notifications_view,
+            window,
+            |this, _view, event: &NotificationsEvent, _window, cx| {
+                match event {
+                    // Both land in the profile manager; the Google reconnect
+                    // control lives on its Email Settings tab.
+                    NotificationsEvent::ReconnectGoogleAccount
+                    | NotificationsEvent::OpenProfileManager => {
+                        this.active_view = ActiveView::ProfileManager;
+                    }
+                }
+                cx.notify();
+            },
+        )
+        .detach();
+
         let db_clone_import = Arc::clone(&db);
         let import_export_view = cx.new(|cx| ImportExportView::new(db_clone_import, window, cx));
 
@@ -705,6 +731,7 @@ impl AppState {
             dashboard_view,
             global_dashboard_view,
             cron_tasks_view,
+            notifications_view,
             import_export_view,
             form_2551q_view: None,
             pending_form_draft: None,
@@ -920,6 +947,7 @@ impl AppState {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
+            ActiveView::Notifications => self.notifications_view.clone().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
             ActiveView::AdminCalendarDashboard => self

@@ -290,11 +290,33 @@ pub fn fetch_and_process_emails_for_address(
                         remaining_pending = true;
                     }
                 }
+                // The connection works, so clear any standing alert. Done here
+                // rather than when the user clicks "Reconnect", so a token that
+                // starts working again for any reason stops nagging without the
+                // user having to do anything.
+                let _ = db_guard.resolve_alert(
+                    Some(&profile.tin.full()),
+                    crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+                );
                 (true, remaining_pending, None)
             }
             Err(e) => {
                 let err_msg = format!("{}", e);
                 tracing::warn!("Email polling failed for {}: {}", email_address, err_msg);
+
+                // Surface it where the user will see it. This path runs every
+                // 60 seconds while broken, which is exactly why `record_alert`
+                // upserts instead of inserting.
+                if let Ok(db_guard) = db.lock() {
+                    let _ = db_guard.record_alert(
+                        Some(&profile.tin.full()),
+                        crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+                        crate::db::AlertSeverity::Error,
+                        "Email confirmation checking has stopped",
+                        &err_msg,
+                        crate::db::AlertAction::ReconnectGoogleAccount,
+                    );
+                }
                 (false, still_pending, Some(err_msg))
             }
         }

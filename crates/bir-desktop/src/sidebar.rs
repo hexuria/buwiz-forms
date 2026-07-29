@@ -798,6 +798,35 @@ impl AppState {
                             })
                     }
                     {div()
+                            .id("notifications_sidebar_btn")
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(cx.theme().muted))
+                            .when(is_mini, |this| {
+                                this.justify_center().size(px(48.)).flex_shrink_0().rounded_full().bg(cx.theme().secondary)
+                            })
+                            .when(!is_mini, |this| {
+                                this.justify_start().h_10().px_3().gap_3().rounded_md().bg(cx.theme().secondary)
+                            })
+                            .on_click(cx.listener(|this, _ev, _window, cx| {
+                                // Keep the view's profile scope current before
+                                // showing it, so switching profile then opening
+                                // Notifications cannot show the previous one's.
+                                let tin = this.active_session_tin.clone();
+                                this.notifications_view.update(cx, |view, cx| {
+                                    view.set_active_session_tin(tin, cx);
+                                });
+                                this.active_view = ActiveView::Notifications;
+                                cx.notify();
+                            }))
+                            .child(Icon::new(IconName::Bell).size(px(20.)).text_color(cx.theme().foreground))
+                            .when(!is_mini, |this| {
+                                this.child(rsx! { <div text_sm text_color={cx.theme().foreground}>{"Notifications"}</div> })
+                            })
+                    }
+                    {div()
                             .id("cron_tasks_sidebar_btn")
                             .flex()
                             .items_center()
