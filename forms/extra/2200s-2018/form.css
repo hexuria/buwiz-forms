@@ -1,0 +1,6 @@
+/* 2200S rev 2018 -- form-specific rules.
+ * Shared scaffolding is in ../../base.css. */
+@page { size:612pt 936pt;margin:0 }
+@font-face { font-family:"eBIRForms Arimo";font-style:italic;font-weight:100 900;font-display:block;src:url("fonts/arimo-latin-wght-italic.woff2") format("woff2") }
+.doc-link { position:absolute;left:0;top:0;z-index:9;font:12px/1.5 system-ui,-apple-system,sans-serif;padding:2px 8px;background:#fff;color:#0645ad;text-decoration:underline }
+.doc-link { display:none }

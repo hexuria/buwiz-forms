@@ -1,0 +1,74 @@
+{
+  "slug": "1601-fq-2020",
+  "code": "1601-FQ",
+  "revision": "2020",
+  "variant": "",
+  "in_corpus": true,
+  "source_file": "1601-FQ 2020 final.pdf",
+  "sha256": "0e06c2e75195ac1cad9524674bfd483f1a514e817decaf5b014927fe8e2e90d7",
+  "stage_failed": null,
+  "error": null,
+  "images_extracted": 0,
+  "pages": 2,
+  "paper": "612.0x936.0",
+  "uniform_paper": true,
+  "fonts": [
+    "Arial",
+    "Arial Narrow",
+    "Calibri",
+    "Times New Roman"
+  ],
+  "rules": 890,
+  "text_runs": 435,
+  "images": 3,
+  "cells": 507,
+  "comb_cells": 106,
+  "growables": [
+    {
+      "page": 1,
+      "rows": 6,
+      "capacity": 6,
+      "pitch_pt": 18.24
+    }
+  ],
+  "sources": [
+    {
+      "role": "form",
+      "file": "1601-FQ 2020 final.pdf",
+      "sha256": "0e06c2e75195ac1cad9524674bfd483f1a514e817decaf5b014927fe8e2e90d7"
+    },
+    {
+      "role": "guide",
+      "file": "1601-FQ Sep 2020 Guide.pdf",
+      "sha256": "41c89ec4fc6912c066d8c7c973017218fe52767f9dd8cfe32915e2478588c47b"
+    }
+  ],
+  "guide": {
+    "document": "guide.html",
+    "origins": [
+      "standalone-pdf"
+    ],
+    "moved_from_form": [],
+    "standalone_pdfs": [
+      {
+        "file": "1601-FQ Sep 2020 Guide.pdf",
+        "sha256": "41c89ec4fc6912c066d8c7c973017218fe52767f9dd8cfe32915e2478588c47b",
+        "embedded_as": "guides/1601-FQ Sep 2020 Guide.pdf"
+      }
+    ],
+    "reclaimed_pt_total": 0,
+    "reclaimed_pct_mean": 0,
+    "reclaimed_pct_min": 0,
+    "reclaimed_pct_max": 0,
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+  },
+  "guide_detected": {
+    "inline_pages": [],
+    "standalone_pdfs": [
+      "1601-FQ Sep 2020 Guide.pdf"
+    ]
+  },
+  "html_bytes": 530061,
+  "generator": "tools/formgen batch.py (rule-backend=svg)",
+  "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
+}

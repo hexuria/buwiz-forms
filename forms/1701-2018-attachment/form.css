@@ -1,0 +1,4 @@
+/* 1701 rev 2018 -- form-specific rules.
+ * Shared scaffolding is in ../base.css. */
+@page { size:612pt 792pt;margin:0 }
+@font-face { font-family:"eBIRForms Arimo";font-style:italic;font-weight:100 900;font-display:block;src:url("fonts/arimo-latin-wght-italic.woff2") format("woff2") }

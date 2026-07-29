@@ -140,3 +140,8 @@ node_modules/
 .keys/
 *.p8
 .archives
+
+# formgen build intermediates: IR, layouts, font plans, audit PDFs and reports.
+# All regenerable from the pinned source PDFs by tools/formgen/batch.py; the
+# maintained artefact is forms/, not this.
+/build/

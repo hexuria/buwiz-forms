@@ -1,0 +1,75 @@
+{
+  "slug": "1601eq-2019",
+  "code": "1601EQ",
+  "revision": "2019",
+  "variant": "",
+  "in_corpus": true,
+  "source_file": "1601-EQ January 2019 ENCS final.pdf",
+  "sha256": "5277addc6778c96a53fde99b8664b1a5213fcea638dea06033c9acf22ee73c25",
+  "stage_failed": null,
+  "error": null,
+  "images_extracted": 0,
+  "pages": 2,
+  "paper": "612.0x936.0",
+  "uniform_paper": true,
+  "fonts": [
+    "Arial",
+    "Arial Narrow",
+    "Calibri",
+    "Candara",
+    "Times New Roman"
+  ],
+  "rules": 906,
+  "text_runs": 533,
+  "images": 3,
+  "cells": 447,
+  "comb_cells": 99,
+  "growables": [
+    {
+      "page": 1,
+      "rows": 6,
+      "capacity": 6,
+      "pitch_pt": 17.4
+    }
+  ],
+  "sources": [
+    {
+      "role": "form",
+      "file": "1601-EQ January 2019 ENCS final.pdf",
+      "sha256": "5277addc6778c96a53fde99b8664b1a5213fcea638dea06033c9acf22ee73c25"
+    },
+    {
+      "role": "guide",
+      "file": "1601-EQ Guide January 2019 ENCS rev.pdf",
+      "sha256": "64730a5220bb67fbf1c8492f7bf785f407d6be5e790c7fe9e903e20c58026fc2"
+    }
+  ],
+  "guide": {
+    "document": "guide.html",
+    "origins": [
+      "standalone-pdf"
+    ],
+    "moved_from_form": [],
+    "standalone_pdfs": [
+      {
+        "file": "1601-EQ Guide January 2019 ENCS rev.pdf",
+        "sha256": "64730a5220bb67fbf1c8492f7bf785f407d6be5e790c7fe9e903e20c58026fc2",
+        "embedded_as": "guides/1601-EQ Guide January 2019 ENCS rev.pdf"
+      }
+    ],
+    "reclaimed_pt_total": 0,
+    "reclaimed_pct_mean": 0,
+    "reclaimed_pct_min": 0,
+    "reclaimed_pct_max": 0,
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+  },
+  "guide_detected": {
+    "inline_pages": [],
+    "standalone_pdfs": [
+      "1601-EQ Guide January 2019 ENCS rev.pdf"
+    ]
+  },
+  "html_bytes": 624849,
+  "generator": "tools/formgen batch.py (rule-backend=svg)",
+  "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
+}

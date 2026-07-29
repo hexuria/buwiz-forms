@@ -1,0 +1,80 @@
+{
+  "slug": "2551m-undated",
+  "code": "2551M",
+  "revision": "undated",
+  "variant": "",
+  "in_corpus": true,
+  "source_file": "2551m.pdf",
+  "sha256": "f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e",
+  "stage_failed": null,
+  "error": null,
+  "images_extracted": 0,
+  "pages": 2,
+  "paper": "612.0x1008.0",
+  "uniform_paper": true,
+  "fonts": [
+    "Arial",
+    "Symbol",
+    "TimesNewRoman"
+  ],
+  "rules": 462,
+  "text_runs": 385,
+  "images": 1,
+  "cells": 117,
+  "comb_cells": 20,
+  "growables": [
+    {
+      "page": 2,
+      "rows": 7,
+      "capacity": 7,
+      "pitch_pt": 11.76
+    }
+  ],
+  "sources": [
+    {
+      "role": "form",
+      "file": "2551m.pdf",
+      "sha256": "f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e"
+    }
+  ],
+  "guide": {
+    "document": "guide.html",
+    "origins": [
+      "inline-region"
+    ],
+    "moved_from_form": [
+      {
+        "page": 2,
+        "cut_y_pt": 154.32,
+        "reclaimed_pt": 853.68,
+        "reclaimed_pct": 85,
+        "marker": "ALPHANUMERIC TAX CODE (ATC)",
+        "marker_pattern": "alphanumeric-tax-code",
+        "moved": {
+          "rules": 4,
+          "cells": 1,
+          "text_runs": 213,
+          "area_fills": 5,
+          "images": 0
+        },
+        "straddlers_kept_by_form": 2,
+        "moved_to": "guide.html"
+      }
+    ],
+    "standalone_pdfs": [],
+    "reclaimed_pt_total": 853.68,
+    "reclaimed_pct_mean": 85,
+    "reclaimed_pct_min": 85,
+    "reclaimed_pct_max": 85,
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+  },
+  "guide_detected": {
+    "inline_pages": [
+      2
+    ],
+    "standalone_pdfs": []
+  },
+  "html_bytes": 170093,
+  "generator": "tools/formgen batch.py (rule-backend=svg)",
+  "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
+}

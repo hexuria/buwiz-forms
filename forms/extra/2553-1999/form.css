@@ -1,0 +1,5 @@
+/* 2553 rev 1999 -- form-specific rules.
+ * Shared scaffolding is in ../../base.css. */
+@page { size:612pt 1008pt;margin:0 }
+@font-face { font-family:"eBIRForms Tinos";font-style:normal;font-weight:400;font-display:block;src:url("fonts/tinos-latin-400-normal.woff2") format("woff2") }
+@font-face { font-family:"eBIRForms Tinos";font-style:normal;font-weight:700;font-display:block;src:url("fonts/tinos-latin-700-normal.woff2") format("woff2") }

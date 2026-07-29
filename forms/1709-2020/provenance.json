@@ -1,0 +1,41 @@
+{
+  "slug": "1709-2020",
+  "code": "1709",
+  "revision": "2020",
+  "variant": "",
+  "in_corpus": true,
+  "source_file": "BIR Form No. 1709 Dec 2020 encs.pdf",
+  "sha256": "73629bceae8c271026b6d5fde8e4ac6d2103bceb5d585f78961794bcedffa45c",
+  "stage_failed": null,
+  "error": null,
+  "images_extracted": 0,
+  "pages": 3,
+  "paper": "612.0x936.0",
+  "uniform_paper": true,
+  "fonts": [
+    "Arial",
+    "Arial Narrow",
+    "Calibri"
+  ],
+  "rules": 556,
+  "text_runs": 249,
+  "images": 4,
+  "cells": 391,
+  "comb_cells": 19,
+  "growables": [],
+  "sources": [
+    {
+      "role": "form",
+      "file": "BIR Form No. 1709 Dec 2020 encs.pdf",
+      "sha256": "73629bceae8c271026b6d5fde8e4ac6d2103bceb5d585f78961794bcedffa45c"
+    }
+  ],
+  "guide": null,
+  "guide_detected": {
+    "inline_pages": [],
+    "standalone_pdfs": []
+  },
+  "html_bytes": 373077,
+  "generator": "tools/formgen batch.py (rule-backend=svg)",
+  "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
+}

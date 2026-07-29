@@ -1,0 +1,85 @@
+{
+  "slug": "2552-2018",
+  "code": "2552",
+  "revision": "2018",
+  "variant": "",
+  "in_corpus": false,
+  "source_file": "2552 2018ENCS Final.pdf",
+  "sha256": "c0a9d7cd44cf931fb939a010a265d05655b9a1d55d21841ecf0b590594b1742a",
+  "stage_failed": null,
+  "error": null,
+  "images_extracted": 0,
+  "pages": 2,
+  "paper": "612.0x936.0",
+  "uniform_paper": true,
+  "fonts": [
+    "Arial",
+    "Arial Narrow",
+    "Calibri"
+  ],
+  "rules": 727,
+  "text_runs": 318,
+  "images": 3,
+  "cells": 431,
+  "comb_cells": 73,
+  "growables": [
+    {
+      "page": 2,
+      "rows": 5,
+      "capacity": 5,
+      "pitch_pt": 10.8
+    },
+    {
+      "page": 2,
+      "rows": 5,
+      "capacity": 5,
+      "pitch_pt": 10.8
+    },
+    {
+      "page": 2,
+      "rows": 5,
+      "capacity": 5,
+      "pitch_pt": 10.8
+    }
+  ],
+  "sources": [
+    {
+      "role": "form",
+      "file": "2552 2018ENCS Final.pdf",
+      "sha256": "c0a9d7cd44cf931fb939a010a265d05655b9a1d55d21841ecf0b590594b1742a"
+    },
+    {
+      "role": "guide",
+      "file": "2552 Guidelines and Instructions.pdf",
+      "sha256": "667888b776a01174bc6a7faf7e7ba8836eefeaae8cbaebe0dd67ef8cda144e05"
+    }
+  ],
+  "guide": {
+    "document": "guide.html",
+    "origins": [
+      "standalone-pdf"
+    ],
+    "moved_from_form": [],
+    "standalone_pdfs": [
+      {
+        "file": "2552 Guidelines and Instructions.pdf",
+        "sha256": "667888b776a01174bc6a7faf7e7ba8836eefeaae8cbaebe0dd67ef8cda144e05",
+        "embedded_as": "guides/2552 Guidelines and Instructions.pdf"
+      }
+    ],
+    "reclaimed_pt_total": 0,
+    "reclaimed_pct_mean": 0,
+    "reclaimed_pct_min": 0,
+    "reclaimed_pct_max": 0,
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+  },
+  "guide_detected": {
+    "inline_pages": [],
+    "standalone_pdfs": [
+      "2552 Guidelines and Instructions.pdf"
+    ]
+  },
+  "html_bytes": 423641,
+  "generator": "tools/formgen batch.py (rule-backend=svg)",
+  "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
+}

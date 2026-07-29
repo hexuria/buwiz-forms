@@ -1,0 +1,66 @@
+{
+  "slug": "1701q-2018",
+  "code": "1701Q",
+  "revision": "2018",
+  "variant": "",
+  "in_corpus": true,
+  "source_file": "1701Q Jan 2018 final rev2_copy.pdf",
+  "sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
+  "stage_failed": null,
+  "error": null,
+  "images_extracted": 0,
+  "pages": 2,
+  "paper": "612.0x936.0",
+  "uniform_paper": true,
+  "fonts": [
+    "Arial",
+    "Arial Narrow",
+    "Calibri"
+  ],
+  "rules": 1353,
+  "text_runs": 365,
+  "images": 3,
+  "cells": 355,
+  "comb_cells": 128,
+  "growables": [],
+  "sources": [
+    {
+      "role": "form",
+      "file": "1701Q Jan 2018 final rev2_copy.pdf",
+      "sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed"
+    },
+    {
+      "role": "guide",
+      "file": "1701Q Guide Jan 2018.pdf",
+      "sha256": "ff07962229015a50b0aa169f91fa32e10c534f6730de5bf59263e22d34e270bc"
+    }
+  ],
+  "guide": {
+    "document": "guide.html",
+    "origins": [
+      "standalone-pdf"
+    ],
+    "moved_from_form": [],
+    "standalone_pdfs": [
+      {
+        "file": "1701Q Guide Jan 2018.pdf",
+        "sha256": "ff07962229015a50b0aa169f91fa32e10c534f6730de5bf59263e22d34e270bc",
+        "embedded_as": "guides/1701Q Guide Jan 2018.pdf"
+      }
+    ],
+    "reclaimed_pt_total": 0,
+    "reclaimed_pct_mean": 0,
+    "reclaimed_pct_min": 0,
+    "reclaimed_pct_max": 0,
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+  },
+  "guide_detected": {
+    "inline_pages": [],
+    "standalone_pdfs": [
+      "1701Q Guide Jan 2018.pdf"
+    ]
+  },
+  "html_bytes": 580541,
+  "generator": "tools/formgen batch.py (rule-backend=svg)",
+  "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
+}

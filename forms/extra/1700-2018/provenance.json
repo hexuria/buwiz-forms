@@ -1,0 +1,41 @@
+{
+  "slug": "1700-2018",
+  "code": "1700",
+  "revision": "2018",
+  "variant": "",
+  "in_corpus": false,
+  "source_file": "1700 Jan 2018 ENCS v6.pdf",
+  "sha256": "a5850f698c8d7aaf165d74bff0cd6547ca8f83eb76552c3bde490cbc3bbfea6c",
+  "stage_failed": null,
+  "error": null,
+  "images_extracted": 0,
+  "pages": 2,
+  "paper": "612.0x936.0",
+  "uniform_paper": true,
+  "fonts": [
+    "Arial",
+    "Arial Narrow",
+    "Calibri"
+  ],
+  "rules": 1522,
+  "text_runs": 361,
+  "images": 3,
+  "cells": 308,
+  "comb_cells": 143,
+  "growables": [],
+  "sources": [
+    {
+      "role": "form",
+      "file": "1700 Jan 2018 ENCS v6.pdf",
+      "sha256": "a5850f698c8d7aaf165d74bff0cd6547ca8f83eb76552c3bde490cbc3bbfea6c"
+    }
+  ],
+  "guide": null,
+  "guide_detected": {
+    "inline_pages": [],
+    "standalone_pdfs": []
+  },
+  "html_bytes": 590577,
+  "generator": "tools/formgen batch.py (rule-backend=svg)",
+  "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
+}
