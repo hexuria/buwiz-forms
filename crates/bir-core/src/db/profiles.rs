@@ -541,18 +541,23 @@ impl Database {
                     // unreadable, so its TIN is precisely what we do not have.
                     // Errors here are swallowed - a profile listing must not
                     // fail because recording an alert about it failed.
-                    let _ = self.record_alert(
+                    const TITLE: &str = "A taxpayer profile could not be read";
+                    let detail = format!(
+                        "Profile #{id} was skipped and is not shown in the sidebar. \
+                         This usually means the database was written by a newer version \
+                         of the app. Details: {error}"
+                    );
+                    if let Ok(outcome) = self.record_alert(
                         None,
                         super::alert_kinds::PROFILE_ROW_UNREADABLE,
                         super::AlertSeverity::Warning,
-                        "A taxpayer profile could not be read",
-                        &format!(
-                            "Profile #{id} was skipped and is not shown in the sidebar. \
-                             This usually means the database was written by a newer version \
-                             of the app. Details: {error}"
-                        ),
+                        TITLE,
+                        &detail,
                         super::AlertAction::OpenProfileManager,
-                    );
+                    ) {
+                        // Listing runs on every sidebar refresh, so gate it.
+                        crate::notification::notify_alert_if_newly_active(outcome, TITLE, &detail);
+                    }
                     continue;
                 }
             };

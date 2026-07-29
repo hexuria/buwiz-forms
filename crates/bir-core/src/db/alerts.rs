@@ -9,7 +9,7 @@
 //! cron could fail every 60 seconds for a week with nothing visible in the UI.
 
 use super::{Database, DbError};
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 /// How much attention an alert deserves.
@@ -82,6 +82,29 @@ impl AlertAction {
     }
 }
 
+/// What `record_alert` did, so callers know whether to notify the user.
+///
+/// This distinction is the difference between a useful desktop notification and
+/// an unusable one. The email cron re-reports a broken token every 60 seconds;
+/// notifying on each would fire ~1,440 banners a day. Only a transition *into*
+/// the active state is news.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlertRecordOutcome {
+    /// First time this condition has been seen at all.
+    Created,
+    /// Seen before, had been resolved or dismissed, and is now back.
+    Reactivated,
+    /// Already active and still is — a repeat report, not news.
+    StillActive,
+}
+
+impl AlertRecordOutcome {
+    /// Whether this transition is worth interrupting the user for.
+    pub fn is_newly_active(self) -> bool {
+        matches!(self, Self::Created | Self::Reactivated)
+    }
+}
+
 /// A recorded application health event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppAlert {
@@ -127,7 +150,21 @@ impl Database {
         title: &str,
         detail: &str,
         action: AlertAction,
-    ) -> Result<(), DbError> {
+    ) -> Result<AlertRecordOutcome, DbError> {
+        // Whether this condition was already active decides the outcome, and
+        // the outcome decides whether the user gets a desktop notification.
+        // Read it first: the upsert below clears `resolved_at` unconditionally,
+        // so afterwards there is no way to tell a recurrence from a first sight.
+        let previously_active: Option<bool> = self
+            .conn
+            .query_row(
+                "SELECT resolved_at IS NULL FROM app_alerts
+                 WHERE kind = ?2 AND COALESCE(tin, '') = COALESCE(?1, '')",
+                params![tin, kind],
+                |row| row.get(0),
+            )
+            .optional()?;
+
         self.conn.execute(
             "INSERT INTO app_alerts (tin, kind, severity, title, detail, action)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -141,7 +178,12 @@ impl Database {
                  resolved_at = NULL",
             params![tin, kind, severity.as_str(), title, detail, action.as_str()],
         )?;
-        Ok(())
+
+        Ok(match previously_active {
+            None => AlertRecordOutcome::Created,
+            Some(false) => AlertRecordOutcome::Reactivated,
+            Some(true) => AlertRecordOutcome::StillActive,
+        })
     }
 
     /// Active alerts, optionally filtered to one profile.
@@ -346,6 +388,69 @@ mod tests {
         );
     }
 
+    /// The outcome gates desktop notifications, so getting it wrong means
+    /// either ~1,440 banners a day or complete silence.
+    #[test]
+    fn only_a_transition_into_active_counts_as_news() {
+        let db = db();
+
+        assert_eq!(
+            db.record_alert(
+                Some(TIN_A),
+                kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+                AlertSeverity::Error,
+                "t",
+                "d",
+                AlertAction::None
+            )
+            .unwrap(),
+            AlertRecordOutcome::Created,
+        );
+
+        // The cron re-reports every 60s. None of these are news.
+        for _ in 0..100 {
+            assert_eq!(
+                db.record_alert(
+                    Some(TIN_A),
+                    kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+                    AlertSeverity::Error,
+                    "t",
+                    "d",
+                    AlertAction::None
+                )
+                .unwrap(),
+                AlertRecordOutcome::StillActive,
+                "a repeat report must not be treated as news",
+            );
+        }
+
+        // Dismissed, then it comes back: that IS news again.
+        db.resolve_alert(Some(TIN_A), kinds::GOOGLE_OAUTH_REFRESH_FAILED)
+            .unwrap();
+        assert_eq!(
+            db.record_alert(
+                Some(TIN_A),
+                kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+                AlertSeverity::Error,
+                "t",
+                "d",
+                AlertAction::None
+            )
+            .unwrap(),
+            AlertRecordOutcome::Reactivated,
+        );
+    }
+
+    #[test]
+    fn is_newly_active_selects_exactly_the_notifiable_outcomes() {
+        assert!(AlertRecordOutcome::Created.is_newly_active());
+        assert!(AlertRecordOutcome::Reactivated.is_newly_active());
+        assert!(
+            !AlertRecordOutcome::StillActive.is_newly_active(),
+            "notifying on every repeat is the failure mode this exists to prevent"
+        );
+    }
+
     #[test]
     fn distinct_kinds_stay_separate() {
         let db = db();
@@ -441,5 +546,48 @@ mod tests {
         assert_eq!(a.severity, AlertSeverity::Error);
         assert_eq!(a.action, AlertAction::ReconnectGoogleAccount);
         assert_eq!(a.action.label(), Some("Reconnect Google Account"));
+    }
+}
+
+/// Seed one alert of each shape, for verifying the Notifications page renders.
+///
+/// Real alerts only appear when something is actually broken, which makes the
+/// page awkward to check: the first attempt at verifying it produced an empty
+/// screen and it was not obvious whether that meant "working" or "broken".
+/// These give every severity and both action buttons something to draw.
+///
+/// Guarded by `debug_assertions` so it cannot ship. It is additive and
+/// idempotent - `record_alert` upserts, so repeated calls bump occurrences
+/// rather than multiplying rows - and clearing them is just Dismiss.
+#[cfg(debug_assertions)]
+impl Database {
+    pub fn seed_example_alerts(&self, tin: Option<&str>) -> Result<(), DbError> {
+        self.record_alert(
+            tin,
+            "example_error",
+            AlertSeverity::Error,
+            "Email confirmation checking has stopped",
+            "Google rejected the token refresh - invalid_grant: Token has been expired or \
+             revoked. Reconnect your Google account in Profile > Email Settings.",
+            AlertAction::ReconnectGoogleAccount,
+        )?;
+        self.record_alert(
+            None,
+            "example_warning",
+            AlertSeverity::Warning,
+            "A taxpayer profile could not be read",
+            "Profile #7 was skipped and is not shown in the sidebar. This usually means the \
+             database was written by a newer version of the app.",
+            AlertAction::OpenProfileManager,
+        )?;
+        self.record_alert(
+            tin,
+            "example_info",
+            AlertSeverity::Info,
+            "Quarterly filing window opens soon",
+            "2551Q for Q3 2026 becomes due on 25 October. No action needed yet.",
+            AlertAction::None,
+        )?;
+        Ok(())
     }
 }
