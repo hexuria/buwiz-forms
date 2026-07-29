@@ -144,19 +144,28 @@ impl Database {
         Ok(())
     }
 
-    /// Active alerts for one profile, plus application-wide ones.
+    /// Active alerts, optionally filtered to one profile.
     ///
-    /// Application-wide alerts (`tin IS NULL`) are always included: a broken
-    /// Google connection or an unreadable database affects the user whichever
-    /// profile happens to be selected, and hiding it behind profile switching
-    /// would be how it goes unnoticed for a week.
+    /// - `Some(tin)` — that profile's alerts plus application-wide ones.
+    ///   App-wide alerts are always included: a broken Google connection affects
+    ///   the user whichever profile is selected, and hiding it behind profile
+    ///   switching is how it goes unnoticed for a week.
+    /// - `None` — **everything**, unfiltered.
+    ///
+    /// That `None` case matters more than it looks. `active_session_tin` is only
+    /// populated when the `hide_tax_profiles` privacy setting is on, so in the
+    /// default configuration the caller passes `None` permanently. Treating that
+    /// as "app-wide only" made the Notifications page show nothing at all while
+    /// real profile-scoped alerts sat in the table — the page reported "Nothing
+    /// needs your attention" during an active, ongoing failure. Unfiltered is
+    /// the only useful reading of "no profile selected".
     pub fn list_active_alerts(&self, tin: Option<&str>) -> Result<Vec<AppAlert>, DbError> {
         let mut stmt = self.conn.prepare(
             "SELECT id, tin, kind, severity, title, detail, action,
                     occurrences, first_seen_at, last_seen_at
              FROM app_alerts
              WHERE resolved_at IS NULL
-               AND (tin IS NULL OR tin = ?1)
+               AND (?1 IS NULL OR tin IS NULL OR tin = ?1)
              ORDER BY CASE severity
                         WHEN 'Error' THEN 0
                         WHEN 'Warning' THEN 1
@@ -305,6 +314,36 @@ mod tests {
         let alerts = db.list_active_alerts(None).unwrap();
         assert_eq!(alerts.len(), 1, "NULL tin must still deduplicate");
         assert_eq!(alerts[0].occurrences, 10);
+    }
+
+    /// Regression: `None` must mean "no filter", not "app-wide only".
+    ///
+    /// `active_session_tin` is only set when the hide_tax_profiles privacy
+    /// setting is on, so the default configuration passes None forever. The
+    /// first cut treated that as app-wide-only, so the Notifications page said
+    /// "Nothing needs your attention" while a profile-scoped OAuth failure was
+    /// firing every 60 seconds. Caught by running the app, not by these tests.
+    #[test]
+    fn no_filter_shows_profile_scoped_alerts_too() {
+        let db = db();
+        record_oauth_failure(&db, Some(TIN_A));
+        record_oauth_failure(&db, Some(TIN_B));
+        db.record_alert(
+            None,
+            kinds::PROFILE_ROW_UNREADABLE,
+            AlertSeverity::Warning,
+            "app-wide",
+            "d",
+            AlertAction::None,
+        )
+        .unwrap();
+
+        let all = db.list_active_alerts(None).unwrap();
+        assert_eq!(
+            all.len(),
+            3,
+            "unfiltered must include both profiles and the app-wide alert; got {all:?}"
+        );
     }
 
     #[test]
