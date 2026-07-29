@@ -15,7 +15,10 @@ use crate::app::{ActiveView, AppState, AppThemeMode, ProfileTargetAction};
 use bir_core::profile::TaxpayerProfile;
 
 impl AppState {
-    fn persist_profile_archived(
+    /// Writes the archived flag for one profile. Callers must already have
+    /// cleared the administrator gate - `AppState::request_profile_lifecycle`
+    /// is the only supported entry point.
+    pub(crate) fn persist_profile_archived(
         &mut self,
         mut profile: TaxpayerProfile,
         archived: bool,
@@ -308,8 +311,6 @@ impl AppState {
                             .children(filtered_profiles.iter().map(|profile| {
                                 let is_active =
                                     self.active_profile_tin.as_ref() == Some(&profile.tin.full());
-                                let is_expanded =
-                                    self.expanded_profile_tin.as_ref() == Some(&profile.tin.full());
                                 let bg_color = if is_active {
                                     cx.theme().accent
                                 } else {
@@ -320,10 +321,6 @@ impl AppState {
                                 } else {
                                     gpui::rgba(0x00000000).into()
                                 };
-
-                                let rdo_desc = bir_core::reference::get_rdo(&profile.rdo_code)
-                                    .map(|r| r.description.clone())
-                                    .unwrap_or_else(|| "Unknown".to_string());
 
                                 div()
                                     .id(profile.tin.full())
@@ -348,7 +345,6 @@ impl AppState {
                                             flex
                                             items_center
                                             gap_3
-                                            when={(is_expanded && !is_mini, |d| d.mb_4())}
                                             when={(is_mini, |this| this.justify_center())}
                                             when={(is_mini, |this| {
                                                 let initials = profile.full_name
@@ -398,209 +394,27 @@ impl AppState {
                                             })}
                                         />
                                     })
-                                    .when(is_expanded && !is_mini, |this| {
-                                        this.child(rsx! {
-                                            <div flex flex_col gap_2>
-                                                <div flex justify_between>
-                                                    <div text_sm text_color={cx.theme().muted_foreground}>{"RDO:"}</div>
-                                                    <div
-                                                        text_sm
-                                                        font_weight={FontWeight::BOLD}
-                                                        text_color={cx.theme().foreground}
-                                                    >
-                                                        {format!("{} - {}", profile.rdo_code, rdo_desc)}
-                                                    </div>
-                                                </div>
-                                                <div
-                                                    flex
-                                                    justify_between
-                                                    gap_2
-                                                    mt_2
-                                                    when={(!profile.is_archived, |this| {
-                                                            let requires_pin = self.enable_profile_pins && self.active_session_tin.as_ref() != Some(&profile.tin.full());
-                                                            this.when(requires_pin, |this| {
-                                                                this.child(rsx! {
-                                                                    <div
-                                                                        id={format!("login_{}", profile.tin.full())}
-                                                                        flex
-                                                                        items_center
-                                                                        justify_center
-                                                                        gap_2
-                                                                        w_full
-                                                                        py_1
-                                                                        rounded_md
-                                                                        bg={cx.theme().primary}
-                                                                        text_color={cx.theme().primary_foreground}
-                                                                        cursor_pointer
-                                                                        hover={|s| s.opacity(0.8)}
-                                                                        on_click={cx.listener({
-                                                                            let profile_clone = profile.clone();
-                                                                            move |this, _ev, window, cx| {
-                                                                                cx.stop_propagation();
-                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
-                                                                            }
-                                                                        })}
-                                                                    >
-                                                                        <svg src="svg/lock.svg" size={px(14.)} text_color={cx.theme().primary_foreground}/>
-                                                                        <div text_sm font_weight={FontWeight::BOLD}>{"Unlock Profile"}</div>
-                                                                    </div>
-                                                                })
-                                                            })
-                                                            .when(!requires_pin, |this| {
-                                                                this.child(
-                                                                    gpui_component::button::Button::new(format!("view_{}", profile.tin.full()))
-                                                                        .small()
-                                                                        .label("View")
-                                                                        .on_click(cx.listener({
-                                                                            let profile_clone = profile.clone();
-                                                                            move |this, _ev, window, cx| {
-                                                                                cx.stop_propagation();
-                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
-                                                                            }
-                                                                        })),
-                                                                )
-                                                                .child(
-                                                                    gpui_component::button::Button::new(format!("edit_{}", profile.tin.full()))
-                                                                        .small()
-                                                                        .label("Edit")
-                                                                        .on_click(cx.listener({
-                                                                            let profile_clone = profile.clone();
-                                                                            move |this, _ev, window, cx| {
-                                                                                cx.stop_propagation();
-                                                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::EditProfile, window, cx);
-                                                                            }
-                                                                        })),
-                                                                )
-                                                                .child(
-                                                                    gpui_component::button::Button::new(format!("archive_{}", profile.tin.full()))
-                                                                        .small()
-                                                                        .label("Archive")
-                                                                        .on_click(cx.listener({
-                                                                            let profile_clone = profile.clone();
-                                                                            move |this, _ev, window, cx| {
-                                                                                cx.stop_propagation();
-                                                                                if this.block_unsaved_compliance_navigation(window, cx) {
-                                                                                    return;
-                                                                                }
-                                                                                this.persist_profile_archived(profile_clone.clone(), true, window, cx);
-                                                                            }
-                                                                        })),
-                                                                )
-                                                            })
-                                                        })}
-                                                        when={(profile.is_archived, |this| {
-                                                            this.child(
-                                                                gpui_component::button::Button::new(format!("restore_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Restore")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        move |this, _ev, window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            if this.block_unsaved_compliance_navigation(window, cx) {
-                                                                                return;
-                                                                            }
-                                                                            this.persist_profile_archived(profile_clone.clone(), false, window, cx);
-                                                                        }
-                                                                    })),
-                                                            )
-                                                            .child(
-                                                                gpui_component::button::Button::new(format!("delete_{}", profile.tin.full()))
-                                                                    .small()
-                                                                    .label("Delete")
-                                                                    .on_click(cx.listener({
-                                                                        let profile_clone = profile.clone();
-                                                                        let tin = profile_clone.tin.full();
-                                                                        move |this, _ev, window, cx| {
-                                                                            cx.stop_propagation();
-                                                                            if this.block_unsaved_compliance_navigation(window, cx) {
-                                                                                return;
-                                                                            }
-                                                                            cx.spawn({
-                                                                                let tin = tin.clone();
-                                                                                async move |this, cx| {
-                                                                                    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-                                                                                    let Some(export_handle) = rfd::AsyncFileDialog::new()
-                                                                                        .set_title("Save Profile Archive")
-                                                                                        .set_file_name(format!("BIR_Archive_{}_{}.zip", tin, timestamp))
-                                                                                        .add_filter("Zip Archive", &["zip"])
-                                                                                        .save_file()
-                                                                                        .await
-                                                                                    else {
-                                                                                        return;
-                                                                                    };
-                                                                                    let export_dir = export_handle.path().to_path_buf();
-
-                                                                                    let deletion_result = this.update(cx, |this, cx| {
-                                                                                        let db = this.db.lock().map_err(|_| "Database lock poisoned".to_string())?;
-                                                                                        bir_core::export_profile_data(&db, &tin, &export_dir)
-                                                                                            .map_err(|error| format!("Profile export failed: {error}"))?;
-                                                                                        db.delete_profile(&tin)
-                                                                                            .map_err(|error| format!("Profile deletion failed: {error}"))?;
-                                                                                        drop(db);
-
-                                                                                        this.profiles.retain(|p| p.tin.full() != tin);
-                                                                                        if !this.profiles.iter().any(|p| p.is_archived) {
-                                                                                            this.show_archived = false;
-                                                                                        }
-                                                                                        if this.active_profile_tin.as_ref() == Some(&tin) {
-                                                                                            this.active_profile_tin = None;
-                                                                                            this.active_view = ActiveView::ProfileManager;
-                                                                                        }
-                                                                                        if this.expanded_profile_tin.as_ref() == Some(&tin) {
-                                                                                            this.expanded_profile_tin = None;
-                                                                                        }
-                                                                                        cx.notify();
-                                                                                        Ok::<(), String>(())
-                                                                                    });
-
-                                                                                    match deletion_result {
-                                                                                        Ok(Ok(())) => {
-                                                                                            rfd::AsyncMessageDialog::new()
-                                                                                                .set_title("Profile Exported & Deleted")
-                                                                                                .set_description(format!("Saved to {}", export_dir.display()))
-                                                                                                .show()
-                                                                                                .await;
-                                                                                        }
-                                                                                        Ok(Err(error)) => {
-                                                                                            rfd::AsyncMessageDialog::new()
-                                                                                                .set_title("Profile Was Not Deleted")
-                                                                                                .set_description(error)
-                                                                                                .show()
-                                                                                                .await;
-                                                                                        }
-                                                                                        Err(error) => {
-                                                                                            rfd::AsyncMessageDialog::new()
-                                                                                                .set_title("Profile Was Not Deleted")
-                                                                                                .set_description(error.to_string())
-                                                                                                .show()
-                                                                                                .await;
-                                                                                        }
-                                                                                    }
-                                                                                }
-                                                                            }).detach();
-                                                                        }
-                                                                    })),
-                                                            )
-                                                        })}
-                                                />
-                                            </div>
-                                        })
-                                    })
                                     .on_click(cx.listener({
                                         let profile_clone = profile.clone();
-                                        let tin = profile_clone.tin.full();
                                         move |this, _ev, window, cx| {
-                                            if this.is_mini_sidebar || window.viewport_size().width < px(768.) {
-                                                this.select_profile(profile_clone.clone(), ProfileTargetAction::ViewDashboard, window, cx);
+                                            // A profile row is a destination, not a
+                                            // disclosure. Selecting one opens its
+                                            // dashboard - the calendar and tax form
+                                            // library - at every width. An archived
+                                            // profile has no dashboard worth showing,
+                                            // so it opens its editor instead, which is
+                                            // where restore and delete now live.
+                                            let action = if profile_clone.is_archived {
+                                                ProfileTargetAction::EditProfile
                                             } else {
-                                                if this.expanded_profile_tin.as_ref() == Some(&tin) {
-                                                    this.expanded_profile_tin = None;
-                                                } else {
-                                                    this.expanded_profile_tin = Some(tin.clone());
-                                                }
-                                            }
-                                            cx.notify();
+                                                ProfileTargetAction::ViewDashboard
+                                            };
+                                            this.select_profile(
+                                                profile_clone.clone(),
+                                                action,
+                                                window,
+                                                cx,
+                                            );
                                         }
                                     }))
                             }))

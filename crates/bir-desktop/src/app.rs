@@ -77,6 +77,28 @@ pub enum ProfileTargetAction {
     UnlockOnly,
 }
 
+/// A change to whether a taxpayer profile exists and is listed. These are the
+/// administrator-only actions: they are requested from the profile editor and
+/// always pass through `AppState::request_profile_lifecycle`, never applied
+/// directly by the view that asked for them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProfileLifecycleAction {
+    Archive,
+    Restore,
+    Delete,
+}
+
+impl ProfileLifecycleAction {
+    /// Past-tense verb used in the notifications these actions push.
+    pub(crate) fn past_tense(self) -> &'static str {
+        match self {
+            Self::Archive => "archived",
+            Self::Restore => "restored",
+            Self::Delete => "deleted",
+        }
+    }
+}
+
 pub struct AppState {
     pub(crate) active_view: ActiveView,
     pub(crate) profile_manager: Entity<ProfileManagerView>,
@@ -111,7 +133,6 @@ pub struct AppState {
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
-    pub(crate) expanded_profile_tin: Option<String>,
     pub(crate) profile_filter: Entity<InputState>,
     pub(crate) sidebar_scroll: ScrollHandle,
     pub(crate) show_archived: bool,
@@ -137,6 +158,16 @@ pub struct AppState {
     pub(crate) hide_tax_profiles: bool,
     pub(crate) enable_profile_pins: bool,
     pub(crate) pending_admin_view: Option<ActiveView>,
+    /// A profile lifecycle change waiting behind the administrator prompt.
+    /// Archiving, restoring, and deleting a taxpayer profile are admin-only,
+    /// and the prompt is the same one that guards Settings and Background
+    /// Tasks - so the request is parked here and replayed once auth succeeds.
+    pub(crate) pending_admin_lifecycle: Option<(String, ProfileLifecycleAction)>,
+    /// A lifecycle change whose administrator prompt has just succeeded. The
+    /// prompt resolves in three places and the OS-authentication one has no
+    /// `Window` to hand, so the authorised action is parked here and applied
+    /// at the top of the next `render`, which does have one.
+    pub(crate) admin_lifecycle_authorized: Option<(String, ProfileLifecycleAction)>,
     pub(crate) admin_otp_state: Entity<OtpState>,
     pub(crate) admin_totp_state: Entity<OtpState>,
     pub(crate) admin_rate_limiter: RateLimiter,
@@ -297,6 +328,9 @@ impl AppState {
                                         .update(cx, |view, cx| view.load_settings(cx));
                                 }
                             }
+                            if let Some(pending) = this.pending_admin_lifecycle.take() {
+                                this.admin_lifecycle_authorized = Some(pending);
+                            }
                             this.admin_auth_error = None;
                             this.admin_otp_state
                                 .update(cx, |input, cx| input.set_value("", window, cx));
@@ -376,6 +410,9 @@ impl AppState {
                                     this.cron_tasks_view
                                         .update(cx, |view, cx| view.load_settings(cx));
                                 }
+                            }
+                            if let Some(pending) = this.pending_admin_lifecycle.take() {
+                                this.admin_lifecycle_authorized = Some(pending);
                             }
                             this.admin_totp_state
                                 .update(cx, |input, cx| input.set_value("", window, cx));
@@ -465,7 +502,6 @@ impl AppState {
                     });
 
                     this.active_profile_tin = None;
-                    this.expanded_profile_tin = None;
                     this.active_view = if this.profiles.is_empty() {
                         ActiveView::ProfileManager
                     } else {
@@ -600,11 +636,26 @@ impl AppState {
             },
         );
 
-        let profile_sub = cx.subscribe(
+        let profile_sub = cx.subscribe_in(
             &profile_manager,
-            |this: &mut Self, _entity, event: &crate::views::profile_manager::ProfileEvent, cx| {
+            window,
+            |this: &mut Self,
+             _entity,
+             event: &crate::views::profile_manager::ProfileEvent,
+             window,
+             cx| {
                 let saved_tin = match event {
                     crate::views::profile_manager::ProfileEvent::Saved(tin) => Some(tin.clone()),
+                    // Not a save: the editor is asking for an admin-gated
+                    // change and has written nothing. Route it through the
+                    // gate and stop - the write refreshes the list itself.
+                    crate::views::profile_manager::ProfileEvent::LifecycleRequested {
+                        tin,
+                        action,
+                    } => {
+                        this.request_profile_lifecycle(tin.clone(), *action, window, cx);
+                        return;
+                    }
                 };
 
                 if let Some(tin) = &saved_tin
@@ -721,6 +772,19 @@ impl AppState {
                     this.active_view = ActiveView::ProfileManager;
                     cx.notify();
                 }
+                DashboardEvent::EditProfile(tin) => {
+                    // The header's Profile Settings control. Reuses the normal
+                    // selection path so a PIN-protected profile still
+                    // authenticates before its editor opens.
+                    if let Some(profile) = this
+                        .profiles
+                        .iter()
+                        .find(|candidate| candidate.tin.full() == *tin)
+                        .cloned()
+                    {
+                        this.select_profile(profile, ProfileTargetAction::EditProfile, window, cx);
+                    }
+                }
             },
         )
         .detach();
@@ -756,7 +820,6 @@ impl AppState {
             db,
             profiles,
             active_profile_tin: None,
-            expanded_profile_tin: None,
             profile_filter,
             sidebar_scroll: ScrollHandle::new(),
             show_archived: false,
@@ -782,6 +845,8 @@ impl AppState {
             hide_tax_profiles,
             enable_profile_pins,
             pending_admin_view: None,
+            pending_admin_lifecycle: None,
+            admin_lifecycle_authorized: None,
             admin_otp_state,
             admin_totp_state,
             admin_rate_limiter: RateLimiter::new(),
@@ -878,6 +943,168 @@ impl AppState {
                 });
             }
         }
+    }
+
+    /// Whether an administrator credential is configured at all. With neither
+    /// an app-lock PIN nor an app TOTP secret there is nobody to authenticate
+    /// against, so the admin-only actions run unprompted - the same rule the
+    /// Settings and Background Tasks gates already follow.
+    fn admin_credential_configured(&self) -> (bool, bool) {
+        if let Ok(db) = self.db.lock() {
+            let pin = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+            let totp = db.get_setting("app_totp_secret").ok().flatten().is_some();
+            (pin, totp)
+        } else {
+            (false, false)
+        }
+    }
+
+    /// Entry point for every archive, restore, and delete. Prompts for the
+    /// administrator credential first when one is configured, parking the
+    /// request in `pending_admin_lifecycle` so it replays on success.
+    pub(crate) fn request_profile_lifecycle(
+        &mut self,
+        tin: String,
+        action: ProfileLifecycleAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
+
+        let (is_app_lock_enabled, has_app_totp) = self.admin_credential_configured();
+
+        if is_app_lock_enabled || has_app_totp {
+            self.pending_admin_lifecycle = Some((tin, action));
+            self.admin_auth_error = None;
+            self.admin_os_auth_triggered = false;
+            self.admin_rate_limiter.reset();
+            if has_app_totp {
+                self.admin_totp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            } else {
+                self.admin_otp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            }
+            cx.notify();
+        } else {
+            self.perform_profile_lifecycle(tin, action, window, cx);
+        }
+    }
+
+    /// Applies an already-authorised lifecycle change. Only ever reached from
+    /// `request_profile_lifecycle` or from the admin prompt succeeding.
+    pub(crate) fn perform_profile_lifecycle(
+        &mut self,
+        tin: String,
+        action: ProfileLifecycleAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(profile) = self
+            .profiles
+            .iter()
+            .find(|candidate| candidate.tin.full() == tin)
+            .cloned()
+        else {
+            push_notification(
+                "error",
+                "Profile unchanged",
+                &format!(
+                    "{tin} was not {}: it is no longer loaded.",
+                    action.past_tense()
+                ),
+                window,
+                cx,
+            );
+            return;
+        };
+
+        match action {
+            ProfileLifecycleAction::Archive => {
+                self.persist_profile_archived(profile, true, window, cx)
+            }
+            ProfileLifecycleAction::Restore => {
+                self.persist_profile_archived(profile, false, window, cx)
+            }
+            ProfileLifecycleAction::Delete => self.export_and_delete_profile(tin, cx),
+        }
+    }
+
+    /// Deleting a profile is irreversible, so it always writes a backup first:
+    /// the save dialog doubles as the confirmation, and cancelling it cancels
+    /// the deletion. The export must succeed before anything is removed.
+    fn export_and_delete_profile(&mut self, tin: String, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            // Safe: SystemTime arithmetic is infallible after UNIX_EPOCH.
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let Some(export_handle) = rfd::AsyncFileDialog::new()
+                .set_title("Save Profile Archive")
+                .set_file_name(format!("BIR_Archive_{tin}_{timestamp}.zip"))
+                .add_filter("Zip Archive", &["zip"])
+                .save_file()
+                .await
+            else {
+                return;
+            };
+            let export_dir = export_handle.path().to_path_buf();
+
+            let deletion_result = this.update(cx, |this, cx| {
+                let db = this
+                    .db
+                    .lock()
+                    .map_err(|_| "Database lock poisoned".to_string())?;
+                bir_core::export_profile_data(&db, &tin, &export_dir)
+                    .map_err(|error| format!("Profile export failed: {error}"))?;
+                db.delete_profile(&tin)
+                    .map_err(|error| format!("Profile deletion failed: {error}"))?;
+                drop(db);
+
+                this.profiles.retain(|p| p.tin.full() != tin);
+                if !this.profiles.iter().any(|p| p.is_archived) {
+                    this.show_archived = false;
+                }
+                if this.active_profile_tin.as_ref() == Some(&tin) {
+                    this.active_profile_tin = None;
+                    this.active_view = ActiveView::ProfileManager;
+                }
+                cx.notify();
+                Ok::<(), String>(())
+            });
+
+            match deletion_result {
+                Ok(Ok(())) => {
+                    rfd::AsyncMessageDialog::new()
+                        .set_title("Profile Exported & Deleted")
+                        .set_description(format!("Saved to {}", export_dir.display()))
+                        .show()
+                        .await;
+                }
+                Ok(Err(error)) => {
+                    rfd::AsyncMessageDialog::new()
+                        .set_title("Profile Was Not Deleted")
+                        .set_description(error)
+                        .show()
+                        .await;
+                }
+                Err(error) => {
+                    rfd::AsyncMessageDialog::new()
+                        .set_title("Profile Was Not Deleted")
+                        .set_description(error.to_string())
+                        .show()
+                        .await;
+                }
+            }
+        })
+        .detach();
     }
 
     pub(crate) fn request_admin_access(
@@ -1471,6 +1698,13 @@ fn push_notification(level: &str, title: &str, message: &str, window: &mut Windo
 
 impl Render for AppState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Apply a lifecycle change the administrator prompt authorised. It
+        // lands here because this is the first point after the prompt
+        // resolves that is guaranteed to hold a `Window`.
+        if let Some((tin, action)) = self.admin_lifecycle_authorized.take() {
+            self.perform_profile_lifecycle(tin, action, window, cx);
+        }
+
         // Set up window-aware subscription for global dashboard notifications (once)
         if !self.global_dashboard_notif_subscribed {
             self.global_dashboard_notif_subscribed = true;

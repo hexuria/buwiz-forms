@@ -39,6 +39,14 @@ mod tab_tax_profile;
 
 pub enum ProfileEvent {
     Saved(String),
+    /// The editor is asking for an administrator-gated lifecycle change.
+    /// `AppState` owns the admin prompt and the database write, so the editor
+    /// only ever states the intent - it never archives or deletes anything
+    /// itself.
+    LifecycleRequested {
+        tin: String,
+        action: crate::app::ProfileLifecycleAction,
+    },
 }
 
 #[derive(Clone, Copy)]
