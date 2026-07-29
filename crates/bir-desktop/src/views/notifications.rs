@@ -36,11 +36,29 @@ pub struct NotificationsView {
 }
 
 impl NotificationsView {
-    pub fn new(
-        db: Arc<Mutex<Database>>,
-        _window: &mut Window,
-        _cx: &mut Context<'_, Self>,
-    ) -> Self {
+    pub fn new(db: Arc<Mutex<Database>>, _window: &mut Window, cx: &mut Context<'_, Self>) -> Self {
+        // Alerts arrive from background work on a 60-second cron, not from user
+        // interaction, so nothing would otherwise prompt a re-render. Without
+        // this the page shows whatever was true when it was opened and silently
+        // goes stale while the user is looking at it.
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_secs(15))
+                    .await;
+                if this
+                    .update(cx, |view, cx| {
+                        view.reload();
+                        cx.notify();
+                    })
+                    .is_err()
+                {
+                    break; // view dropped
+                }
+            }
+        })
+        .detach();
+
         let mut view = Self {
             db,
             active_session_tin: None,
