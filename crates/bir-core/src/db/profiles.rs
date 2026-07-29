@@ -516,9 +516,35 @@ impl Database {
         let mut profiles = Vec::new();
         for row_result in rows {
             let (id, json_data) = row_result?;
-            let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
+
+            // Skip rows this build cannot read rather than failing the whole
+            // list. A single unreadable row used to abort the query, so the
+            // sidebar showed NO profiles at all while single-profile lookups
+            // still succeeded - which is how a duplicate-TIN error could name a
+            // profile the user had no way to see.
+            //
+            // The realistic cause is a database written by a newer build: an
+            // enum gains a variant, an older binary meets it, and every profile
+            // disappears. That is a downgrade, not corruption, and the other
+            // rows are perfectly readable.
+            let mut profile: TaxpayerProfile = match serde_json::from_str(&json_data) {
+                Ok(profile) => profile,
+                Err(error) => {
+                    tracing::error!(
+                        profile_id = id,
+                        %error,
+                        "Skipping a profile this build cannot deserialize; the remaining \
+                         profiles are unaffected. This usually means the database was \
+                         written by a newer version of the app."
+                    );
+                    continue;
+                }
+            };
             profile.normalize_profile_version_review_statuses();
             profile.id = Some(id);
+            // Deliberately still fatal: a hydrate failure is a database-level
+            // problem, not one row being from the future, and silently
+            // returning profiles with missing forms would be worse than an error.
             self.hydrate_profile_forms(&mut profile)?;
             profiles.push(profile);
         }
@@ -585,6 +611,77 @@ mod tests {
     use crate::db::ProfileCalendarLink;
     use chrono::{FixedOffset, TimeZone, Utc};
     use tempfile::NamedTempFile;
+
+    fn listing_test_profile(seg1: &str) -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": format!("Taxpayer {seg1}"),
+            "tin": { "segment1": seg1, "segment2": "456", "segment3": "789", "branch": "000" },
+            "rdo_code": "018",
+            "line_of_business": "Retail",
+            "registered_address": "Manila",
+            "zip_code": "1000",
+            "phone": "09123456789",
+            "email": "test@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual",
+            "business_start_date": "2020-01-01"
+        }))
+        .unwrap()
+    }
+
+    /// Reproduces the failure that hid every taxpayer profile in the sidebar.
+    ///
+    /// A row written by a newer build carried an enum variant this build does
+    /// not know (`NeedsReview`, in the real incident). `list_profiles` used `?`
+    /// on the per-row deserialize, so that single row aborted the whole query
+    /// and the UI showed NO profiles - while single-profile lookups still
+    /// succeeded, which is how a duplicate-TIN error could name a profile the
+    /// user had no way to see.
+    #[test]
+    fn one_unreadable_row_does_not_hide_the_others() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111"))
+            .expect("first profile saves");
+        db.save_profile(listing_test_profile("222"))
+            .expect("second profile saves");
+        assert_eq!(db.list_profiles().unwrap().len(), 2, "precondition");
+
+        // Rewrite exactly one row the way a downgrade does.
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
+                params![
+                    r#"{"full_name":"From The Future","status":"AVariantThisBuildLacks"}"#,
+                    "222456789000"
+                ],
+            )
+            .expect("row is rewritten");
+
+        let listed = db
+            .list_profiles()
+            .expect("a single bad row must not fail the whole listing");
+
+        assert_eq!(listed.len(), 1, "the readable profile must survive");
+        assert_eq!(listed[0].tin.full(), "111456789000");
+    }
+
+    #[test]
+    fn every_row_unreadable_yields_an_empty_list_not_an_error() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111")).unwrap();
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1",
+                params![r#"{"status":"AVariantThisBuildLacks"}"#],
+            )
+            .unwrap();
+
+        assert!(
+            db.list_profiles().expect("still must not error").is_empty(),
+            "unreadable rows are skipped, so the list is empty rather than failed"
+        );
+    }
 
     #[test]
     fn reconciliation_calendar_year_uses_local_date_at_utc_positive_year_boundary() {
