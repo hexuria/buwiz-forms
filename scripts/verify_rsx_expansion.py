@@ -43,6 +43,12 @@ BENIGN = [
      r'Some(\2.into_any_element())'),
     (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);\1\.into_any_element\(\)', re.S),
      r'\2.into_any_element()'),
+    # `.into_any()` is a distinct method from `.into_any_element()`; the literal
+    # `()` in the pattern keeps the two from matching each other.
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);return\1\.into_any\(\)', re.S),
+     r'return\2.into_any()'),
+    (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);\1\.into_any\(\)', re.S),
+     r'\2.into_any()'),
     # same binding, returned directly instead of chained
     (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);return\1;', re.S), r'return\2;'),
     (re.compile(r'let([a-z_][a-z0-9_]*)=((?:(?!let\1=).)*?);return\1\}', re.S), r'return\2}'),
