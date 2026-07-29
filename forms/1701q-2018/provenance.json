@@ -8,7 +8,7 @@
   "sha256": "c731d3f12556e6f19ab81f6113ca7c4a23f7ed099675c03451ac0074d96b85ed",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 2,
+  "images_extracted": 0,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -20,7 +20,7 @@
   "rules": 1353,
   "text_runs": 365,
   "images": 3,
-  "cells": 355,
+  "cells": 312,
   "comb_cells": 128,
   "growables": [],
   "sources": [
@@ -61,7 +61,7 @@
       "1701Q Guide Jan 2018.pdf"
     ]
   },
-  "html_bytes": 755663,
+  "html_bytes": 741348,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

@@ -93,6 +93,30 @@ an `fvar`, and an `@font-face` that claims `100 900` for a static regular makes
 the browser synthesise the bold. Both are decided from the loaded face's own
 `fvar`, never from the file name.
 
+GLYPHS THE SHIPPED FACES DO NOT HAVE
+------------------------------------
+Advance equality only says something about a glyph the face actually contains.
+Arimo has no U+25CF BLACK CIRCLE -- not in `latin`, not in `latin-ext`, and
+neither do Tinos or Roboto Condensed. The whole U+25A0..U+25FF geometric-shapes
+block is outside every bundled subset. Asking a face for a codepoint it lacks
+returns gid 0, and gid 0 has a width (0.75em in Arimo, 0.7778em in Tinos), so
+the old code compared 0.75em against Arial's real 0.604em and reported a 0.74pt
+metric failure. **A .notdef width is not a measurement.** It reported a
+rendering hole as a near-miss on advance, and dragged a face's verdict down for
+a glyph that face was never able to draw.
+
+Absence is now its own verdict, on its own line, with its own count:
+
+  * missing codepoints are excluded from the advance statistics entirely -- the
+    face verdict describes the glyphs the face has;
+  * each one is either **substituted** from `GLYPH_SUBSTITUTIONS`, an explicit
+    per-codepoint table where every entry carries measured evidence and a stated
+    cost, or left **unrepresentable** and warned when nothing bundled is the
+    same shape;
+  * neither is ever dropped. An unrepresentable glyph is a real rendering
+    problem even though it is not a metric one, so it stays visible in the plan
+    and the substitution is emitted for `emit.py` to apply.
+
 HOW WE GET THE SHIPPED FACE'S METRICS
 -------------------------------------
 The repo ships Arimo and Roboto Condensed as variable WOFF2, and MuPDF
@@ -590,8 +614,15 @@ class MetricFace:
         units = sum(self.advance_units(self.glyph_for(c), coords) for c in text)
         return units * size_pt / self.units_per_em
 
-    def covers(self, text: str) -> list[str]:
-        return sorted({c for c in text if ord(c) not in self.cmap})
+    def has(self, codepoint: int) -> bool:
+        """Whether this face draws `codepoint` with a glyph of its own.
+
+        The one question `char_advance_pt` cannot answer: a face with no glyph
+        for a codepoint still returns an advance, gid 0's, and that number
+        describes the placeholder rather than the character. Every caller that
+        is about to measure a character has to ask this first.
+        """
+        return codepoint in self.cmap
 
 
 # ---------------------------------------------------------------------------
@@ -957,6 +988,408 @@ def transform_css(scale: float) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Codepoints no bundled face contains
+# ---------------------------------------------------------------------------
+
+# Wingdings is a symbol face: what it calls "text" is font-specific byte codes,
+# not Unicode. Depending on how the generator wrote /ToUnicode, one and the same
+# Wingdings glyph reaches the IR either as U+F0A7 -- the private-use spelling,
+# F000 + the byte -- or as bare U+00A7. The PDF proves they are the same
+# drawing: across the 27 corpus occurrences both spellings carry an advance of
+# 0.4577..0.4583em, which is Wingdings gid 131's own 0.4575em.
+#
+# Folding the bare form onto the private-use form is what stops Arimo's SECTION
+# SIGN being painted where a square bullet belongs. Nothing else would catch it:
+# Arimo *does* contain U+00A7, so a coverage test on the raw codepoint passes
+# and renders confidently wrong. Only Wingdings is listed. Symbol is not: its
+# runs reach the IR already decoded to real Unicode (its bullet arrives as
+# U+2022, which every bundled face has), so re-encoding it would invent a
+# problem that is not there.
+SYMBOL_PUA_BASE = 0xF000
+SYMBOL_ENCODED_FAMILIES = frozenset({"Wingdings"})
+
+
+def normalised_codepoint(family: str, char: str) -> int:
+    """The codepoint to look a character up by, after symbol-font folding."""
+    codepoint = ord(char)
+    if family in SYMBOL_ENCODED_FAMILIES and 0x20 <= codepoint <= 0xFF:
+        return SYMBOL_PUA_BASE + codepoint
+    return codepoint
+
+
+class InkBox:
+    """Ink extent of one glyph, in em, from the real face's `glyf` bounds.
+
+    Pinned rather than measured at run time, and that is forced: the shipped
+    WOFF2 files store `glyf` under the WOFF2 glyph transform, and this module
+    decodes no outlines anywhere (see the header). The numbers below were read
+    off the faces the PDFs actually name -- Arial.ttf and Wingdings.ttf in
+    /System/Library/Fonts/Supplemental -- by walking loca/glyf and taking each
+    glyph's xMin/yMin/xMax/yMax.
+
+    They are used only to state the *size* cost of a substitution in the plan.
+    Nothing is decided from them; every decision in this module is made from an
+    advance read live out of the shipped file. Arimo draws its own outlines, so
+    treat an ink figure as the design intent it was cloned to, not as a
+    measurement of the bundled binary.
+    """
+
+    __slots__ = ("width_em", "height_em", "y_min_em", "y_max_em")
+
+    def __init__(self, width_em: float, height_em: float,
+                 y_min_em: float, y_max_em: float) -> None:
+        self.width_em = width_em
+        self.height_em = height_em
+        self.y_min_em = y_min_em
+        self.y_max_em = y_max_em
+
+    @property
+    def centre_y_em(self) -> float:
+        return (self.y_min_em + self.y_max_em) / 2.0
+
+    def as_record(self) -> dict[str, Any]:
+        return {"width_em": r4(self.width_em), "height_em": r4(self.height_em),
+                "y_min_em": r4(self.y_min_em), "y_max_em": r4(self.y_max_em),
+                "centre_y_em": r4(self.centre_y_em)}
+
+
+class GlyphSubstitution:
+    """One codepoint no bundled face contains, and what may stand in for it.
+
+    `replacement is None` is a decision, not a gap in the table: it says nothing
+    bundled is the same shape and the character is therefore left unresolved and
+    warned. Drawing a disc where the source drew a square is a change of
+    typography on a tax form, and this module would rather fail loudly than
+    guess quietly -- the same posture the rest of the pipeline takes towards
+    substituting a face it has not proved.
+    """
+
+    __slots__ = ("name", "source_advance_em", "source_ink", "replacement",
+                 "replacement_name", "replacement_advance_em", "replacement_ink",
+                 "reason")
+
+    def __init__(self, name: str, source_advance_em: float, source_ink: InkBox,
+                 replacement: int | None, replacement_name: str | None,
+                 replacement_advance_em: float | None,
+                 replacement_ink: InkBox | None, reason: str) -> None:
+        self.name = name
+        self.source_advance_em = source_advance_em
+        self.source_ink = source_ink
+        self.replacement = replacement
+        self.replacement_name = replacement_name
+        # Pinned so the self-test can hold the shipped file to it. Unlike the
+        # ink figures this one IS readable at run time, which is exactly why it
+        # is pinned: a pin nobody checks is a comment, and this one is checked.
+        self.replacement_advance_em = replacement_advance_em
+        self.replacement_ink = replacement_ink
+        self.reason = reason
+
+    @property
+    def resolved(self) -> bool:
+        return self.replacement is not None
+
+    def as_record(self, codepoint: int) -> dict[str, Any]:
+        """The table row for this entry, filed under the codepoint it describes.
+
+        The key is passed in rather than stored so it is written exactly once,
+        in the table literal, and an entry cannot end up describing one
+        codepoint while being looked up under another.
+        """
+        record: dict[str, Any] = {
+            "from": format_codepoint(codepoint),
+            "from_char": chr(codepoint),
+            "from_name": self.name,
+            "source_advance_em": r4(self.source_advance_em),
+            "source_ink_em": self.source_ink.as_record(),
+            "reason": self.reason,
+        }
+        if not self.resolved:
+            record.update({"to": None, "to_name": None, "status": "unrepresentable"})
+            return record
+        assert self.replacement_ink is not None
+        record.update({
+            "to": format_codepoint(self.replacement),
+            "to_char": chr(self.replacement),
+            "to_name": self.replacement_name,
+            "status": "substituted",
+            "replacement_advance_em": r4(self.replacement_advance_em or 0.0),
+            "advance_ratio": r4((self.replacement_advance_em or 0.0)
+                                / self.source_advance_em),
+            "replacement_ink_em": self.replacement_ink.as_record(),
+            # The two costs of drawing a different glyph, stated as ratios so a
+            # caller can correct for them: how much narrower the ink is, and how
+            # far its centre sits from where the source put it.
+            "ink_width_ratio": r4(self.replacement_ink.width_em / self.source_ink.width_em),
+            "ink_centre_offset_em": r4(
+                self.replacement_ink.centre_y_em - self.source_ink.centre_y_em),
+        })
+        return record
+
+
+def format_codepoint(codepoint: int) -> str:
+    return f"U+{codepoint:04X}"
+
+
+def display_char(codepoint: int) -> str:
+    """A terminal-safe rendering of one codepoint for the summary table.
+
+    The private-use codepoints in this table exist precisely because no font
+    agrees what they are, so writing one to a terminal produces a replacement
+    box or nothing at all, and the line silently loses a column. JSON keeps the
+    real character -- it is the data -- but the human-facing table does not.
+    """
+    if 0xE000 <= codepoint <= 0xF8FF or codepoint < 0x20:
+        return f"<{format_codepoint(codepoint)}>"
+    return chr(codepoint)
+
+
+def table_status(codepoint: int) -> str:
+    """This module's policy verdict on a codepoint, independent of any face.
+
+    Used for the corpus-level tally, where occurrences arrive from resolved and
+    unresolved families in whatever order the pages happen to be walked. Deriving
+    the status from whichever run was seen first would make the report depend on
+    page order; the policy does not.
+    """
+    substitution = GLYPH_SUBSTITUTIONS.get(codepoint)
+    if substitution is not None and substitution.resolved:
+        return SUBSTITUTED
+    return UNREPRESENTABLE
+
+
+BLACK_CIRCLE = 0x25CF
+BULLET = 0x2022
+WINGDINGS_SQUARE_BULLET = 0xF0A7
+
+# The package whose metrics the pinned replacement figures below describe. Every
+# occurrence in this corpus is set in a sans family -- Arial, which resolves to
+# Arimo, and Calibri, which has no plan yet but would not resolve to a serif --
+# so Arimo's numbers are the true cost of every substitution actually applied.
+# Stated rather than assumed because it is not a constant across families:
+# Roboto Condensed draws U+2022 at 0.3374em against Arimo's 0.3501em, so a form
+# that ever mapped an affected family there would need its own measurement.
+# `substitution_self_test` asserts that no substitution escapes this package.
+SUBSTITUTION_REFERENCE_PACKAGE = "arimo"
+
+# Every codepoint the corpus sets that no bundled subset contains. Measured, not
+# guessed: the sweep that produced this list asked each of arimo, tinos and
+# roboto-condensed (latin and latin-ext alike) for every non-ASCII codepoint in
+# all 51 forms. Only these two came back absent -- U+2013, U+2019, U+201C,
+# U+201D, U+2026, U+2022, U+00A7 and U+00BD are all present and need no entry.
+# The self-test re-runs both halves of that check against the shipped files, so
+# this table cannot drift away from the fonts it describes.
+GLYPH_SUBSTITUTIONS: dict[int, GlyphSubstitution] = {
+    BLACK_CIRCLE: GlyphSubstitution(
+        name="BLACK CIRCLE",
+        # Arial's own advance, and the PDF agrees: all 486 corpus occurrences
+        # carry 0.6032..0.6050em, whether the run calls the face Arial or
+        # Calibri.
+        source_advance_em=0.6040,
+        source_ink=InkBox(0.4302, 0.4302, 0.0669, 0.4971),
+        replacement=BULLET,
+        replacement_name="BULLET",
+        replacement_advance_em=0.3501,
+        replacement_ink=InkBox(0.2476, 0.2476, 0.2266, 0.4741),
+        reason=(
+            "U+2022 BULLET is the only filled disc in any bundled subset, and a "
+            "disc is what U+25CF is -- the shape is right, the size is not. The "
+            "geometric-shapes block U+25A0..U+25FF is absent from arimo, tinos "
+            "and roboto-condensed in both latin and latin-ext, so there is no "
+            "same-size circle to reach for; the only other disc, U+00B7 MIDDLE "
+            "DOT, is smaller still (0.1001em of ink against the 0.4302em "
+            "wanted, 23%). Measured cost of this substitution: the disc is "
+            "0.2476em across instead of 0.4302em (57.6%) and its centre sits "
+            "0.0684em higher (+0.3504em against +0.2820em above the baseline). "
+            "Advance is 0.3501em against 0.6040em (58.0%). Those two ratios "
+            "agree to 0.7%, i.e. U+2022 is very nearly U+25CF drawn at 0.58 "
+            "scale, so a caller that wants the right size can set this one "
+            "glyph at font-size x 1.7252 and drop it 0.0684em x 1.7252 = "
+            "0.1180em; the plan carries every number needed for that and "
+            "reports the substitution either way. Not corrected here because "
+            "per-glyph size and baseline are emit.py's to apply, and a caller "
+            "that applies neither still gets a bullet rather than a hole."),
+    ),
+    WINGDINGS_SQUARE_BULLET: GlyphSubstitution(
+        name="WINGDINGS SMALL BLACK SQUARE (byte 0xA7)",
+        # Wingdings gid 131's own advance; the PDF's 0.4577..0.4583em across all
+        # 27 occurrences is the same number through the IR's 2dp quantisation.
+        source_advance_em=0.4575,
+        source_ink=InkBox(0.2891, 0.2891, 0.2168, 0.5059),
+        replacement=None,
+        replacement_name=None,
+        replacement_advance_em=None,
+        replacement_ink=None,
+        reason=(
+            "UNRESOLVED on purpose: this is a filled square (0.2891 x 0.2891em "
+            "of ink, y +0.2168..+0.5059) and no bundled subset contains a "
+            "square at all. U+25AA BLACK SMALL SQUARE, U+25A0 and the rest of "
+            "U+25A0..U+25FF are absent from arimo, tinos and roboto-condensed "
+            "in both latin and latin-ext; the only filled marks available are "
+            "discs (U+2022, U+00B7). A disc is not a square, and on a tax form "
+            "these mark statutory list items and checkbox rows, so swapping the "
+            "shape would be a change of typography rather than a rendering "
+            "detail. Fixing this needs a bundled face that actually carries "
+            "U+25AA -- a geometric-shapes subset, or the source Wingdings "
+            "outline converted to SVG the way the artwork path already is -- "
+            "not another row in this table."),
+    ),
+}
+
+PRESENT = "present"
+SUBSTITUTED = "substituted"
+UNREPRESENTABLE = "unrepresentable"
+
+
+class GlyphResolution:
+    """What the shipped face will actually draw for one source character.
+
+    Three outcomes, and they are measured differently on purpose:
+
+      * `present`   -- the face has the glyph. This is the only case that may
+                       enter the advance proof.
+      * `substituted` -- the face lacks it and the table names a stand-in. The
+                       advance is real (it is the stand-in's) but it is not
+                       evidence about the face, so it is reported beside the
+                       proof and never inside it.
+      * `unrepresentable` -- nothing bundled draws it. There is no advance to
+                       measure at all; the PDF's own width is reserved so the
+                       rest of the run still lands correctly, and the hole is
+                       warned about.
+    """
+
+    __slots__ = ("char", "codepoint", "status", "drawn_codepoint", "substitution")
+
+    def __init__(self, char: str, codepoint: int, status: str,
+                 drawn_codepoint: int | None,
+                 substitution: GlyphSubstitution | None) -> None:
+        self.char = char
+        self.codepoint = codepoint
+        self.status = status
+        self.drawn_codepoint = drawn_codepoint
+        self.substitution = substitution
+
+    @property
+    def absent(self) -> bool:
+        return self.status != PRESENT
+
+
+def resolve_glyph(face: MetricFace, family: str, char: str) -> GlyphResolution:
+    """Decide what a shipped face draws for one character, before measuring it.
+
+    Every advance in this module goes through here first. `char_advance_pt` will
+    happily answer for a codepoint the face has never heard of -- it returns
+    gid 0's width -- so the coverage question has to be settled before the
+    measurement, not inferred from it afterwards.
+    """
+    codepoint = normalised_codepoint(family, char)
+    if face.has(codepoint):
+        return GlyphResolution(char, codepoint, PRESENT, codepoint, None)
+    substitution = GLYPH_SUBSTITUTIONS.get(codepoint)
+    if substitution is not None and substitution.replacement is not None:
+        if face.has(substitution.replacement):
+            return GlyphResolution(char, codepoint, SUBSTITUTED,
+                                   substitution.replacement, substitution)
+    return GlyphResolution(char, codepoint, UNREPRESENTABLE, None, substitution)
+
+
+def resolution_advance_pt(resolution: GlyphResolution, face: MetricFace,
+                          size_pt: float, weight: float, pdf_width_pt: float) -> float:
+    """The advance this character will occupy once the page is laid out.
+
+    Not the same question as "what does the face say", and the difference is the
+    whole point of the three statuses:
+
+      * present     -- the face's own advance, which is also the proof.
+      * substituted -- the *stand-in's* advance, because that is the glyph the
+        browser will set and therefore the width the rest of the run is offset
+        by. Reporting the source's width here would make the run model describe
+        a layout that never happens.
+      * unrepresentable -- the PDF's own width. Nothing is known about what will
+        be drawn, but the width the character must occupy is known exactly, and
+        reserving it keeps every later glyph in the run at its PDF origin.
+        Falling through to gid 0's 0.75em instead would inject a fabricated
+        error into the run's advance and into its derived letter-spacing.
+    """
+    if resolution.status == UNREPRESENTABLE:
+        return pdf_width_pt
+    assert resolution.drawn_codepoint is not None
+    return face.char_advance_pt(chr(resolution.drawn_codepoint), size_pt, weight)
+
+
+class AbsentGlyphTally:
+    """Running count of one codepoint that a face could not draw as written.
+
+    Kept per codepoint rather than per occurrence because the plan's job here is
+    to say *what* is missing and *how much* of it there is. The sizes and
+    families are carried so a reader can tell one bullet on one sheet from 405
+    of them across the corpus without opening the IR.
+    """
+
+    __slots__ = ("codepoint", "char", "status", "substitution", "count",
+                 "sizes_pt", "families", "example")
+
+    def __init__(self, resolution: GlyphResolution, status: str) -> None:
+        self.codepoint = resolution.codepoint
+        self.char = resolution.char
+        self.status = status
+        self.substitution = resolution.substitution
+        self.count = 0
+        self.sizes_pt: set[float] = set()
+        self.families: collections.Counter[str] = collections.Counter()
+        self.example: str | None = None
+
+    def record(self, size_pt: float, family: str, run_text: str) -> None:
+        """Add one occurrence. Only the first run text is kept, as an example:
+        405 identical previews would say nothing 1 does not."""
+        self.count += 1
+        self.sizes_pt.add(r4(size_pt))
+        self.families[family] += 1
+        if self.example is None:
+            self.example = run_text[:32]
+
+    def as_record(self) -> dict[str, Any]:
+        substitution = self.substitution
+        return {
+            "codepoint": format_codepoint(self.codepoint),
+            "char": self.char,
+            "name": substitution.name if substitution else None,
+            "status": self.status,
+            "count": self.count,
+            "sizes_pt": sorted(self.sizes_pt),
+            "families": dict(sorted(self.families.items())),
+            "in_run": self.example,
+            "replacement": (format_codepoint(substitution.replacement)
+                            if substitution and substitution.replacement is not None
+                            else None),
+            "replacement_char": (chr(substitution.replacement)
+                                 if substitution and substitution.replacement is not None
+                                 else None),
+        }
+
+
+def tally_absent(store: dict[int, AbsentGlyphTally], resolution: GlyphResolution,
+                 size_pt: float, family: str, run_text: str,
+                 status: str | None = None) -> None:
+    """Count one absent glyph into `store`, creating its tally on first sight.
+
+    `status` overrides the per-face verdict, and the corpus-level tally passes
+    `table_status` for it. Without that, the same codepoint arriving first from
+    a resolved face and later from an unresolved one (or the reverse) would file
+    the whole tally under whichever run the page walk happened to reach first.
+    """
+    tally = store.get(resolution.codepoint)
+    if tally is None:
+        tally = AbsentGlyphTally(resolution, status or resolution.status)
+        store[resolution.codepoint] = tally
+    tally.record(size_pt, family, run_text)
+
+
+def absent_records(store: dict[int, AbsentGlyphTally]) -> list[dict[str, Any]]:
+    """Absent-glyph tallies, ordered by codepoint so two runs serialise alike."""
+    return [store[codepoint].as_record() for codepoint in sorted(store)]
+
+
+# ---------------------------------------------------------------------------
 # The metric proof
 # ---------------------------------------------------------------------------
 
@@ -1000,6 +1433,41 @@ class FaceEvidence:
         self.run_residual: list[tuple[float, dict[str, Any]]] = []
         self.tracking_em: list[float] = []
         self.runs = 0
+        # Glyphs the face could not draw as written, kept strictly out of
+        # `self.glyphs`: they carry no advance measurement of this face, only a
+        # count of how often it was asked for something it does not have.
+        self.absent: dict[int, AbsentGlyphTally] = {}
+        # Runs whose derived tracking is contaminated by a substitution (see
+        # `_tracking_record`), held aside so the face's tracking figures stay a
+        # statement about the generator's Tc/TJ and nothing else.
+        self.substituted_runs = 0
+
+    def absent_counts(self) -> tuple[int, int]:
+        """(substituted, unrepresentable) glyph occurrences for this face."""
+        substituted = sum(t.count for t in self.absent.values()
+                          if t.status == SUBSTITUTED)
+        unrepresentable = sum(t.count for t in self.absent.values()
+                              if t.status == UNREPRESENTABLE)
+        return substituted, unrepresentable
+
+    def coverage_record(self) -> dict[str, Any]:
+        """The absence verdict: what this face was asked for and does not have.
+
+        Deliberately a sibling of the advance statistics rather than a term in
+        them. A face that is a perfect metric clone of Arial for every glyph it
+        contains is still missing U+25CF, and the plan has to be able to say
+        both of those things at once without either one contaminating the other.
+        """
+        substituted, unrepresentable = self.absent_counts()
+        return {
+            "basis": "codepoints the shipped face has no glyph for. Excluded "
+                     "from the advance statistics above: a .notdef width "
+                     "measures the placeholder, not the character.",
+            "representable_samples": len(self.glyphs),
+            "substituted_samples": substituted,
+            "unrepresentable_samples": unrepresentable,
+            "absent_codepoints": absent_records(self.absent),
+        }
 
     def summarise_glyphs(self) -> dict[str, Any]:
         if not self.glyphs:
@@ -1011,7 +1479,9 @@ class FaceEvidence:
         exact = sum(1 for sample in self.glyphs if sample.per_mille_exact)
         return {
             "basis": "per-glyph advance: CSS face vs the PDF font's own advance "
-                     "(IR char_widths_pt); free of Tc/TJ tracking",
+                     "(IR char_widths_pt); free of Tc/TJ tracking, and over the "
+                     "glyphs this face actually contains -- absent codepoints "
+                     "are counted in glyph_coverage, never measured here",
             "samples": len(self.glyphs),
             "max_advance_delta_pt": r4(worst.delta),
             "mean_advance_delta_pt": r4(total / len(self.glyphs)),
@@ -1051,6 +1521,13 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
     packages: dict[tuple[str, bool, bool], str | None] = {}
     scales: dict[tuple[str, bool, bool], float] = {}
     run_entries: list[dict[str, Any]] = []
+    # Corpus-level absence tally, across every run whether or not its family
+    # resolved. A form's U+25CF problem is the same problem whether the run
+    # calls the face Arial (resolved, substituted here) or Calibri (no plan at
+    # all yet), and a report that only counted the resolved half would
+    # understate it by a factor of five.
+    absent_corpus: dict[int, AbsentGlyphTally] = {}
+    absent_in_unresolved: collections.Counter[int] = collections.Counter()
 
     def family_scale(family: str) -> float:
         plan = plan_for(family)
@@ -1108,6 +1585,21 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
             }
 
             if face is None:
+                # No face means no coverage question can be answered, but the
+                # characters are still there and the pinned table already knows
+                # which of them nothing bundled can draw. Counting them here is
+                # what keeps Calibri's 405 bullets in the corpus report instead
+                # of vanishing with the family that has no plan yet.
+                for char in text:
+                    codepoint = normalised_codepoint(run["family"], char)
+                    if codepoint not in GLYPH_SUBSTITUTIONS:
+                        continue
+                    absent_in_unresolved[codepoint] += 1
+                    tally_absent(absent_corpus,
+                                 GlyphResolution(char, codepoint, UNREPRESENTABLE,
+                                                 None, GLYPH_SUBSTITUTIONS[codepoint]),
+                                 size, run["family"], text,
+                                 status=table_status(codepoint))
                 entry["css"] = None
                 entry["unresolved"] = True
                 run_entries.append(entry)
@@ -1115,12 +1607,6 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
 
             store = evidence[fk]
             store.runs += 1
-            missing = face.covers(text)
-            if missing:
-                warnings.append(
-                    f"page {page['index']} run {index}: shipped face "
-                    f"{PACKAGES[package].css_family} does not cover "
-                    f"{''.join(missing)!r}; advances for those glyphs are .notdef")
 
             # Every advance below is in page space, i.e. already through the
             # scaleX. That keeps `natural`, the tracking and the residual
@@ -1128,14 +1614,36 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
             # CSS values have to be divided back out.
             scale = scales.get(key, 1.0)
             natural = 0.0
-            for char, pdf_width in zip(text, run["char_widths_pt"]):
-                css_width = face.char_advance_pt(char, size, weight) * scale
+            substitutions: list[dict[str, Any]] = []
+            unrepresentable_here = 0
+            for position, (char, pdf_width) in enumerate(
+                    zip(text, run["char_widths_pt"])):
+                resolution = resolve_glyph(face, run["family"], char)
+                css_width = resolution_advance_pt(
+                    resolution, face, size, weight, float(pdf_width)) * scale
                 natural += css_width
-                store.glyphs.append(
-                    GlyphSample(char, size, css_width, float(pdf_width), text[:32]))
+                if not resolution.absent:
+                    store.glyphs.append(
+                        GlyphSample(char, size, css_width, float(pdf_width), text[:32]))
+                    continue
+                tally_absent(store.absent, resolution, size, run["family"], text)
+                tally_absent(absent_corpus, resolution, size, run["family"], text,
+                             status=table_status(resolution.codepoint))
+                substitutions.append(_substitution_record(
+                    resolution, position, size, css_width, float(pdf_width)))
+                if resolution.status == UNREPRESENTABLE:
+                    unrepresentable_here += 1
 
             measured = float(run["measured_advance_pt"])
-            store.run_natural.append((abs(natural - measured), run, natural))
+            substituted_here = len(substitutions) - unrepresentable_here
+            if substituted_here:
+                # The gap between this run's natural width and the PDF's is now
+                # mostly the stand-in glyph being narrower, not the generator's
+                # tracking. Letting it into the face's tracking figures would
+                # report a +0.25em "Tc" that no Tc operator produced.
+                store.substituted_runs += 1
+            else:
+                store.run_natural.append((abs(natural - measured), run, natural))
 
             # Tracking: what the generator added on top of the face's own
             # advances (this PDF uses Tc plus per-glyph TJ nudges). CSS
@@ -1150,10 +1658,11 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
                 # `spacing`. Round after dividing, not before.
                 emitted = r4(spacing / scale)
             applied = (emitted or 0.0) * scale * gaps
-            store.run_residual.append((abs(natural + applied - measured), run))
-            store.tracking_em.append(spacing / size if size else 0.0)
+            if not substituted_here:
+                store.run_residual.append((abs(natural + applied - measured), run))
+                store.tracking_em.append(spacing / size if size else 0.0)
 
-            if spacing / size <= CONDENSED_TRACKING_EM and size:
+            if spacing / size <= CONDENSED_TRACKING_EM and size and not substituted_here:
                 warnings.append(
                     f"page {page['index']} run {index}: condensed tracking "
                     f"{spacing / size:+.4f}em ({format_pt(spacing)} at "
@@ -1192,6 +1701,12 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
             entry["letter_spacing_pt"] = r4(emitted * scale) if emitted is not None else None
             entry["letter_spacing_em"] = r4(spacing / size) if size else None
             entry["width_residual_pt"] = r4(natural + applied - measured)
+            # Present on every run so a consumer can branch on one key rather
+            # than on a key's existence, and so a diff shows a substitution
+            # appearing rather than a field appearing.
+            entry["substitutions"] = substitutions
+            entry["has_substitution"] = bool(substituted_here)
+            entry["has_unrepresentable_glyph"] = bool(unrepresentable_here)
             run_entries.append(entry)
 
     faces_out = [_face_record(family, bold, italic, resolved[(family, bold, italic)],
@@ -1205,6 +1720,8 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
         warnings.append(
             "no shipped face could be read; the metric proof in this plan is "
             "absent, not passing")
+
+    warnings.extend(_absence_warnings(absent_corpus, absent_in_unresolved))
 
     for record in faces_out:
         check = record.get("metric_check") or {}
@@ -1252,8 +1769,113 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
                 "because letter-spacing inside a scaled box is scaled too.",
         },
         "faces": faces_out,
+        "glyph_substitutions": _glyph_substitution_block(absent_corpus,
+                                                         absent_in_unresolved),
         "runs": run_entries,
         "warnings": sorted(set(warnings)),
+    }
+
+
+def _absence_warnings(absent: dict[int, AbsentGlyphTally],
+                      in_unresolved: collections.Counter[int]) -> list[str]:
+    """One warning per absent codepoint -- never one per occurrence.
+
+    A per-run warning would bury the plan under 405 identical lines for one
+    missing bullet and make the substituted and the unrepresentable cases read
+    as the same severity. They are not: a substitution is a stated, measured
+    compromise, and an unrepresentable glyph is a hole in the page.
+    """
+    out: list[str] = []
+    for codepoint in sorted(absent):
+        tally = absent[codepoint]
+        where = ", ".join(f"{family} x{count}"
+                          for family, count in sorted(tally.families.items()))
+        unresolved = in_unresolved.get(codepoint, 0)
+        caveat = (f" ({unresolved} of them in runs whose family has no plan yet, "
+                  f"so nothing is drawn for those at all)" if unresolved else "")
+        if tally.status == SUBSTITUTED and tally.substitution is not None:
+            out.append(
+                f"SUBSTITUTED {format_codepoint(codepoint)} "
+                f"{tally.substitution.name} x{tally.count} [{where}]{caveat}: no "
+                f"bundled face contains it; drawn as "
+                f"{format_codepoint(tally.substitution.replacement or 0)} "
+                f"{tally.substitution.replacement_name}. This is a shape "
+                f"compromise, not a metric one -- it is excluded from the "
+                f"advance proof and reported in glyph_substitutions.")
+        else:
+            name = tally.substitution.name if tally.substitution else "unknown glyph"
+            out.append(
+                f"UNREPRESENTABLE {format_codepoint(codepoint)} {name} "
+                f"x{tally.count} [{where}]{caveat}: no bundled face contains it "
+                f"and no faithful substitute exists, so nothing may be invented "
+                f"for it. The PDF's own advance is reserved so the rest of each "
+                f"run still lands correctly; what draws there is unresolved. "
+                f"Bundle a face that carries the glyph, or render it as artwork.")
+    return out
+
+
+def _substitution_record(resolution: GlyphResolution, position: int, size_pt: float,
+                         css_advance_pt: float, pdf_advance_pt: float) -> dict[str, Any]:
+    """One character emit.py must draw as something other than what it says.
+
+    Carries the position so the replacement can be applied without re-deriving
+    it, and both advances so the caller can decide what to do about the width:
+    leave it (the run's letter-spacing already absorbs it and every following
+    glyph lands at its PDF origin), or pin the glyph's advance and correct the
+    spacing back out. `advance_correction_pt` is what the stand-in is short by.
+    """
+    substitution = resolution.substitution
+    return {
+        "index": position,
+        "from": format_codepoint(resolution.codepoint),
+        "from_char": resolution.char,
+        "from_name": substitution.name if substitution else None,
+        "status": resolution.status,
+        "to": (format_codepoint(resolution.drawn_codepoint)
+               if resolution.drawn_codepoint is not None else None),
+        "to_char": (chr(resolution.drawn_codepoint)
+                    if resolution.drawn_codepoint is not None else None),
+        "size_pt": r4(size_pt),
+        "css_advance_pt": r4(css_advance_pt),
+        "pdf_advance_pt": r4(pdf_advance_pt),
+        "advance_correction_pt": r4(pdf_advance_pt - css_advance_pt),
+    }
+
+
+def _glyph_substitution_block(absent: dict[int, AbsentGlyphTally],
+                              in_unresolved: collections.Counter[int]) -> dict[str, Any]:
+    """The plan's per-character substitution report, for emit.py and for humans.
+
+    `table` is the whole pinned table, including entries this form does not
+    reach, so a reader can see what the policy is rather than only what it did
+    here. `used` is what this form actually hit, with counts.
+    """
+    used: list[dict[str, Any]] = []
+    for codepoint in sorted(absent):
+        record = absent[codepoint].as_record()
+        record["occurrences_in_unresolved_faces"] = in_unresolved.get(codepoint, 0)
+        used.append(record)
+    substituted = sum(t.count for t in absent.values() if t.status == SUBSTITUTED)
+    unrepresentable = sum(t.count for t in absent.values()
+                          if t.status == UNREPRESENTABLE)
+    return {
+        "basis": "codepoints no bundled subset (arimo, tinos, roboto-condensed; "
+                 "latin and latin-ext) contains. A face that lacks a codepoint "
+                 "still answers with gid 0's advance, so coverage is settled "
+                 "before any measurement and absent glyphs never enter the "
+                 "advance proof.",
+        "symbol_encoded_families": sorted(SYMBOL_ENCODED_FAMILIES),
+        "symbol_pua_base": format_codepoint(SYMBOL_PUA_BASE),
+        "table": [substitution.as_record(codepoint)
+                  for codepoint, substitution in sorted(GLYPH_SUBSTITUTIONS.items())],
+        "used": used,
+        "substituted_occurrences": substituted,
+        "unrepresentable_occurrences": unrepresentable,
+        "note": "a substituted glyph is drawn as `to` at the run's own "
+                "font-size; the run's letter-spacing already absorbs the "
+                "advance difference, so every following glyph origin is "
+                "unchanged. An unrepresentable glyph has the PDF's own advance "
+                "reserved for it and nothing decided about what draws it.",
     }
 
 
@@ -1303,12 +1925,14 @@ def _face_record(family: str, bold: bool, italic: bool, face: MetricFace | None,
         record["font_face"] = None
         record["metric_check"] = {"samples": 0, "max_advance_delta_pt": None,
                                   "mean_advance_delta_pt": None, "worst": None}
+        record["glyph_coverage"] = store.coverage_record()
         record["tracking_check"] = None
         record["vertical_metrics"] = None
         return record
 
     record["font_face"] = _font_face_record(record, face, library)
     record["metric_check"] = store.summarise_glyphs()
+    record["glyph_coverage"] = store.coverage_record()
     record["tracking_check"] = _tracking_record(store)
     record["vertical_metrics"] = _vertical_record(ir, family, face)
     record["shaping_features"] = {
@@ -1363,14 +1987,27 @@ def _embedded_flag(ir: dict[str, Any], basefonts: Sequence[str]) -> bool | None:
 
 
 def _tracking_record(store: FaceEvidence) -> dict[str, Any]:
+    """Per-face tracking evidence, over runs whose width model is uncontaminated.
+
+    Runs containing a substituted glyph are excluded and counted separately.
+    Their (measured - natural) gap is dominated by the stand-in being narrower
+    than the character it replaces -- 1.28pt on a 5.04pt bullet -- and averaging
+    that into the face's tracking would report a quarter-em of `Tc` that no Tc
+    operator ever emitted. The affected runs still get their own letter-spacing
+    in `runs`; what is excluded is only their contribution to this summary.
+    """
     if not store.run_natural:
-        return {"runs": 0}
+        return {"runs": 0,
+                "runs_excluded_for_substitution": store.substituted_runs}
     worst_natural = max(store.run_natural, key=lambda item: item[0])
     worst_residual = max(store.run_residual, key=lambda item: item[0])
     return {
         "basis": "run advance: CSS face natural width vs IR measured_advance_pt; "
-                 "the gap is the generator's Tc/TJ tracking, not a face mismatch",
+                 "the gap is the generator's Tc/TJ tracking, not a face mismatch. "
+                 "Runs containing a substituted glyph are excluded and counted "
+                 "in runs_excluded_for_substitution.",
         "runs": len(store.run_natural),
+        "runs_excluded_for_substitution": store.substituted_runs,
         "max_untracked_delta_pt": r4(worst_natural[0]),
         "mean_untracked_delta_pt": r4(
             sum(item[0] for item in store.run_natural) / len(store.run_natural)),
@@ -1464,6 +2101,10 @@ def _declared_unused_records(ir: dict[str, Any],
             "used_glyphs": 0,
             "metric_check": {"samples": 0, "max_advance_delta_pt": None,
                              "mean_advance_delta_pt": None, "worst": None},
+            # Same shape as a used face, all zeros: nothing was set in it, so
+            # nothing could be missing from it. A null here would read as "not
+            # checked", which is a different claim.
+            "glyph_coverage": FaceEvidence().coverage_record(),
             "tracking_check": None,
             "vertical_metrics": None,
         })
@@ -1505,6 +2146,14 @@ def print_face_table(plan: dict[str, Any], stream: Any = sys.stderr) -> None:
               f"{face['used_runs']:5} {face['used_glyphs']:7} "
               f"{'-' if maximum is None else f'{maximum:9.4f}'} "
               f"{'-' if mean is None else f'{mean:9.4f}'}  {verdict}", file=stream)
+        # Absence gets its own line under the face it belongs to, never a column
+        # in the verdict above: the verdict describes advances, and a glyph the
+        # face does not have has no advance to describe.
+        for absent in (face.get("glyph_coverage") or {}).get("absent_codepoints", []):
+            drawn = (f"drawn as {absent['replacement']} {absent['replacement_char']}"
+                     if absent["status"] == SUBSTITUTED else "NOT DRAWN")
+            print(f"{'':34} {absent['status'].upper():>22} {absent['codepoint']} "
+                  f"{absent['name']} x{absent['count']} -- {drawn}", file=stream)
 
     print("", file=stream)
     for face in plan["faces"]:
@@ -1512,9 +2161,28 @@ def print_face_table(plan: dict[str, Any], stream: Any = sys.stderr) -> None:
         if not track:
             continue
         spacing = track["letter_spacing_em"]
+        if not track.get("runs"):
+            continue
+        excluded = track.get("runs_excluded_for_substitution") or 0
         print(f"{face['face_key']:34} tracking {spacing['min']:+.4f}..{spacing['max']:+.4f}em "
               f"(mean {spacing['mean']:+.4f}em)  residual after letter-spacing "
-              f"{track['max_residual_after_letter_spacing_pt']:.4f}pt", file=stream)
+              f"{track['max_residual_after_letter_spacing_pt']:.4f}pt"
+              + (f"  [{excluded} runs excluded: substituted glyph]" if excluded else ""),
+              file=stream)
+
+    used = plan["glyph_substitutions"]["used"]
+    if used:
+        print("", file=stream)
+        print("glyph substitutions", file=stream)
+        for entry in used:
+            target = (f"-> {entry['replacement']} {entry['replacement_char']}"
+                      if entry["status"] == SUBSTITUTED
+                      else "-> (none: unrepresentable)")
+            print(f"  {entry['codepoint']} {display_char(ord(entry['char'])):8} "
+                  f"x{entry['count']:<5} {target:32} {entry['name']}", file=stream)
+            print(f"{'':4}families {entry['families']}, sizes {entry['sizes_pt']}pt, "
+                  f"{entry['occurrences_in_unresolved_faces']} in unresolved faces",
+                  file=stream)
 
 
 # ---------------------------------------------------------------------------
@@ -1522,6 +2190,90 @@ def print_face_table(plan: dict[str, Any], stream: Any = sys.stderr) -> None:
 # ---------------------------------------------------------------------------
 
 SELF_TEST_IR = pathlib.Path("build/ir/2551q-2018.ir.json")
+
+# 2551Q sets nothing outside the shipped subsets, so it proves the substitution
+# machinery is *inert* where coverage is complete but can never exercise it.
+# 1601C is the one sheet that hits every branch at once: 23 U+25CF in a resolved
+# Arial face (substituted), 14 more in Calibri (no family plan yet), and both
+# spellings of the Wingdings square bullet (unrepresentable, and one of them
+# only reachable through the symbol-encoding fold).
+SELF_TEST_SUBSTITUTION_IR = pathlib.Path("build/ir/1601c-2018.ir.json")
+
+# What 1601C must report. Pinned as counts rather than "more than zero" so a
+# regression that silently stops seeing one of the two spellings, or starts
+# double-counting, fails instead of passing quietly.
+SELF_TEST_SUBSTITUTED_BLACK_CIRCLES = 37
+SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES = 23
+SELF_TEST_UNREPRESENTABLE_SQUARES = 2
+
+# The pinned source advances must agree with what the PDFs actually carry. Two
+# per-mille of an em is four times the PDF width table's own precision, so this
+# catches a mis-transcribed pin without firing on rounding.
+SOURCE_ADVANCE_TOLERANCE_EM = 0.002
+
+
+def substitution_table_failures(library: FaceLibrary) -> list[str]:
+    """Check GLYPH_SUBSTITUTIONS against the fonts it claims to describe.
+
+    The table is a set of claims about the shipped binaries -- "no bundled face
+    has this codepoint", "every bundled family has this stand-in" -- and a claim
+    that is never put to the font is just a comment. Both halves are re-derived
+    here from the files on disk, so an entry cannot outlive the fontsource
+    release that justified it.
+
+    The two halves quantify over the subsets differently, and that asymmetry is
+    the point. fontsource ships `latin-ext` as the *complement* of `latin`, not
+    as a superset, so absence has to hold across every subset while presence
+    only has to hold in one of them -- the browser loads both `@font-face`
+    declarations and resolves per glyph. Demanding the stand-in in both would
+    reject U+2022 for living, correctly, only in `latin`.
+    """
+    failures: list[str] = []
+    for codepoint, substitution in sorted(GLYPH_SUBSTITUTIONS.items()):
+        for package in sorted(PACKAGES):
+            faces = [(FONTSOURCE_SUBSETS[1] if extended else FONTSOURCE_SUBSETS[0],
+                      library.load(package, 400, "normal", extended=extended))
+                     for extended in (False, True)]
+            faces = [(subset, face) for subset, face in faces if face is not None]
+            if not faces:
+                continue
+            for subset, face in faces:
+                if face.has(codepoint):
+                    failures.append(
+                        f"{format_codepoint(codepoint)} is listed as absent but "
+                        f"{package} {subset} contains it; the substitution is "
+                        f"unnecessary and would replace a glyph we ship")
+            if substitution.replacement is None:
+                continue
+            if not any(face.has(substitution.replacement) for _subset, face in faces):
+                failures.append(
+                    f"{format_codepoint(codepoint)} substitutes "
+                    f"{format_codepoint(substitution.replacement)}, which no "
+                    f"subset of {package} contains either")
+                continue
+            # The stand-in's advance is the one number in the reason text a
+            # running program can check, so it is checked -- but only against
+            # the package the affected runs actually resolve to. It is not a
+            # constant across families: Arimo draws U+2022 at 0.3501em (Arial's
+            # own advance, which is why the stated 58% cost is exact) and Roboto
+            # Condensed draws it at 0.3374em. Pinning one number and asserting it
+            # everywhere would either be false or force the cost to be stated as
+            # a range that describes no real substitution.
+            if package != SUBSTITUTION_REFERENCE_PACKAGE:
+                continue
+            for subset, face in faces:
+                if not face.has(substitution.replacement):
+                    continue
+                observed = (face.advance_units(face.cmap[substitution.replacement],
+                                               face.coords(400))
+                            / face.units_per_em)
+                pinned = substitution.replacement_advance_em or 0.0
+                if abs(observed - pinned) > SOURCE_ADVANCE_TOLERANCE_EM:
+                    failures.append(
+                        f"{format_codepoint(codepoint)}: pinned replacement "
+                        f"advance {pinned}em is not what {package} {subset} "
+                        f"draws ({observed:.4f}em); the stated cost is wrong")
+    return failures
 
 
 def self_test(ir_path: pathlib.Path, fonts_root: pathlib.Path | None) -> int:
@@ -1707,7 +2459,30 @@ def self_test(ir_path: pathlib.Path, fonts_root: pathlib.Path | None) -> int:
     if scaled_runs != 10:
         failures.append(f"expected 10 scaled runs on 2551Q, got {scaled_runs}")
 
-    # 7. Determinism: two evaluations must serialise identically.
+    # 7. The pinned substitution table still describes the fonts on disk.
+    failures.extend(substitution_table_failures(library))
+
+    # 7b. 2551Q sets nothing outside the shipped subsets, so the substitution
+    #     path must be provably inert here: no absent glyph, no substitution,
+    #     and -- the point of the fix -- no .notdef width anywhere in the proof.
+    #     Its faces already assert 100% per-mille-exact above, which only holds
+    #     because no gid 0 is being measured.
+    if plan["glyph_substitutions"]["used"]:
+        failures.append(
+            f"2551Q needs no substitutions but the plan reports "
+            f"{plan['glyph_substitutions']['used']}")
+    for face in plan["faces"]:
+        coverage = face["glyph_coverage"]
+        if coverage["absent_codepoints"]:
+            failures.append(f"{face['face_key']}: unexpected absent glyphs on "
+                            f"2551Q: {coverage['absent_codepoints']}")
+    for entry in plan["runs"]:
+        if entry.get("substitutions"):
+            failures.append(f"page {entry['page']} run {entry['run_index']}: "
+                            f"unexpected substitution on 2551Q")
+            break
+
+    # 8. Determinism: two evaluations must serialise identically.
     again = json.dumps(evaluate(ir, FaceLibrary(fonts_root)), sort_keys=False)
     if again != json.dumps(plan, sort_keys=False):
         failures.append("output is not deterministic across runs")
@@ -1728,6 +2503,240 @@ def self_test(ir_path: pathlib.Path, fonts_root: pathlib.Path | None) -> int:
     print(f"self-test OK: {len(plan['faces'])} faces, {len(plan['runs'])} runs, "
           f"brotli via {plan['generator']['brotli_provider']}", file=sys.stdout)
     return 0
+
+
+def pdf_advances_em(ir: dict[str, Any], codepoint: int) -> list[float]:
+    """Every advance the PDF itself records for one codepoint, in em.
+
+    The pinned `source_advance_em` figures are the whole basis for saying how
+    much a substitution costs, so they are checked against the document rather
+    than trusted. Sizes come from the same runs, and the symbol fold is applied
+    here too -- so the Wingdings pin is validated against both spellings.
+    """
+    out: list[float] = []
+    for page in ir["pages"]:
+        for run in page["text_runs"]:
+            size = float(run["size_pt"])
+            if not size:
+                continue
+            for char, width in zip(run["text"], run["char_widths_pt"]):
+                if normalised_codepoint(run["family"], char) == codepoint:
+                    out.append(float(width) / size)
+    return out
+
+
+def substitution_self_test(ir_path: pathlib.Path,
+                           fonts_root: pathlib.Path | None) -> int:
+    """Assert the absence and substitution machinery against the real 1601C IR.
+
+    Everything here is a statement about a form that genuinely contains glyphs
+    no bundled face has. The 2551Q self-test proves the path stays out of the
+    way when coverage is complete; this one proves it does the right thing when
+    it is not.
+    """
+    if not ir_path.is_file():
+        print(f"substitution self-test needs the real IR at {ir_path}",
+              file=sys.stderr)
+        return 2
+    if fonts_root is None:
+        print("substitution self-test needs node_modules/@fontsource-variable",
+              file=sys.stderr)
+        return 2
+    ir = json.loads(ir_path.read_text(encoding="utf-8"))
+    library = FaceLibrary(fonts_root)
+    plan = evaluate(ir, library)
+    failures: list[str] = []
+    block = plan["glyph_substitutions"]
+    used = {entry["codepoint"]: entry for entry in block["used"]}
+
+    # 1. The symbol fold, directly. Wingdings' bare U+00A7 and its private-use
+    #    spelling are one glyph; Arial's U+00A7 is the section sign and must be
+    #    left completely alone.
+    if normalised_codepoint("Wingdings", "§") != WINGDINGS_SQUARE_BULLET:
+        failures.append("Wingdings U+00A7 does not fold onto the PUA spelling, so "
+                        "Arimo's SECTION SIGN would be drawn for a square bullet")
+    if normalised_codepoint("Arial", "§") != 0x00A7:
+        failures.append("a non-symbol family must not be folded into the PUA")
+
+    # 2. THE item-1 assertion: a face that is asked for a codepoint it lacks is
+    #    still judged only on the glyphs it has. Before the fix Arial|700 on this
+    #    form reported a 0.74pt worst advance -- Arimo's gid 0 at 0.75em against
+    #    Arial's real 0.604em -- and failed `within_measurement_precision`. That
+    #    number was never a measurement of Arimo's advances.
+    arial_bold = next((f for f in plan["faces"]
+                       if f["face_key"] == "Arial|700|normal"), None)
+    if arial_bold is None or arial_bold["status"] != "resolved":
+        failures.append("1601C must resolve Arial|700|normal")
+    else:
+        check = arial_bold["metric_check"]
+        worst = check["max_advance_delta_pt"]
+        if worst is None or worst > SELF_TEST_MAX_DELTA_PT:
+            failures.append(
+                f"Arial|700|normal worst advance {worst}pt exceeds "
+                f"{SELF_TEST_MAX_DELTA_PT}pt. If this is a .notdef leaking back "
+                f"into the proof, fix the coverage test -- never widen this.")
+        if not check["within_measurement_precision"]:
+            failures.append(
+                "Arial|700|normal is no longer within measurement precision; a "
+                "placeholder advance is being measured as if it were the face's")
+        coverage = arial_bold["glyph_coverage"]
+        absent = {a["codepoint"]: a for a in coverage["absent_codepoints"]}
+        circle = absent.get(format_codepoint(BLACK_CIRCLE))
+        if circle is None:
+            failures.append(
+                "Arial|700|normal must still report U+25CF as absent; dropping "
+                "an unrepresentable glyph hides a real rendering problem")
+        else:
+            if circle["count"] != SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES:
+                failures.append(
+                    f"Arial|700|normal U+25CF count {circle['count']} != "
+                    f"{SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES}")
+            if circle["status"] != SUBSTITUTED or circle["replacement"] != "U+2022":
+                failures.append(f"U+25CF must be substituted by U+2022, got {circle}")
+        # Nothing may be quietly discarded: measured + substituted +
+        # unrepresentable has to account for every character set in this face.
+        counted = (coverage["representable_samples"] + coverage["substituted_samples"]
+                   + coverage["unrepresentable_samples"])
+        chars = sum(len(r["text"]) for p in ir["pages"] for r in p["text_runs"]
+                    if face_key(r["family"], r["bold"], r["italic"])
+                    == arial_bold["face_key"])
+        if counted != chars:
+            failures.append(
+                f"Arial|700|normal accounts for {counted} of {chars} characters; "
+                f"absent glyphs must be counted, not dropped")
+
+    # 3. Item 2: what the corpus actually contains, and what each maps to.
+    circle = used.get(format_codepoint(BLACK_CIRCLE))
+    if circle is None or circle["count"] != SELF_TEST_SUBSTITUTED_BLACK_CIRCLES:
+        failures.append(
+            f"expected {SELF_TEST_SUBSTITUTED_BLACK_CIRCLES} U+25CF on 1601C, got "
+            f"{circle['count'] if circle else 0}")
+    elif circle["status"] != SUBSTITUTED:
+        failures.append(f"U+25CF must be substituted, got {circle['status']}")
+    square = used.get(format_codepoint(WINGDINGS_SQUARE_BULLET))
+    if square is None or square["count"] != SELF_TEST_UNREPRESENTABLE_SQUARES:
+        failures.append(
+            f"expected {SELF_TEST_UNREPRESENTABLE_SQUARES} U+F0A7 on 1601C, got "
+            f"{square['count'] if square else 0}")
+    elif square["status"] != UNREPRESENTABLE or square["replacement"] is not None:
+        failures.append(
+            f"U+F0A7 is a square and nothing bundled draws a square; it must stay "
+            f"unrepresentable rather than borrow a disc, got {square}")
+
+    # 4. Every absent codepoint is warned about by name. This is what stops an
+    #    unrepresentable glyph disappearing into a count nobody reads.
+    for codepoint, entry in used.items():
+        if not any(codepoint in warning for warning in plan["warnings"]):
+            failures.append(f"{codepoint} is absent but no warning names it")
+        expected = SUBSTITUTED.upper() if entry["status"] == SUBSTITUTED \
+            else UNREPRESENTABLE.upper()
+        if not any(warning.startswith(expected) and codepoint in warning
+                   for warning in plan["warnings"]):
+            failures.append(
+                f"{codepoint} is {entry['status']} but no warning says so; a "
+                f"substitution and a hole are not the same severity")
+
+    # 5. The pinned advances are the document's, not a transcription.
+    for codepoint, substitution in sorted(GLYPH_SUBSTITUTIONS.items()):
+        observed = pdf_advances_em(ir, codepoint)
+        if not observed:
+            continue
+        drift = max(abs(value - substitution.source_advance_em) for value in observed)
+        if drift > SOURCE_ADVANCE_TOLERANCE_EM:
+            failures.append(
+                f"{format_codepoint(codepoint)}: pinned source advance "
+                f"{substitution.source_advance_em}em is {drift:.4f}em away from "
+                f"what the PDF carries ({min(observed):.4f}..{max(observed):.4f}em)")
+
+    # 6. Substitution must not break the layout model. The stand-in is narrower,
+    #    the run's letter-spacing absorbs exactly that, and every glyph after it
+    #    still lands on its PDF origin -- which is the only thing verify.py
+    #    compares. A regression here is a page that shifts, not a report that
+    #    reads oddly.
+    substituted_runs = 0
+    for entry in plan["runs"]:
+        for record in entry.get("substitutions") or []:
+            if record["status"] != SUBSTITUTED:
+                continue
+            substituted_runs += 1
+            if record["advance_correction_pt"] <= 0:
+                failures.append(
+                    f"page {entry['page']} run {entry['run_index']}: the stand-in "
+                    f"for {record['from']} is not narrower than the character it "
+                    f"replaces, so the measured cost is wrong")
+            if abs(entry["width_residual_pt"]) > LETTER_SPACING_ACCUMULATED_PT:
+                failures.append(
+                    f"page {entry['page']} run {entry['run_index']}: substituted "
+                    f"run misses the PDF's measured width by "
+                    f"{entry['width_residual_pt']}pt")
+            break
+    if substituted_runs != SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES:
+        failures.append(
+            f"{substituted_runs} runs carry a substitution, expected "
+            f"{SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES}")
+
+    # 7. The faces whose tracking was excluded are exactly those runs, and the
+    #    surviving tracking figures are still ordinary.
+    for face in plan["faces"]:
+        track = face.get("tracking_check") or {}
+        if face["face_key"] != "Arial|700|normal":
+            if track.get("runs_excluded_for_substitution"):
+                failures.append(
+                    f"{face['face_key']} excluded runs for a substitution it "
+                    f"does not have")
+            continue
+        if track.get("runs_excluded_for_substitution") != SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES:
+            failures.append(
+                f"Arial|700|normal should hold back "
+                f"{SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES} substituted runs from its "
+                f"tracking figures, got {track.get('runs_excluded_for_substitution')}")
+
+    # 7b. Every substitution actually applied is served by the package whose
+    #     metrics the pinned costs describe. A face served from elsewhere would
+    #     still get a bullet, but the "58% of the diameter, 58% of the advance"
+    #     the plan reports for it would be someone else's measurement.
+    for face in plan["faces"]:
+        coverage = face.get("glyph_coverage") or {}
+        if not any(a["status"] == SUBSTITUTED
+                   for a in coverage.get("absent_codepoints", [])):
+            continue
+        package = face["fontsource_package"] or ""
+        if not package.endswith(f"/{SUBSTITUTION_REFERENCE_PACKAGE}"):
+            failures.append(
+                f"{face['face_key']} applies a substitution but is served by "
+                f"{package!r}, not {SUBSTITUTION_REFERENCE_PACKAGE}; the pinned "
+                f"substitution costs do not describe that face")
+
+    # 8. The table still matches the shipped fonts, and the plan is deterministic
+    #    with substitutions in it.
+    failures.extend(substitution_table_failures(library))
+    again = json.dumps(evaluate(ir, FaceLibrary(fonts_root)), sort_keys=False)
+    if again != json.dumps(plan, sort_keys=False):
+        failures.append("output is not deterministic across runs")
+
+    print_face_table(plan, sys.stdout)
+    print("", file=sys.stdout)
+    for warning in plan["warnings"]:
+        if warning.startswith((SUBSTITUTED.upper(), UNREPRESENTABLE.upper())):
+            print(f"  - {warning}", file=sys.stdout)
+
+    print("", file=sys.stdout)
+    if failures:
+        for failure in failures:
+            print(f"FAIL: {failure}", file=sys.stdout)
+        return 1
+    print(f"substitution self-test OK: {block['substituted_occurrences']} "
+          f"substituted, {block['unrepresentable_occurrences']} unrepresentable "
+          f"on {plan['form']['code']}-{plan['form']['revision']}", file=sys.stdout)
+    return 0
+
+
+def locate_ir(here: pathlib.Path, relative: pathlib.Path) -> pathlib.Path | None:
+    """Find a build IR from either the repo root or the tools directory."""
+    for candidate in (here.parent.parent / relative, relative):
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1760,17 +2769,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     fonts_root = args.fonts_root or find_fonts_root(here)
 
     if args.self_test:
-        ir_path = args.ir
-        if ir_path is None:
-            for candidate in [here.parent.parent / SELF_TEST_IR, SELF_TEST_IR]:
-                if candidate.is_file():
-                    ir_path = candidate
-                    break
-        if ir_path is None:
-            print("self-test could not locate build/ir/2551q-2018.ir.json",
-                  file=sys.stderr)
+        # An explicit --ir still means "run the metric self-test against this
+        # one document", as it always has. The two-document default is only the
+        # default: each half pins counts for the form it was written against and
+        # neither is meaningful pointed at an arbitrary IR.
+        if args.ir is not None:
+            return self_test(args.ir, fonts_root)
+        ir_path = locate_ir(here, SELF_TEST_IR)
+        substitution_ir = locate_ir(here, SELF_TEST_SUBSTITUTION_IR)
+        if ir_path is None or substitution_ir is None:
+            missing = SELF_TEST_IR if ir_path is None else SELF_TEST_SUBSTITUTION_IR
+            print(f"self-test could not locate {missing}", file=sys.stderr)
             return 2
-        return self_test(ir_path, fonts_root)
+        # Both halves always run and both statuses are kept: a coverage
+        # regression must not hide behind a passing 2551Q, and a 2551Q failure
+        # must not stop the substitution report being printed.
+        status = self_test(ir_path, fonts_root)
+        print("", file=sys.stdout)
+        return substitution_self_test(substitution_ir, fonts_root) or status
 
     if args.ir is None or not args.ir.is_file():
         print(f"no such IR: {args.ir}", file=sys.stderr)

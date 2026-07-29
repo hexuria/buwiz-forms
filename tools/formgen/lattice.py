@@ -37,6 +37,25 @@ containers. Slot boundaries are carried through as measured x values because
 the 14.16pt slot pitch is not uniform -- the content stream carries 14.04,
 14.18, 14.28 among the 14.16s, and index*pitch would drift off the paper.
 
+A fourth finding comes from the corpus rather than from 2551Q: a boundary is
+not always one bar, and the inside of a boundary is never a cell. 119 places
+draw a boundary as a *stack* -- a 0.14pt hairline on a 0.96pt bar (0605
+y=232.4), a double rule of two 1.44pt bars around a 1.2pt white core (0619E
+y=150.1, that core sometimes explicitly painted by a `knockout` rule), a
+double hairline 0.65pt apart (1600WP x=357.0), a double 0.72pt box edge (2551M
+x=284.2). Others draw one rule that *jogs*: the left page frame of 1606 steps
+from x=26.64 to x=27.00 half way down, 1701 CONSO steps its right frame twice.
+Centre clustering keeps the bars apart in every one of those, so the walk
+emitted 1100 sub-2pt cells between them, 1092 of them classified `field` --
+which is how a 0.36pt field input reached the page 36 times on one sheet.
+
+Ink settles both. `fuse_boundaries` merges two clusters into one lattice line
+when the paper between them, measured where the two actually run together, is
+thinner than the bars drawing them. `encloses_paper` then refuses any cell
+whose bounding lines leave no paper between their ink at all, which is what a
+jog leaves. Neither is allowed to move a comb or a growable band; both counts
+are unchanged across the corpus.
+
 Usage:
     python3 tools/formgen/lattice.py --ir build/ir/2551q-2018.ir.json \\
         --out build/layout/2551q-2018.layout.json --summary
@@ -162,6 +181,133 @@ class Lattice:
         return len(self.positions)
 
 
+def cluster_collinear(defining: Sequence[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Chain rules whose centres lie within a rule width of each other."""
+    groups: list[list[dict[str, Any]]] = []
+    for rule in sorted(defining, key=centre):
+        if groups and centre(rule) - centre(groups[-1][-1]) <= CLUSTER_TOL_PT:
+            groups[-1].append(rule)
+        else:
+            groups.append([rule])
+    return groups
+
+
+def total_length(spans: Sequence[Interval]) -> float:
+    return sum(b - a for a, b in spans)
+
+
+def overlap_length(left: Sequence[Interval], right: Sequence[Interval]) -> float:
+    """Length of paper where two along-axis extents coincide."""
+    total = 0.0
+    for a0, a1 in left:
+        for b0, b1 in right:
+            total += max(0.0, min(a1, b1) - max(a0, b0))
+    return total
+
+
+# A composite boundary's bars are drawn over the same run, so each must shadow
+# this much of the other's length before they may fuse.
+MIN_BOUNDARY_OVERLAP = 0.5
+
+
+class Bar:
+    """One drawn rule reduced to the four numbers the fusion test needs."""
+
+    __slots__ = ("start", "end", "near", "far", "thickness")
+
+    def __init__(self, rule: dict[str, Any], axis: str) -> None:
+        near, far = ("y0", "y1") if axis == "h" else ("x0", "x1")
+        along = ("x0", "x1") if axis == "h" else ("y0", "y1")
+        self.start, self.end = rule[along[0]], rule[along[1]]
+        self.near, self.far = rule[near], rule[far]
+        self.thickness = rule["thickness_pt"]
+
+
+class GroupGeometry:
+    """One centre-cluster measured on both axes, before boundary fusion."""
+
+    __slots__ = ("rules", "bars", "position", "ink_lo", "ink_hi", "span")
+
+    def __init__(self, rules: list[dict[str, Any]], all_ink: Sequence[dict[str, Any]],
+                 axis: str) -> None:
+        near, far = ("y0", "y1") if axis == "h" else ("x0", "x1")
+        along = ("x0", "x1") if axis == "h" else ("y0", "y1")
+        self.rules = rules
+        self.bars = [Bar(r, axis) for r in rules]
+        self.position = q(sum(centre(r) for r in rules) / len(rules))
+        self.ink_lo = q(min(r[near] for r in rules))
+        self.ink_hi = q(max(r[far] for r in rules))
+        # Coverage is measured against this cluster's own centre, so fusing two
+        # clusters later cannot move the span of either one.
+        self.span = union_intervals((r[along[0]], r[along[1]]) for r in all_ink
+                                    if abs(centre(r) - self.position) <= CLUSTER_TOL_PT)
+
+
+def bars_over(bars: Sequence[Bar], where: Sequence[Interval]) -> list[Bar]:
+    """The bars of a cluster that run where `where` runs."""
+    return [b for b in bars if overlap_length([(b.start, b.end)], where) > 0]
+
+
+def is_one_boundary(lower: GroupGeometry, upper: GroupGeometry) -> bool:
+    """True when two collinear clusters are two bars of ONE drawn boundary.
+
+    The comparison is local. A cluster gathers every collinear fragment on the
+    page, so its ink extent and its length belong to no single place: the
+    0.24pt hairline at 1600WP x=357.00 shares a cluster with three 0.76pt bars
+    500pt further down the sheet. Each cluster is therefore cut down to the
+    bars that actually run where the other one runs, and the test is applied to
+    those.
+
+    The test itself is ink against paper, never distance. A boundary drawn as a
+    stack of bars -- a hairline lying on a bar, or the two rules of a double
+    rule -- leaves either no paper at all between the bars or a white core
+    thinner than the bars around it, and reads as one heavier line. A real pair
+    of boundaries encloses more paper than its own ink: the narrowest genuine
+    cell in the corpus is the 4.8pt dash gap between two TIN comb groups
+    (2550M x=99.84), 4.08pt of paper inside two 0.72pt edges.
+
+    Length decides the rest, because bars of one boundary are drawn over the
+    same run. Where the bars physically overlap there is no paper between them
+    wherever they coincide, so it is enough that the shorter one is shadowed --
+    that is a 5pt corner tick sitting on a full-width rule (2553 y=39.4). Where
+    paper separates them, both have to match, which stops a row of four 14pt
+    field underlines being swallowed by the Part header bar 2.2pt below them
+    (1601C y=124.4).
+
+    Fragments of one rule that merely *follow* each other down the page never
+    fuse here, however far their ink overlaps, because moving a page frame to
+    the average of its own jogs drags every cell edge on that side with it.
+    `encloses_paper` deals with those where they do damage.
+    """
+    here = bars_over(lower.bars, upper.span)
+    there = bars_over(upper.bars, lower.span)
+    if not here or not there:
+        return False
+
+    paper = min(b.near for b in there) - max(b.far for b in here)
+    if paper >= max(b.thickness for b in here) + max(b.thickness for b in there):
+        return False
+
+    runs = (union_intervals((b.start, b.end) for b in here),
+            union_intervals((b.start, b.end) for b in there))
+    lengths = (total_length(runs[0]), total_length(runs[1]))
+    if min(lengths) <= 0:
+        return False
+    shared = overlap_length(*runs)
+    return shared >= MIN_BOUNDARY_OVERLAP * (min(lengths) if paper <= 0 else max(lengths))
+
+
+def fuse_boundaries(groups: Sequence[GroupGeometry]) -> list[list[GroupGeometry]]:
+    """Merge runs of clusters that together draw one boundary."""
+    fused: list[list[GroupGeometry]] = []
+    for group in groups:
+        if fused and is_one_boundary(fused[-1][-1], group):
+            fused[-1].append(group)
+        else:
+            fused.append([group])
+    return fused
+
+
 def build_lattice(defining: Sequence[dict[str, Any]], all_ink: Sequence[dict[str, Any]],
                   axis: str) -> Lattice:
     """Cluster `defining` rules into lattice lines, then measure coverage.
@@ -170,27 +316,31 @@ def build_lattice(defining: Sequence[dict[str, Any]], all_ink: Sequence[dict[str
     invent a column. Coverage comes from `all_ink` (borders + combs), because
     a border crossing a comb band is drawn thinner *inside* the band and would
     otherwise read as three disconnected fragments.
+
+    Clustering happens twice, on two different questions. Centre clustering
+    gathers the collinear fragments of one bar; boundary fusion then gathers
+    the bars of one composite boundary, so that the paper inside a double rule
+    never becomes a cell. A lattice line that survives fusion is byte-identical
+    to what centre clustering alone produced.
     """
     if not defining:
         return Lattice([], [], [], [], [])
 
-    near, far = ("y0", "y1") if axis == "h" else ("x0", "x1")
-    along = ("x0", "x1") if axis == "h" else ("y0", "y1")
+    groups = [GroupGeometry(g, all_ink, axis) for g in cluster_collinear(defining)]
 
-    groups: list[list[dict[str, Any]]] = []
-    for rule in sorted(defining, key=centre):
-        if groups and centre(rule) - centre(groups[-1][-1]) <= CLUSTER_TOL_PT:
-            groups[-1].append(rule)
-        else:
-            groups.append([rule])
-
-    positions = [q(sum(centre(r) for r in g) / len(g)) for g in groups]
-    ink_lo = [q(min(r[near] for r in g)) for g in groups]
-    ink_hi = [q(max(r[far] for r in g)) for g in groups]
-    spans = [union_intervals((r[along[0]], r[along[1]]) for r in all_ink
-                             if abs(centre(r) - p) <= CLUSTER_TOL_PT)
-             for p in positions]
-    return Lattice(positions, ink_lo, ink_hi, spans, groups)
+    positions: list[float] = []
+    ink_lo: list[float] = []
+    ink_hi: list[float] = []
+    spans: list[list[Interval]] = []
+    members: list[list[dict[str, Any]]] = []
+    for boundary in fuse_boundaries(groups):
+        rules = [r for g in boundary for r in g.rules]
+        positions.append(q(sum(centre(r) for r in rules) / len(rules)))
+        ink_lo.append(min(g.ink_lo for g in boundary))
+        ink_hi.append(max(g.ink_hi for g in boundary))
+        spans.append(union_intervals(i for g in boundary for i in g.span))
+        members.append(rules)
+    return Lattice(positions, ink_lo, ink_hi, spans, members)
 
 
 def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str, Any]],
@@ -200,11 +350,17 @@ def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str
     Thickness is the maximum: where a border thins to 0.24 crossing a comb
     band its real weight is the 0.48 it carries everywhere else. Tone is the
     darkest, because a border is as visible as its darkest segment.
+
+    The line's own defining rules count whatever their distance from the
+    clustered centre. On a fused composite boundary the centre sits in the
+    white core of the double rule, further from either bar than the clustering
+    tolerance, and a distance-only scan would report the boundary as absent.
     """
     a0, a1 = ("x0", "x1") if axis == "h" else ("y0", "y1")
     position = lattice.positions[index]
+    own = {id(r) for r in lattice.members[index]}
     hits = [r for r in all_ink
-            if abs(centre(r) - position) <= CLUSTER_TOL_PT
+            if (abs(centre(r) - position) <= CLUSTER_TOL_PT or id(r) in own)
             and r[a1] > lo - CLUSTER_TOL_PT and r[a0] < hi + CLUSTER_TOL_PT]
     if not hits:
         hits = lattice.members[index]
@@ -315,6 +471,21 @@ def comb_bands(members: Sequence[dict[str, Any]], x0: float,
     return bands
 
 
+def encloses_paper(lattice: Lattice, first: int, last: int) -> bool:
+    """True when unpainted paper survives between two lattice lines.
+
+    Fusion catches the boundaries that are drawn as a stack of bars, but a
+    frame rule may also *jog*: 1606 draws its left page frame as one chain of
+    segments whose x centre steps from 26.64 to 27.00 half way down the sheet,
+    and 1701 CONSO steps its right frame twice. Those fragments are too far
+    apart to cluster and never coincide along the page, so both centres stand
+    as lattice lines with the ink of one bar spanning both. A cell between them
+    contains no paper -- nothing can be printed there and nobody can write
+    there -- so it is a walk artefact, not a container.
+    """
+    return lattice.ink_lo[last] > lattice.ink_hi[first]
+
+
 def classify_cell(is_empty: bool, border_count: int, has_comb: bool) -> str:
     if is_empty and border_count >= 3:
         return "field"
@@ -341,6 +512,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         js = [j for j, _ in squares]
         is_ = [i for _, i in squares]
         j0, j1, i0, i1 = min(js), max(js) + 1, min(is_), max(is_) + 1
+        if not encloses_paper(xl, i0, i1) or not encloses_paper(yl, j0, j1):
+            continue
         boxes.append({
             "j0": j0, "j1": j1, "i0": i0, "i1": i1,
             "rectangular": len(squares) == (j1 - j0) * (i1 - i0),
@@ -500,6 +673,7 @@ def detect_growables(page_index: int, xl: Lattice, yl: Lattice,
         if len(run) < MIN_GROWABLE_ROWS or len(signature) < MIN_GROWABLE_COLUMNS:
             continue
         i0, i1 = signature[0], signature[-1]
+
         # Every row must be closed top and bottom across the band's width,
         # otherwise this is a column of free space, not a stack of rows.
         if not all(h_at[j][i] for j in (*run, run[-1] + 1) for i in range(i0, i1)):

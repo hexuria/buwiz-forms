@@ -8,7 +8,7 @@
   "sha256": "0e06c2e75195ac1cad9524674bfd483f1a514e817decaf5b014927fe8e2e90d7",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 2,
+  "images_extracted": 0,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -21,7 +21,7 @@
   "rules": 890,
   "text_runs": 435,
   "images": 3,
-  "cells": 507,
+  "cells": 501,
   "comb_cells": 106,
   "growables": [
     {
@@ -69,7 +69,7 @@
       "1601-FQ Sep 2020 Guide.pdf"
     ]
   },
-  "html_bytes": 670681,
+  "html_bytes": 669824,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

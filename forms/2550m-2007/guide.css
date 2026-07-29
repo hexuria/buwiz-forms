@@ -1,4 +1,4 @@
-/* 2550M rev undated -- guide-specific rules.
+/* 2550M rev 2007 -- guide-specific rules.
  * Shared scaffolding is in ../base.css; the form's own rules
  * are in form.css and are not loaded by the guide. */
 @page { size:612pt 1008pt;margin:36pt }

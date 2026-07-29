@@ -41,6 +41,17 @@ score -- it is the guide's text, in the guide document, because that is the
 only version of it that prints. The pinned PDF stays beside the HTML and is
 linked, and remains the exact artefact.
 
+Regeneration cannot silently drop tracked files
+-----------------------------------------------
+
+`rm -rf forms` followed by a run once deleted forms/fonts/tinos-latin-400 and
+its bold: package() stages only the faces an emitted document resolved, so when
+a face went unresolved the font stopped being staged and the tracked file was
+simply gone -- no error, no diff to read, just two files missing from a tree
+that had just been rebuilt. Every output of this driver is committed, so any
+tracked file the run does not write is either lost or orphaned. That is checked
+against `git ls-files` before the first byte is written; see check_tracked_files.
+
 Usage:
     python3 tools/formgen/batch.py --source-root ~/Downloads/forms --out forms
     python3 tools/formgen/batch.py --only 2551Q --dry-run
@@ -88,9 +99,9 @@ NON_FORM_MARKERS = ("guide", "guidelines", "instruction", "annex")
 # extractable text. Only entries confirmed from the document body belong here --
 # an invented revision is worse than an honest "undated", because revision is
 # part of a form's identity and everything downstream pins on it.
-REVISION_OVERRIDES = {
-    "0605": "1999",     # printed in the sheet body; matches the repo's existing pin
-}
+# Defined in guides.py, which this module already imports. Kept as one
+# definition so the two can never disagree.
+REVISION_OVERRIDES = guides.REVISION_OVERRIDES
 
 STAGES = ("extract", "lattice", "guides", "fonts", "emit")
 
@@ -600,12 +611,140 @@ def render_css(header: str, rules: Iterable[tuple[str, str]]) -> str:
     return header + "\n".join(f"{sel} {{ {body} }}" for sel, body in rules) + "\n"
 
 
+# ---------------------------------------------------------------------------
+# the tracked-file guard
+# ---------------------------------------------------------------------------
+
+
+class TrackedFileLoss(Exception):
+    """This run would leave a git-tracked file under the output root unwritten."""
+
+
+def tracked_files(root: pathlib.Path) -> set[pathlib.Path]:
+    """Every file git tracks under `root`, as absolute paths.
+
+    An output root outside the checkout -- a scratch tree, which is how this
+    driver is run while the committed bundles are being reviewed by hand --
+    makes `git ls-files` fail, and the empty set is the right answer there:
+    nothing under it is committed, so nothing under it can be lost.
+    """
+    result = subprocess.run(["git", "ls-files", "-z", "--", str(root)],
+                            capture_output=True, text=True, cwd=REPO)
+    if result.returncode != 0:
+        return set()
+    return {(REPO / name).resolve() for name in result.stdout.split("\0") if name}
+
+
+def bundle_outputs(record: dict[str, Any],
+                   out_root: pathlib.Path) -> tuple[pathlib.Path, list[pathlib.Path]]:
+    """One converted form's bundle directory, and every file package() puts in it.
+
+    package() writes through this rather than repeating the paths, so the guard
+    below cannot certify a set of files that differs from the set that lands.
+    """
+    target = out_root / ("" if record["in_corpus"] else "extra") / record["slug"]
+    files = [target / "form.css", target / FORM_DOCUMENT, target / "provenance.json"]
+    build = record.get("guide_build") or {}
+    if build.get("html"):
+        files += [target / "guide.css", target / GUIDE_DOCUMENT]
+        files += [target / GUIDE_PDF_DIR / pathlib.Path(pdf).name
+                  for pdf in build.get("pdfs", [])]
+    return target, files
+
+
+def planned_outputs(records: list[dict[str, Any]], out_root: pathlib.Path,
+                    fonts_src: pathlib.Path) -> set[pathlib.Path]:
+    """Every path this run is about to write under `out_root`."""
+    planned = {out_root / "base.css"}
+    planned |= {out_root / "fonts" / name for name in collect_fonts(records, fonts_src)}
+    for record in records:
+        planned |= set(bundle_outputs(record, out_root)[1])
+        assets = pathlib.Path(record["html"]).parent / "assets"
+        if assets.is_dir():
+            planned |= {out_root / "assets" / path.relative_to(assets)
+                        for path in assets.rglob("*") if path.is_file()}
+    return {path.resolve() for path in planned}
+
+
+def drop_reason(path: pathlib.Path, out_root: pathlib.Path) -> str:
+    """Why this run does not write a file that is committed under `out_root`."""
+    top = path.relative_to(out_root).parts[0]
+    if top == "fonts":
+        return ("no font plan in this run resolved this face, so package() "
+                "would not stage it")
+    if top == "assets":
+        return "no converted page referenced this artwork, so no bundle would stage it"
+    if top == "base.css":
+        return "no form converted, so there were no shared rules to hoist"
+    return ("no converted bundle writes it -- its form failed, was excluded, or "
+            "now converts under a different <code>-<revision> slug")
+
+
+def check_tracked_files(records: list[dict[str, Any]], out_root: pathlib.Path,
+                        fonts_src: pathlib.Path, *, complete_run: bool,
+                        allow_removals: bool) -> None:
+    """Refuse to package if a committed file under `out_root` would not be written.
+
+    Everything this driver writes is committed, so a tracked file the run does
+    not produce is a defect either way, in one of two flavours:
+
+      lost      -- it is not on disk. Someone cleared the tree before the run
+                   (`rm -rf forms`) and this run does not put it back, so the
+                   next commit deletes it. This is how the two Tinos faces
+                   disappeared: a face went unresolved, package() stages only
+                   resolved faces, and nothing said so.
+      orphaned  -- it is still on disk, untouched, but the generator has stopped
+                   producing it: a bundle that changed slug, a font that stopped
+                   being referenced. Nothing is destroyed today, but the file is
+                   now hand-maintained fiction that no re-run can reproduce.
+
+    Only a complete run can judge the second one -- `--only` deliberately builds
+    a slice, and every bundle outside it is untouched by design rather than
+    dropped -- so a restricted run checks for losses alone.
+
+    `--allow-removals` turns the whole check into a warning. Dropping a bundle
+    is a real operation (a revision that was wrong, a form withdrawn); it just
+    has to be asked for, because the failure mode being guarded is precisely the
+    one nobody asks for.
+    """
+    tracked = tracked_files(out_root)
+    if not tracked:
+        return
+    out_root = out_root.resolve()
+    planned = planned_outputs(records, out_root, fonts_src)
+
+    losses = sorted(p for p in tracked - planned if not p.exists())
+    orphans = sorted(p for p in tracked - planned if p.exists()) if complete_run else []
+    if not losses and not orphans:
+        return
+
+    lines = [f"{len(losses) + len(orphans)} file(s) tracked in git under "
+             f"{out_root.relative_to(REPO) if out_root.is_relative_to(REPO) else out_root}"
+             " would not be written by this run:"]
+    for label, paths in (("LOST (not on disk either)", losses),
+                         ("ORPHANED (on disk, no longer generated)", orphans)):
+        for path in paths:
+            lines.append(f"  {label}  {path.relative_to(out_root)}")
+            lines.append(f"      {drop_reason(path, out_root)}")
+    if allow_removals:
+        lines.append("--allow-removals given: packaging anyway.")
+        print("\n".join(lines), file=sys.stderr)
+        return
+    lines.append("Nothing was written. Fix the cause, or pass --allow-removals "
+                 "if these files are meant to go.")
+    raise TrackedFileLoss("\n".join(lines))
+
+
 def package(records: list[dict[str, Any]], out_root: pathlib.Path,
-            fonts_src: pathlib.Path, generator_version: str) -> dict[str, Any]:
+            fonts_src: pathlib.Path, generator_version: str, *,
+            complete_run: bool = True, allow_removals: bool = False) -> dict[str, Any]:
     """Split shared CSS out, then write one self-contained bundle per form."""
     ok = [r for r in records if r["stage_failed"] is None]
     if not ok:
         return {"shared_rules": 0, "bundles": 0, "guides": 0}
+
+    check_tracked_files(ok, out_root, fonts_src, complete_run=complete_run,
+                        allow_removals=allow_removals)
 
     # A declaration shared by every form belongs in base.css. Anything else is
     # form-specific. This is computed, not curated, so it cannot drift. Only the
@@ -625,7 +764,15 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
                    " * Computed as the declarations common to all forms, so editing here\n"
                    " * changes every form at once. Form-specific rules live in each\n"
                    " * bundle's form.css, guide-specific rules in its guide.css. */\n",
-                   sorted(shared, key=lambda r: r[0])),
+                   # Sorted whole, not by prelude. `shared` is a set, so rules
+                   # that tie on the prelude -- several @font-face blocks, the
+                   # usual case -- were left in set-iteration order, which is
+                   # seeded per process: two runs over identical input emitted
+                   # base.css with the faces in different orders. Today's 51-form
+                   # base.css has 16 distinct preludes and no tie, so this changes
+                   # none of its bytes; it stops the next shared face from
+                   # reintroducing a build that cannot reproduce itself.
+                   sorted(shared)),
         encoding="utf-8")
 
     fonts_out = out_root / "fonts"
@@ -635,7 +782,7 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
 
     guides_written = 0
     for record in ok:
-        target = out_root / ("" if record["in_corpus"] else "extra") / record["slug"]
+        target, _ = bundle_outputs(record, out_root)
         target.mkdir(parents=True, exist_ok=True)
         depth = "../" * (len(target.relative_to(out_root).parts))
 
@@ -724,6 +871,11 @@ def main(argv: Iterable[str] | None = None) -> int:
                         help="Restrict to these form codes (repeatable).")
     parser.add_argument("--dry-run", action="store_true",
                         help="List what would be converted and stop.")
+    parser.add_argument("--allow-removals", action="store_true",
+                        help="Package even though committed files under --out would "
+                             "not be written by this run (a dropped bundle, a font "
+                             "that stopped being used). Off by default: the same "
+                             "condition is how a regeneration deletes tracked files.")
     parser.add_argument("--report", type=pathlib.Path, default=None)
     args = parser.parse_args(list(argv) if argv is not None else None)
 
@@ -779,7 +931,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         print(f"[{i:>2}/{len(sources)}] {source.slug:<24} {status}{note}", file=sys.stderr)
 
     generator = f"tools/formgen batch.py (rule-backend={args.rule_backend})"
-    summary = package(records, args.out, args.fonts_dir, generator)
+    try:
+        summary = package(records, args.out, args.fonts_dir, generator,
+                          complete_run=not args.only, allow_removals=args.allow_removals)
+    except TrackedFileLoss as loss:
+        print(f"\nrefusing to package: {loss}", file=sys.stderr)
+        return 2
 
     failed = [r for r in records if r["stage_failed"]]
     totals = guide_totals(records)

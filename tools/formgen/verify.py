@@ -37,6 +37,13 @@ visible characters exactly, in order, so a truncated, altered or absent string
 still reports missing. Static text correctness is the one thing standing between
 this pipeline and a wrong tax rate on a printed form.
 
+Those two ends are not the whole run, so *every* glyph between them is located
+too (`Interior`). A layer that reproduces a run's total advance by spreading it
+evenly -- which is exactly fonts.py's one-letter-spacing-per-run model -- passes
+origin, end and advance while putting every interior glyph somewhere else; the
+corpus round-trip carries such runs at up to 7.44pt. Whitespace is still not
+compared at a seam, but *ink position* is compared everywhere.
+
 Determinism: the report is a pure function of the two IRs. The candidate PDF
 itself is not byte-reproducible (Chromium stamps a creation date), which is why
 the diff ignores the IR's `source` and `generator` blocks entirely.
@@ -568,6 +575,56 @@ class Strip:
         positions = [k for k, (run, _) in enumerate(self.glyphs) if run == index]
         return (positions[0], positions[-1]) if positions else None
 
+    def glyph_x(self, index: int) -> float:
+        """Absolute page x of one visible glyph's origin."""
+        run, char = self.glyphs[index]
+        return float(self.runs[run]["origin_x"] or 0.0) + self.offsets[run][char]
+
+    def glyph_char(self, index: int) -> str:
+        """The character one visible glyph carries, for naming it in a report."""
+        run, char = self.glyphs[index]
+        return self.runs[run]["text"][char]
+
+
+@dataclass(frozen=True)
+class Interior:
+    """The worst-placed glyph strictly inside a segment, and where it sits.
+
+    A segment's outer measurements -- origin_x, end_x, advance -- pin only its
+    two ends. Everything between them was unchecked, and that is not a
+    hypothetical gap: fonts.py derives one uniform `letter-spacing` per run as
+    (measured_advance - natural_advance) / gaps, whose whole justification is
+    that "every glyph origin still lands where the PDF put it, which is what
+    verify.py compares". That claim is only true when the source's own tracking
+    is uniform. Where the PDF concentrated its extra advance in one gap -- a
+    wide word space, a single TJ offset -- the uniform model reproduces the
+    outer extent exactly while moving every interior glyph, so the run passed
+    both ends and the advance while its ink sat elsewhere. Measured on the
+    corpus round-trip that reaches 7.44pt, thirty times the position tolerance.
+
+    Glyph 0 is excluded because it *is* origin_x and already has its own reason;
+    everything after it is what nothing else looks at.
+
+    This is the one comparison that leans hard on `char_origin_offsets_pt`. An
+    IR old enough to lack it falls back to summing quantised advances, which
+    drifts up to 0.86pt deep inside a long run -- so on such an IR this reports
+    the fallback's accumulation rather than a defect. Re-extract; do not widen
+    the tolerance.
+    """
+
+    delta_pt: float
+    index: int          # position within the segment, 0 = the segment's origin
+    char: str
+
+    @classmethod
+    def between(cls, reference: Strip, candidate: Strip, first: int, stop: int) -> "Interior":
+        worst = cls(0.0, 0, "")
+        for position in range(first + 1, stop):
+            delta = abs(reference.glyph_x(position) - candidate.glyph_x(position))
+            if delta > worst.delta_pt:
+                worst = cls(delta, position - first, reference.glyph_char(position))
+        return worst
+
 
 @dataclass(frozen=True)
 class Pairing:
@@ -582,6 +639,7 @@ class Pairing:
     reference: Placement
     candidate: Placement
     parts: int          # runs spanned on the side the extractor chunked differently
+    interior: Interior  # worst glyph between the segment's two measured ends
 
 
 def _anchor(run: dict[str, Any]) -> tuple[float, float]:
@@ -669,7 +727,9 @@ def _pair_block(ref_runs: Sequence[dict[str, Any]], cand_runs: Sequence[dict[str
         if normalise_text(reference.text) != normalise_text(candidate.text):
             return None
         pairings.append(Pairing(ref_index=owner[first], reference=reference,
-                                candidate=candidate, parts=parts))
+                                candidate=candidate, parts=parts,
+                                interior=Interior.between(ref_strip, cand_strip,
+                                                          first, stop)))
     return pairings
 
 
@@ -783,6 +843,7 @@ def diff_text(ref_runs: Sequence[dict[str, Any]], cand_runs: Sequence[dict[str, 
     max_baseline = 0.0
     max_advance = 0.0
     max_size = 0.0
+    max_interior = 0.0
     for pairing in pairings:
         ref, cand = pairing.reference, pairing.candidate
         ref_family, ref_bold, ref_italic = run_style(ref.run)
@@ -796,6 +857,7 @@ def diff_text(ref_runs: Sequence[dict[str, Any]], cand_runs: Sequence[dict[str, 
         max_baseline = max(max_baseline, d_baseline)
         max_advance = max(max_advance, d_advance)
         max_size = max(max_size, d_size)
+        max_interior = max(max_interior, pairing.interior.delta_pt)
 
         reasons: list[str] = []
         if ref_family != cand_family:
@@ -812,6 +874,10 @@ def diff_text(ref_runs: Sequence[dict[str, Any]], cand_runs: Sequence[dict[str, 
             reasons.append(f"baseline_y Δ{d_baseline:.4f}pt")
         if d_advance > tol.advance:
             reasons.append(f"advance Δ{d_advance:.4f}pt")
+        if pairing.interior.delta_pt > tol.position:
+            reasons.append(f"glyph {pairing.interior.index} "
+                           f"{pairing.interior.char!r} origin "
+                           f"Δ{pairing.interior.delta_pt:.4f}pt")
         if reasons:
             entry = {
                 "reference": _placement_brief(ref),
@@ -821,6 +887,8 @@ def diff_text(ref_runs: Sequence[dict[str, Any]], cand_runs: Sequence[dict[str, 
                 "baseline_y_delta_pt": r4(d_baseline),
                 "size_delta_pt": r4(d_size),
                 "advance_delta_pt": r4(d_advance),
+                "interior_glyph_delta_pt": r4(pairing.interior.delta_pt),
+                "interior_glyph_index": pairing.interior.index,
             }
             if pairing.parts > 1:
                 # Say so: a reader comparing this against the raw IR would
@@ -842,6 +910,10 @@ def diff_text(ref_runs: Sequence[dict[str, Any]], cand_runs: Sequence[dict[str, 
         "max_baseline_y_delta_pt": r4(max_baseline),
         "max_advance_delta_pt": r4(max_advance),
         "max_size_delta_pt": r4(max_size),
+        # Reported next to the others because it is the only one that describes
+        # the inside of a run. A page can carry a perfect max_origin_x and a
+        # multi-point max_interior_glyph: same ink volume, wrong ink positions.
+        "max_interior_glyph_delta_pt": r4(max_interior),
         "ok": not free_ref and not free_cand and not mismatched,
     }
 
@@ -1091,7 +1163,8 @@ def print_report(report: dict[str, Any], stream: Any = sys.stdout, limit: int = 
               f"rechunked {text.get('reconciled_chunkings', 0)}  "
               f"maxΔorigin {text['max_origin_x_delta_pt']}pt  "
               f"maxΔbaseline {text['max_baseline_y_delta_pt']}pt  "
-              f"maxΔadv {text['max_advance_delta_pt']}pt", file=stream)
+              f"maxΔadv {text['max_advance_delta_pt']}pt  "
+              f"maxΔglyph {text.get('max_interior_glyph_delta_pt')}pt", file=stream)
         _bullets((f"missing text {m['text']!r} @ ({m['origin_x']},{m['baseline_y']}) "
                   f"{m['family']} {m['size_pt']}pt" for m in text["missing"]), limit, stream)
         _bullets((f"extra text {e['text']!r} @ ({e['origin_x']},{e['baseline_y']}) "
@@ -1293,6 +1366,90 @@ def text_differ_cases(check: Any) -> None:
           and abs((padding["mismatched"][0]["origin_x_delta_pt"] or 0.0) - 3.0) < 1e-6,
           f"{[m['reasons'] for m in padding['mismatched']]}")
 
+    # Redistributed tracking: the run keeps its origin, its end and therefore its
+    # advance, and moves every glyph in between. This is what one uniform
+    # letter-spacing does to a source that put all its extra advance in one gap,
+    # and until Interior existed nothing in this file looked at it. "2nd" is
+    # 5pt per glyph over a 20pt advance: the source spends the 5pt of tracking
+    # entirely in the first gap, the even model spends 2.5pt in each, so glyph 1
+    # lands 2.5pt right of where the PDF put it while both ends are exact.
+    def _tracked(offsets: list[float]) -> dict[str, Any]:
+        run = _fake_run("2nd", 30.0, 160.0, pitch=5.0)
+        run["char_origin_offsets_pt"] = offsets
+        run["char_advances_pt"] = [round(offsets[i + 1] - offsets[i], 2)
+                                   for i in range(len(offsets) - 1)] + [5.0]
+        run["measured_advance_pt"] = round(offsets[-1] + 5.0, 2)
+        run["x1"] = 30.0 + run["measured_advance_pt"]
+        return run
+
+    retracked = diff_text([_tracked([0.0, 10.0, 15.0])],
+                          [_tracked([0.0, 7.5, 15.0])], tol)
+    worst = retracked["mismatched"][0] if retracked["mismatched"] else {}
+    check("evenly redistributed tracking is caught on the interior glyph",
+          not retracked["ok"] and len(retracked["mismatched"]) == 1
+          and abs((worst.get("origin_x_delta_pt") or 0.0)) < 1e-6
+          and abs((worst.get("advance_delta_pt") or 0.0)) < 1e-6
+          and abs((worst.get("interior_glyph_delta_pt") or 0.0) - 2.5) < 1e-6
+          and worst.get("interior_glyph_index") == 1
+          and any("glyph 1" in reason for reason in worst.get("reasons", [])),
+          f"{retracked['mismatched']}")
+
+    check("an interior glyph delta is reported even when nothing is mismatched",
+          "max_interior_glyph_delta_pt" in retracked
+          and abs((retracked["max_interior_glyph_delta_pt"] or 0.0) - 2.5) < 1e-6,
+          f"{retracked.get('max_interior_glyph_delta_pt')}")
+
+    # The corpus's three unmatched runs, to the hundredth of a point: 2550Q's
+    # ' 2nd ' against what our own print round-trips to. The source spends 6pt
+    # of tracking in the gap after the leading space; the even model spends
+    # ~1.5pt in each of four gaps, which both moves every glyph AND opens gaps
+    # wide enough that the extractor invents a space between them. The invented
+    # spaces must not reconcile it away, and -- the load-bearing half -- the
+    # geometry must condemn it on its own, with the invented spaces removed.
+    source_2nd = _fake_run(" 2nd ", 481.18, 116.8, size=9.0)
+    source_2nd["char_origin_offsets_pt"] = [0.0, 8.59, 13.59, 18.59, 23.62]
+    source_2nd["char_advances_pt"] = [8.59, 5.0, 5.0, 5.03, 2.5]
+    source_2nd["char_widths_pt"] = [2.5, 5.0, 5.0, 5.0, 2.5]
+    source_2nd["measured_advance_pt"] = 26.12
+
+    printed_2nd = _fake_run(" 2 n d  ", 481.17, 116.8, size=9.0)
+    printed_2nd["char_origin_offsets_pt"] = [0.0, 4.03, 9.03, 10.56, 15.56,
+                                             17.09, 22.09, 23.62]
+    printed_2nd["char_advances_pt"] = [4.03, 5.0, 1.53, 5.0, 1.53, 5.0, 1.53, 2.49]
+    printed_2nd["char_widths_pt"] = [2.49, 5.0, 1.53, 5.0, 1.53, 5.0, 1.53, 2.49]
+    printed_2nd["measured_advance_pt"] = 26.11
+
+    redistributed = diff_text([source_2nd], [printed_2nd], tol)
+    check("a short padded run whose glyphs were redistributed stays reported",
+          not redistributed["ok"] and len(redistributed["missing"]) == 1
+          and len(redistributed["extra"]) == 1
+          and redistributed["reconciled_chunkings"] == 0,
+          f"missing {[m['text'] for m in redistributed['missing']]} "
+          f"extra {[e['text'] for e in redistributed['extra']]}")
+
+    without_invented = dict(printed_2nd, text=" 2nd ",
+                            char_origin_offsets_pt=[0.0, 4.03, 10.56, 17.09, 23.62],
+                            char_advances_pt=[4.03, 6.53, 6.53, 6.53, 2.49],
+                            char_widths_pt=[2.49, 5.0, 5.0, 5.0, 2.49])
+    geometry_only = diff_text([source_2nd], [without_invented], tol)
+    check("the same redistribution is condemned by geometry alone",
+          not geometry_only["ok"] and len(geometry_only["mismatched"]) == 1
+          and abs((geometry_only["mismatched"][0]["origin_x_delta_pt"] or 0.0)
+                  - 4.57) < 5e-3,
+          f"{[m['reasons'] for m in geometry_only['mismatched']]}")
+
+    # The guard on all of the above: whatever the differ learns to forgive about
+    # short padded strings, one that is simply NOT on the candidate page must
+    # still be missing -- even with a sibling of the same shape sitting beside
+    # it to be mistaken for it. ' No ' is 1800's real string; it fails this
+    # pipeline's whole purpose if it can be answered by ' 2nd '.
+    no_run = _fake_run(" No ", 231.17, 371.81, size=9.0)
+    dropped = diff_text([no_run, source_2nd], [source_2nd], tol)
+    check("a short padded string absent from the candidate is still missing",
+          not dropped["ok"] and [m["text"] for m in dropped["missing"]] == [" No "]
+          and not dropped["extra"],
+          f"missing {[m['text'] for m in dropped['missing']]}")
+
     # --- and now the cases that must NOT be explained away -------------------
 
     truncated = diff_text(
@@ -1392,6 +1549,7 @@ def self_test(pdf_path: pathlib.Path, stream: Any = sys.stderr) -> int:
         and page["text"]["max_baseline_y_delta_pt"] == 0.0
         and page["text"]["max_advance_delta_pt"] == 0.0
         and page["text"]["max_size_delta_pt"] == 0.0
+        and page["text"]["max_interior_glyph_delta_pt"] == 0.0
         and page["images"]["max_placement_delta_pt"] == 0.0
         for page in clean["pages"])
     check("self-diff deltas are exactly zero", zero_deltas)

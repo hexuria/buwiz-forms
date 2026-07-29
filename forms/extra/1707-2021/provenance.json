@@ -8,7 +8,7 @@
   "sha256": "b6bc016f240a8d6233db6fb0065b72b31e75cb665affc2b96bcd2066e7ad257e",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 2,
+  "images_extracted": 0,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -21,7 +21,7 @@
   "rules": 1084,
   "text_runs": 264,
   "images": 3,
-  "cells": 287,
+  "cells": 281,
   "comb_cells": 113,
   "growables": [],
   "sources": [
@@ -62,7 +62,7 @@
       "1707 April 2021 ENCS Guidelines and Instructions.pdf"
     ]
   },
-  "html_bytes": 593494,
+  "html_bytes": 592521,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

@@ -8,7 +8,7 @@
   "sha256": "ec49207aab9b035d1913d41091b677d9df690e01b391ed2c2f4c34cf43a524c6",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 2,
+  "images_extracted": 0,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -21,7 +21,7 @@
   "rules": 1114,
   "text_runs": 388,
   "images": 3,
-  "cells": 508,
+  "cells": 425,
   "comb_cells": 102,
   "growables": [],
   "sources": [
@@ -62,7 +62,7 @@
       "1801 Guidelines.pdf"
     ]
   },
-  "html_bytes": 955022,
+  "html_bytes": 928134,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

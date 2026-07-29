@@ -98,9 +98,24 @@ GUIDE_FIELD_CELL_FRACTION = 0.05
 # batch.py skips these; for this module they are the target, not the noise.
 GUIDE_NAME_MARKERS = ("guide", "guidelines", "instruction", "annex")
 
-# Mirrors batch.REVISION_OVERRIDES. Kept as data rather than imported so this
-# module runs standalone; self_test() asserts the two agree.
-REVISION_OVERRIDES = {"0605": "1999"}
+# Owned here and imported by batch.py, which already depends on this module.
+# It used to be duplicated in both files with a self-test asserting the copies
+# agreed; the test did its job and caught the drift, but a constant that can
+# drift at all is the defect. One definition cannot disagree with itself.
+REVISION_OVERRIDES = {
+    "0605": "1999",     # printed in the sheet body; matches the repo's existing pin
+    # Neither folder ("2550M", "2551M") nor file name ("bir2550m.pdf",
+    # "2551m.pdf") carries a year, so discovery fell back to "undated". Both
+    # sheets do stamp the revision, in the masthead where every other BIR form
+    # stamps it -- the year simply never reached classify(), which only reads
+    # names. The PDF metadata is *not* the evidence for either (2550M's says
+    # created 2007-04-15 by "Acrobat PDFWriter 5.0", 2551M's 2003-02-14 by
+    # "Acrobat PDFWriter 4.05"): that dates the file, not the form.
+    "2550M": "2007",    # p1 masthead "February 2007 (ENCS)" at (468.96, 69.39) pt,
+                        # repeated in the p2/p3 running head:
+                        # "BIR  Form 2550M  -  February 2007 (ENCS)      Page 2"
+    "2551M": "2002",    # p1 masthead "April  2002  (ENCS)" at (476.4, 99.36) pt
+}
 
 SCHEMA_VERSION = 1
 DEFAULT_SOURCE_ROOT = pathlib.Path("~/Downloads/forms").expanduser()
