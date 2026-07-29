@@ -13,7 +13,7 @@ use gpui_component::input::OtpInput;
 use gpui_component::*;
 use gpui_rsx::rsx;
 
-use crate::app::{ActiveView, AppState};
+use crate::app::{ActiveView, AppState, ProfileLifecycleAction};
 use crate::components::otp_paste::paste_otp_value;
 
 impl AppState {
@@ -268,7 +268,17 @@ impl AppState {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let target = self.pending_admin_view?;
+        // The prompt now guards two kinds of request: navigating to an
+        // admin-only view, and changing a taxpayer profile's lifecycle.
+        // Exactly one of them is pending whenever this overlay is up.
+        let target = self.pending_admin_view;
+        let pending_lifecycle = self
+            .pending_admin_lifecycle
+            .as_ref()
+            .map(|(_, action)| *action);
+        if target.is_none() && pending_lifecycle.is_none() {
+            return None;
+        }
         let error_msg = self.admin_auth_error.clone();
         let os_triggered = self.admin_os_auth_triggered;
 
@@ -322,15 +332,36 @@ impl AppState {
                                 {div()
                                         .text_sm()
                                         .text_color(cx.theme().muted_foreground)
-                                        .child(match target {
-                                            ActiveView::Settings => {
+                                        .child(match (target, pending_lifecycle) {
+                                            (_, Some(ProfileLifecycleAction::Archive)) => {
+                                                if use_totp {
+                                                    "Enter Authenticator Code to archive this taxpayer profile"
+                                                } else {
+                                                    "Enter App Lock PIN to archive this taxpayer profile"
+                                                }
+                                            }
+                                            (_, Some(ProfileLifecycleAction::Restore)) => {
+                                                if use_totp {
+                                                    "Enter Authenticator Code to restore this taxpayer profile"
+                                                } else {
+                                                    "Enter App Lock PIN to restore this taxpayer profile"
+                                                }
+                                            }
+                                            (_, Some(ProfileLifecycleAction::Delete)) => {
+                                                if use_totp {
+                                                    "Enter Authenticator Code to delete this taxpayer profile"
+                                                } else {
+                                                    "Enter App Lock PIN to delete this taxpayer profile"
+                                                }
+                                            }
+                                            (Some(ActiveView::Settings), None) => {
                                                 if use_totp {
                                                     "Enter Authenticator Code to access Settings"
                                                 } else {
                                                     "Enter App Lock PIN to access Settings"
                                                 }
                                             }
-                                            ActiveView::CronTasks => {
+                                            (Some(ActiveView::CronTasks), None) => {
                                                 if use_totp {
                                                     "Enter Authenticator Code to access Background Tasks"
                                                 } else {
@@ -478,6 +509,12 @@ impl AppState {
                                                                 );
                                                             }
                                                         }
+                                                        if let Some(pending) =
+                                                            this.pending_admin_lifecycle.take()
+                                                        {
+                                                            this.admin_lifecycle_authorized =
+                                                                Some(pending);
+                                                        }
                                                     } else {
                                                         this.admin_auth_error = Some(
                                                             "OS Authentication failed or canceled."
@@ -509,6 +546,7 @@ impl AppState {
                                         .disabled(os_triggered)
                                         .on_click(cx.listener(|this, _ev, window, cx| {
                                             this.pending_admin_view = None;
+                                            this.pending_admin_lifecycle = None;
                                             this.admin_otp_state.update(cx, |input, cx| {
                                                 input.set_value("", window, cx)
                                             });

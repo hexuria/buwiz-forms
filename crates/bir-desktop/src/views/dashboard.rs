@@ -25,6 +25,10 @@ pub enum DashboardEvent {
     Reload,
     LogoutProfile(String),
     OpenProfileManager,
+    /// Open the profile editor for the profile this dashboard is showing.
+    /// The sidebar row no longer expands into an Edit button, so this header
+    /// control is the route to a profile's own settings.
+    EditProfile(String),
 }
 
 impl EventEmitter<DashboardEvent> for DashboardView {}
@@ -1816,27 +1820,38 @@ impl Render for DashboardView {
         let dashboard = rsx! {
             <div id={"dashboard-scroll"} size_full flex flex_col justify_start overflow_y_scroll>
                 <div flex flex_col w_full justify_start gap_6 px_8 py_6>
-                    <div flex flex_col gap_2>
-                        <div
-                            text_3xl
-                            font_weight={FontWeight::BOLD}
-                            text_color={cx.theme().foreground}
-                        >
-                            {profile.full_name.clone()}
+                    <div flex items_start justify_between gap_4>
+                        <div flex flex_col gap_2>
+                            <div
+                                text_3xl
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {profile.full_name.clone()}
+                            </div>
+                            <div text_base text_color={cx.theme().muted_foreground}>
+                                {format!(
+                                    "TIN: {} • Type: {:?} • {} • {}",
+                                    profile.tin.full(),
+                                    profile.taxpayer_type,
+                                    period_desc,
+                                    if profile.is_vat_registered {
+                                        "VAT"
+                                    } else {
+                                        "Non-VAT"
+                                    }
+                                )}
+                            </div>
                         </div>
-                        <div text_base text_color={cx.theme().muted_foreground}>
-                            {format!(
-                                "TIN: {} • Type: {:?} • {} • {}",
-                                profile.tin.full(),
-                                profile.taxpayer_type,
-                                period_desc,
-                                if profile.is_vat_registered {
-                                    "VAT"
-                                } else {
-                                    "Non-VAT"
+                        {gpui_component::button::Button::new("open_profile_settings")
+                            .outline()
+                            .label("Profile Settings")
+                            .on_click(cx.listener({
+                                let tin = profile.tin.full();
+                                move |_this, _ev, _window, cx| {
+                                    cx.emit(DashboardEvent::EditProfile(tin.clone()));
                                 }
-                            )}
-                        </div>
+                            }))}
                     </div>
                     <div flex items_center justify_between gap_4>
                         <div flex_grow>
