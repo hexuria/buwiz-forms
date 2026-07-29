@@ -34,9 +34,12 @@ A bundle with no guide content gets no guide.html, and nothing links to one.
 Standalone guide PDFs stay out of form discovery -- converting an instruction
 sheet into a fillable-looking bundle is worse than skipping it -- but they are
 not discarded either: guides.py maps each one to its parent form, this driver
-copies it into that bundle's guides/ directory, and emit.py's guide document
-embeds it. It stays the pinned PDF rather than becoming a second conversion
-whose parity nobody measures.
+copies it into that bundle's guides/ directory and extracts it with the same
+extractor the form uses, and emit.py reflows that extraction into guide.html.
+It is not a second *form* conversion -- no lattice, no font plan, no parity
+score -- it is the guide's text, in the guide document, because that is the
+only version of it that prints. The pinned PDF stays beside the HTML and is
+linked, and remains the exact artefact.
 
 Usage:
     python3 tools/formgen/batch.py --source-root ~/Downloads/forms --out forms
@@ -101,6 +104,12 @@ GUIDE_PDF_DIR = "guides"
 
 # The flags emit.py needs before this driver can split anything.
 GUIDE_EMIT_FLAGS = frozenset({"--guide-plan", "--document"})
+
+# The flag that turns a standalone guide PDF into printable text rather than an
+# embedded viewer. Optional in the same way the naming flags are: a checkout
+# whose emit.py predates it still builds every bundle, with the guide PDFs
+# linked instead of converted.
+GUIDE_SOURCE_FLAG = "--guide-source"
 
 
 @dataclasses.dataclass
@@ -274,16 +283,49 @@ def stage_fonts(plan_path: pathlib.Path, fonts_dir: pathlib.Path) -> None:
 def stage_guide_pdfs(pdfs: Iterable[pathlib.Path], staging: pathlib.Path) -> None:
     """Put the standalone guide PDFs where the emitted guide document expects them.
 
-    emit.py embeds each one as <object data="guides/<name>"> and checks the file
-    is actually beside its output, so they have to be staged before the emit
-    rather than at packaging time -- otherwise every guide document is emitted
-    with a warning about a file this driver was always going to copy.
+    emit.py links each one as guides/<name> and checks the file is actually
+    beside its output, so they have to be staged before the emit rather than at
+    packaging time -- otherwise every guide document is emitted with a warning
+    about a file this driver was always going to copy.
     """
     staging.mkdir(parents=True, exist_ok=True)
     for pdf in pdfs:
         target = staging / pdf.name
         if not target.is_file():
             shutil.copy2(pdf, target)
+
+
+def stage_guide_sources(pdfs: Iterable[pathlib.Path], slug: str, code: str,
+                        revision: str, work: pathlib.Path
+                        ) -> tuple[list[pathlib.Path], str]:
+    """Extract each standalone guide PDF with the extractor the form itself uses.
+
+    A guide shipped as its own PDF used to be handed to the browser as a linked
+    <object>, which does not print with the document around it: twelve bundles
+    had a guide that could be read on screen and not put on paper. Running the
+    guide PDF through extract.py makes its text available to the same reflow the
+    inline guides go through, so all 29 guides become one kind of document.
+
+    These IRs are a *reading* artefact and deliberately go no further down the
+    pipeline -- no lattice, no font plan, no round-trip score. A guide has no
+    fields to model and no parity to measure; what it has is text, and text is
+    all the reflow reads. They land in a subdirectory so audit.py's `*.ir.json`
+    sweep, which scores forms, cannot mistake one for a form.
+
+    Returns the IR paths, or an empty list and the first error.
+    """
+    out: list[pathlib.Path] = []
+    for index, pdf in enumerate(pdfs, 1):
+        target = work / "ir" / "guides" / f"{slug}.guide-{index}.ir.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        ok, error = run_stage([str(HERE / "extract.py"), "--pdf", str(pdf),
+                               "--form-code", code, "--revision", revision,
+                               "--expected-sha256", sha256_file(pdf),
+                               "--out", str(target)])
+        if not ok:
+            return [], f"{pdf.name}: {error}"
+        out.append(target)
+    return out, ""
 
 
 def region_summary(entry: dict[str, Any], destination: str) -> dict[str, Any]:
@@ -307,7 +349,8 @@ def region_summary(entry: dict[str, Any], destination: str) -> dict[str, Any]:
     }
 
 
-def guide_block(plan: dict[str, Any], pdfs: list[pathlib.Path]) -> dict[str, Any]:
+def guide_block(plan: dict[str, Any], pdfs: list[pathlib.Path],
+                converted: bool) -> dict[str, Any]:
     """The bundle's guide record: what left the form pages, and where it went."""
     regions = [region_summary(entry, GUIDE_DOCUMENT) for entry in plan["inline"]]
     pcts = [r["reclaimed_pct"] for r in regions]
@@ -317,15 +360,19 @@ def guide_block(plan: dict[str, Any], pdfs: list[pathlib.Path]) -> dict[str, Any
         "origins": origins,
         "moved_from_form": regions,
         "standalone_pdfs": [{"file": pdf.name, "sha256": sha256_file(pdf),
-                             "embedded_as": f"{GUIDE_PDF_DIR}/{pdf.name}"} for pdf in pdfs],
+                             "linked_as": f"{GUIDE_PDF_DIR}/{pdf.name}",
+                             "reflowed_into": GUIDE_DOCUMENT if converted else None}
+                            for pdf in pdfs],
         "reclaimed_pt_total": round(sum(r["reclaimed_pt"] for r in regions), 2),
         "reclaimed_pct_mean": round(sum(pcts) / len(pcts)) if pcts else 0,
         "reclaimed_pct_min": min(pcts) if pcts else 0,
         "reclaimed_pct_max": max(pcts) if pcts else 0,
         "note": ("Reference material printed on the source sheet, or shipped as a separate "
                  "guide PDF. It is not part of the filed form: index.html no longer carries "
-                 "the regions listed under moved_from_form, and the PDFs under "
-                 "standalone_pdfs are embedded by guide.html, not converted."),
+                 "the regions listed under moved_from_form. Each PDF under standalone_pdfs "
+                 "was re-extracted and reflowed into guide.html so that it prints with the "
+                 "document; the pinned PDF is kept beside it and linked, and remains the "
+                 "exact artefact."),
     }
 
 
@@ -374,8 +421,16 @@ def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib
     has_guide = bool(guide["inline"] or standalone)
     splitting = has_guide and guide_emission_supported()
     guide_html = work / "html" / f"{slug}.{GUIDE_DOCUMENT}"
+    guide_source_irs: list[pathlib.Path] = []
     if splitting and standalone:
         stage_guide_pdfs(standalone, guide_html.parent / GUIDE_PDF_DIR)
+        if GUIDE_SOURCE_FLAG in emit_options():
+            guide_source_irs, error = stage_guide_sources(
+                standalone, slug, source.code, source.revision, work)
+            if error:
+                record["stage_failed"] = "extract-guide"
+                record["error"] = error
+                return record
 
     # The form. A bundle with nothing to split is emitted exactly as it was
     # before guides existed -- same argv, same bytes -- so the 22 forms with no
@@ -401,6 +456,7 @@ def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib
                       "--out", str(guide_html)]
         with_supported(guide_argv, [("--form-href", FORM_DOCUMENT),
                                     ("--guide-pdf-dir", GUIDE_PDF_DIR)])
+        with_supported(guide_argv, [(GUIDE_SOURCE_FLAG, str(p)) for p in guide_source_irs])
         if guide_layout:
             with_supported(guide_argv, [("--guide-layout", guide_layout)])
         ok, error = run_stage(guide_argv)
@@ -429,7 +485,8 @@ def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib
         "sources": [{"role": "form", "file": source.pdf.name, "sha256": record["sha256"]}]
                    + [{"role": "guide", "file": pdf.name, "sha256": sha256_file(pdf)}
                       for pdf in (standalone if splitting else [])],
-        "guide": guide_block(guide, standalone) if splitting else None,
+        "guide": (guide_block(guide, standalone, bool(guide_source_irs))
+                  if splitting else None),
         "guide_detected": {"inline_pages": [e["page"] for e in guide["inline"]],
                            "standalone_pdfs": [p.name for p in standalone]},
         "html_bytes": html.stat().st_size,
@@ -437,22 +494,52 @@ def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib
         "guide_build": {"plan": str(guide_plan),
                         "html": str(guide_html) if splitting else None,
                         "pdfs": [str(p) for p in (standalone if splitting else [])]},
+        "guide_source_irs": [str(p) for p in guide_source_irs],
         "font_plans": [str(plan)],
     })
     return record
 
 
 STYLE_RE = re.compile(r"<style[^>]*>(.*?)</style>", re.DOTALL)
-DECL_RE = re.compile(r"([^{}]+)\{([^{}]*)\}")
+COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 # Keys that name the build tree, not the source. They are machine-dependent and
 # stay out of the committed bundle.
-BUILD_ONLY_KEYS = ("html", "font_plans", "guide_build")
+BUILD_ONLY_KEYS = ("html", "font_plans", "guide_build", "guide_source_irs")
 
 
 def split_rules(css: str) -> list[tuple[str, str]]:
-    """Flatten a stylesheet into (selector, body) pairs, ignoring at-rules."""
-    return [(m.group(1).strip(), m.group(2).strip()) for m in DECL_RE.finditer(css)]
+    """A stylesheet as (prelude, body) pairs, with nested at-rules kept whole.
+
+    This used to be one regex over `sel{body}`, which cannot see nesting: it
+    matched the rules *inside* `@media print{...}` and dropped the condition
+    around them. A conditional rule that has lost its condition is not a
+    smaller stylesheet, it is a different one. `@media print{.doc-link{display:
+    none}}` became an unconditional `.doc-link{display:none}`, which hid both
+    documents' navigation links on screen as well as on paper, and every
+    print-only pagination rule the guide document now carries would have been
+    applied to the screen the same way.
+
+    Depth counting is enough because the generated CSS has no strings holding
+    braces; comments are stripped first so one in prose cannot open a phantom
+    block.
+    """
+    css = COMMENT_RE.sub("", css)
+    out: list[tuple[str, str]] = []
+    index = 0
+    while True:
+        brace = css.find("{", index)
+        if brace < 0:
+            return out
+        prelude = css[index:brace].strip()
+        depth = 1
+        cursor = brace + 1
+        while cursor < len(css) and depth:
+            depth += (css[cursor] == "{") - (css[cursor] == "}")
+            cursor += 1
+        if prelude:
+            out.append((prelude, css[brace + 1:cursor - 1].strip()))
+        index = cursor
 
 
 def document_rules(html_path: pathlib.Path) -> list[tuple[str, str]]:

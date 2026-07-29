@@ -2,3 +2,34 @@
  * Shared scaffolding is in ../base.css. */
 @page { size:612pt 936pt;margin:0 }
 @font-face { font-family:"eBIRForms Arimo";font-style:italic;font-weight:100 900;font-display:block;src:url("fonts/arimo-latin-wght-italic.woff2") format("woff2") }
+.fi { position:absolute;inset:0;appearance:none;-webkit-appearance:none;border:0;margin:0;padding:0;background:transparent;box-shadow:none;outline:0;border-radius:0;caret-color:#000000;text-rendering:geometricPrecision;font-family:"eBIRForms Arimo", Arimo, Arial, Helvetica, sans-serif;font-weight:400;font-style:normal;font-kerning:none;font-variant-ligatures:none;font-feature-settings:normal;font-variation-settings:"wght" 400;color:#000000 }
+.fh0 { font-size:4.08pt;line-height:4.56pt }
+.fh1 { font-size:4.63pt;line-height:5.18pt }
+.fh10 { font-size:6.56pt;line-height:7.34pt }
+.fh11 { font-size:6.57pt;line-height:7.35pt }
+.fh12 { font-size:6.65pt;line-height:7.44pt }
+.fh13 { font-size:6.67pt;line-height:7.46pt }
+.fh14 { font-size:6.76pt;line-height:7.56pt }
+.fh15 { font-size:7.19pt;line-height:8.04pt }
+.fh16 { font-size:7.3pt;line-height:8.16pt }
+.fh17 { font-size:7.51pt;line-height:8.4pt }
+.fh18 { font-size:8.7pt;line-height:9.72pt }
+.fh19 { font-size:9pt;line-height:10.53pt }
+.fh2 { font-size:5.58pt;line-height:6.24pt }
+.fh20 { font-size:9pt;line-height:10.56pt }
+.fh21 { font-size:9pt;line-height:10.62pt }
+.fh22 { font-size:9pt;line-height:10.8pt }
+.fh23 { font-size:9pt;line-height:10.86pt }
+.fh24 { font-size:9pt;line-height:10.92pt }
+.fh25 { font-size:9pt;line-height:11.04pt }
+.fh26 { font-size:9pt;line-height:17.28pt }
+.fh27 { font-size:9pt;line-height:17.3pt }
+.fh28 { font-size:9pt;line-height:17.31pt }
+.fh29 { font-size:9pt;line-height:36.72pt }
+.fh3 { font-size:5.69pt;line-height:6.36pt }
+.fh4 { font-size:6.04pt;line-height:6.75pt }
+.fh5 { font-size:6.12pt;line-height:6.84pt }
+.fh6 { font-size:6.22pt;line-height:6.96pt }
+.fh7 { font-size:6.33pt;line-height:7.08pt }
+.fh8 { font-size:6.44pt;line-height:7.2pt }
+.fh9 { font-size:6.55pt;line-height:7.32pt }

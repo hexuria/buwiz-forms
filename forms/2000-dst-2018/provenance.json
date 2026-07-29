@@ -8,7 +8,7 @@
   "sha256": "b18ce9d2380d216814f4410c2e132eebb02b93754f7ca0167311f368e100e79f",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 2,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -70,14 +70,15 @@
       {
         "file": "2000 Guide Jan 2018.pdf",
         "sha256": "bb653d7157cf3c6a116b5eae5d669fe302e4e08230154dffe3239ea61174a130",
-        "embedded_as": "guides/2000 Guide Jan 2018.pdf"
+        "linked_as": "guides/2000 Guide Jan 2018.pdf",
+        "reflowed_into": "guide.html"
       }
     ],
     "reclaimed_pt_total": 0,
     "reclaimed_pct_mean": 0,
     "reclaimed_pct_min": 0,
     "reclaimed_pct_max": 0,
-    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form. Each PDF under standalone_pdfs was re-extracted and reflowed into guide.html so that it prints with the document; the pinned PDF is kept beside it and linked, and remains the exact artefact."
   },
   "guide_detected": {
     "inline_pages": [],
@@ -85,7 +86,7 @@
       "2000 Guide Jan 2018.pdf"
     ]
   },
-  "html_bytes": 632773,
+  "html_bytes": 802348,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

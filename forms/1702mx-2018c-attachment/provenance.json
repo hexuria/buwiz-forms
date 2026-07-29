@@ -8,7 +8,7 @@
   "sha256": "36c02d4c84919d2e5b94cd31b339490019be80afa622f5681ce252c8ec3dec26",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 2,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -48,7 +48,7 @@
     "inline_pages": [],
     "standalone_pdfs": []
   },
-  "html_bytes": 504896,
+  "html_bytes": 691407,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

@@ -8,7 +8,7 @@
   "sha256": "fc34de40dc7e6bc5f7a8cbc3feb5b170cca4bce4f0abd5b7b0dece4e9dd75c4d",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 2,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -61,7 +61,7 @@
     "reclaimed_pct_mean": 51,
     "reclaimed_pct_min": 51,
     "reclaimed_pct_max": 51,
-    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form. Each PDF under standalone_pdfs was re-extracted and reflowed into guide.html so that it prints with the document; the pinned PDF is kept beside it and linked, and remains the exact artefact."
   },
   "guide_detected": {
     "inline_pages": [
@@ -69,7 +69,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 260716,
+  "html_bytes": 320358,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

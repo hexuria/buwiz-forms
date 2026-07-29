@@ -51,6 +51,13 @@ those as positioned runs is what makes them overlap. `--guide-layout reflow`
 flowing HTML, which fixes the overlap by construction rather than by nudging
 coordinates. `--guide-layout absolute` keeps the positioned form.
 
+A guide is a document people print, so the reflowed guide carries an `@page` of
+its own: the form's paper, with a reading margin instead of the form's
+`margin:0`. A standalone guide PDF is reflowed into the same document from its
+own extraction (`--guide-source`) rather than embedded with `<object>`, because
+an embedded PDF is a second document with its own pagination and does not print
+with the one around it. The pinned PDF stays beside the HTML and is linked.
+
 Usage:
     python3 tools/formgen/emit.py \
         --ir build/ir/2551q-2018.ir.json \
@@ -734,11 +741,378 @@ def text_json(run: dict[str, Any], identifier: str, style: RunStyle,
 
 
 # ---------------------------------------------------------------------------
+# Fields: the surface a taxpayer types on
+# ---------------------------------------------------------------------------
+#
+# A cell of kind "field" is a box the official sheet left blank. Until this
+# layer existed the generated document reproduced the blank exactly and gave
+# nobody anywhere to type: 2551Q carried 147 cells marked `data-cell-kind=
+# "field"` and not one input. The field layer adds the typing surface without
+# adding a single unit of ink, which is what makes it safe to bolt onto a
+# document whose whole value is that it round-trips.
+#
+# Three properties are load-bearing:
+#
+#   * An empty field prints as nothing. Every affordance is a `:hover`/`:focus`
+#     rule under `@media screen`, and print has neither state, so the printed
+#     sheet is the same PDF it was before this layer existed even if a
+#     stylesheet transform drops the media guard -- which is a thing that has
+#     actually happened to this repo's packaged bundles.
+#   * A field never states its geometry twice. A comb slot is already a
+#     positioned box, so its input is `inset:0` inside it; only a plain field
+#     states an inset, and it states offsets rather than a width, so the same
+#     markup fits a band row whose cell is a different size.
+#   * The typography is the font plan's, not the browser's. A blank has no text
+#     of its own to measure, so the face is derived from the sheet's own body
+#     text (see FieldFace) and served by the same @font-face, at a size fitted
+#     to the box the form actually drew.
+
+
+# Below this a fitted field would be typographically useless, and a box that
+# small is more likely a mis-detected cell than a place to write. It is
+# reported, never silently corrected: the box is the source's.
+FIELD_MIN_SIZE_PT = 4.0
+
+# Used only when the plan carries no shipped-face vertical metrics, which is
+# also warned about. 1.2em is the browser's own `normal` line box, so a field
+# fitted through it is no worse placed than an unstyled one.
+FALLBACK_LINE_SPAN_EM = 1.2
+
+
+class FieldFace:
+    """The face a taxpayer's own entries are typed in, derived from the sheet.
+
+    A blank has no text of its own, so its typography has to come from
+    somewhere else, and the only defensible source is the form's own printed
+    body text: whatever face and size the sheet sets most of its characters in
+    is what a filled entry has to match, or a filled form stops matching its
+    own blanks. It is chosen by glyph count over the *font plan*, so an entry
+    is served by the identical @font-face, kerning, ligature and variation
+    settings as the pre-printed runs beside it -- not by a look-alike, and not
+    by the platform UI font an unstyled <input> would use.
+
+    Candidates are restricted to resolved, metric-compatible faces at unit
+    horizontal scale: a face reached through scaleX() carries its advances
+    through a transform that would have to be re-derived per box, and a
+    non-metric-compatible face has wrong glyph origins by the plan's own
+    admission. Upright regular wins over bold and italic where both exist,
+    because the runs a BIR sheet sets bold are its headings, not its data.
+    """
+
+    __slots__ = ("css", "size_pt", "letter_spacing_pt", "line_span_em", "face_key")
+
+    def __init__(self, css: dict[str, Any], size_pt: float, letter_spacing_pt: float,
+                 line_span_em: float, face_key: str) -> None:
+        self.css = css
+        self.size_pt = size_pt
+        self.letter_spacing_pt = letter_spacing_pt
+        self.line_span_em = line_span_em
+        self.face_key = face_key
+
+
+def resolve_field_face(plan: dict[str, Any], warnings: list[str]) -> FieldFace | None:
+    """The modal body face of the font plan, by glyph count. Deterministic."""
+    faces = {f["face_key"]: f for f in plan["faces"]}
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for entry in plan["runs"]:
+        face = faces.get(entry.get("face_key"))
+        css = entry.get("css") or {}
+        if face is None or face.get("status") != "resolved":
+            continue
+        if not face.get("metric_compatible") or not css.get("font-family"):
+            continue
+        scale = entry.get("horizontal_scale")
+        if scale is not None and abs(float(scale) - 1.0) > 1e-9:
+            continue
+        groups.setdefault((str(entry["face_key"]), str(css.get("font-size"))),
+                          []).append(entry)
+
+    if not groups:
+        warnings.append(
+            "the font plan resolves no metric-compatible face at unit scale, so a field "
+            "input would be typed in the browser's UI font; no typing surface is emitted "
+            "rather than one whose advances are nobody's")
+        return None
+
+    def rank(item: tuple[tuple[str, str], list[dict[str, Any]]]) -> tuple[int, int]:
+        face = faces[item[0][0]]
+        upright = (int(face.get("css_weight") or 400) == 400
+                   and str(face.get("css_style") or "normal") == "normal")
+        return (1 if upright else 0, sum(int(e.get("chars") or 0) for e in item[1]))
+
+    (face_key, _size), entries = max(sorted(groups.items()), key=rank)
+    donor = max(sorted(entries, key=lambda e: (int(e["page"]), int(e["run_index"]))),
+                key=lambda e: int(e.get("chars") or 0))
+    face = faces[face_key]
+
+    metrics = face.get("vertical_metrics") or {}
+    ascender = metrics.get("css_hhea_ascender")
+    descender = metrics.get("css_hhea_descender")
+    if ascender is None or descender is None:
+        warnings.append(
+            f"face {face_key!r} carries no shipped-face vertical metrics; field sizes are "
+            f"fitted through the browser's {fmt(FALLBACK_LINE_SPAN_EM)}em default line box "
+            f"instead of the face's own")
+        span = FALLBACK_LINE_SPAN_EM
+    else:
+        span = float(ascender) - float(descender)
+
+    dropped = {"font-size", "line-height", "letter-spacing", "color"}
+    css = {name: value for name, value in (donor.get("css") or {}).items()
+           if name not in FONT_CSS_MANAGED and name not in dropped and value is not None}
+    # The typed value is the taxpayer's own ink and is always black; the donor
+    # run's colour belongs to the printed label it was measured from.
+    css["color"] = "#000000"
+    return FieldFace(css, parse_pt((donor.get("css") or {}).get("font-size")),
+                     parse_pt((donor.get("css") or {}).get("letter-spacing")),
+                     span, face_key)
+
+
+def _border_thickness(cell: dict[str, Any], side: str) -> float:
+    entry = (cell.get("border") or {}).get(side) or {}
+    return float(entry.get("thickness_pt") or 0.0)
+
+
+def _floor2(value: float) -> float:
+    """A fitted size, rounded down to the extractor's own 2dp quantisation.
+
+    Down, never to nearest: a size rounded up is a size that no longer fits the
+    box the form drew, and fitting it is the entire exercise.
+    """
+    return math.floor(value * 100.0) / 100.0
+
+
+class FieldBox:
+    """One field's writing box and the text metrics fitted into it.
+
+    The writing box is what the source drew, not the cell rect. A comb's is the
+    comb's own sub-band -- the extent of the dividers, 7.44pt inside an 18.90pt
+    cell on 2551Q -- and a plain field's is the cell inset by the thickness of
+    the rule bounding each side. A cell rect runs along its rules' *centres*
+    (rule v173 spans x 136.10-136.58 and the cell edge is 136.34), so half a
+    thickness already clears the ink; using the whole one clears it and leaves
+    the same distance again as clearance. It is the cell's own measurement
+    rather than a constant, so a 1.44pt underline and a 0.24pt comb divider do
+    not get the same margin.
+    """
+
+    __slots__ = ("kind", "inset_trbl", "size_pt", "line_height_pt",
+                 "letter_spacing_pt", "capacity")
+
+    def __init__(self, kind: str, inset_trbl: tuple[float, float, float, float] | None,
+                 size_pt: float, line_height_pt: float,
+                 letter_spacing_pt: float | None, capacity: int | None) -> None:
+        self.kind = kind
+        self.inset_trbl = inset_trbl
+        self.size_pt = size_pt
+        self.line_height_pt = line_height_pt
+        self.letter_spacing_pt = letter_spacing_pt
+        self.capacity = capacity
+
+    @property
+    def metrics_key(self) -> tuple[float, float, float | None]:
+        return (self.size_pt, self.line_height_pt, self.letter_spacing_pt)
+
+
+def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
+    """Fit the body face into one field's writing box. None if it cannot fit."""
+    comb = cell.get("comb")
+    if comb:
+        kind, capacity = "comb", int(comb["cells"])
+        inset: tuple[float, float, float, float] | None = None
+        height = float(comb.get("height_pt", cell["y1"] - cell["y0"]))
+    else:
+        kind, capacity = "text", None
+        top = _border_thickness(cell, "top")
+        right = _border_thickness(cell, "right")
+        bottom = _border_thickness(cell, "bottom")
+        left = _border_thickness(cell, "left")
+        # A cell no bigger than its own borders on an axis gives up the
+        # clearance on that axis rather than the box: clearance is the optional
+        # part. 2551Q has eight 0.72pt-wide slivers classified as fields with a
+        # 1.44pt rule down one side, and inset by it they would be inputs of
+        # negative width.
+        if top + bottom >= cell["y1"] - cell["y0"]:
+            top = bottom = 0.0
+        if left + right >= cell["x1"] - cell["x0"]:
+            left = right = 0.0
+        inset = (top, right, bottom, left) if any((top, right, bottom, left)) else None
+        height = (cell["y1"] - cell["y0"]) - top - bottom
+    if height <= 0.0 or face.line_span_em <= 0.0:
+        return None
+
+    size = min(face.size_pt, _floor2(height / face.line_span_em))
+    if size <= 0.0:
+        return None
+    spacing = None
+    if face.size_pt > 0 and abs(face.letter_spacing_pt) > 0:
+        # Tracking is a per-em property of the run it was measured from, so it
+        # travels to a refitted size in proportion rather than as absolute pt.
+        scaled = round(face.letter_spacing_pt * size / face.size_pt, 4)
+        if abs(scaled) >= LETTER_SPACING_EPSILON_PT:
+            spacing = scaled
+    return FieldBox(kind, inset, size, round(height, 4), spacing, capacity)
+
+
+class FieldPlan:
+    """Every field on the sheet, and the CSS classes their metrics collapse to.
+
+    The metrics are shared: the 65 comb cells on 2551Q page 1 sit in identically
+    sized sub-bands, so writing `font-size`/`line-height`/`letter-spacing` onto
+    each of their 488 inputs would repeat one declaration 488 times. They are
+    collected first, sorted, then named `fh<n>`, which keeps the class index a
+    pure function of the layout and therefore deterministic.
+    """
+
+    __slots__ = ("face", "boxes", "classes", "small")
+
+    def __init__(self, layout: dict[str, Any], face: FieldFace | None,
+                 warnings: list[str]) -> None:
+        self.face = face
+        self.boxes: dict[str, FieldBox] = {}
+        self.classes: dict[tuple[float, float, float | None], str] = {}
+        self.small: list[str] = []
+        if face is None:
+            return
+        for page in layout["pages"]:
+            for cell in page["cells"]:
+                if cell["kind"] != "field":
+                    continue
+                box = field_box(cell, face)
+                if box is None:
+                    warnings.append(f"cell {cell['id']}: the field's writing box has no "
+                                    f"height, so it gets no typing surface")
+                    continue
+                self.boxes[cell["id"]] = box
+                if box.size_pt < FIELD_MIN_SIZE_PT:
+                    self.small.append(cell["id"])
+        # Sorted through an explicit key: the tracking is None for a field whose
+        # scaled tracking rounds to nothing, and a bare tuple sort would compare
+        # None against a float the day two boxes share a size and differ there.
+        distinct = sorted({b.metrics_key for b in self.boxes.values()},
+                          key=lambda k: (k[0], k[1], k[2] is not None, k[2] or 0.0))
+        for index, key in enumerate(distinct):
+            self.classes[key] = f"fh{index}"
+        if self.small:
+            warnings.append(
+                f"{len(self.small)} field(s) fit the body face at under "
+                f"{fmt(FIELD_MIN_SIZE_PT)}pt ({', '.join(self.small[:6])}"
+                f"{'...' if len(self.small) > 6 else ''}); the box is the source's own and "
+                f"is emitted as measured")
+
+    def __bool__(self) -> bool:
+        return bool(self.boxes)
+
+    def of(self, cell_id: str) -> FieldBox | None:
+        return self.boxes.get(cell_id)
+
+    def class_of(self, box: FieldBox) -> str:
+        return self.classes[box.metrics_key]
+
+
+def field_input_markup(cell_id: str, box: FieldBox, fields: FieldPlan,
+                       slot_index: int | None, live: bool) -> str:
+    """One <input>. Its geometry is its parent's unless it is a plain field.
+
+    A template's inputs carry no `id` and no `name`: template content is the
+    blueprint for rows that do not exist yet, and a name is an identity. The
+    band renderer stamps both from the row's own cell id as it clones.
+    """
+    classes = ["fi", fields.class_of(box)]
+    attrs: list[str] = []
+    if slot_index is None:
+        if box.inset_trbl:
+            inset = " ".join(f"{fmt(v)}pt" for v in box.inset_trbl)
+            attrs.append(f'style="inset:{esc_attr(inset)}"')
+    else:
+        classes.append("fc")
+    identity: list[str] = []
+    if live:
+        suffix = "-i" if slot_index is None else f"-s{slot_index}"
+        identity = [f'id="{esc_attr(cell_id + suffix)}"', f'name="{esc_attr(cell_id)}"']
+    if slot_index is not None:
+        identity.append(f'data-slot-index="{slot_index}"')
+        identity.append('maxlength="1"')
+    return ('<input type="text" class="' + " ".join(classes) + '" '
+            + " ".join(identity + attrs + ['autocomplete="off"', 'spellcheck="false"'])
+            + ">")
+
+
+def field_json(box: FieldBox, fields: FieldPlan) -> dict[str, Any]:
+    """The field as data, so the band renderer can build one from scratch."""
+    return {
+        "kind": box.kind,
+        "class": fields.class_of(box),
+        "size_pt": box.size_pt,
+        "line_height_pt": box.line_height_pt,
+        "letter_spacing_pt": box.letter_spacing_pt,
+        "capacity": box.capacity,
+        "inset_trbl": ([round(v, 4) for v in box.inset_trbl] if box.inset_trbl else None),
+    }
+
+
+FIELD_CSS_ORDER = ("font-family", "font-weight", "font-style", "font-kerning",
+                   "font-variant-ligatures", "font-feature-settings",
+                   "font-variation-settings", "color")
+
+
+def field_css(fields: FieldPlan) -> str:
+    """The field layer's stylesheet: one face, N fitted metrics, no printed ink.
+
+    The screen affordances are `:hover`/`:focus` only. Print has neither state,
+    so an empty field prints as nothing *by construction*, not merely because
+    the `@media print` reset below says so.
+    """
+    if not fields or fields.face is None:
+        return ""
+    css = fields.face.css
+    declarations = [(name, css[name]) for name in FIELD_CSS_ORDER if name in css]
+    declarations.extend((name, css[name])
+                        for name in sorted(set(css) - set(FIELD_CSS_ORDER)))
+    lines = [
+        ".fi{position:absolute;inset:0;appearance:none;-webkit-appearance:none;"
+        "border:0;margin:0;padding:0;background:transparent;box-shadow:none;outline:0;"
+        "border-radius:0;caret-color:#000000;text-rendering:geometricPrecision;"
+        + style_attr(declarations) + "}",
+        # A character must not show outside the box it was typed in. It is not
+        # hypothetical: 1600-VT classifies a 1.04pt-wide sliver as a field, and
+        # the digit typed into it printed 5pt wide across the first slot of the
+        # comb beside it. The clip is stated on the field box rather than on the
+        # input, because the box is what the source drew. Note what it does and
+        # does not do: clipping is not deletion, so the round-trip still finds
+        # the glyph at its full extent and fill_check.py still attributes it to
+        # the field it was typed into. What this fixes is the sheet.
+        ".f,.f .s{overflow:hidden}",
+        ".fc{text-align:center}",
+    ]
+    for key, name in sorted(fields.classes.items(), key=lambda kv: kv[1]):
+        size, line_height, spacing = key
+        pairs = [("font-size", f"{fmt(size)}pt"),
+                 ("line-height", f"{fmt(line_height)}pt"),
+                 ("letter-spacing", None if spacing is None else f"{fmt(spacing)}pt")]
+        lines.append(f".{name}{{{style_attr(pairs)}}}")
+    lines.append("@media screen{.fi:hover{background:rgba(21,101,192,.07)}"
+                 ".fi:focus{background:rgba(255,213,0,.35)}}")
+    # The caret is the one piece of input chrome that is not a background, a
+    # border or an outline, and Chromium prints it: a sheet printed with the
+    # cursor still in a field came back with a 0.75x6.75pt black bar that the
+    # round-trip reported as an extra structural rule, because that is exactly
+    # what an extra 1px vertical bar is. Measured, `caret-color` does *not*
+    # suppress it in Chromium's print path -- FIELD_JS dropping the focus on
+    # `beforeprint` is what does. This declaration is the second line of
+    # defence and the correct thing to say, not the fix.
+    lines.append("@media print{.fi{border:0;outline:0;background:none;box-shadow:none;"
+                 "-webkit-appearance:none;appearance:none;caret-color:transparent}}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Cells and combs
 # ---------------------------------------------------------------------------
 
 
-def cell_markup(cell: dict[str, Any], id_attribute: str = "id") -> str:
+def cell_markup(cell: dict[str, Any], fields: FieldPlan | None = None,
+                id_attribute: str = "id") -> str:
     """One addressable box. Fields carry their comb slots; nothing paints ink.
 
     The rule layer already holds every border and every comb divider, so a cell
@@ -752,6 +1126,11 @@ def cell_markup(cell: dict[str, Any], id_attribute: str = "id") -> str:
     is a blueprint for rows that do not exist yet, and stamping the row it was
     cut from with a live `id` would hand two elements the same identity the
     moment the renderer clones it.
+
+    A field cell also carries its typing surface. The cell *is* the field --
+    including a comb, which is one field drawn with N tick marks and not N
+    fields -- so the field's name, kind and comb capacity are attributes of the
+    cell, and the inputs under it are how that one field is typed into.
     """
     width = cell["x1"] - cell["x0"]
     height = cell["y1"] - cell["y0"]
@@ -767,17 +1146,36 @@ def cell_markup(cell: dict[str, Any], id_attribute: str = "id") -> str:
     if not cell.get("rectangular", True):
         attrs.append('data-rectangular="false"')
 
+    box = fields.of(cell["id"]) if fields is not None else None
+    live = id_attribute == "id"
+    if box is not None:
+        attrs.append(f'data-field-kind="{esc_attr(box.kind)}"')
+        if live:
+            attrs.append(f'data-field-name="{esc_attr(cell["id"])}"')
+        if box.capacity is not None:
+            attrs.append(f'data-comb-capacity="{box.capacity}"')
+
     comb = cell.get("comb")
     body = ""
     if comb:
         attrs.append(f'data-comb-slots="{comb["cells"]}"')
         attrs.append(f'data-comb-pitch="{fmt(comb["pitch_pt"])}"')
-        body = comb_slots_markup(cell, comb)
+        body = comb_slots_markup(cell, comb, box, fields, live)
+    elif box is not None:
+        body = field_input_markup(cell["id"], box, fields, None, live)
     return f'<div {" ".join(attrs)} style="{esc_attr(style)}">{body}</div>'
 
 
-def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any]) -> str:
-    """N slots inside ONE field, from the comb's own measured slot_x."""
+def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any],
+                      box: "FieldBox | None" = None,
+                      fields: "FieldPlan | None" = None, live: bool = True) -> str:
+    """N slots inside ONE field, from the comb's own measured slot_x.
+
+    Each slot holds one input, and that is the whole of "the glyphs land in the
+    slots": the input *is* the slot box, so a centred character is centred on a
+    measured slot centre by layout rather than by an advance calculation over a
+    pitch that is not uniform (2551Q's pitch deviates by up to 0.12pt).
+    """
     slot_x = comb["slot_x"]
     top = float(comb.get("y0", cell["y0"])) - cell["y0"]
     height = float(comb.get("height_pt", cell["y1"] - cell["y0"]))
@@ -789,11 +1187,14 @@ def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any]) -> str:
             ("left", f"{fmt(left)}pt"), ("top", f"{fmt(top)}pt"),
             ("width", f"{fmt(width)}pt"), ("height", f"{fmt(height)}pt"),
         ))
-        parts.append(f'<div class="s" data-slot="{index}" style="{esc_attr(style)}"></div>')
+        inner = ("" if box is None or fields is None
+                 else field_input_markup(cell["id"], box, fields, index, live))
+        parts.append(f'<div class="s" data-slot="{index}" '
+                     f'style="{esc_attr(style)}">{inner}</div>')
     return "".join(parts)
 
 
-def cell_json(cell: dict[str, Any]) -> dict[str, Any]:
+def cell_json(cell: dict[str, Any], fields: "FieldPlan | None" = None) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": cell["id"],
         "kind": cell["kind"],
@@ -810,6 +1211,9 @@ def cell_json(cell: dict[str, Any]) -> dict[str, Any]:
             "y": round(float(comb.get("y0", cell["y0"])) - cell["y0"], 4),
             "h": round(float(comb.get("height_pt", cell["y1"] - cell["y0"])), 4),
         }
+    box = fields.of(cell["id"]) if fields is not None else None
+    if box is not None:
+        payload["field"] = field_json(box, fields)
     return payload
 
 
@@ -1005,7 +1409,8 @@ def band_rects(plan: BandPlan, rows: int) -> list[Rect]:
 
 
 def band_json(plan: BandPlan, rendered_rows: int, styles: dict[tuple[int, int], RunStyle],
-              runs_by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+              runs_by_id: dict[str, dict[str, Any]],
+              fields: FieldPlan | None = None) -> dict[str, Any]:
     """The band as data: what the JS renderer needs to reproduce any row count.
 
     Rows within capacity ship their measured geometry so a re-render at the
@@ -1026,8 +1431,9 @@ def band_json(plan: BandPlan, rendered_rows: int, styles: dict[tuple[int, int], 
             "index": index,
             "y": round(row_y[index], 4),
             "rules": [r.to_json() for r in plan.rules_by_row.get(index, [])],
-            "cells": [cell_json(c) for c in sorted(plan.cells_by_row.get(index, []),
-                                                   key=lambda c: (c["x0"], c["id"]))],
+            "cells": [cell_json(c, fields)
+                      for c in sorted(plan.cells_by_row.get(index, []),
+                                      key=lambda c: (c["x0"], c["id"]))],
             "texts": texts,
         })
     return {
@@ -1051,7 +1457,8 @@ def band_json(plan: BandPlan, rendered_rows: int, styles: dict[tuple[int, int], 
     }
 
 
-def band_template_markup(plan: BandPlan, blob_index: int) -> str:
+def band_template_markup(plan: BandPlan, blob_index: int,
+                         fields: FieldPlan | None = None) -> str:
     """One row of markup, emitted once, cloned by the renderer.
 
     The template is what makes this a generated form rather than a traced
@@ -1075,7 +1482,7 @@ def band_template_markup(plan: BandPlan, blob_index: int) -> str:
         if comb:
             relative["comb"] = dict(comb)
             relative["comb"]["y0"] = float(comb["y0"]) - row_top
-        parts.append(cell_markup(relative, id_attribute="data-cell-id"))
+        parts.append(cell_markup(relative, fields, id_attribute="data-cell-id"))
     return (f'<template id="band-template-{esc_attr(plan.band["id"])}" '
             f'data-band="{esc_attr(plan.band["id"])}" '
             f'data-band-index="{blob_index}" '
@@ -1683,6 +2090,11 @@ DOC_LINK_CSS = (".doc-link{position:absolute;left:0;top:0;z-index:9;"
 # shipping the measured WOFF2 with text that has deliberately been re-broken
 # would imply an advance-level fidelity this document does not have and is not
 # trying to have.
+#
+# The @media print block is where the guide stops being a web page. Its rules
+# are pagination, not decoration: a heading must not be the last thing on a
+# sheet, a table row must not be sliced in half, and the navigation links back
+# to the form are furniture that means nothing on paper.
 GUIDE_CSS = """body{background:#fff;color:#111}
 .gl{max-width:46em;margin:0 auto;padding:3em 1.5em 4em;
 font:16px/1.6 Georgia,"Times New Roman",serif}
@@ -1696,15 +2108,59 @@ font:16px/1.6 Georgia,"Times New Roman",serif}
 .gl .gl-table td,.gl .gl-table th{border:1px solid #bbb;padding:.25em .5em;
 text-align:left;vertical-align:top}
 .gl .gl-table th{background:#f0f0f0}
-@media print{.gl{max-width:none;padding:0}}"""
+@media print{
+.gl{max-width:none;padding:0;font-size:11pt}
+.gl h1,.gl h2,.gl h3{break-after:avoid;page-break-after:avoid;
+break-inside:avoid;page-break-inside:avoid}
+.gl p{orphans:2;widows:2}
+.gl li,.gl .gl-sub,.gl .gl-download,.gl .gl-table tr{
+break-inside:avoid;page-break-inside:avoid}
+.gl .gl-table thead{display:table-header-group}
+.gl .gl-page{margin:0 0 1.5em}
+}"""
 
 
 # Shared by both guide layouts: the absolute one needs it too, and it is the
 # only styling that document has beyond the form's own scaffolding.
+#
+# `.gl-pdf object` is the fallback path only -- a guide PDF that came with an
+# extraction is reflowed into this document instead, because a plugin viewport
+# is not printable content. Where the fallback is taken the print rules make it
+# say so rather than printing a blank frame.
 GUIDE_PDF_CSS = """.gl-pdf{margin:2.5em auto;max-width:46em;
 font:16px/1.6 Georgia,"Times New Roman",serif}
 .gl-pdf object{display:block;width:100%;height:90vh;border:1px solid #bbb}
-@media print{.gl-pdf object{height:auto}}"""
+.gl .gl-download{color:#555;font-size:.9em;margin:0 0 1.5em}
+@media print{
+.gl-pdf{margin:0;max-width:none}
+.gl-page+.gl-pdf,.gl-pdf+.gl-pdf{break-before:page;page-break-before:always}
+.gl-pdf object{display:none}
+}"""
+
+
+# The form prints with `margin:0` because every coordinate on it is measured
+# from the MediaBox and a margin would move all of them. The reflowed guide has
+# no such coordinates -- it is prose -- and prose set to the paper's edge runs
+# into the unprintable border that consumer printers reserve. 36pt (half an
+# inch) clears that border on every common printer, so it is the widest measure
+# that is safe to print unscaled anywhere.
+GUIDE_PAGE_MARGIN_PT = 36.0
+
+
+def guide_page_css(ir: dict[str, Any]) -> str:
+    """@page for the reflowed guide: the form's paper, with a reading margin.
+
+    Sized from the *form's* paper block rather than from the guide's own
+    content, because a guide is printed to be read alongside its form and a
+    Legal form whose instructions come out on Letter is two stacks of paper
+    instead of one. There is deliberately no per-page rule here as there is for
+    the form: the reflowed guide has no page boxes of its own, so it flows
+    across as many sheets as the prose needs and every one of them is the same
+    size.
+    """
+    paper = ir["paper"]
+    return (f'@page{{size:{fmt(paper["width_pt"])}pt {fmt(paper["height_pt"])}pt;'
+            f'margin:{fmt(GUIDE_PAGE_MARGIN_PT)}pt}}')
 
 
 BAND_JS = r"""(function(){
@@ -1813,11 +2269,60 @@ function rowCells(band,row){
   for(i=0;i<row.cells.length;i++){out.push(applyCell(nodes[i],row.cells[i]));}
   return out;
 }
+/* A row added at run time has to be as fillable as a pre-rendered one, so the
+   field layer is rebuilt with the row's own measurements rather than inherited
+   from the template: a band row's comb sub-band is measured per row and the
+   template's fitted size is not automatically this row's. */
+function fieldMetrics(el,field){
+  el.style.fontSize=field.size_pt+"pt";
+  el.style.lineHeight=field.line_height_pt+"pt";
+  if(field.letter_spacing_pt!==null&&field.letter_spacing_pt!==undefined){
+    el.style.letterSpacing=field.letter_spacing_pt+"pt";
+  }else{
+    el.style.letterSpacing="";
+  }
+  if(field.inset_trbl){
+    el.style.inset=field.inset_trbl[0]+"pt "+field.inset_trbl[1]+"pt "+
+      field.inset_trbl[2]+"pt "+field.inset_trbl[3]+"pt";
+  }
+}
+function fieldName(cell,slotIndex){
+  return cell.id+(slotIndex===null?"-i":"-s"+slotIndex);
+}
+function fieldInput(cell,slotIndex){
+  var el=document.createElement("input");
+  el.type="text";
+  el.className="fi "+cell.field["class"]+(slotIndex===null?"":" fc");
+  el.id=fieldName(cell,slotIndex);
+  el.name=cell.id;
+  el.setAttribute("autocomplete","off");
+  el.setAttribute("spellcheck","false");
+  if(slotIndex!==null){
+    el.setAttribute("data-slot-index",slotIndex);
+    el.setAttribute("maxlength","1");
+  }
+  fieldMetrics(el,cell.field);
+  return el;
+}
+/* The clone carries the template's inputs, which are deliberately anonymous:
+   an identity in a <template> would be a second element with the row's name. */
+function applyFields(el,cell){
+  if(!cell.field){return;}
+  var inputs=el.querySelectorAll("input.fi"),i,slot;
+  for(i=0;i<inputs.length;i++){
+    slot=inputs[i].getAttribute("data-slot-index");
+    inputs[i].id=fieldName(cell,slot===null?null:slot);
+    inputs[i].name=cell.id;
+    inputs[i].value="";
+    fieldMetrics(inputs[i],cell.field);
+  }
+}
 function applyCell(el,cell){
   el.removeAttribute("data-cell-id");
   el.id=cell.id;
   el.setAttribute("data-row",cell.row);
   el.setAttribute("data-col",cell.col);
+  if(cell.field){el.setAttribute("data-field-name",cell.id);}
   el.style.cssText="left:"+cell.x+"pt;top:"+cell.y+"pt;width:"+cell.w+
     "pt;height:"+cell.h+"pt";
   var slots=el.querySelectorAll(".s");
@@ -1833,6 +2338,7 @@ function applyCell(el,cell){
        measure */
     return cellElement(cell);
   }
+  applyFields(el,cell);
   return el;
 }
 function cellElement(cell){
@@ -1844,6 +2350,13 @@ function cellElement(cell){
   el.setAttribute("data-col",cell.col);
   el.style.cssText="left:"+cell.x+"pt;top:"+cell.y+"pt;width:"+cell.w+
     "pt;height:"+cell.h+"pt";
+  if(cell.field){
+    el.setAttribute("data-field-kind",cell.field.kind);
+    el.setAttribute("data-field-name",cell.id);
+    if(cell.field.capacity!==null&&cell.field.capacity!==undefined){
+      el.setAttribute("data-comb-capacity",cell.field.capacity);
+    }
+  }
   if(cell.comb){
     el.setAttribute("data-comb-slots",cell.comb.cells);
     el.setAttribute("data-comb-pitch",cell.comb.pitch_pt);
@@ -1854,8 +2367,11 @@ function cellElement(cell){
       slot.style.cssText="left:"+cell.comb.slot_x[i]+"pt;top:"+cell.comb.y+
         "pt;width:"+(cell.comb.slot_x[i+1]-cell.comb.slot_x[i])+
         "pt;height:"+cell.comb.h+"pt";
+      if(cell.field){slot.appendChild(fieldInput(cell,i));}
       el.appendChild(slot);
     }
+  }else if(cell.field){
+    el.appendChild(fieldInput(cell,null));
   }
   return el;
 }
@@ -1921,17 +2437,98 @@ window.formgen={bands:bands,setBandRows:setBandRows,bandRects:bandRects,rowY:row
 })();"""
 
 
+# A comb is one field drawn with N tick marks, so it has to *behave* as one:
+# typing runs through it, backspace runs back through it, and a pasted TIN
+# lands in it whole. Every listener is delegated from the document rather than
+# bound per input, which is what makes a band row added by setBandRows fillable
+# with no re-binding step -- and there are 488 comb inputs on 2551Q page 1
+# alone, so 488 listener registrations is not a neutral alternative.
+FIELD_JS = r"""(function(){
+"use strict";
+function isSlot(el){
+  return !!(el&&el.classList&&el.classList.contains("fi")&&
+            el.hasAttribute("data-slot-index"));
+}
+function slotsOf(el){
+  var cell=el.closest("[data-cell-kind]");
+  return cell?cell.querySelectorAll("input.fi[data-slot-index]"):null;
+}
+function move(el,delta,select){
+  var list=slotsOf(el);
+  if(!list){return null;}
+  var index=parseInt(el.getAttribute("data-slot-index"),10)+delta;
+  if(index<0||index>=list.length){return null;}
+  list[index].focus();
+  if(select&&list[index].select){list[index].select();}
+  return list[index];
+}
+/* Selecting on focus is what lets a filled slot be typed over: maxlength=1
+   rejects a second character outright, so without it a comb can be corrected
+   only by deleting first. */
+document.addEventListener("focusin",function(ev){
+  if(isSlot(ev.target)&&ev.target.select){ev.target.select();}
+});
+document.addEventListener("input",function(ev){
+  if(!isSlot(ev.target)){return;}
+  if(ev.target.value.length>0){move(ev.target,1,true);}
+});
+document.addEventListener("keydown",function(ev){
+  var el=ev.target;
+  if(!isSlot(el)){return;}
+  if(ev.key==="Backspace"&&el.value===""){
+    var previous=move(el,-1,false);
+    if(previous){previous.value="";ev.preventDefault();}
+  }else if(ev.key==="ArrowLeft"&&el.selectionStart===0){
+    if(move(el,-1,true)){ev.preventDefault();}
+  }else if(ev.key==="ArrowRight"&&el.selectionEnd===el.value.length){
+    if(move(el,1,true)){ev.preventDefault();}
+  }
+});
+/* maxlength=1 truncates a paste to its first character, which for a TIN is
+   the difference between one keystroke and nine. Spread it instead. */
+document.addEventListener("paste",function(ev){
+  var el=ev.target;
+  if(!isSlot(el)){return;}
+  var clipboard=ev.clipboardData||window.clipboardData;
+  var list=slotsOf(el);
+  if(!clipboard||!list){return;}
+  var text=(clipboard.getData("text")||"").replace(/\s+/g,"");
+  if(!text){return;}
+  ev.preventDefault();
+  var index=parseInt(el.getAttribute("data-slot-index"),10),written=0,last=el;
+  while(index<list.length&&written<text.length){
+    list[index].value=text.charAt(written);
+    last=list[index];
+    index++;written++;
+  }
+  last.focus();
+  if(last.select){last.select();}
+});
+/* A caret is browser chrome, and Chromium paints it into the printed page:
+   printing with the cursor still in a comb produced a 0.75x6.75pt black bar
+   which the round-trip read as an extra structural rule -- correctly, because
+   on paper that is what it is. `caret-color:transparent` does not suppress it
+   in the print path, so the focus itself is dropped for the duration. */
+window.addEventListener("beforeprint",function(){
+  var el=document.activeElement;
+  if(el&&el.classList&&el.classList.contains("fi")){el.blur();}
+});
+window.formgenFields={slotsOf:slotsOf};
+})();"""
+
+
 class Options:
     __slots__ = ("rule_backend", "fonts_dir", "assets_dir", "out_dir", "band_rows",
                  "title", "guide_plan", "document", "guide_layout", "guide_href",
-                 "form_href", "guide_pdf_dir")
+                 "form_href", "guide_pdf_dir", "guide_sources")
 
     def __init__(self, rule_backend: str, fonts_dir: str, assets_dir: str,
                  out_dir: pathlib.Path | None, band_rows: int | None,
                  title: str | None, guide_plan: dict[str, Any] | None = None,
                  document: str = "form", guide_layout: str = "reflow",
                  guide_href: str = "guide.html", form_href: str = "index.html",
-                 guide_pdf_dir: str = "guides") -> None:
+                 guide_pdf_dir: str = "guides",
+                 guide_sources: dict[str, dict[str, Any]] | None = None) -> None:
         self.rule_backend = rule_backend
         self.fonts_dir = fonts_dir
         self.assets_dir = assets_dir
@@ -1944,6 +2541,9 @@ class Options:
         self.guide_href = guide_href
         self.form_href = form_href
         self.guide_pdf_dir = guide_pdf_dir
+        # Keyed by PDF file name, which is what the guide plan lists. Only the
+        # guide document reads it; the form side has no standalone PDFs.
+        self.guide_sources = dict(guide_sources or {})
 
 
 def font_face_css(styles: dict[tuple[int, int], RunStyle], options: Options,
@@ -1999,7 +2599,8 @@ def page_css(ir: dict[str, Any]) -> str:
 def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
               styles: dict[tuple[int, int], RunStyle], backend: RuleBackend,
               options: Options, band_blobs: list[dict[str, Any]],
-              warnings: list[str], split: PageSplit = WHOLE_PAGE) -> str:
+              warnings: list[str], split: PageSplit = WHOLE_PAGE,
+              fields: FieldPlan | None = None) -> str:
     index = int(page_ir["index"])
     cells_by_id = {c["id"]: c for c in page_layout["cells"]}
     runs = page_ir["text_runs"]
@@ -2083,14 +2684,14 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
     for cell in page_layout["cells"]:
         if cell["id"] in band_cell_ids or not split.keep_cell(cell["id"]):
             continue
-        parts.append(cell_markup(cell))
+        parts.append(cell_markup(cell, fields))
     parts.append("</div>")
 
     # -- growable bands: template + pre-rendered rows ------------------------
     for plan in plans:
         rows = plan.capacity if options.band_rows is None else min(options.band_rows,
                                                                    plan.capacity)
-        parts.append(band_template_markup(plan, len(band_blobs)))
+        parts.append(band_template_markup(plan, len(band_blobs), fields))
         parts.append(f'<div class="band" id="band-content-{esc_attr(plan.band["id"])}" '
                      f'data-band="{esc_attr(plan.band["id"])}" '
                      f'data-rendered-rows="{rows}" data-overflow-rows="0" '
@@ -2098,13 +2699,13 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
                      f'data-row-pitch="{fmt(plan.band["row_pitch_pt"])}">')
         for row in range(rows):
             for cell in sorted(plan.cells_by_row.get(row, []), key=lambda c: (c["x0"], c["id"])):
-                parts.append(cell_markup(cell))
+                parts.append(cell_markup(cell, fields))
             for rid, _cell, _ in sorted(plan.texts_by_row.get(row, []), key=_run_order):
                 key = (index, _run_index_of(rid))
                 parts.append(text_markup(runs_by_id[rid], rid, styles[key],
                                          extra=(("data-band-row", str(row)),)))
         parts.append("</div>")
-        band_blobs.append(band_json(plan, rows, styles, runs_by_id))
+        band_blobs.append(band_json(plan, rows, styles, runs_by_id, fields))
 
     parts.append("</div>")
     return "".join(parts)
@@ -2114,20 +2715,50 @@ def doc_link_markup(href: str, label: str) -> str:
     return f'<a class="doc-link" href="{esc_attr(href)}">{esc_text(label)}</a>'
 
 
+def whole_page_split(page: dict[str, Any]) -> PageSplit:
+    """A page of a standalone guide PDF: all of it is guide material.
+
+    guides.py computes which runs of a *form* sheet lie below the cut. A guide
+    PDF has no form on it to cut away from, so the claim is the whole page, and
+    the same reflow that fixed 1603Q's overlapping columns applies unchanged.
+    """
+    return PageSplit(guide_side=True,
+                     run_indices=frozenset(range(len(page["text_runs"]))))
+
+
+def guide_source_key(source_ir: dict[str, Any]) -> str:
+    """The PDF file name a guide-source IR was extracted from.
+
+    extract.py records `external:<name>` for any PDF outside the repo, which
+    every source PDF is. The name is what binds an extraction back to the entry
+    in the guide plan; nothing here matches on order, so passing the sources in
+    a different order cannot silently pair the wrong text with the wrong link.
+    """
+    file_name = str(source_ir.get("source", {}).get("file", ""))
+    return pathlib.PurePosixPath(file_name.split(":", 1)[-1]).name
+
+
 def standalone_pdf_markup(split: DocumentSplit, options: Options,
                           warnings: list[str]) -> str:
-    """The guide PDFs batch.py skips, embedded after the inline guide pages.
+    """The guide PDFs batch.py skips, reflowed after the inline guide pages.
 
-    Embedded rather than converted. Converting them would mean running the
-    extractor, the lattice and the font planner over a second document to
-    produce something whose parity is explicitly not measured -- and the pinned
-    PDF is already the exact artefact, so handing it to the viewer's PDF engine
-    loses nothing the guide document was carrying.
+    These used to be embedded with `<object>`. An embedded PDF is a second
+    document with its own pagination: printing the page around it prints the
+    plugin's viewport, not the four pages of instructions inside it, so the
+    twelve bundles whose whole guide was a linked PDF printed as one near-blank
+    sheet. Running the guide PDF through the same extractor and the same reflow
+    the inline guides use makes it text in *this* document, which is the only
+    form of it that prints, and makes all 29 guides print the same way.
+
+    The conversion is a reading copy, not a replacement: the pinned PDF stays
+    beside the HTML and is linked, so the exact artefact is always one click
+    away and the printed sheet names it. A PDF with no extraction falls back to
+    the embed, with a warning -- degraded rather than dropped.
     """
     if not split.standalone_pdfs:
         return ""
     directory = options.guide_pdf_dir.rstrip("/")
-    parts = ['<section class="gl-pdf">']
+    parts: list[str] = []
     for source in split.standalone_pdfs:
         name = pathlib.PurePosixPath(source).name
         href = f"{directory}/{name}" if directory else name
@@ -2136,13 +2767,26 @@ def standalone_pdf_markup(split: DocumentSplit, options: Options,
         url = urllib.parse.quote(href)
         if options.out_dir is not None and not (options.out_dir / href).is_file():
             warnings.append(
-                f"missing guide PDF {href}: the guide document embeds it but it is not "
-                f"beside the output, so the section renders empty")
+                f"missing guide PDF {href}: the guide document links it but it is not "
+                f"beside the output, so the link 404s")
+        source_ir = options.guide_sources.get(name)
+        converted = source_ir is not None
+        parts.append(f'<section class="gl-pdf" data-source="{esc_attr(name)}" '
+                     f'data-converted="{"true" if converted else "false"}">')
         parts.append(f"<h2>{esc_text(name)}</h2>")
-        parts.append(f'<object data="{esc_attr(url)}" type="application/pdf" '
-                     f'data-source="{esc_attr(name)}">'
-                     f'<a href="{esc_attr(url)}">{esc_text(name)}</a></object>')
-    parts.append("</section>")
+        parts.append(f'<p class="gl-download">Source PDF: '
+                     f'<a href="{esc_attr(url)}">{esc_text(name)}</a></p>')
+        if converted:
+            for page in source_ir["pages"]:
+                parts.append(reflow_page(page, whole_page_split(page)))
+        else:
+            warnings.append(
+                f"no --guide-source for {name}: it is embedded as a linked PDF, which "
+                f"does not print with this document")
+            parts.append(f'<object data="{esc_attr(url)}" type="application/pdf" '
+                         f'data-source="{esc_attr(name)}">'
+                         f'<a href="{esc_attr(url)}">{esc_text(name)}</a></object>')
+        parts.append("</section>")
     return "".join(parts)
 
 
@@ -2176,6 +2820,35 @@ def _head(ir: dict[str, Any], title: str, styles: str, backend_name: str | None,
     ]
 
 
+def _validate_guide_sources(split: DocumentSplit, ir: dict[str, Any],
+                            options: Options) -> None:
+    """A guide-source IR must belong to this form and to a PDF the plan lists.
+
+    Both directions are fatal. An extraction of the wrong PDF would print
+    another form's instructions under this form's heading, and a source that
+    matches no entry in the plan means the driver and the plan disagree about
+    what this bundle's guide is made of. Either way the document would be
+    quietly wrong, which is the one outcome this pipeline exists to make
+    impossible.
+    """
+    if not options.guide_sources:
+        return
+    listed = {pathlib.PurePosixPath(path).name for path in split.standalone_pdfs}
+    unknown = sorted(set(options.guide_sources) - listed)
+    if unknown:
+        raise SystemExit(
+            f"--guide-source names {unknown}, which the guide plan does not list as a "
+            f"standalone PDF of {ir['form']['code']}-{ir['form']['revision']}")
+    for name, source_ir in sorted(options.guide_sources.items()):
+        source_form = source_ir.get("form", {})
+        if (source_form.get("code"), source_form.get("revision")) != (
+                ir["form"]["code"], ir["form"]["revision"]):
+            raise SystemExit(
+                f"guide source {name} was extracted as "
+                f"{source_form.get('code')}-{source_form.get('revision')}, not as "
+                f"{ir['form']['code']}-{ir['form']['revision']}")
+
+
 def build_reflow_guide(ir: dict[str, Any], split: DocumentSplit, options: Options,
                        warnings: list[str]) -> tuple[str, list[str]]:
     """The guide as a readable document: no coordinates, therefore no overlap."""
@@ -2201,8 +2874,11 @@ def build_reflow_guide(ir: dict[str, Any], split: DocumentSplit, options: Option
     body.append(standalone_pdf_markup(split, options, warnings))
     body.append("</div>")
 
+    # guide_page_css leads for the same reason page_css does in the form: the
+    # sheet the document is printed on is the first thing about it.
     head = _head(ir, title,
-                 "\n".join([BASE_CSS.rstrip(), DOC_LINK_CSS, GUIDE_CSS, GUIDE_PDF_CSS]),
+                 "\n".join([guide_page_css(ir), BASE_CSS.rstrip(), DOC_LINK_CSS,
+                            GUIDE_CSS, GUIDE_PDF_CSS]),
                  None, "guide")
     return "\n".join(head) + "\n" + "".join(body) + "\n</body>\n</html>\n", warnings
 
@@ -2216,11 +2892,17 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
         raise SystemExit("font plan was built from a different PDF than the IR")
 
     split = DocumentSplit(options.guide_plan, ir, options.document)
+    _validate_guide_sources(split, ir, options)
     if options.document == "guide" and options.guide_layout == "reflow":
         return build_reflow_guide(ir, split, options, warnings)
 
     backend = BACKENDS[options.rule_backend]()
     styles = resolve_run_styles(ir, plan, warnings)
+    # Built from the whole layout, never from the half being emitted, so a
+    # cell's typing surface is the same markup whichever document carries it --
+    # which is what lets the split assertions compare the two halves against the
+    # undivided document byte for byte.
+    fields = FieldPlan(layout, resolve_field_face(plan, warnings), warnings)
 
     # The form keeps every page at its full height even where the guide took the
     # lower 70% of one: the page box, the page count and @page are the form's
@@ -2231,7 +2913,7 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
 
     band_blobs: list[dict[str, Any]] = []
     pages = [emit_page(page_ir, page_layout, styles, backend, options, band_blobs,
-                       warnings, split.page(int(page_ir["index"])))
+                       warnings, split.page(int(page_ir["index"])), fields)
              for page_ir, page_layout in zip(ir["pages"], layout["pages"])
              if int(page_ir["index"]) in wanted]
 
@@ -2247,6 +2929,9 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
 
     styles_css = [page_css(ir), font_face_css(styles, options, warnings),
                   BASE_CSS.rstrip()]
+    field_style = field_css(fields)
+    if field_style:
+        styles_css.append(field_style)
     if link:
         styles_css.append(DOC_LINK_CSS)
     if split.guide_side and split.standalone_pdfs:
@@ -2261,6 +2946,9 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
         "</script>",
         "<script>",
         BAND_JS,
+        "</script>",
+        "<script>",
+        FIELD_JS,
         "</script>",
         "</body>",
         "</html>",
@@ -2303,6 +2991,78 @@ def _pages_of(html: str) -> dict[int, str]:
     for index in range(1, len(chunks) - 1, 2):
         out[int(chunks[index])] = chunks[index + 1]
     return out
+
+
+INPUT_RE = re.compile(r"<input\b[^>]*>")
+INPUT_NAME_RE = re.compile(r'<input\b[^>]*\bname="([^"]+)"')
+INPUT_ID_RE = re.compile(r'<input\b[^>]*\bid="([^"]+)"')
+
+
+def field_assertions(layout: dict[str, Any], plan: dict[str, Any], html: str,
+                     rendered: str, failures: list[str]) -> None:
+    """Every blank the source drew is typeable, exactly once, and prints clean.
+
+    Counted against the *layout*, not against the markup, so an input the
+    generator forgot fails as loudly as one it emitted twice. That matters more
+    here than anywhere else in this module: a field that silently does not exist
+    looks exactly like a form that prints correctly, which is precisely the
+    state this layer was written to end.
+    """
+    fields = FieldPlan(layout, resolve_field_face(plan, []), [])
+    expected: dict[str, int] = {}
+    for page in layout["pages"]:
+        for cell in page["cells"]:
+            box = fields.of(cell["id"])
+            if box is not None:
+                expected[cell["id"]] = box.capacity or 1
+
+    field_cells = sum(1 for p in layout["pages"] for c in p["cells"]
+                      if c["kind"] == "field")
+    _check(len(expected) == field_cells,
+           "every field cell has a typing surface",
+           f"{len(expected)} of {field_cells} field cells", failures)
+
+    names = INPUT_NAME_RE.findall(rendered)
+    counts: dict[str, int] = {}
+    for name in names:
+        counts[name] = counts.get(name, 0) + 1
+    _check(counts == expected,
+           "one input per comb slot, one per plain field, and none anywhere else",
+           f"{len(names)} inputs over {len(counts)} names; "
+           f"{sum(expected.values())} expected over {len(expected)}", failures)
+
+    identifiers = INPUT_ID_RE.findall(rendered)
+    duplicates = sorted({i for i in identifiers if identifiers.count(i) > 1})
+    _check(len(identifiers) == len(names) and not duplicates,
+           "every input carries a unique id",
+           f"{len(identifiers)} ids, {len(duplicates)} duplicated", failures)
+
+    # A <template>'s inputs are a blueprint: an id or a name in there is a
+    # second element answering to a row's identity.
+    inert = "".join(re.findall(r"<template\b.*?</template>", html, flags=re.S))
+    _check(not INPUT_ID_RE.search(inert) and not INPUT_NAME_RE.search(inert),
+           "template inputs are anonymous",
+           f"{len(INPUT_RE.findall(inert))} template input(s)", failures)
+
+    used = {c for tag in INPUT_RE.findall(html)
+            for c in re.findall(r'class="([^"]*)"', tag)[0].split()}
+    declared = {"fi", "fc"} | set(fields.classes.values())
+    _check(used <= declared and all(f".{name}{{" in html for name in used - {"fi", "fc"}),
+           "every input's metrics class is declared",
+           f"{len(used)} used, {len(declared)} declared", failures)
+
+    # The affordances are :hover/:focus under @media screen, so an empty field
+    # cannot print ink even if the guard is lost; the print reset is the second
+    # line of defence, not the first.
+    screen = re.search(r"@media screen\{(.*?)\}\n", html + "\n", flags=re.S)
+    _check(screen is not None and ":hover" in screen.group(1)
+           and ":focus" in screen.group(1),
+           "field affordances are screen-only states",
+           "hover/focus under @media screen" if screen else "no @media screen block",
+           failures)
+    _check("@media print{.fi{" in html,
+           "the print stylesheet strips input chrome",
+           "@media print resets border/outline/background", failures)
 
 
 def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, Any],
@@ -2424,6 +3184,94 @@ def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
                f"reflowed guide p{entry['page']} carries every claimed run",
                f"{len(entry['text_run_indices'])} runs, {len(missing)} missing", failures)
 
+    print_assertions(ir, layout, plan, guide_plan, reflow, failures)
+
+
+def _dense_text(html: str) -> str:
+    """The document's visible text, whitespace-free, with esc_text undone."""
+    text = re.sub(r"<[^>]+>", " ", html)
+    for entity, literal in (("&lt;", "<"), ("&gt;", ">"), ("&amp;", "&")):
+        text = text.replace(entity, literal)
+    return "".join(text.split())
+
+
+def print_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, Any],
+                     guide_plan: dict[str, Any], reflow: str,
+                     failures: list[str]) -> None:
+    """A guide is a document people print, so assert it is printable.
+
+    Without an `@page` a guide prints at the browser's default paper, which is
+    Letter wherever the user happens to be and is not the paper its form prints
+    on. Without the print block the navigation links print as furniture and
+    headings strand at the foot of a sheet. Both are invisible on screen, which
+    is exactly why they need an assertion rather than an inspection.
+    """
+    paper = ir["paper"]
+    want_page = (f'@page{{size:{fmt(paper["width_pt"])}pt {fmt(paper["height_pt"])}pt;'
+                 f'margin:{fmt(GUIDE_PAGE_MARGIN_PT)}pt}}')
+    _check(want_page in reflow, "reflowed guide sets @page from the form's paper",
+           want_page, failures)
+    _check(f'@page{{size:{fmt(paper["width_pt"])}pt {fmt(paper["height_pt"])}pt;'
+           f'margin:0}}' not in reflow,
+           "the guide does not inherit the form's zero-margin @page",
+           f"{fmt(GUIDE_PAGE_MARGIN_PT)}pt margin", failures)
+    _check("@media print{.doc-link{display:none}}" in reflow,
+           "the guide hides its cross-document link in print",
+           "DOC_LINK_CSS present", failures)
+    for declaration in ("break-after:avoid", "orphans:2", "break-inside:avoid"):
+        _check(declaration in reflow.split("@media print{", 1)[-1],
+               f"the guide's print block declares {declaration}",
+               "pagination rule present", failures)
+
+    # A standalone guide PDF, exercised on this form's own IR. 2551Q ships no
+    # separate guide, so the case is built rather than found: what is being
+    # asserted is that a source IR reaches the document as reflowed text and
+    # that the pinned PDF is still linked beside it, and any extraction proves
+    # that as well as the real one would.
+    name = guide_source_key(ir)
+    _check(name.lower().endswith(".pdf"), "guide_source_key reads the source file name",
+           name, failures)
+    staged = dict(guide_plan, standalone_pdfs=[f"/somewhere/{name}"], standalone_pdf=name)
+    converted, _ = build_document(ir, layout, plan, Options(
+        "svg", "fonts", "assets", None, None, None, staged, "guide", "reflow",
+        guide_sources={name: ir}))
+    dense = _dense_text(converted)
+    runs = [run["text"] for page in ir["pages"] for run in page["text_runs"]]
+    missing = [text for text in runs if "".join(text.split()) not in dense]
+    _check(not missing, "a converted guide PDF carries every run of its own extraction",
+           f"{len(runs)} runs, {len(missing)} missing", failures)
+    _check('data-converted="true"' in converted and "<object" not in converted,
+           "a converted guide PDF is reflowed text, not an embedded viewer",
+           f"{len(converted)} bytes", failures)
+    url = esc_attr(urllib.parse.quote(f"guides/{name}"))
+    _check(f'<p class="gl-download">Source PDF: <a href="{url}">' in converted,
+           "a converted guide PDF is still linked as the pinned artefact",
+           url, failures)
+
+    # The fallback has to stay honest: no extraction means the embed, and the
+    # warning has to say that the embed does not print.
+    embedded, warnings = build_document(ir, layout, plan, Options(
+        "svg", "fonts", "assets", None, None, None, staged, "guide", "reflow"))
+    _check('data-converted="false"' in embedded and "<object" in embedded,
+           "a guide PDF with no extraction falls back to the embed",
+           f"{len(embedded)} bytes", failures)
+    _check(any("does not print" in warning for warning in warnings),
+           "the fallback warns that an embedded PDF does not print",
+           f"{len(warnings)} warning(s)", failures)
+
+    # Wrong file, wrong form: both must fail rather than produce a document.
+    for label, sources in (("a PDF the plan does not list", {"not-in-the-plan.pdf": ir}),
+                           ("an extraction of another form",
+                            {name: dict(ir, form={"code": "9999", "revision": "1999"})})):
+        try:
+            build_document(ir, layout, plan, Options(
+                "svg", "fonts", "assets", None, None, None, staged, "guide", "reflow",
+                guide_sources=sources))
+        except SystemExit:
+            _check(True, f"guide source is rejected: {label}", "SystemExit", failures)
+        else:
+            _check(False, f"guide source is rejected: {label}", "accepted", failures)
+
 
 def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
               plan_path: pathlib.Path,
@@ -2503,6 +3351,8 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
                 bad.append(cid)
         _check(not bad, "comb slot counts match the layout",
                f"{len(comb_cells)} comb cells, {len(bad)} wrong", failures)
+
+        field_assertions(layout, plan, html, rendered, failures)
 
         bands = [(p["index"], g) for p in layout["pages"] for g in p["growable"]]
         for page_index, band in bands:
@@ -2621,6 +3471,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="Where the guide's link back to the form points.")
     parser.add_argument("--guide-pdf-dir", default="guides",
                         help="Where standalone guide PDFs live, relative to the HTML.")
+    parser.add_argument("--guide-source", type=pathlib.Path, action="append", default=None,
+                        metavar="IR", help="extract.py IR of a standalone guide PDF. Its "
+                                           "text is reflowed into the guide document "
+                                           "instead of the PDF being embedded, which is "
+                                           "what makes it print. Repeatable.")
     parser.add_argument("--title", default=None)
     parser.add_argument("--out", type=pathlib.Path, default=None,
                         help="Write the HTML here (default: stdout).")
@@ -2642,17 +3497,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("--document guide needs --guide-plan", file=sys.stderr)
         return 2
 
+    for path in args.guide_source or ():
+        if not path.is_file():
+            print(f"no such guide source IR: {path}", file=sys.stderr)
+            return 2
+
     ir = json.loads(args.ir.read_text(encoding="utf-8"))
     layout = json.loads(args.layout.read_text(encoding="utf-8"))
     plan = json.loads(args.font_plan.read_text(encoding="utf-8"))
     guide_plan = (json.loads(args.guide_plan.read_text(encoding="utf-8"))
                   if args.guide_plan else None)
+    guide_sources: dict[str, dict[str, Any]] = {}
+    for path in args.guide_source or ():
+        source_ir = json.loads(path.read_text(encoding="utf-8"))
+        guide_sources[guide_source_key(source_ir)] = source_ir
 
     out_dir = args.out.resolve().parent if args.out else None
     options = Options(args.rule_backend, args.fonts_dir, args.assets_dir,
                       out_dir, args.band_rows, args.title, guide_plan,
                       args.document, args.guide_layout, args.guide_href,
-                      args.form_href, args.guide_pdf_dir)
+                      args.form_href, args.guide_pdf_dir, guide_sources)
     html, warnings = build_document(ir, layout, plan, options)
 
     if args.out:

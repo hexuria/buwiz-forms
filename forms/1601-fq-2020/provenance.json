@@ -8,7 +8,7 @@
   "sha256": "0e06c2e75195ac1cad9524674bfd483f1a514e817decaf5b014927fe8e2e90d7",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 2,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -53,14 +53,15 @@
       {
         "file": "1601-FQ Sep 2020 Guide.pdf",
         "sha256": "41c89ec4fc6912c066d8c7c973017218fe52767f9dd8cfe32915e2478588c47b",
-        "embedded_as": "guides/1601-FQ Sep 2020 Guide.pdf"
+        "linked_as": "guides/1601-FQ Sep 2020 Guide.pdf",
+        "reflowed_into": "guide.html"
       }
     ],
     "reclaimed_pt_total": 0,
     "reclaimed_pct_mean": 0,
     "reclaimed_pct_min": 0,
     "reclaimed_pct_max": 0,
-    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form. Each PDF under standalone_pdfs was re-extracted and reflowed into guide.html so that it prints with the document; the pinned PDF is kept beside it and linked, and remains the exact artefact."
   },
   "guide_detected": {
     "inline_pages": [],
@@ -68,7 +69,7 @@
       "1601-FQ Sep 2020 Guide.pdf"
     ]
   },
-  "html_bytes": 530061,
+  "html_bytes": 670681,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

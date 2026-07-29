@@ -8,7 +8,7 @@
   "sha256": "5277addc6778c96a53fde99b8664b1a5213fcea638dea06033c9acf22ee73c25",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 2,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -54,14 +54,15 @@
       {
         "file": "1601-EQ Guide January 2019 ENCS rev.pdf",
         "sha256": "64730a5220bb67fbf1c8492f7bf785f407d6be5e790c7fe9e903e20c58026fc2",
-        "embedded_as": "guides/1601-EQ Guide January 2019 ENCS rev.pdf"
+        "linked_as": "guides/1601-EQ Guide January 2019 ENCS rev.pdf",
+        "reflowed_into": "guide.html"
       }
     ],
     "reclaimed_pt_total": 0,
     "reclaimed_pct_mean": 0,
     "reclaimed_pct_min": 0,
     "reclaimed_pct_max": 0,
-    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form, and the PDFs under standalone_pdfs are embedded by guide.html, not converted."
+    "note": "Reference material printed on the source sheet, or shipped as a separate guide PDF. It is not part of the filed form: index.html no longer carries the regions listed under moved_from_form. Each PDF under standalone_pdfs was re-extracted and reflowed into guide.html so that it prints with the document; the pinned PDF is kept beside it and linked, and remains the exact artefact."
   },
   "guide_detected": {
     "inline_pages": [],
@@ -69,7 +70,7 @@
       "1601-EQ Guide January 2019 ENCS rev.pdf"
     ]
   },
-  "html_bytes": 624849,
+  "html_bytes": 757435,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

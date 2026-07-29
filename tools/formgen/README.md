@@ -165,6 +165,47 @@ tone 83–153 and could not distinguish from decoration, because sub-pixel black
 ink cannot fill a pixel at 144 DPI. In the content stream they are pure black at
 an exact coordinate. The ambiguity was an artefact of the measurement.
 
+## Fields
+
+A cell of kind `field` is a box the sheet left blank, and it carries a real
+`<input>`: one per plain field, one per comb slot. Per slot, because the slot is
+already a positioned box at a *measured* `slot_x`, so a centred character lands
+on a measured slot centre by layout rather than by an advance calculation over a
+pitch that is not uniform. A comb stays **one** field: all of its inputs share
+the cell's `name`, and the cell carries `data-field-kind`, `data-field-name` and
+`data-comb-capacity` so a binder can address the field without re-deriving any
+geometry. Ids are `<cell>-i` and `<cell>-s<n>` — page, cell and slot;
+deterministic, and stable across a re-render.
+
+Typing runs forward through a comb and backspace runs back through it. Every
+listener is delegated from the document, which is what makes a row added by
+`setBandRows` fillable with no re-binding step, and that is not a small saving:
+2551Q page 1 alone has 488 comb inputs.
+
+Three properties keep the field layer from costing anything on paper:
+
+- **An empty field prints as nothing.** Every affordance is a `:hover`/`:focus`
+  rule under `@media screen`, and print has neither state, so an empty sheet
+  prints as the same PDF it did before fields existed — even if a stylesheet
+  transform loses the media guard, which had happened to the packaged bundles.
+- **A filled field prints only its characters.** `@media print` strips border,
+  outline, background and box-shadow. The caret needed catching separately:
+  printing with the cursor still in a comb painted a 0.75×6.75pt black bar, and
+  the round-trip reported it as an extra structural rule — correctly, because on
+  paper that is what it is. `caret-color` does not suppress it in Chromium's
+  print path, so the focus is dropped on `beforeprint`.
+- **The typography is the font plan's.** A blank has no text to measure, so the
+  face is the sheet's own modal body face by glyph count, restricted to resolved
+  metric-compatible faces at unit scale, and the size is fitted to the box the
+  source drew — a comb's own sub-band, or a cell inset by the thickness of the
+  rule bounding each side — and never exceeds the body size. An unstyled
+  `<input>` types in the platform UI font at 13.33px, which is a different
+  document from the one it is being typed onto.
+
+`fill_check.py` is the proof, and it is IR-vs-IR like everything else: fill every
+field, type one comb by keystroke, print, re-extract, and compare each glyph's
+centre against the layout's measured slot centre.
+
 ## One sheet, two documents
 
 A BIR sheet carries a form and a pile of reference material — ATC tables,
@@ -210,6 +251,43 @@ row-major as a real table on the undissolved gutter grid; across the 17 regions
 that separates the two ATC tables (0.36–0.55) from the thirteen prose blocks
 (0.61–0.95) with nothing in between. `--guide-layout absolute` keeps the
 positioned form for anyone who wants the original arrangement.
+
+### Guides are printed, not only read
+
+A guide is the document someone puts beside the form they are filling in, so it
+has to come out of a printer. Three things were in the way and all three are
+stylesheet or document-structure problems, not geometry:
+
+- **No `@page`.** A guide printed at whatever the browser defaults to, which is
+  Letter wherever the user is, while its form prints Folio or Legal. The guide
+  now sets `@page` from the *form's* paper — a form and its instructions should
+  be one stack of paper, not two — with a 36pt margin instead of the form's
+  `margin:0`. The form's zero margin is right for a sheet whose every coordinate
+  is measured from the MediaBox and wrong for prose, which would otherwise run
+  into the unprintable border every consumer printer reserves.
+- **Pagination.** `@media print` keeps headings with what they introduce
+  (`break-after:avoid`), keeps table rows and short blocks whole, sets
+  orphans/widows, repeats a table's header group across sheets, and drops the
+  cross-document navigation links, which mean nothing on paper. The prose then
+  flows across as many sheets as it needs.
+- **The twelve standalone guide PDFs.** They used to be embedded with
+  `<object>`. An embedded PDF is a second document with its own pagination:
+  printing the page around it prints the plugin's viewport, so 1701Q's four
+  pages of instructions printed as one near-blank sheet with the file name on
+  it. They are now run through *this* pipeline — `extract.py`, then `emit.py
+  --document guide --guide-layout reflow` via `--guide-source` — so their text
+  becomes reflowed HTML exactly like an inline guide, and all 29 guides print
+  the same way. That is a reading copy, not a replacement: the pinned PDF stays
+  in the bundle's `guides/` directory and is linked from the document, and it
+  remains the exact artefact. No lattice, no font plan and no parity score is
+  computed for it; a guide has no fields to model and nothing to measure.
+
+`batch.py`'s CSS splitter had to learn about nesting before any of this could
+work. It flattened a stylesheet with one regex over `sel{body}`, which cannot
+see `@media print{…}` and so lifted the rules inside it out of their condition —
+`.doc-link{display:none}` had been unconditional in all 29 bundles since the
+split existed, hiding both documents' navigation links on screen. Every rule
+above would have been applied to the screen the same way.
 
 ## Determinism
 
