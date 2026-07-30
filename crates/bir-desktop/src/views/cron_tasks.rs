@@ -2,6 +2,7 @@
 use bir_core::db::{Database, Job};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
+use gpui_rsx::rsx;
 
 use crate::components::combobox::{Combobox, ComboboxEvent, ComboboxState};
 use chrono::Utc;
@@ -573,53 +574,25 @@ impl Render for CronTasksView {
         let active_tab_bg = cx.theme().secondary;
         let inactive_tab_bg = gpui::rgba(0x00000000).into();
 
-        let jobs_view = div()
-            .flex()
-            .flex_col()
-            .gap_6()
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_wrap()
-                    .flex_shrink_0()
-                    .justify_between()
-                    .items_center()
-                    .mt_6()
-                    .gap_4()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_1()
-                            .gap_4()
-                            .items_center()
-                            .child(div().w_48().child(Combobox::new(&self.filter_combobox)))
-                            .child(div().flex_1().min_w(px(200.)).child(Input::new(&self.search_input)))
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .flex_wrap()
-                            .gap_4()
-                            .items_center()
-                            .child(div().text_sm().text_color(cx.theme().muted_foreground).child("Archive Days: 30"))
-                            .child(
-                                gpui_component::button::Button::new("purge_archived")
-                                    .label("Purge Archives")
-                                    .small()
-                                    .on_click(cx.listener(|this, _ev, window, cx| {
-                                        this.purge_archived(window, cx);
-                                    }))
-                            )
-                    )
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .children(paged_jobs.into_iter().enumerate().map(|(i, job)| {
+        let jobs_view = rsx! {
+            <div flex flex_col gap_6>
+                <div flex flex_row flex_wrap flex_shrink_0 justify_between items_center mt_6 gap_4>
+                    <div flex flex_1 gap_4 items_center>
+                        <div w_48>{Combobox::new(&self.filter_combobox)}</div>
+                        <div flex_1 min_w={px(200.)}>{Input::new(&self.search_input)}</div>
+                    </div>
+                    <div flex flex_row flex_wrap gap_4 items_center>
+                        <div text_sm text_color={cx.theme().muted_foreground}>{"Archive Days: 30"}</div>
+                        {gpui_component::button::Button::new("purge_archived")
+                            .label("Purge Archives")
+                            .small()
+                            .on_click(cx.listener(|this, _ev, window, cx| {
+                                this.purge_archived(window, cx);
+                            }))}
+                    </div>
+                </div>
+                <div flex flex_col gap_2>
+                    {...paged_jobs.into_iter().enumerate().map(|(i, job)| {
                         let _id = job.id.unwrap_or(0);
                         let db_id = job.id.unwrap_or(0);
                         let is_submission = job.job_kind == JobKind::Submission;
@@ -631,77 +604,42 @@ impl Render for CronTasksView {
                             "Archived" => cx.theme().muted_foreground,
                             _ => cx.theme().primary,
                         };
-                        div()
-                            .flex()
-                            .flex_row()
-                            .flex_wrap()
-                            .justify_between()
-                            .items_center()
-                            .p_4()
-                            .gap_4()
-                            .bg(cx.theme().muted)
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_lg()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .flex_1()
-                                    .min_w(px(250.))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_2()
-                                            .items_start()
-                                            .child(div().w_full().font_weight(FontWeight::BOLD).text_color(cx.theme().foreground).child(job.name.clone()))
-                                            .child(
-                                                div()
-                                                    .px_2()
-                                                    .py_0p5()
-                                                    .rounded_md()
-                                                    .bg(if is_submission { cx.theme().info.opacity(0.2) } else { cx.theme().secondary })
-                                                    .text_color(if is_submission { cx.theme().info } else { cx.theme().foreground })
-                                                    .text_xs()
-                                                    .child(job.job_type.clone())
-                                            )
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(if is_submission {
-                                                "Managed by System Daemon (Automatic Backoff)".to_string()
+                        rsx! {
+                            <div flex flex_row flex_wrap justify_between items_center p_4 gap_4 bg={cx.theme().muted} border_1 border_color={cx.theme().border} rounded_lg>
+                                <div flex flex_col gap_1 flex_1 min_w={px(250.)}>
+                                    <div flex flex_col gap_2 items_start>
+                                        <div w_full font_weight={FontWeight::BOLD} text_color={cx.theme().foreground}>{job.name.clone()}</div>
+                                        <div px_2 py_0p5 rounded_md bg={if is_submission { cx.theme().info.opacity(0.2) } else { cx.theme().secondary }} text_color={if is_submission { cx.theme().info } else { cx.theme().foreground }} text_xs>{job.job_type.clone()}</div>
+                                    </div>
+                                    {div()
+                                        .text_sm()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(if is_submission {
+                                            "Managed by System Daemon (Automatic Backoff)".to_string()
+                                        } else {
+                                            let cron_str = job.cron_expr.clone().unwrap_or_default();
+                                            if cron_str.is_empty() {
+                                                "One-off".to_string()
                                             } else {
-                                                let cron_str = job.cron_expr.clone().unwrap_or_default();
-                                                if cron_str.is_empty() {
-                                                    "One-off".to_string()
-                                                } else {
-                                                    humanize_cron(&cron_str)
-                                                }
-                                            })
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_wrap()
-                                            .gap_2()
-                                            .text_xs()
-                                            .child(
-                                                div().text_color(status_color).font_weight(FontWeight::BOLD).child(format!("Status: {}", job.status))
-                                            )
-                                            .child(
-                                                div().text_color(cx.theme().muted_foreground).child(format!("| Retries: {}", job.retries))
-                                            )
-                                            .when_some(job.next_run_at.clone(), |this, time| {
-                                                this.child(div().text_color(cx.theme().muted_foreground).child(format!("| Next run: {}", bir_core::time_utils::format_next_run(&time))))
-                                            })
-                                    )
-                            )
-                            .child(
-                                div()
+                                                humanize_cron(&cron_str)
+                                            }
+                                        })}
+                                    {div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .gap_2()
+                                        .text_xs()
+                                        .child(
+                                            div().text_color(status_color).font_weight(FontWeight::BOLD).child(format!("Status: {}", job.status))
+                                        )
+                                        .child(
+                                            div().text_color(cx.theme().muted_foreground).child(format!("| Retries: {}", job.retries))
+                                        )
+                                        .when_some(job.next_run_at.clone(), |this, time| {
+                                            this.child(div().text_color(cx.theme().muted_foreground).child(format!("| Next run: {}", bir_core::time_utils::format_next_run(&time))))
+                                        })}
+                                </div>
+                                {div()
                                     .flex()
                                     .flex_row()
                                     .flex_wrap()
@@ -793,12 +731,12 @@ impl Render for CronTasksView {
                                                     });
                                                 }))
                                         )
-                                    })
-                            )
-                    }))
-            )
-            .child(
-                div().flex().justify_center().pt_4().pb_8().when(total_pages > 1, |this| {
+                                    })}
+                            </div>
+                        }
+                    })}
+                </div>
+                <div flex justify_center pt_4 pb_8 when={(total_pages > 1, |this| {
                     this.child(
                         gpui_component::pagination::Pagination::new("job-pagination")
                             .current_page(self.current_page)
@@ -808,8 +746,9 @@ impl Render for CronTasksView {
                                 cx.notify();
                             }))
                     )
-                })
-            );
+                })} />
+            </div>
+        };
 
         let selected_log_filter = self.log_filter_combobox.read(cx).selected_value(cx);
 
@@ -839,194 +778,144 @@ impl Render for CronTasksView {
                 } else {
                     cx.theme().muted_foreground
                 };
-                div()
-                    .font_family(crate::platform::MONOSPACE_FONT)
-                    .text_sm()
-                    .text_color(color)
-                    .child(line.to_string())
+                rsx! {
+                    <div font_family={crate::platform::MONOSPACE_FONT} text_sm text_color={color}>
+                        {line.to_string()}
+                    </div>
+                }
             });
 
-        let logs_view = div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .justify_between()
-                    .items_center()
-                    .w_full()
-                    .mt_6()
-                    .pb_4()
-                    .border_b_1()
-                    .border_color(border)
-                    .child(
-                        div()
-                            .flex()
-                            .gap_4()
-                            .items_center()
-                            .child(
-                                gpui_component::button::Button::new("refresh_logs")
-                                    .label("Refresh Logs")
-                                    .small()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.refresh_logs(cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("clear_logs")
-                                    .label("Clear Logs")
-                                    .small()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.clear_logs(cx);
-                                    })),
-                            )
-                            .child(div().w_48().child(Combobox::new(&self.log_filter_combobox))),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap_4()
-                            .child(
-                                gpui_component::button::Button::new("export_error_logs")
-                                    .label("Export Error Logs")
-                                    .small()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.export_error_logs(cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("email_support_global")
-                                    .label("Email Support")
-                                    .small()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.email_support(cx);
-                                    })),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .id("logs_view_content")
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .p_4()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .border_color(border)
-                    .rounded_md()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.logs_scroll_handle)
-                    .children(parsed_logs),
-            );
+        let logs_view = rsx! {
+            <div flex flex_col w_full h_full gap_4>
+                <div flex flex_row justify_between items_center w_full mt_6 pb_4 border_b_1 border_color={border}>
+                    <div flex gap_4 items_center>
+                        {gpui_component::button::Button::new("refresh_logs")
+                            .label("Refresh Logs")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.refresh_logs(cx);
+                            }))}
+                        {gpui_component::button::Button::new("clear_logs")
+                            .label("Clear Logs")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.clear_logs(cx);
+                            }))}
+                        <div w_48>{Combobox::new(&self.log_filter_combobox)}</div>
+                    </div>
+                    <div flex gap_4>
+                        {gpui_component::button::Button::new("export_error_logs")
+                            .label("Export Error Logs")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.export_error_logs(cx);
+                            }))}
+                        {gpui_component::button::Button::new("email_support_global")
+                            .label("Email Support")
+                            .small()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.email_support(cx);
+                            }))}
+                    </div>
+                </div>
+                <div
+                    id={"logs_view_content"}
+                    flex
+                    flex_col
+                    flex_1
+                    p_4
+                    bg={cx.theme().background}
+                    border_1
+                    border_color={border}
+                    rounded_md
+                    overflow_y_scroll
+                    track_scroll={&self.logs_scroll_handle}
+                >
+                    {...parsed_logs}
+                </div>
+            </div>
+        };
 
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .p_8()
-                    .gap_6()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_2xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .child("Background Tasks & Job Queue"),
-                            )
-                            .child(div().text_color(cx.theme().muted_foreground).child(
-                                "Manage system daemon jobs, retry queues, and application logs.",
-                            )),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .w_full()
-                            .gap_2()
-                            .border_b_1()
-                            .border_color(border)
-                            .child(
-                                div()
-                                    .id("jobs_tab")
-                                    .px_4()
-                                    .py_2()
-                                    .cursor_pointer()
-                                    .bg(if is_jobs {
-                                        active_tab_bg
-                                    } else {
-                                        inactive_tab_bg
-                                    })
-                                    .border_b_2()
-                                    .border_color(if is_jobs {
-                                        cx.theme().primary
-                                    } else {
-                                        gpui::rgba(0x00000000).into()
-                                    })
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.active_tab = BackgroundTaskTab::Jobs;
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(if is_jobs {
-                                                cx.theme().foreground
-                                            } else {
-                                                cx.theme().muted_foreground
-                                            })
-                                            .child("Jobs"),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .id("logs_tab")
-                                    .px_4()
-                                    .py_2()
-                                    .cursor_pointer()
-                                    .bg(if is_logs {
-                                        active_tab_bg
-                                    } else {
-                                        inactive_tab_bg
-                                    })
-                                    .border_b_2()
-                                    .border_color(if is_logs {
-                                        cx.theme().primary
-                                    } else {
-                                        gpui::rgba(0x00000000).into()
-                                    })
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.active_tab = BackgroundTaskTab::Logs;
-                                        this.refresh_logs(cx);
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(if is_logs {
-                                                cx.theme().foreground
-                                            } else {
-                                                cx.theme().muted_foreground
-                                            })
-                                            .child("Logs"),
-                                    ),
-                            ),
-                    ),
-            )
-            .child(
-                div()
+        rsx! {
+            <div flex flex_col w_full h_full>
+                <div flex flex_col p_8 gap_6>
+                    <div flex flex_col gap_1>
+                        <div text_2xl font_weight={FontWeight::BOLD}>
+                            {"Background Tasks & Job Queue"}
+                        </div>
+                        <div text_color={cx.theme().muted_foreground}>
+                            {"Manage system daemon jobs, retry queues, and application logs."}
+                        </div>
+                    </div>
+                    <div flex flex_row w_full gap_2 border_b_1 border_color={border}>
+                        <div
+                            id={"jobs_tab"}
+                            px_4
+                            py_2
+                            cursor_pointer
+                            bg={if is_jobs {
+                                active_tab_bg
+                            } else {
+                                inactive_tab_bg
+                            }}
+                            border_b_2
+                            border_color={if is_jobs {
+                                cx.theme().primary
+                            } else {
+                                gpui::rgba(0x00000000).into()
+                            }}
+                            on_click={cx.listener(|this, _, _, cx| {
+                                this.active_tab = BackgroundTaskTab::Jobs;
+                                cx.notify();
+                            })}
+                        >
+                            <div
+                                font_weight={FontWeight::BOLD}
+                                text_color={if is_jobs {
+                                    cx.theme().foreground
+                                } else {
+                                    cx.theme().muted_foreground
+                                }}
+                            >
+                                {"Jobs"}
+                            </div>
+                        </div>
+                        <div
+                            id={"logs_tab"}
+                            px_4
+                            py_2
+                            cursor_pointer
+                            bg={if is_logs {
+                                active_tab_bg
+                            } else {
+                                inactive_tab_bg
+                            }}
+                            border_b_2
+                            border_color={if is_logs {
+                                cx.theme().primary
+                            } else {
+                                gpui::rgba(0x00000000).into()
+                            }}
+                            on_click={cx.listener(|this, _, _, cx| {
+                                this.active_tab = BackgroundTaskTab::Logs;
+                                this.refresh_logs(cx);
+                                cx.notify();
+                            })}
+                        >
+                            <div
+                                font_weight={FontWeight::BOLD}
+                                text_color={if is_logs {
+                                    cx.theme().foreground
+                                } else {
+                                    cx.theme().muted_foreground
+                                }}
+                            >
+                                {"Logs"}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {div()
                     .id("cron_tasks_content")
                     .flex()
                     .flex_col()
@@ -1038,7 +927,8 @@ impl Render for CronTasksView {
                         jobs_view.into_any_element()
                     } else {
                         logs_view.into_any_element()
-                    }),
-            )
+                    })}
+            </div>
+        }
     }
 }

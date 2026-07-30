@@ -516,9 +516,56 @@ impl Database {
         let mut profiles = Vec::new();
         for row_result in rows {
             let (id, json_data) = row_result?;
-            let mut profile: TaxpayerProfile = serde_json::from_str(&json_data)?;
+
+            // Skip rows this build cannot read rather than failing the whole
+            // list. A single unreadable row used to abort the query, so the
+            // sidebar showed NO profiles at all while single-profile lookups
+            // still succeeded - which is how a duplicate-TIN error could name a
+            // profile the user had no way to see.
+            //
+            // The realistic cause is a database written by a newer build: an
+            // enum gains a variant, an older binary meets it, and every profile
+            // disappears. That is a downgrade, not corruption, and the other
+            // rows are perfectly readable.
+            let mut profile: TaxpayerProfile = match serde_json::from_str(&json_data) {
+                Ok(profile) => profile,
+                Err(error) => {
+                    tracing::error!(
+                        profile_id = id,
+                        %error,
+                        "Skipping a profile this build cannot deserialize; the remaining \
+                         profiles are unaffected. This usually means the database was \
+                         written by a newer version of the app."
+                    );
+                    // Application-wide rather than profile-scoped: the row is
+                    // unreadable, so its TIN is precisely what we do not have.
+                    // Errors here are swallowed - a profile listing must not
+                    // fail because recording an alert about it failed.
+                    const TITLE: &str = "A taxpayer profile could not be read";
+                    let detail = format!(
+                        "Profile #{id} was skipped and is not shown in the sidebar. \
+                         This usually means the database was written by a newer version \
+                         of the app. Details: {error}"
+                    );
+                    if let Ok(outcome) = self.record_alert(
+                        None,
+                        super::alert_kinds::PROFILE_ROW_UNREADABLE,
+                        super::AlertSeverity::Warning,
+                        TITLE,
+                        &detail,
+                        super::AlertAction::OpenProfileManager,
+                    ) {
+                        // Listing runs on every sidebar refresh, so gate it.
+                        crate::notification::notify_alert_if_newly_active(outcome, TITLE, &detail);
+                    }
+                    continue;
+                }
+            };
             profile.normalize_profile_version_review_statuses();
             profile.id = Some(id);
+            // Deliberately still fatal: a hydrate failure is a database-level
+            // problem, not one row being from the future, and silently
+            // returning profiles with missing forms would be worse than an error.
             self.hydrate_profile_forms(&mut profile)?;
             profiles.push(profile);
         }
@@ -585,6 +632,129 @@ mod tests {
     use crate::db::ProfileCalendarLink;
     use chrono::{FixedOffset, TimeZone, Utc};
     use tempfile::NamedTempFile;
+
+    fn listing_test_profile(seg1: &str) -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": format!("Taxpayer {seg1}"),
+            "tin": { "segment1": seg1, "segment2": "456", "segment3": "789", "branch": "000" },
+            "rdo_code": "018",
+            "line_of_business": "Retail",
+            "registered_address": "Manila",
+            "zip_code": "1000",
+            "phone": "09123456789",
+            "email": "test@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual",
+            "business_start_date": "2020-01-01"
+        }))
+        .unwrap()
+    }
+
+    /// Reproduces the failure that hid every taxpayer profile in the sidebar.
+    ///
+    /// A row written by a newer build carried an enum variant this build does
+    /// not know (`NeedsReview`, in the real incident). `list_profiles` used `?`
+    /// on the per-row deserialize, so that single row aborted the whole query
+    /// and the UI showed NO profiles - while single-profile lookups still
+    /// succeeded, which is how a duplicate-TIN error could name a profile the
+    /// user had no way to see.
+    #[test]
+    fn one_unreadable_row_does_not_hide_the_others() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111"))
+            .expect("first profile saves");
+        db.save_profile(listing_test_profile("222"))
+            .expect("second profile saves");
+        assert_eq!(db.list_profiles().unwrap().len(), 2, "precondition");
+
+        // Rewrite exactly one row the way a downgrade does.
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
+                params![
+                    r#"{"full_name":"From The Future","status":"AVariantThisBuildLacks"}"#,
+                    "222456789000"
+                ],
+            )
+            .expect("row is rewritten");
+
+        let listed = db
+            .list_profiles()
+            .expect("a single bad row must not fail the whole listing");
+
+        assert_eq!(listed.len(), 1, "the readable profile must survive");
+        assert_eq!(listed[0].tin.full(), "111456789000");
+    }
+
+    /// The skip must also become something the user can see. Logging alone is
+    /// how this went unnoticed: profiles silently vanished from the sidebar
+    /// while the log filled up where nobody was looking.
+    #[test]
+    fn skipping_a_row_raises_a_visible_alert() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111")).unwrap();
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1",
+                params![r#"{"status":"AVariantThisBuildLacks"}"#],
+            )
+            .unwrap();
+
+        assert!(
+            db.list_active_alerts(None).unwrap().is_empty(),
+            "precondition: no alerts before the bad row is read"
+        );
+
+        let _ = db.list_profiles().expect("listing must not fail");
+
+        let alerts = db.list_active_alerts(None).unwrap();
+        assert_eq!(alerts.len(), 1, "the skip must surface as an alert");
+        assert_eq!(
+            alerts[0].kind,
+            crate::db::alert_kinds::PROFILE_ROW_UNREADABLE
+        );
+        assert_eq!(alerts[0].action, crate::db::AlertAction::OpenProfileManager);
+    }
+
+    /// Listing runs constantly - the sidebar re-reads on every refresh - so the
+    /// alert must not multiply.
+    #[test]
+    fn repeated_listings_do_not_multiply_the_alert() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111")).unwrap();
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1",
+                params![r#"{"status":"AVariantThisBuildLacks"}"#],
+            )
+            .unwrap();
+
+        for _ in 0..25 {
+            let _ = db.list_profiles().unwrap();
+        }
+
+        let alerts = db.list_active_alerts(None).unwrap();
+        assert_eq!(alerts.len(), 1, "25 listings must not make 25 alerts");
+        assert_eq!(alerts[0].occurrences, 25);
+    }
+
+    #[test]
+    fn every_row_unreadable_yields_an_empty_list_not_an_error() {
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        db.save_profile(listing_test_profile("111")).unwrap();
+        db.conn
+            .execute(
+                "UPDATE profiles SET data_json = ?1",
+                params![r#"{"status":"AVariantThisBuildLacks"}"#],
+            )
+            .unwrap();
+
+        assert!(
+            db.list_profiles().expect("still must not error").is_empty(),
+            "unreadable rows are skipped, so the list is empty rather than failed"
+        );
+    }
 
     #[test]
     fn reconciliation_calendar_year_uses_local_date_at_utc_positive_year_boundary() {

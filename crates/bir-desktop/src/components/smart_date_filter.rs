@@ -2,6 +2,7 @@ use chrono::{Datelike, Local};
 use gpui::prelude::*;
 use gpui::*;
 use gpui_component::ActiveTheme;
+use gpui_rsx::rsx;
 
 /// Event emitted when the user changes the selected year.
 pub struct SmartDateFilterEvent {
@@ -61,31 +62,33 @@ impl Render for SmartDateFilterState {
 
         div()
             .relative()
-            .child(
-                div()
-                    .id("year_trigger")
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .px_3()
-                    .h_11()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().background)
-                    .hover(|s| s.bg(cx.theme().secondary))
-                    .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| {
+            .child(rsx! {
+                <div
+                    id="year_trigger"
+                    flex
+                    items_center
+                    gap_2
+                    px_3
+                    h_11
+                    rounded_lg
+                    border_1
+                    border_color={cx.theme().border}
+                    bg={cx.theme().background}
+                    hover={|s| s.bg(cx.theme().secondary)}
+                    cursor_pointer
+                    on_click={cx.listener(|this, _, _, cx| {
                         this.toggle_open(cx);
-                    }))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(cx.theme().foreground)
-                            .child(label),
-                    ),
-            )
+                    })}
+                >
+                    <div
+                        text_sm
+                        font_weight={FontWeight::MEDIUM}
+                        text_color={cx.theme().foreground}
+                    >
+                        {label}
+                    </div>
+                </div>
+            })
             .when(is_open, |this| {
                 this.child(
                     deferred(
@@ -108,69 +111,67 @@ impl Render for SmartDateFilterState {
                                 .flex_col()
                                 .p_3()
                                 // Year navigation row
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .justify_between()
-                                        .child(
-                                            div()
-                                                .id("year_prev")
-                                                .px_2()
-                                                .py_1()
-                                                .text_sm()
-                                                .cursor_pointer()
-                                                .when(can_go_backward, |s| {
-                                                    s.text_color(cx.theme().muted_foreground)
-                                                        .hover(|s| {
-                                                            s.text_color(cx.theme().foreground)
-                                                        })
-                                                        .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.selected_year -= 1;
-                                                            cx.emit(SmartDateFilterEvent {
-                                                                year: this.selected_year,
-                                                            });
-                                                            cx.notify();
-                                                        }))
-                                                })
-                                                .when(!can_go_backward, |s| {
-                                                    s.text_color(cx.theme().border)
-                                                })
-                                                .child("◀"),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_lg()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child(format!("{}", selected_year)),
-                                        )
-                                        .child(
-                                            div()
-                                                .id("year_next")
-                                                .px_2()
-                                                .py_1()
-                                                .text_sm()
-                                                .cursor_pointer()
-                                                .when(can_go_forward, |s| {
-                                                    s.text_color(cx.theme().muted_foreground)
-                                                        .hover(|s| {
-                                                            s.text_color(cx.theme().foreground)
-                                                        })
-                                                        .on_click(cx.listener(|this, _, _, cx| {
-                                                            this.selected_year += 1;
-                                                            cx.emit(SmartDateFilterEvent {
-                                                                year: this.selected_year,
-                                                            });
-                                                            cx.notify();
-                                                        }))
-                                                })
-                                                .when(!can_go_forward, |s| {
-                                                    s.text_color(cx.theme().border)
-                                                })
-                                                .child("▶"),
-                                        ),
-                                )
+                                .child(rsx! {
+                                    <div flex items_center justify_between>
+                                        <div
+                                            id="year_prev"
+                                            px_2
+                                            py_1
+                                            text_sm
+                                            cursor_pointer
+                                            when={(can_go_backward, |s| {
+                                                s.text_color(cx.theme().muted_foreground)
+                                                    .hover(|s| {
+                                                        s.text_color(cx.theme().foreground)
+                                                    })
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.selected_year -= 1;
+                                                        cx.emit(SmartDateFilterEvent {
+                                                            year: this.selected_year,
+                                                        });
+                                                        cx.notify();
+                                                    }))
+                                            })}
+                                            when={(!can_go_backward, |s| {
+                                                s.text_color(cx.theme().border)
+                                            })}
+                                        >
+                                            {"◀"}
+                                        </div>
+                                        <div
+                                            text_lg
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={cx.theme().foreground}
+                                        >
+                                            {format!("{}", selected_year)}
+                                        </div>
+                                        <div
+                                            id="year_next"
+                                            px_2
+                                            py_1
+                                            text_sm
+                                            cursor_pointer
+                                            when={(can_go_forward, |s| {
+                                                s.text_color(cx.theme().muted_foreground)
+                                                    .hover(|s| {
+                                                        s.text_color(cx.theme().foreground)
+                                                    })
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.selected_year += 1;
+                                                        cx.emit(SmartDateFilterEvent {
+                                                            year: this.selected_year,
+                                                        });
+                                                        cx.notify();
+                                                    }))
+                                            })}
+                                            when={(!can_go_forward, |s| {
+                                                s.text_color(cx.theme().border)
+                                            })}
+                                        >
+                                            {"▶"}
+                                        </div>
+                                    </div>
+                                })
                                 // Nearby year pills for quick selection
                                 .child(
                                     div()

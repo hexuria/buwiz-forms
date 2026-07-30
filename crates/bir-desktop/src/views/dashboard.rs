@@ -6,8 +6,10 @@ use bir_core::forms::{
 };
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local, NaiveDate};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use crate::components::filter_bar::{FilterBar, FilterEvent, FilterState};
@@ -15,6 +17,7 @@ use crate::components::smart_date_filter::{
     SmartDateFilter, SmartDateFilterEvent, SmartDateFilterState,
 };
 
+#[derive(Clone)]
 pub enum DashboardEvent {
     FileForm {
         form_code: String,
@@ -24,6 +27,17 @@ pub enum DashboardEvent {
     Reload,
     LogoutProfile(String),
     OpenProfileManager,
+    /// Open the profile editor for the profile this dashboard is showing.
+    /// The sidebar row no longer expands into an Edit button, so this header
+    /// control is the route to a profile's own settings.
+    EditProfile(String),
+    /// Write this profile's deadlines as an `.ics` and hand it to the platform's
+    /// default calendar application. Every OS can open one, so this is the
+    /// always-available path; the Google sync is the optional extra.
+    AddToNativeCalendar(String),
+    /// Push this profile's deadlines to its linked Google Calendar. Offered only
+    /// when that profile actually has a link.
+    SyncGoogleCalendar(String),
 }
 
 impl EventEmitter<DashboardEvent> for DashboardView {}
@@ -79,6 +93,10 @@ pub struct DashboardView {
         Entity<crate::components::upcoming_deadlines_list::UpcomingDeadlinesList>,
     /// Consistency issues from the last resolve_profile_obligations_for_year call
     consistency_issues: Vec<bir_core::integration::ProfileConsistencyIssue>,
+    /// Whether the header's cog dropdown is open. The header actions sit behind
+    /// one control at every width, so the layout never shifts with how many of
+    /// them happen to apply to the current profile.
+    header_menu_open: bool,
 }
 
 impl DashboardView {
@@ -167,6 +185,7 @@ impl DashboardView {
             actionable_forms: Vec::new(),
             upcoming_deadlines_list,
             consistency_issues: Vec::new(),
+            header_menu_open: false,
         }
     }
 
@@ -513,18 +532,14 @@ impl DashboardView {
 impl Render for DashboardView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let Some(profile) = &self.active_profile else {
-            return div()
-                .flex()
-                .size_full()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .text_xl()
-                        .text_color(cx.theme().muted_foreground)
-                        .child("Select a Taxpayer Profile from the Sidebar"),
-                )
-                .into_any_element();
+            let empty_state = rsx! {
+                <div flex size_full items_center justify_center>
+                    <div text_xl text_color={cx.theme().muted_foreground}>
+                        {"Select a Taxpayer Profile from the Sidebar"}
+                    </div>
+                </div>
+            };
+            return empty_state.into_any_element();
         };
 
         let year = self.selected_year as u16;
@@ -698,34 +713,33 @@ impl Render for DashboardView {
                                 has_quarter_filter && !active_quarters.contains(&q_num);
 
                             if should_dim {
-                                quarter_dots = quarter_dots.child(
-                                    div()
-                                        .flex()
-                                        .flex_1()
-                                        .flex_col()
-                                        .items_center()
-                                        .justify_center()
-                                        .gap_1()
-                                        .opacity(0.2)
-                                        .py_3()
-                                        .rounded_xl()
-                                        .border_1()
-                                        .border_color(cx.theme().border)
-                                        .bg(gpui::transparent_black())
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(format!("Q{}", q_num)),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child("-"),
-                                        ),
-                                );
+                                quarter_dots = quarter_dots.child(rsx! {
+                                    <div
+                                        flex
+                                        flex_1
+                                        flex_col
+                                        items_center
+                                        justify_center
+                                        gap_1
+                                        opacity={0.2}
+                                        py_3
+                                        rounded_xl
+                                        border_1
+                                        border_color={cx.theme().border}
+                                        bg={gpui::transparent_black()}
+                                    >
+                                        <div
+                                            text_sm
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={cx.theme().muted_foreground}
+                                        >
+                                            {format!("Q{}", q_num)}
+                                        </div>
+                                        <div text_xs text_color={cx.theme().muted_foreground}>
+                                            {"-"}
+                                        </div>
+                                    </div>
+                                });
                             } else {
                                 let (bg, border_clr, accent, _icon, status_label) =
                                     Self::state_style(q_state, cx);
@@ -745,26 +759,28 @@ impl Render for DashboardView {
                                     .border_1()
                                     .border_color(border_clr)
                                     .bg(bg)
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(
-                                                if matches!(q_state, QuarterState::NotStarted) {
-                                                    cx.theme().foreground
-                                                } else {
-                                                    accent
-                                                },
-                                            )
-                                            .child(format!("Q{}", q_num)),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(accent)
-                                            .child(status_label),
-                                    );
+                                    .child(rsx! {
+                                        <div
+                                            text_sm
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={if matches!(q_state, QuarterState::NotStarted) {
+                                                cx.theme().foreground
+                                            } else {
+                                                accent
+                                            }}
+                                        >
+                                            {format!("Q{}", q_num)}
+                                        </div>
+                                    })
+                                    .child(rsx! {
+                                        <div
+                                            text_xs
+                                            font_weight={FontWeight::SEMIBOLD}
+                                            text_color={accent}
+                                        >
+                                            {status_label}
+                                        </div>
+                                    });
 
                                 if is_fileable {
                                     dot = dot
@@ -785,36 +801,27 @@ impl Render for DashboardView {
                             }
                         }
 
-                        Self::build_card(form_def, year, card_width, cx).child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_3()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .justify_between()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(format!("Year {}:", year)),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child(if is_release_fileable {
-                                                    format!("{}/4 filed", filed)
-                                                } else {
-                                                    support_label.to_string()
-                                                }),
-                                        ),
-                                )
-                                .child(quarter_dots),
-                        )
+                        Self::build_card(form_def, year, card_width, cx).child(rsx! {
+                            <div flex flex_col gap_3>
+                                <div flex justify_between items_center>
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!("Year {}:", year)}
+                                    </div>
+                                    <div
+                                        text_xs
+                                        font_weight={FontWeight::BOLD}
+                                        text_color={cx.theme().foreground}
+                                    >
+                                        {if is_release_fileable {
+                                            format!("{}/4 filed", filed)
+                                        } else {
+                                            support_label.to_string()
+                                        }}
+                                    </div>
+                                </div>
+                                {quarter_dots}
+                            </div>
+                        })
                     }
                     FilingFrequency::Monthly => {
                         let months = progress.as_ref().map(|p| p.months.clone()).unwrap_or([
@@ -857,34 +864,33 @@ impl Render for DashboardView {
                                     has_month_filter && !active_months.contains(&m_num);
 
                                 if should_dim {
-                                    row = row.child(
-                                        div()
-                                            .flex()
-                                            .flex_1()
-                                            .flex_col()
-                                            .items_center()
-                                            .justify_center()
-                                            .gap_1()
-                                            .opacity(0.2)
-                                            .py_3()
-                                            .rounded_xl()
-                                            .border_1()
-                                            .border_color(cx.theme().border)
-                                            .bg(gpui::transparent_black())
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child(month_names[absolute_idx]),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("-"),
-                                            ),
-                                    );
+                                    row = row.child(rsx! {
+                                        <div
+                                            flex
+                                            flex_1
+                                            flex_col
+                                            items_center
+                                            justify_center
+                                            gap_1
+                                            opacity={0.2}
+                                            py_3
+                                            rounded_xl
+                                            border_1
+                                            border_color={cx.theme().border}
+                                            bg={gpui::transparent_black()}
+                                        >
+                                            <div
+                                                text_sm
+                                                font_weight={FontWeight::BOLD}
+                                                text_color={cx.theme().muted_foreground}
+                                            >
+                                                {month_names[absolute_idx]}
+                                            </div>
+                                            <div text_xs text_color={cx.theme().muted_foreground}>
+                                                {"-"}
+                                            </div>
+                                        </div>
+                                    });
                                 } else {
                                     let (bg, border_clr, accent, _icon, status_label) =
                                         Self::state_style(m_state, cx);
@@ -904,26 +910,28 @@ impl Render for DashboardView {
                                         .border_1()
                                         .border_color(border_clr)
                                         .bg(bg)
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(
-                                                    if matches!(m_state, QuarterState::NotStarted) {
-                                                        cx.theme().foreground
-                                                    } else {
-                                                        accent
-                                                    },
-                                                )
-                                                .child(month_names[absolute_idx]),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(accent)
-                                                .child(status_label),
-                                        );
+                                        .child(rsx! {
+                                            <div
+                                                text_sm
+                                                font_weight={FontWeight::BOLD}
+                                                text_color={if matches!(m_state, QuarterState::NotStarted) {
+                                                    cx.theme().foreground
+                                                } else {
+                                                    accent
+                                                }}
+                                            >
+                                                {month_names[absolute_idx]}
+                                            </div>
+                                        })
+                                        .child(rsx! {
+                                            <div
+                                                text_xs
+                                                font_weight={FontWeight::SEMIBOLD}
+                                                text_color={accent}
+                                            >
+                                                {status_label}
+                                            </div>
+                                        });
 
                                     if is_fileable {
                                         dot = dot
@@ -948,36 +956,27 @@ impl Render for DashboardView {
                             month_dots = month_dots.child(row);
                         }
 
-                        Self::build_card(form_def, year, card_width, cx).child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_3()
-                                .child(
-                                    div()
-                                        .flex()
-                                        .justify_between()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(format!("Year {}:", year)),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().foreground)
-                                                .child(if is_release_fileable {
-                                                    format!("{}/12 filed", filed)
-                                                } else {
-                                                    support_label.to_string()
-                                                }),
-                                        ),
-                                )
-                                .child(month_dots),
-                        )
+                        Self::build_card(form_def, year, card_width, cx).child(rsx! {
+                            <div flex flex_col gap_3>
+                                <div flex justify_between items_center>
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!("Year {}:", year)}
+                                    </div>
+                                    <div
+                                        text_xs
+                                        font_weight={FontWeight::BOLD}
+                                        text_color={cx.theme().foreground}
+                                    >
+                                        {if is_release_fileable {
+                                            format!("{}/12 filed", filed)
+                                        } else {
+                                            support_label.to_string()
+                                        }}
+                                    </div>
+                                </div>
+                                {month_dots}
+                            </div>
+                        })
                     }
                     FilingFrequency::Annual => {
                         let status = progress
@@ -991,14 +990,13 @@ impl Render for DashboardView {
                         let code_click = code.clone();
 
                         Self::build_card(form_def, year, card_width, cx)
-                            .child(
-                                div().flex().justify_between().items_center().child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!("Year {}:", year)),
-                                ),
-                            )
+                            .child(rsx! {
+                                <div flex justify_between items_center>
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!("Year {}:", year)}
+                                    </div>
+                                </div>
+                            })
                             .child({
                                 let mut dot = div()
                                     .id(format!("annual_{}_{}", form_def.form_code, year))
@@ -1012,25 +1010,26 @@ impl Render for DashboardView {
                                     .border_1()
                                     .border_color(border_clr)
                                     .bg(bg)
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(accent)
-                                            .child(icon),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(
-                                                if matches!(&status, QuarterState::NotStarted) {
-                                                    cx.theme().foreground
-                                                } else {
-                                                    accent
-                                                },
-                                            )
-                                            .child(if is_release_fileable {
+                                    .child(rsx! {
+                                        <div
+                                            text_base
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={accent}
+                                        >
+                                            {icon}
+                                        </div>
+                                    })
+                                    .child(rsx! {
+                                        <div
+                                            text_sm
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={if matches!(&status, QuarterState::NotStarted) {
+                                                cx.theme().foreground
+                                            } else {
+                                                accent
+                                            }}
+                                        >
+                                            {if is_release_fileable {
                                                 match &status {
                                                     QuarterState::Paid => "View Paid Return",
                                                     QuarterState::Confirmed => {
@@ -1047,8 +1046,9 @@ impl Render for DashboardView {
                                                 "Open certification draft"
                                             } else {
                                                 support_label
-                                            }),
-                                    );
+                                            }}
+                                        </div>
+                                    });
 
                                 if is_fileable {
                                     dot = dot
@@ -1077,25 +1077,20 @@ impl Render for DashboardView {
                         let primary = cx.theme().primary;
 
                         Self::build_card(form_def, year, card_width, cx)
-                            .child(
-                                div()
-                                    .flex()
-                                    .justify_between()
-                                    .items_center()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!("Year {}:", year)),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(format!("{} filed", count)),
-                                    ),
-                            )
+                            .child(rsx! {
+                                <div flex justify_between items_center>
+                                    <div text_xs text_color={cx.theme().muted_foreground}>
+                                        {format!("Year {}:", year)}
+                                    </div>
+                                    <div
+                                        text_xs
+                                        font_weight={FontWeight::BOLD}
+                                        text_color={cx.theme().foreground}
+                                    >
+                                        {format!("{} filed", count)}
+                                    </div>
+                                </div>
+                            })
                             .child({
                                 let mut dot = div()
                                     .id(format!("monthly_{}_{}", form_def.form_code, year))
@@ -1109,26 +1104,30 @@ impl Render for DashboardView {
                                     .border_1()
                                     .border_color(cx.theme().border)
                                     .bg(gpui::transparent_black())
-                                    .child(
-                                        div()
-                                            .text_base()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(if is_release_fileable { "+" } else { "" }),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(cx.theme().foreground)
-                                            .child(if is_release_fileable {
+                                    .child(rsx! {
+                                        <div
+                                            text_base
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={cx.theme().foreground}
+                                        >
+                                            {if is_release_fileable { "+" } else { "" }}
+                                        </div>
+                                    })
+                                    .child(rsx! {
+                                        <div
+                                            text_sm
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={cx.theme().foreground}
+                                        >
+                                            {if is_release_fileable {
                                                 "File New Return"
                                             } else if is_certification_draft {
                                                 "Open certification draft"
                                             } else {
                                                 support_label
-                                            }),
-                                    );
+                                            }}
+                                        </div>
+                                    });
 
                                 if is_fileable {
                                     dot = dot
@@ -1157,7 +1156,11 @@ impl Render for DashboardView {
             // Add spacers to maintain identical column widths
             let empty_slots = cols - chunk.len();
             for _ in 0..empty_slots {
-                row = row.child(div().w(px(card_width)).child(div().h(px(1.))));
+                row = row.child(rsx! {
+                    <div w={px(card_width)}>
+                        <div h={px(1.)}/>
+                    </div>
+                });
             }
 
             forms_ui = forms_ui.child(row);
@@ -1174,78 +1177,58 @@ impl Render for DashboardView {
 
             if per_year_is_empty && no_active_filters {
                 // Gap R1 nudge: profile has no form configuration for this year
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .w_full()
-                    .py_24()
-                    .gap_4()
-                    .child(
-                        Icon::new(IconName::File)
+                rsx! {
+                    <div flex flex_col items_center justify_center w_full py_24 gap_4>
+                        {Icon::new(IconName::File)
                             .size(px(48.))
-                            .text_color(cx.theme().muted_foreground),
-                    )
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(format!("No forms configured for {}", year)),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(
-                                "This profile has no active filing obligations set up for this year.",
-                            ),
-                    )
-                    .child(
-                        div()
-                            .id("cta_open_profile_manager")
-                            .px_4()
-                            .py_2()
-                            .rounded_lg()
-                            .bg(cx.theme().primary)
-                            .text_color(cx.theme().primary_foreground)
-                            .text_sm()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(0.85))
-                            .on_click(cx.listener(|_this, _ev, _window, cx| {
+                            .text_color(cx.theme().muted_foreground)}
+                        <div
+                            text_xl
+                            font_weight={FontWeight::BOLD}
+                            text_color={cx.theme().foreground}
+                        >
+                            {format!("No forms configured for {}", year)}
+                        </div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {"This profile has no active filing obligations set up for this year."}
+                        </div>
+                        <div
+                            id={"cta_open_profile_manager"}
+                            px_4
+                            py_2
+                            rounded_lg
+                            bg={cx.theme().primary}
+                            text_color={cx.theme().primary_foreground}
+                            text_sm
+                            font_weight={FontWeight::SEMIBOLD}
+                            cursor_pointer
+                            hover={|s| s.opacity(0.85)}
+                            on_click={cx.listener(|_this, _ev, _window, cx| {
                                 cx.emit(DashboardEvent::OpenProfileManager);
-                            }))
-                            .child("Set up forms for this year"),
-                    )
+                            })}
+                        >
+                            {"Set up forms for this year"}
+                        </div>
+                    </div>
+                }
             } else {
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .w_full()
-                    .py_24()
-                    .gap_4()
-                    .child(
-                        Icon::new(IconName::Search)
+                rsx! {
+                    <div flex flex_col items_center justify_center w_full py_24 gap_4>
+                        {Icon::new(IconName::Search)
                             .size(px(48.))
-                            .text_color(cx.theme().muted_foreground),
-                    )
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("No forms match your filters"),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Try adjusting your form type filters or year selection."),
-                    )
+                            .text_color(cx.theme().muted_foreground)}
+                        <div
+                            text_xl
+                            font_weight={FontWeight::BOLD}
+                            text_color={cx.theme().foreground}
+                        >
+                            {"No forms match your filters"}
+                        </div>
+                        <div text_sm text_color={cx.theme().muted_foreground}>
+                            {"Try adjusting your form type filters or year selection."}
+                        </div>
+                    </div>
+                }
             }
         } else {
             forms_ui
@@ -1354,23 +1337,17 @@ impl Render for DashboardView {
                 let mut overdue_inner = div().flex().flex_col().gap_3();
 
                 if overdue_deadlines.is_empty() {
-                    overdue_inner = overdue_inner.child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .justify_center()
-                            .py_8()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("No overdue deadlines. You're on track!"),
-                            ),
-                    );
+                    overdue_inner = overdue_inner.child(rsx! {
+                        <div w_full flex flex_col items_center justify_center py_8 gap_2>
+                            <div
+                                text_sm
+                                font_weight={FontWeight::MEDIUM}
+                                text_color={cx.theme().muted_foreground}
+                            >
+                                {"No overdue deadlines. You're on track!"}
+                            </div>
+                        </div>
+                    });
                 } else {
                     // Theme-aware overdue card colors
                     let is_dark = cx.theme().is_dark();
@@ -1460,121 +1437,108 @@ impl Render for DashboardView {
                         overdue_inner = overdue_inner.child(
                             card.child(
                                 // Date badge
-                                div()
-                                    .w(px(56.))
-                                    .h(px(56.))
-                                    .flex()
-                                    .flex_col()
-                                    .items_center()
-                                    .justify_center()
-                                    .bg(badge_bg)
-                                    .border_1()
-                                    .border_color(badge_border)
-                                    .rounded_md()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::BOLD)
-                                            .text_color(overdue_text)
-                                            .child(month_label),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xl()
-                                            .font_weight(FontWeight::BLACK)
-                                            .text_color(overdue_text)
-                                            .child(day_label),
-                                    ),
+                                rsx! {
+                                    <div
+                                        w={px(56.)}
+                                        h={px(56.)}
+                                        flex
+                                        flex_col
+                                        items_center
+                                        justify_center
+                                        bg={badge_bg}
+                                        border_1
+                                        border_color={badge_border}
+                                        rounded_md
+                                    >
+                                        <div
+                                            text_xs
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={overdue_text}
+                                        >
+                                            {month_label}
+                                        </div>
+                                        <div
+                                            text_xl
+                                            font_weight={FontWeight::BLACK}
+                                            text_color={overdue_text}
+                                        >
+                                            {day_label}
+                                        </div>
+                                    </div>
+                                },
                             )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(
-                                                div()
-                                                    .text_base()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(overdue_text)
-                                                    .child(d.display_form_no.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .px_2()
-                                                    .py(px(2.))
-                                                    .bg(overdue_pill_bg)
-                                                    .text_color(gpui::white())
-                                                    .rounded(px(4.))
-                                                    .child(format!(
-                                                        "{} day{} overdue",
-                                                        days_overdue,
-                                                        if days_overdue == 1 { "" } else { "s" }
-                                                    )),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(d.form_name.clone()),
-                                    ),
-                            ),
+                            .child(rsx! {
+                                <div flex_1 flex flex_col gap_1>
+                                    <div flex items_center gap_2>
+                                        <div
+                                            text_base
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={overdue_text}
+                                        >
+                                            {d.display_form_no.clone()}
+                                        </div>
+                                        <div
+                                            text_xs
+                                            px_2
+                                            py={px(2.)}
+                                            bg={overdue_pill_bg}
+                                            text_color={gpui::white()}
+                                            rounded={px(4.)}
+                                        >
+                                            {format!(
+                                                "{} day{} overdue",
+                                                days_overdue,
+                                                if days_overdue == 1 { "" } else { "s" }
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {d.form_name.clone()}
+                                    </div>
+                                </div>
+                            }),
                         );
                     }
                 }
 
-                let overdue_col = div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(gpui::hsla(0.0, 0.8, 0.5, 1.0))
-                            .child("Overdue"),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .p_4()
-                            .bg(cx.theme().background)
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_xl()
-                            .shadow_sm()
-                            .child(overdue_inner),
-                    );
+                let overdue_col = rsx! {
+                    <div flex_1 flex flex_col gap_2>
+                        <div
+                            text_xl
+                            font_weight={FontWeight::BOLD}
+                            text_color={gpui::hsla(0.0, 0.8, 0.5, 1.0)}
+                        >
+                            {"Overdue"}
+                        </div>
+                        <div
+                            w_full
+                            p_4
+                            bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_xl
+                            shadow_sm
+                        >
+                            {overdue_inner}
+                        </div>
+                    </div>
+                };
 
                 // Build action required column
                 let mut action_inner = div().flex().flex_col().gap_3();
 
                 if matching_actionable_forms.is_empty() {
-                    action_inner = action_inner.child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .justify_center()
-                            .py_8()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("No pending forms. All caught up!"),
-                            ),
-                    );
+                    action_inner = action_inner.child(rsx! {
+                        <div w_full flex flex_col items_center justify_center py_8 gap_2>
+                            <div
+                                text_sm
+                                font_weight={FontWeight::MEDIUM}
+                                text_color={cx.theme().muted_foreground}
+                            >
+                                {"No pending forms. All caught up!"}
+                            </div>
+                        </div>
+                    });
                 } else {
                     for (_p, f) in matching_actionable_forms {
                         let period_label = if let Some(q) = f.quarter {
@@ -1657,166 +1621,149 @@ impl Render for DashboardView {
                         );
                         let btn_form_code = f.form_code.clone();
 
-                        action_inner = action_inner.child(
-                            div()
-                                .id(card_id)
-                                .flex()
-                                .items_center()
-                                .gap_4()
-                                .p_3()
-                                .bg(cx.theme().background)
-                                .border_1()
-                                .border_color(cx.theme().border)
-                                .rounded_lg()
-                                .cursor_pointer()
-                                .hover(|s| {
+                        action_inner = action_inner.child(rsx! {
+                            <div
+                                id={card_id}
+                                flex
+                                items_center
+                                gap_4
+                                p_3
+                                bg={cx.theme().background}
+                                border_1
+                                border_color={cx.theme().border}
+                                rounded_lg
+                                cursor_pointer
+                                hover={|s| {
                                     s.bg(cx.theme().secondary)
                                         .border_color(cx.theme().primary.opacity(0.3))
-                                })
-                                .on_click(cx.listener(move |_this, _ev, _window, cx| {
+                                }}
+                                on_click={cx.listener(move |_this, _ev, _window, cx| {
                                     cx.emit(DashboardEvent::FileForm {
                                         form_code: form_code_click.clone(),
                                         year: nav_year,
                                         quarter: nav_quarter,
                                     });
-                                }))
-                                .child(
-                                    // Date badge
-                                    div()
-                                        .w(px(56.))
-                                        .h(px(56.))
-                                        .flex()
-                                        .flex_col()
-                                        .items_center()
-                                        .justify_center()
-                                        .bg(cx.theme().secondary)
-                                        .border_1()
-                                        .border_color(cx.theme().border)
-                                        .rounded_md()
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .font_weight(FontWeight::BOLD)
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(month_label),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xl()
-                                                .font_weight(FontWeight::BLACK)
-                                                .text_color(cx.theme().foreground)
-                                                .child(day_label),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .flex()
-                                        .flex_col()
-                                        .gap_2()
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .items_center()
-                                                .gap_2()
-                                                .child(
-                                                    div()
-                                                        .text_base()
-                                                        .font_weight(FontWeight::BOLD)
-                                                        .text_color(cx.theme().foreground)
-                                                        .child(format!(
-                                                            "{} - {} {}",
-                                                            f.form_code,
-                                                            f.taxable_year,
-                                                            period_label
-                                                        )),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .px_2()
-                                                        .py(px(2.))
-                                                        .bg(status_color.opacity(0.15))
-                                                        .text_color(crate::theme::hue_on_tint(
-                                                            cx.theme(),
-                                                            status_color,
-                                                        ))
-                                                        .rounded(px(4.))
-                                                        .child(format!("{:?}", f.status)),
-                                                ),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(cx.theme().muted_foreground)
-                                                .child(format!(
-                                                    "Due: {}",
-                                                    deadline_date
-                                                        .map(|d| d.format("%b %d, %Y").to_string())
-                                                        .unwrap_or_else(|| "N/A".to_string())
-                                                )),
-                                        ),
-                                ),
-                        );
+                                })}
+                            >
+                                // Date badge
+                                <div
+                                    w={px(56.)}
+                                    h={px(56.)}
+                                    flex
+                                    flex_col
+                                    items_center
+                                    justify_center
+                                    bg={cx.theme().secondary}
+                                    border_1
+                                    border_color={cx.theme().border}
+                                    rounded_md
+                                >
+                                    <div
+                                        text_xs
+                                        font_weight={FontWeight::BOLD}
+                                        text_color={cx.theme().muted_foreground}
+                                    >
+                                        {month_label}
+                                    </div>
+                                    <div
+                                        text_xl
+                                        font_weight={FontWeight::BLACK}
+                                        text_color={cx.theme().foreground}
+                                    >
+                                        {day_label}
+                                    </div>
+                                </div>
+                                <div flex_1 flex flex_col gap_2>
+                                    <div flex items_center gap_2>
+                                        <div
+                                            text_base
+                                            font_weight={FontWeight::BOLD}
+                                            text_color={cx.theme().foreground}
+                                        >
+                                            {format!(
+                                                "{} - {} {}",
+                                                f.form_code,
+                                                f.taxable_year,
+                                                period_label
+                                            )}
+                                        </div>
+                                        <div
+                                            text_xs
+                                            px_2
+                                            py={px(2.)}
+                                            bg={status_color.opacity(0.15)}
+                                            text_color={crate::theme::hue_on_tint(
+                                                cx.theme(),
+                                                status_color,
+                                            )}
+                                            rounded={px(4.)}
+                                        >
+                                            {format!("{:?}", f.status)}
+                                        </div>
+                                    </div>
+                                    <div text_sm text_color={cx.theme().muted_foreground}>
+                                        {format!(
+                                            "Due: {}",
+                                            deadline_date
+                                                .map(|d| d.format("%b %d, %Y").to_string())
+                                                .unwrap_or_else(|| "N/A".to_string())
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        });
                     }
                 }
 
-                let action_col = div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Action Required"),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .p_4()
-                            .bg(cx.theme().background)
-                            .border_1()
-                            .border_color(cx.theme().border)
-                            .rounded_xl()
-                            .shadow_sm()
-                            .child(action_inner),
-                    );
+                let action_col = rsx! {
+                    <div flex_1 flex flex_col gap_2>
+                        <div
+                            text_xl
+                            font_weight={FontWeight::BOLD}
+                            text_color={cx.theme().foreground}
+                        >
+                            {"Action Required"}
+                        </div>
+                        <div
+                            w_full
+                            p_4
+                            bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_xl
+                            shadow_sm
+                        >
+                            {action_inner}
+                        </div>
+                    </div>
+                };
 
                 // Wrap the upcoming deadlines list in a column matching action/overdue
-                let upcoming_col = div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .child(self.upcoming_deadlines_list.clone());
+                let upcoming_col = rsx! {
+                    <div flex_1 flex flex_col gap_4>
+                        {self.upcoming_deadlines_list.clone()}
+                    </div>
+                };
 
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    // Full-width header row
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child(deadline_header.clone()),
-                    )
-                    // Three equal columns below
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_start()
-                            .gap_6()
-                            .child(upcoming_col)
-                            .child(action_col)
-                            .child(overdue_col),
-                    )
-                    .into_any_element()
+                let calendar_tab = rsx! {
+                    <div flex flex_col gap_4>
+                        // Full-width header row
+                        <div
+                            text_xl
+                            font_weight={FontWeight::BOLD}
+                            text_color={cx.theme().foreground}
+                        >
+                            {deadline_header.clone()}
+                        </div>
+                        // Three equal columns below
+                        <div flex flex_row items_start gap_6>
+                            {upcoming_col}
+                            {action_col}
+                            {overdue_col}
+                        </div>
+                    </div>
+                };
+                calendar_tab.into_any_element()
             }
             ProfileTab::Forms => {
                 // Render consistency warnings (e.g., ITR conflicts) above the form grid
@@ -1836,31 +1783,33 @@ impl Render for DashboardView {
                 } else {
                     let mut warnings_banner = div().flex().flex_col().gap_2().mb_4();
                     for issue in &warnings {
-                        warnings_banner = warnings_banner.child(
-                            div()
-                                .flex()
-                                .items_start()
-                                .gap_2()
-                                .p_3()
-                                .rounded_lg()
-                                .bg(cx.theme().warning.opacity(0.12))
-                                .border_1()
-                                .border_color(cx.theme().warning.opacity(0.45))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(crate::theme::warning_on_tint(cx.theme()))
-                                        .child(format!("\u{26a0} {}", issue.message)),
-                                ),
-                        );
+                        warnings_banner = warnings_banner.child(rsx! {
+                            <div
+                                flex
+                                items_start
+                                gap_2
+                                p_3
+                                rounded_lg
+                                bg={cx.theme().warning.opacity(0.12)}
+                                border_1
+                                border_color={cx.theme().warning.opacity(0.45)}
+                            >
+                                <div
+                                    text_sm
+                                    text_color={crate::theme::warning_on_tint(cx.theme())}
+                                >
+                                    {format!("\u{26a0} {}", issue.message)}
+                                </div>
+                            </div>
+                        });
                     }
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_4()
-                        .child(warnings_banner)
-                        .child(forms_ui)
-                        .into_any_element()
+                    let forms_tab = rsx! {
+                        <div flex flex_col gap_4>
+                            {warnings_banner}
+                            {forms_ui}
+                        </div>
+                    };
+                    forms_tab.into_any_element()
                 }
             }
         };
@@ -1882,128 +1831,207 @@ impl Render for DashboardView {
             format!("Tax Year {}", self.selected_year)
         };
 
-        div()
-            .id("dashboard-scroll")
-            .size_full()
-            .flex()
-            .flex_col()
-            .justify_start()
-            .overflow_y_scroll()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .w_full()
-                    .justify_start()
-                    .gap_6()
-                    .px_8()
-                    .py_6()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_3xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(profile.full_name.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_base()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!(
-                                        "TIN: {} • Type: {:?} • {} • {}",
-                                        profile.tin.full(),
-                                        profile.taxpayer_type,
-                                        period_desc,
-                                        if profile.is_vat_registered {
-                                            "VAT"
-                                        } else {
-                                            "Non-VAT"
-                                        }
-                                    )),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap_4()
-                            .child(div().flex_grow().child(FilterBar::new(&self.filter_state)))
-                            .child(SmartDateFilter::new(&self.smart_date_filter)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_4()
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap_4()
-                                    .child(
-                                        div()
-                                            .id("tab_calendar")
-                                            .p_2()
-                                            .border_b_2()
-                                            .border_color(
-                                                if matches!(self.active_tab, ProfileTab::Calendar) {
-                                                    cx.theme().primary
-                                                } else {
-                                                    gpui::transparent_black()
-                                                },
-                                            )
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.active_tab = ProfileTab::Calendar;
-                                                cx.notify();
-                                            }))
-                                            .child(
-                                                div()
-                                                    .text_xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().foreground)
-                                                    .child("Calendar"),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .id("tab_forms")
-                                            .p_2()
-                                            .border_b_2()
-                                            .border_color(
-                                                if matches!(self.active_tab, ProfileTab::Forms) {
-                                                    cx.theme().primary
-                                                } else {
-                                                    gpui::transparent_black()
-                                                },
-                                            )
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.active_tab = ProfileTab::Forms;
-                                                cx.notify();
-                                            }))
-                                            .child(
-                                                div()
-                                                    .text_xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().foreground)
-                                                    .child("Tax Form Library"),
-                                            ),
-                                    ),
-                            )
-                            .child(main_content),
-                    ),
-            )
-            .into_any_element()
+        let dashboard = rsx! {
+            <div id={"dashboard-scroll"} size_full flex flex_col justify_start overflow_y_scroll>
+                <div flex flex_col w_full justify_start gap_6 px_8 py_6>
+                    <div flex items_start justify_between gap_4>
+                        <div flex flex_col gap_2>
+                            <div
+                                text_3xl
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {profile.full_name.clone()}
+                            </div>
+                            <div text_base text_color={cx.theme().muted_foreground}>
+                                {format!(
+                                    "TIN: {} • Type: {:?} • {} • {}",
+                                    profile.tin.full(),
+                                    profile.taxpayer_type,
+                                    period_desc,
+                                    if profile.is_vat_registered {
+                                        "VAT"
+                                    } else {
+                                        "Non-VAT"
+                                    }
+                                )}
+                            </div>
+                        </div>
+                        {self.render_header_actions(profile, cx)}
+                    </div>
+                    <div flex items_center justify_between gap_4>
+                        <div flex_grow>
+                            {FilterBar::new(&self.filter_state)}
+                        </div>
+                        {SmartDateFilter::new(&self.smart_date_filter)}
+                    </div>
+                    <div flex flex_col gap_4>
+                        <div flex gap_4>
+                            <div
+                                id={"tab_calendar"}
+                                p_2
+                                border_b_2
+                                border_color={if matches!(self.active_tab, ProfileTab::Calendar) {
+                                    cx.theme().primary
+                                } else {
+                                    gpui::transparent_black()
+                                }}
+                                cursor_pointer
+                                on_click={cx.listener(|this, _, _, cx| {
+                                    this.active_tab = ProfileTab::Calendar;
+                                    cx.notify();
+                                })}
+                            >
+                                <div
+                                    text_xl
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().foreground}
+                                >
+                                    {"Calendar"}
+                                </div>
+                            </div>
+                            <div
+                                id={"tab_forms"}
+                                p_2
+                                border_b_2
+                                border_color={if matches!(self.active_tab, ProfileTab::Forms) {
+                                    cx.theme().primary
+                                } else {
+                                    gpui::transparent_black()
+                                }}
+                                cursor_pointer
+                                on_click={cx.listener(|this, _, _, cx| {
+                                    this.active_tab = ProfileTab::Forms;
+                                    cx.notify();
+                                })}
+                            >
+                                <div
+                                    text_xl
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().foreground}
+                                >
+                                    {"Tax Form Library"}
+                                </div>
+                            </div>
+                        </div>
+                        {main_content}
+                    </div>
+                </div>
+            </div>
+        };
+        dashboard.into_any_element()
     }
 }
 
 impl DashboardView {
+    /// The header's action control: one overflow button that opens a dropdown.
+    ///
+    /// These used to be one visible button per action, which meant the header
+    /// grew or shrank depending on whether the profile had a Google Calendar
+    /// link. A single control at every width keeps the layout fixed and leaves
+    /// room for further per-profile actions without redesigning the header.
+    fn render_header_actions(
+        &self,
+        profile: &TaxpayerProfile,
+        cx: &Context<Self>,
+    ) -> gpui::AnyElement {
+        let tin = profile.tin.full();
+        // Google Calendar is the optional path, so the sync only appears when
+        // this profile actually has a calendar linked.
+        let has_google_calendar = self
+            .db
+            .lock()
+            .ok()
+            .and_then(|db| db.get_profile_calendar_link(&tin).ok().flatten())
+            .is_some();
+
+        div()
+            .relative()
+            .flex_shrink_0()
+            .child(
+                gpui_component::button::Button::new("header_actions_menu")
+                    .outline()
+                    .icon(IconName::Ellipsis)
+                    .tooltip("Profile actions")
+                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                        this.header_menu_open = !this.header_menu_open;
+                        cx.notify();
+                    })),
+            )
+            .when(self.header_menu_open, |this| {
+                // Deferred + anchored so the dropdown paints above the filter
+                // row below it; a plain absolute child is painted over by later
+                // siblings. Same pattern the smart date filter already uses.
+                this.child(deferred(
+                    anchored().snap_to_window_with_margin(px(8.)).child(
+                        div()
+                            .occlude()
+                            .on_mouse_down_out(cx.listener(|this, _ev, _window, cx| {
+                                this.header_menu_open = false;
+                                cx.notify();
+                            }))
+                            .mt_1p5()
+                            .w(px(240.))
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .shadow_lg()
+                            .rounded_xl()
+                            .bg(cx.theme().popover)
+                            .text_color(cx.theme().popover_foreground)
+                            .flex()
+                            .flex_col()
+                            .p_1()
+                            .child(self.header_menu_item(
+                                "hdr_profile_settings",
+                                "Profile Settings",
+                                DashboardEvent::EditProfile(tin.clone()),
+                                cx,
+                            ))
+                            .child(self.header_menu_item(
+                                "hdr_add_to_calendar",
+                                "Add to Calendar",
+                                DashboardEvent::AddToNativeCalendar(tin.clone()),
+                                cx,
+                            ))
+                            .when(has_google_calendar, |this| {
+                                this.child(self.header_menu_item(
+                                    "hdr_sync_google",
+                                    "Sync Google Calendar",
+                                    DashboardEvent::SyncGoogleCalendar(tin.clone()),
+                                    cx,
+                                ))
+                            }),
+                    ),
+                ))
+            })
+            .into_any_element()
+    }
+
+    /// One row of the header dropdown. Selecting a row always closes the menu,
+    /// so it never stays open over the view the action navigated away to.
+    fn header_menu_item(
+        &self,
+        id: &'static str,
+        label: &'static str,
+        event: DashboardEvent,
+        cx: &Context<Self>,
+    ) -> Stateful<Div> {
+        div()
+            .id(id)
+            .w_full()
+            .px_3()
+            .py_2()
+            .rounded_md()
+            .cursor_pointer()
+            .hover(|s| s.bg(cx.theme().muted))
+            .child(label)
+            .on_click(cx.listener(move |this, _ev, _window, cx| {
+                this.header_menu_open = false;
+                cx.emit(event.clone());
+                cx.notify();
+            }))
+    }
+
     /// Build the common card shell (header + title). Caller appends progress + action sections.
     fn build_card(
         form_def: &bir_core::forms::FormCardData,
@@ -2011,51 +2039,51 @@ impl DashboardView {
         card_width: f32,
         cx: &Context<Self>,
     ) -> Div {
-        div()
-            .w(px(card_width))
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_xl()
-            .p_6()
-            .overflow_hidden()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .hover(|style| style.border_color(cx.theme().primary))
-            .shadow_sm()
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_3xl()
-                            .font_weight(FontWeight::BLACK)
-                            .text_color(cx.theme().primary)
-                            .child(form_def.form_code.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .bg(cx.theme().secondary)
-                            .px_3()
-                            .py_1()
-                            .rounded_full()
-                            .text_color(cx.theme().secondary_foreground)
-                            .child(form_def.category.clone()),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .line_height(relative(1.3))
-                    .text_color(cx.theme().foreground)
-                    .child(form_def.title.clone()),
-            )
+        rsx! {
+            <div
+                w={px(card_width)}
+                bg={cx.theme().background}
+                border_1
+                border_color={cx.theme().border}
+                rounded_xl
+                p_6
+                overflow_hidden
+                flex
+                flex_col
+                gap_4
+                hover={|style| style.border_color(cx.theme().primary)}
+                shadow_sm
+            >
+                <div flex justify_between items_center>
+                    <div
+                        text_3xl
+                        font_weight={FontWeight::BLACK}
+                        text_color={cx.theme().primary}
+                    >
+                        {form_def.form_code.clone()}
+                    </div>
+                    <div
+                        text_xs
+                        font_weight={FontWeight::BOLD}
+                        bg={cx.theme().secondary}
+                        px_3
+                        py_1
+                        rounded_full
+                        text_color={cx.theme().secondary_foreground}
+                    >
+                        {form_def.category.clone()}
+                    </div>
+                </div>
+                <div
+                    text_sm
+                    font_weight={FontWeight::BOLD}
+                    line_height={relative(1.3)}
+                    text_color={cx.theme().foreground}
+                >
+                    {form_def.title.clone()}
+                </div>
+            </div>
+        }
     }
 
     fn month_label_to_num(label: &str) -> Option<u8> {

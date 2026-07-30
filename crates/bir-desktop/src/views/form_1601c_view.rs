@@ -6,6 +6,7 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
@@ -759,81 +760,63 @@ impl Render for Form1601CView {
             .w_full()
             .h_full()
             .bg(cx.theme().background)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .bg(cx.theme().background)
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("back_btn")
-                            .label("← Back")
-                            .on_click(cx.listener(|_, _, _, cx| {
-                                cx.emit(Form1601CEvent::BackToDashboard);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                gpui_component::button::Button::new("save_draft_btn")
-                                    .label("Save Draft")
-                                    .outline()
-                                    .disabled(!is_draft)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.save_draft(window, cx);
-                                    })),
+            .child(rsx! {
+                <div flex items_center justify_between px_8 py_4
+                    bg={cx.theme().background}
+                    border_b_1
+                    border_color={cx.theme().border}>
+                    {gpui_component::button::Button::new("back_btn")
+                        .label("← Back")
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            cx.emit(Form1601CEvent::BackToDashboard);
+                        }))}
+                    <div flex items_center gap_3>
+                        {gpui_component::button::Button::new("save_draft_btn")
+                            .label("Save Draft")
+                            .outline()
+                            .disabled(!is_draft)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.save_draft(window, cx);
+                            }))}
+                        {gpui_component::button::Button::new("submit_btn")
+                            .label(if queue_supported {
+                                "Generate XML & Submit"
+                            } else {
+                                "Manual / external filing"
+                            })
+                            .primary()
+                            .disabled(
+                                !queue_supported
+                                    || !is_draft
+                                    || !self.validation_errors.is_empty(),
                             )
-                            .child(
-                                gpui_component::button::Button::new("submit_btn")
-                                    .label(if queue_supported {
-                                        "Generate XML & Submit"
-                                    } else {
-                                        "Manual / external filing"
-                                    })
-                                    .primary()
-                                    .disabled(
-                                        !queue_supported
-                                            || !is_draft
-                                            || !self.validation_errors.is_empty(),
-                                    )
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.mark_submitted(window, cx);
-                                    })),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .p_6()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().accent)
-                    .child(self.render_header(cx))
-                    .child(div().mt_6().child(self.render_status_pipeline(cx))),
-            )
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.mark_submitted(window, cx);
+                            }))}
+                    </div>
+                </div>
+            })
+            .child(rsx! {
+                <div p_6 border_b_1
+                    border_color={cx.theme().border}
+                    bg={cx.theme().accent}>
+                    {self.render_header(cx)}
+                    <div mt_6>{self.render_status_pipeline(cx)}</div>
+                </div>
+            })
             .when(!queue_supported, |view| {
-                view.child(
-                    div()
-                        .px_8()
-                        .py_3()
-                        .bg(cx.theme().warning.opacity(0.12))
-                        .border_b_1()
-                        .border_color(cx.theme().warning.opacity(0.4))
-                        .text_sm()
-                        .text_color(crate::theme::warning_on_tint(cx.theme()))
-                        .child(
-                            self.status_message
-                                .clone()
-                                .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string()),
-                        ),
-                )
+                view.child(rsx! {
+                    <div px_8 py_3
+                        bg={cx.theme().warning.opacity(0.12)}
+                        border_b_1
+                        border_color={cx.theme().warning.opacity(0.4)}
+                        text_sm
+                        text_color={crate::theme::warning_on_tint(cx.theme())}>
+                        {self.status_message
+                            .clone()
+                            .unwrap_or_else(|| SCAFFOLD_MESSAGE.to_string())}
+                    </div>
+                })
             })
             .when(queue_supported, |view| {
                 let message = self
@@ -842,103 +825,68 @@ impl Render for Form1601CView {
                     .clone()
                     .or_else(|| self.status_message.clone());
                 view.when_some(message, |view, message| {
-                    view.child(
-                        div()
-                            .px_8()
-                            .py_3()
-                            .bg(cx.theme().warning.opacity(0.12))
-                            .border_b_1()
-                            .border_color(cx.theme().warning.opacity(0.4))
-                            .text_sm()
-                            .text_color(crate::theme::warning_on_tint(cx.theme()))
-                            .child(message),
-                    )
+                    view.child(rsx! {
+                        <div px_8 py_3
+                            bg={cx.theme().warning.opacity(0.12)}
+                            border_b_1
+                            border_color={cx.theme().warning.opacity(0.4)}
+                            text_sm
+                            text_color={crate::theme::warning_on_tint(cx.theme())}>
+                            {message}
+                        </div>
+                    })
                 })
             })
-            .child(
-                div()
-                    .id("scroll_container")
-                    .flex_1()
-                    .w_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .p_8()
-                    .child(
-                        div()
-                            .max_w(px(800.))
-                            .mx_auto()
-                            .flex()
-                            .flex_col()
-                            .gap_6()
-                            .child(
-                                div()
-                                    .bg(cx.theme().background)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_lg()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .p_4()
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().muted_foreground)
-                                                    .child("TAXPAYER PROFILE"),
-                                            )
-                                            .child(
-                                                div().mt_2().flex().gap_4().child(
-                                                    div()
-                                                        .text_xl()
-                                                        .font_weight(FontWeight::BOLD)
-                                                        .child(self.draft.taxpayer_name.clone()),
-                                                ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .mt_1()
-                                                    .text_sm()
-                                                    .child(format!("TIN: {}", self.draft.tin)),
-                                            )
-                                            .child(div().mt_1().text_sm().child(format!(
-                                                "RDO Code: {}",
-                                                self.draft.rdo_code
-                                            )))
-                                            .child(div().mt_1().text_sm().child(format!(
-                                                "Address: {}",
-                                                self.draft.registered_address
-                                            ))),
-                                    ),
-                            )
-                            .child(self.render_schedule_section(is_draft, cx))
-                            .child(
-                                div()
-                                    .bg(cx.theme().background)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_lg()
-                                    .child(
-                                        div()
+            .child(rsx! {
+                <div id="scroll_container" flex_1 w_full overflow_y_scroll
+                    track_scroll={&self.scroll_handle}
+                    p_8>
+                    <div max_w={px(800.)} mx_auto flex flex_col gap_6>
+                        <div bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_lg>
+                            <div flex flex_col p_4>
+                                <div text_sm
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().muted_foreground}>
+                                    {"TAXPAYER PROFILE"}
+                                </div>
+                                <div mt_2 flex gap_4>
+                                    <div text_xl font_weight={FontWeight::BOLD}>
+                                        {self.draft.taxpayer_name.clone()}
+                                    </div>
+                                </div>
+                                <div mt_1 text_sm>{format!("TIN: {}", self.draft.tin)}</div>
+                                <div mt_1 text_sm>{format!(
+                                    "RDO Code: {}",
+                                    self.draft.rdo_code
+                                )}</div>
+                                <div mt_1 text_sm>{format!(
+                                    "Address: {}",
+                                    self.draft.registered_address
+                                )}</div>
+                            </div>
+                        </div>
+                        {self.render_schedule_section(is_draft, cx)}
+                        <div bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_lg>
+                            {div()
                                             .flex()
                                             .flex_col()
                                             .gap_4()
                                             .p_4()
-                                            .child(
-                                                div()
-                                                    .text_xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .child("Part I - Background Information"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .gap_4()
-                                                    .items_center()
-                                                    .child(div().child("Amended Return?"))
-                                                    .child(
-                                                        div()
+                                            .child(rsx! {
+                                                <div text_xl font_weight={FontWeight::BOLD}>
+                                                    {"Part I - Background Information"}
+                                                </div>
+                                            })
+                                            .child(rsx! {
+                                                <div flex gap_4 items_center>
+                                                    <div>{"Amended Return?"}</div>
+                                                    {div()
                                                             .id("amended_btn")
                                                             .p_2()
                                                             .border_1()
@@ -970,17 +918,13 @@ impl Render for Form1601CView {
                                                                 "Yes"
                                                             } else {
                                                                 "No"
-                                                            }),
-                                                    ),
-                                            )
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .gap_4()
-                                                    .items_center()
-                                                    .child(div().child("Any Taxes Withheld?"))
-                                                    .child(
-                                                        div()
+                                                            })}
+                                                </div>
+                                            })
+                                            .child(rsx! {
+                                                <div flex gap_4 items_center>
+                                                    <div>{"Any Taxes Withheld?"}</div>
+                                                    {div()
                                                             .id("withheld_btn")
                                                             .p_2()
                                                             .border_1()
@@ -1015,25 +959,21 @@ impl Render for Form1601CView {
                                                                 "Yes"
                                                             } else {
                                                                 "No"
-                                                            }),
-                                                    ),
-                                            )
+                                                            })}
+                                                </div>
+                                            })
                                             .child(self.render_input_row(
                                                 "Number of Sheets Attached",
                                                 &self.number_of_sheets,
                                                 cx,
                                             ))
                                             .child(self.render_input_row("ATC", &self.atc, cx))
-                                            .child(
-                                                div()
-                                                    .flex()
-                                                    .gap_4()
-                                                    .items_center()
-                                                    .child(div().child(
-                                                        "13 Payees availing of tax relief under Special Law or International Tax Treaty?",
-                                                    ))
-                                                    .child(
-                                                        div()
+                                            .child(rsx! {
+                                                <div flex gap_4 items_center>
+                                                    <div>{
+                                                        "13 Payees availing of tax relief under Special Law or International Tax Treaty?"
+                                                    }</div>
+                                                    {div()
                                                             .id("tax_relief_btn")
                                                             .p_2()
                                                             .border_1()
@@ -1080,210 +1020,175 @@ impl Render for Form1601CView {
                                                                 "Yes"
                                                             } else {
                                                                 "No"
-                                                            }),
-                                                    ),
-                                            )
+                                                            })}
+                                                </div>
+                                            })
                                             .when(self.tax_relief, |content| {
                                                 content.child(self.render_input_row(
                                                     "13A If yes, specify",
                                                     &self.tax_relief_specification,
                                                     cx,
                                                 ))
-                                            }),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .bg(cx.theme().background)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_lg()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_4()
-                                            .p_4()
-                                            .child(
-                                                div()
-                                                    .text_xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .child("Part II - Computation of Tax"),
-                                            )
-                                            .child(self.render_input_row(
-                                                "14 Total Amount of Compensation",
-                                                &self.tax_14_total_compensation,
-                                                cx,
-                                            ))
-                                            .child(
-                                                div()
-                                                    .text_lg()
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .mt_4()
-                                                    .child("Less: Non-Taxable/Exempt Compensation"),
-                                            )
-                                            .child(self.render_input_row(
-                                                "15 Statutory Minimum Wage",
-                                                &self.tax_15_statutory_minimum_wage,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "16 Holiday Pay, Overtime Pay, Night Shift",
-                                                &self.tax_16_holiday_pay,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "17 13th Month Pay and Other Benefits",
-                                                &self.tax_17_13th_month_pay,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "18 De Minimis Benefits",
-                                                &self.tax_18_de_minimis,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "19 SSS, GSIS, PHIC, HDMF Contributions",
-                                                &self.tax_19_sss_gsis,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_with_text_row(
-                                                "20 Other Non-Taxable Compensation",
-                                                &self.tax_20_other_name,
-                                                &self.tax_20_other_amount,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "21 Total Non-Taxable Compensation",
-                                                self.draft.tax_21_total_non_taxable,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "22 Total Taxable Compensation (14 - 21)",
-                                                self.draft.tax_22_total_taxable,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "23 Less: Taxable comp not subject to withholding",
-                                                &self.tax_23_not_subject,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "24 Net Taxable Compensation (22 - 23)",
-                                                self.draft.tax_24_net_taxable,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "25 Total Taxes Withheld",
-                                                &self.tax_25_total_taxes_withheld,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "26 Add/Less: Adjustment from Schedule I",
-                                                self.draft.tax_26_adjustment,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "27 Taxes Withheld for Remittance",
-                                                self.draft.tax_27_taxes_withheld_for_remittance,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "28 Less: Tax Remitted in Return Previously Filed",
-                                                &self.tax_28_tax_remitted_previously,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_with_text_row(
-                                                "29 Other Remittances Made",
-                                                &self.tax_29_other_remittances_name,
-                                                &self.tax_29_other_remittances_amount,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "30 Total Tax Remittances Made",
-                                                self.draft.tax_30_total_tax_remittances,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "31 Tax Still Due/(Overremittance)",
-                                                self.draft.tax_31_tax_still_due,
-                                                cx,
-                                            )),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .bg(cx.theme().background)
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .rounded_lg()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap_4()
-                                            .p_4()
-                                            .child(
-                                                div()
-                                                    .text_xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .child("Add: Penalties"),
-                                            )
-                                            .child(self.render_input_row(
-                                                "32 Surcharge",
-                                                &self.tax_32_surcharge,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "33 Interest",
-                                                &self.tax_33_interest,
-                                                cx,
-                                            ))
-                                            .child(self.render_input_row(
-                                                "34 Compromise",
-                                                &self.tax_34_compromise,
-                                                cx,
-                                            ))
-                                            .child(self.render_computed_row(
-                                                "35 Total Penalties",
-                                                self.draft.tax_35_total_penalties,
-                                                cx,
-                                            )),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .bg(cx.theme().primary.opacity(0.1))
-                                    .border_1()
-                                    .border_color(cx.theme().primary.opacity(0.2))
-                                    .rounded_lg()
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .justify_between()
-                                            .items_center()
-                                            .p_6()
-                                            .child(
-                                                div()
-                                                    .text_2xl()
-                                                    .font_weight(FontWeight::BOLD)
-                                                    .text_color(cx.theme().primary)
-                                                    .child("36 Total Amount Payable"),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_2xl()
-                                                    .font_weight(FontWeight::BLACK)
-                                                    .text_color(cx.theme().primary)
-                                                    .child(format!(
-                                                        "P {:.2}",
-                                                        self.draft.tax_36_total_amount_payable
-                                                    )),
-                                            ),
-                                    ),
-                            ),
-                    ),
-            )
+                                            })}
+                        </div>
+                        <div bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_lg>
+                            <div flex flex_col gap_4 p_4>
+                                <div text_xl font_weight={FontWeight::BOLD}>
+                                    {"Part II - Computation of Tax"}
+                                </div>
+                                {self.render_input_row(
+                                    "14 Total Amount of Compensation",
+                                    &self.tax_14_total_compensation,
+                                    cx,
+                                )}
+                                <div text_lg font_weight={FontWeight::SEMIBOLD} mt_4>
+                                    {"Less: Non-Taxable/Exempt Compensation"}
+                                </div>
+                                {self.render_input_row(
+                                    "15 Statutory Minimum Wage",
+                                    &self.tax_15_statutory_minimum_wage,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "16 Holiday Pay, Overtime Pay, Night Shift",
+                                    &self.tax_16_holiday_pay,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "17 13th Month Pay and Other Benefits",
+                                    &self.tax_17_13th_month_pay,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "18 De Minimis Benefits",
+                                    &self.tax_18_de_minimis,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "19 SSS, GSIS, PHIC, HDMF Contributions",
+                                    &self.tax_19_sss_gsis,
+                                    cx,
+                                )}
+                                {self.render_input_with_text_row(
+                                    "20 Other Non-Taxable Compensation",
+                                    &self.tax_20_other_name,
+                                    &self.tax_20_other_amount,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "21 Total Non-Taxable Compensation",
+                                    self.draft.tax_21_total_non_taxable,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "22 Total Taxable Compensation (14 - 21)",
+                                    self.draft.tax_22_total_taxable,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "23 Less: Taxable comp not subject to withholding",
+                                    &self.tax_23_not_subject,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "24 Net Taxable Compensation (22 - 23)",
+                                    self.draft.tax_24_net_taxable,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "25 Total Taxes Withheld",
+                                    &self.tax_25_total_taxes_withheld,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "26 Add/Less: Adjustment from Schedule I",
+                                    self.draft.tax_26_adjustment,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "27 Taxes Withheld for Remittance",
+                                    self.draft.tax_27_taxes_withheld_for_remittance,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "28 Less: Tax Remitted in Return Previously Filed",
+                                    &self.tax_28_tax_remitted_previously,
+                                    cx,
+                                )}
+                                {self.render_input_with_text_row(
+                                    "29 Other Remittances Made",
+                                    &self.tax_29_other_remittances_name,
+                                    &self.tax_29_other_remittances_amount,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "30 Total Tax Remittances Made",
+                                    self.draft.tax_30_total_tax_remittances,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "31 Tax Still Due/(Overremittance)",
+                                    self.draft.tax_31_tax_still_due,
+                                    cx,
+                                )}
+                            </div>
+                        </div>
+                        <div bg={cx.theme().background}
+                            border_1
+                            border_color={cx.theme().border}
+                            rounded_lg>
+                            <div flex flex_col gap_4 p_4>
+                                <div text_xl font_weight={FontWeight::BOLD}>
+                                    {"Add: Penalties"}
+                                </div>
+                                {self.render_input_row(
+                                    "32 Surcharge",
+                                    &self.tax_32_surcharge,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "33 Interest",
+                                    &self.tax_33_interest,
+                                    cx,
+                                )}
+                                {self.render_input_row(
+                                    "34 Compromise",
+                                    &self.tax_34_compromise,
+                                    cx,
+                                )}
+                                {self.render_computed_row(
+                                    "35 Total Penalties",
+                                    self.draft.tax_35_total_penalties,
+                                    cx,
+                                )}
+                            </div>
+                        </div>
+                        <div bg={cx.theme().primary.opacity(0.1)}
+                            border_1
+                            border_color={cx.theme().primary.opacity(0.2)}
+                            rounded_lg>
+                            <div flex justify_between items_center p_6>
+                                <div text_2xl
+                                    font_weight={FontWeight::BOLD}
+                                    text_color={cx.theme().primary}>
+                                    {"36 Total Amount Payable"}
+                                </div>
+                                <div text_2xl
+                                    font_weight={FontWeight::BLACK}
+                                    text_color={cx.theme().primary}>
+                                    {format!(
+                                        "P {:.2}",
+                                        self.draft.tax_36_total_amount_payable
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            })
     }
 }
 
@@ -1301,24 +1206,19 @@ impl Form1601CView {
                     .get(index)
                     .map(|row| row.adjustment)
                     .unwrap_or(0.0);
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .p_4()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .rounded_md()
-                    .child(
-                        div()
+                rsx! {
+                    <div flex flex_col gap_3 p_4 border_1
+                        border_color={cx.theme().border}
+                        rounded_md>
+                        {div()
                             .flex()
                             .items_center()
                             .justify_between()
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::BOLD)
-                                    .child(format!("Schedule I row {}", index + 1)),
-                            )
+                            .child(rsx! {
+                                <div font_weight={FontWeight::BOLD}>
+                                    {format!("Schedule I row {}", index + 1)}
+                                </div>
+                            })
                             .when(is_editable, |header| {
                                 header.child(
                                     gpui_component::button::Button::new(format!(
@@ -1334,91 +1234,69 @@ impl Form1601CView {
                                         },
                                     )),
                                 )
-                            }),
-                    )
-                    .child(self.render_input_row(
-                        "1 Previous Month (MM/YYYY)",
-                        &inputs.previous_month,
-                        cx,
-                    ))
-                    .child(self.render_input_row("2 Date Paid (MM/DD/YYYY)", &inputs.date_paid, cx))
-                    .child(self.render_input_row(
-                        "3 Drawee Bank / Bank Code / Agency",
-                        &inputs.drawee_bank_code_or_agency,
-                        cx,
-                    ))
-                    .child(self.render_input_row(
-                        "4 Payment Reference Number",
-                        &inputs.payment_number,
-                        cx,
-                    ))
-                    .child(self.render_input_row(
-                        "5 Tax Paid (excluding penalties)",
-                        &inputs.tax_paid,
-                        cx,
-                    ))
-                    .child(self.render_input_row(
-                        "6 Should Be Tax Due for the Month",
-                        &inputs.should_be_tax_due,
-                        cx,
-                    ))
-                    .child(self.render_computed_row(
-                        "7 Adjustment (Item 6 less Item 5)",
-                        adjustment,
-                        cx,
-                    ))
+                            })}
+                        {self.render_input_row(
+                            "1 Previous Month (MM/YYYY)",
+                            &inputs.previous_month,
+                            cx,
+                        )}
+                        {self.render_input_row("2 Date Paid (MM/DD/YYYY)", &inputs.date_paid, cx)}
+                        {self.render_input_row(
+                            "3 Drawee Bank / Bank Code / Agency",
+                            &inputs.drawee_bank_code_or_agency,
+                            cx,
+                        )}
+                        {self.render_input_row(
+                            "4 Payment Reference Number",
+                            &inputs.payment_number,
+                            cx,
+                        )}
+                        {self.render_input_row(
+                            "5 Tax Paid (excluding penalties)",
+                            &inputs.tax_paid,
+                            cx,
+                        )}
+                        {self.render_input_row(
+                            "6 Should Be Tax Due for the Month",
+                            &inputs.should_be_tax_due,
+                            cx,
+                        )}
+                        {self.render_computed_row(
+                            "7 Adjustment (Item 6 less Item 5)",
+                            adjustment,
+                            cx,
+                        )}
+                    </div>
+                }
             })
             .collect::<Vec<_>>();
 
-        div()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_lg()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(
-                                        div()
-                                            .text_xl()
-                                            .font_weight(FontWeight::BOLD)
-                                            .child("Part IV - Schedule I"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(
-                                                "Adjustment of Taxes Withheld on Compensation from Previous Months",
-                                            ),
-                                    ),
-                            )
-                            .child(
-                                div()
+        rsx! {
+            <div bg={cx.theme().background}
+                border_1
+                border_color={cx.theme().border}
+                rounded_lg>
+                <div flex flex_col gap_4 p_4>
+                    <div flex items_center justify_between>
+                        <div flex flex_col gap_1>
+                            <div text_xl font_weight={FontWeight::BOLD}>
+                                {"Part IV - Schedule I"}
+                            </div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {
+                                    "Adjustment of Taxes Withheld on Compensation from Previous Months"
+                                }
+                            </div>
+                        </div>
+                        {div()
                                     .flex()
                                     .items_center()
                                     .gap_3()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child(format!(
-                                                "{row_count} of {MAX_SCHEDULE_1_ROWS} rows"
-                                            )),
-                                    )
+                                    .child(rsx! {
+                                        <div text_xs text_color={cx.theme().muted_foreground}>
+                                            {format!("{row_count} of {MAX_SCHEDULE_1_ROWS} rows")}
+                                        </div>
+                                    })
                                     .when(is_editable, |controls| {
                                         controls.child(
                                             gpui_component::button::Button::new(
@@ -1431,16 +1309,17 @@ impl Form1601CView {
                                                 this.add_schedule_row(window, cx);
                                             })),
                                         )
-                                    }),
-                            ),
-                    )
-                    .children(rows)
-                    .child(self.render_computed_row(
+                                    })}
+                    </div>
+                    {...rows}
+                    {self.render_computed_row(
                         "4 Total Adjustment (to Part II, Item 26)",
                         self.draft.tax_26_adjustment,
                         cx,
-                    )),
-            )
+                    )}
+                </div>
+            </div>
+        }
     }
 
     fn render_input_row(
@@ -1450,19 +1329,14 @@ impl Form1601CView {
         _cx: &Context<Self>,
     ) -> impl IntoElement {
         let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
-        div()
-            .flex()
-            .justify_between()
-            .items_center()
-            .gap_4()
-            .child(
-                div()
-                    .w_1_2()
-                    .text_sm()
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(label.to_string()),
-            )
-            .child(div().w_1_2().child(Input::new(input).disabled(is_disabled)))
+        rsx! {
+            <div flex justify_between items_center gap_4>
+                <div w_1_2 text_sm font_weight={FontWeight::MEDIUM}>
+                    {label.to_string()}
+                </div>
+                <div w_1_2>{Input::new(input).disabled(is_disabled)}</div>
+            </div>
+        }
     }
 
     fn render_input_with_text_row(
@@ -1473,54 +1347,33 @@ impl Form1601CView {
         _cx: &Context<Self>,
     ) -> impl IntoElement {
         let is_disabled = !matches!(self.draft.status, FilingStatus::Draft);
-        div()
-            .flex()
-            .justify_between()
-            .items_center()
-            .gap_4()
-            .child(
-                div()
-                    .w_1_2()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(label.to_string()),
-                    )
-                    .child(Input::new(text_input).disabled(is_disabled)),
-            )
-            .child(
-                div()
-                    .w_1_2()
-                    .child(Input::new(amount_input).disabled(is_disabled)),
-            )
+        rsx! {
+            <div flex justify_between items_center gap_4>
+                <div w_1_2 flex flex_col gap_2>
+                    <div text_sm font_weight={FontWeight::MEDIUM}>
+                        {label.to_string()}
+                    </div>
+                    {Input::new(text_input).disabled(is_disabled)}
+                </div>
+                <div w_1_2>
+                    {Input::new(amount_input).disabled(is_disabled)}
+                </div>
+            </div>
+        }
     }
 
     fn render_computed_row(&self, label: &str, value: f64, cx: &Context<Self>) -> impl IntoElement {
-        div()
-            .flex()
-            .justify_between()
-            .items_center()
-            .gap_4()
-            .p_2()
-            .bg(cx.theme().muted.opacity(0.5))
-            .rounded_md()
-            .child(
-                div()
-                    .w_1_2()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .child(label.to_string()),
-            )
-            .child(
-                div()
-                    .w_1_2()
-                    .text_right()
-                    .font_weight(FontWeight::BOLD)
-                    .child(format!("{:.2}", value)),
-            )
+        rsx! {
+            <div flex justify_between items_center gap_4 p_2
+                bg={cx.theme().muted.opacity(0.5)}
+                rounded_md>
+                <div w_1_2 text_sm font_weight={FontWeight::BOLD}>
+                    {label.to_string()}
+                </div>
+                <div w_1_2 text_right font_weight={FontWeight::BOLD}>
+                    {format!("{:.2}", value)}
+                </div>
+            </div>
+        }
     }
 }

@@ -248,6 +248,77 @@ pub fn get_oauth_email(access_token: &str) -> Result<String, anyhow::Error> {
 
 // ── Token Management ─────────────────────────────────────────────────────────
 
+/// Turns a failed Google token-endpoint response into something a user can act on.
+///
+/// Google returns the real reason as `error` / `error_description` in the JSON
+/// body. The status line alone cannot distinguish "your token expired, reconnect"
+/// from "your OAuth client is misconfigured, and reconnecting will not help" -
+/// both are plain `400 Bad Request`. Reporting only the status sent us chasing a
+/// non-existent bug in the refresh logic, which fires correctly; it is the token
+/// that was dead.
+fn describe_token_endpoint_failure(status: u16, body: &str) -> String {
+    let parsed: Option<serde_json::Value> = serde_json::from_str(body).ok();
+    let code = parsed
+        .as_ref()
+        .and_then(|v| v.get("error"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let description = parsed
+        .as_ref()
+        .and_then(|v| v.get("error_description"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    // Guidance per documented Google error code. `invalid_grant` is by far the
+    // most common and has a cause worth naming: an OAuth app left in "Testing"
+    // publishing status has its refresh tokens expired by Google every 7 days,
+    // so reconnecting works but only until the next expiry.
+    let guidance = match code {
+        "invalid_grant" => {
+            "The refresh token is expired or revoked. Reconnect your Google account in \
+             Profile > Email Settings. If this recurs about weekly, the OAuth app is \
+             likely still in \"Testing\" publishing status in Google Cloud Console, \
+             which expires refresh tokens every 7 days - publishing it stops that."
+        }
+        "invalid_client" | "unauthorized_client" => {
+            "The configured Google client ID or secret does not match the one that \
+             issued this token. Reconnecting will not help until the credentials are \
+             corrected."
+        }
+        "invalid_scope" => {
+            "The stored token lacks the scopes this app now requires. Reconnect your \
+             Google account to re-consent."
+        }
+        _ => "Reconnect your Google account in Profile > Email Settings if this persists.",
+    };
+
+    let reported = match (code.is_empty(), description.is_empty()) {
+        (false, false) => format!("{code}: {description}"),
+        (false, true) => code.to_string(),
+        // No parseable error object; include a bounded slice of the raw body so
+        // the cause is not lost entirely.
+        (true, _) => {
+            let raw = body.trim();
+            if raw.is_empty() {
+                format!("HTTP {status} with an empty body")
+            } else {
+                // Truncate on a char boundary. Slicing by byte index panics when
+                // it lands mid-character, and a proxy or captive portal can
+                // return a multi-byte HTML error page here.
+                let end = raw
+                    .char_indices()
+                    .map(|(i, c)| i + c.len_utf8())
+                    .take_while(|&i| i <= 200)
+                    .last()
+                    .unwrap_or(0);
+                format!("HTTP {status}: {}", &raw[..end])
+            }
+        }
+    };
+
+    format!("Google rejected the token refresh - {reported}. {guidance}")
+}
+
 fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
     if refresh_token.is_empty() {
         return Err(anyhow::anyhow!(
@@ -268,10 +339,21 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, anyhow::Error> {
                 ("grant_type", "refresh_token"),
                 ("refresh_token", refresh_token.as_str()),
             ])
-            .send()?
-            .error_for_status()?;
+            .send()?;
 
+        // Deliberately NOT `error_for_status()`. That discards the response
+        // body, which is the only place Google says what actually went wrong,
+        // leaving the caller with a bare "400 Bad Request" and no way to tell
+        // an expired token from a misconfigured client.
+        let status = resp.status();
         let text = resp.text()?;
+        if !status.is_success() {
+            return Err(anyhow::anyhow!(
+                "{}",
+                describe_token_endpoint_failure(status.as_u16(), &text)
+            ));
+        }
+
         let body: serde_json::Value = serde_json::from_str(&text)?;
         let access_token = body
             .get("access_token")
@@ -314,10 +396,11 @@ fn exchange_code_for_tokens(
         let status = resp.status();
         let text = resp.text()?;
         if !status.is_success() {
+            // Same endpoint as the refresh path, so the same interpretation
+            // applies - this previously dumped the raw JSON with no guidance.
             return Err(anyhow::anyhow!(
-                "Google Token API error ({}): {}",
-                status,
-                text
+                "{}",
+                describe_token_endpoint_failure(status.as_u16(), &text)
             ));
         }
 
@@ -355,4 +438,91 @@ fn generate_pkce_challenge(verifier: &str) -> String {
     hasher.update(verifier.as_bytes());
     let hash = hasher.finalize();
     data_encoding::BASE64URL_NOPAD.encode(&hash)
+}
+
+#[cfg(test)]
+mod token_endpoint_failure_tests {
+    use super::describe_token_endpoint_failure;
+
+    // Payloads below are the shapes Google actually returns from
+    // https://oauth2.googleapis.com/token. Before this change every one of them
+    // surfaced as a bare "400 Bad Request", which is why an expired token and a
+    // misconfigured client were indistinguishable in the log.
+
+    #[test]
+    fn expired_or_revoked_token_names_the_cause_and_the_weekly_trap() {
+        let msg = describe_token_endpoint_failure(
+            400,
+            r#"{"error":"invalid_grant","error_description":"Token has been expired or revoked."}"#,
+        );
+        assert!(msg.contains("invalid_grant"), "{msg}");
+        assert!(msg.contains("Token has been expired or revoked"), "{msg}");
+        assert!(
+            msg.contains("Email Settings"),
+            "must say where to reconnect: {msg}"
+        );
+        // The recurring-weekly cause is the whole point of this message.
+        assert!(
+            msg.contains("Testing"),
+            "must name the 7-day expiry cause: {msg}"
+        );
+    }
+
+    #[test]
+    fn client_misconfiguration_says_reconnecting_will_not_help() {
+        for code in ["invalid_client", "unauthorized_client"] {
+            let msg = describe_token_endpoint_failure(
+                401,
+                &format!(
+                    r#"{{"error":"{code}","error_description":"The OAuth client was not found."}}"#
+                ),
+            );
+            assert!(msg.contains(code), "{msg}");
+            assert!(
+                msg.contains("will not help"),
+                "reconnecting cannot fix bad credentials, and the message must say so: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn scope_change_asks_for_reconsent() {
+        let msg = describe_token_endpoint_failure(400, r#"{"error":"invalid_scope"}"#);
+        assert!(msg.contains("invalid_scope"), "{msg}");
+        assert!(msg.contains("re-consent"), "{msg}");
+    }
+
+    #[test]
+    fn a_non_json_body_still_reports_something_useful() {
+        let msg = describe_token_endpoint_failure(502, "<html>Bad Gateway</html>");
+        assert!(msg.contains("502"), "{msg}");
+        assert!(
+            msg.contains("Bad Gateway"),
+            "the raw body must not be lost: {msg}"
+        );
+    }
+
+    #[test]
+    fn an_empty_body_does_not_produce_a_dangling_message() {
+        let msg = describe_token_endpoint_failure(400, "");
+        assert!(msg.contains("400"), "{msg}");
+        assert!(msg.contains("empty body"), "{msg}");
+    }
+
+    #[test]
+    fn an_enormous_body_is_bounded() {
+        let msg = describe_token_endpoint_failure(400, &"x".repeat(10_000));
+        assert!(
+            msg.len() < 600,
+            "a huge body must not flood the log: {}",
+            msg.len()
+        );
+    }
+
+    #[test]
+    fn a_multibyte_body_is_truncated_on_a_char_boundary() {
+        // Slicing by byte index panics mid-character; the guard must not.
+        let msg = describe_token_endpoint_failure(400, &"日本語テキスト".repeat(100));
+        assert!(msg.contains("400"), "{msg}");
+    }
 }

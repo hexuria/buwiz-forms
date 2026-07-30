@@ -4,6 +4,7 @@ use gpui::prelude::*;
 use gpui::*;
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 pub struct EmailConfirmationView {
     receipt: SubmissionReceipt,
@@ -106,11 +107,12 @@ impl Render for EmailConfirmationView {
             .status_message
             .as_ref()
             .map(|message| {
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(message.clone())
-                    .into_any_element()
+                let status_el = rsx! {
+                    <div text_xs text_color={cx.theme().muted_foreground}>
+                        {message.clone()}
+                    </div>
+                };
+                status_el.into_any_element()
             })
             .unwrap_or_else(|| div().into_any_element());
 
@@ -124,95 +126,79 @@ impl Render for EmailConfirmationView {
             .on_action(cx.listener(|_, _: &crate::global_actions::CloseWindow, window, _| {
                 window.remove_window();
             }))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .px_5()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .bg(cx.theme().background)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_3()
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child("Email Confirmation"),
-                            )
-                            .child(status),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                gpui_component::button::Button::new("email_copy_btn")
-                                    .outline()
-                                    .small()
-                                    .tooltip("Copy Text")
-                                    .icon(Icon::empty().path("svg/copy.svg").small())
-                                    .when(!is_mobile, |this| this.label("Copy Text"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(this.receipt.raw_text.clone()));
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("email_export_btn")
-                                    .outline()
-                                    .small()
-                                    .tooltip("Export PDF")
-                                    .icon(Icon::empty().path("svg/download.svg").small())
-                                    .when(!is_mobile, |this| this.label("Export"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.export_pdf(cx);
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("email_print_btn")
-                                    .outline()
-                                    .small()
-                                    .tooltip("Print")
-                                    .icon(Icon::empty().path("svg/printer.svg").small())
-                                    .when(!is_mobile, |this| this.label("Print"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.print_pdf(cx);
-                                    })),
-                            ),
-                    ),
-            )
-            .child(
-                div().flex_1().min_h_0().overflow_hidden().child(
-                    div()
+            .child(rsx! {
+                <div
+                    flex
+                    flex_wrap
+                    items_center
+                    justify_between
+                    gap_3
+                    px_5
+                    py_3
+                    border_b_1
+                    border_color={cx.theme().border}
+                    bg={cx.theme().background}
+                >
+                    <div flex items_center gap_3>
+                        <div
+                            text_lg
+                            font_weight={FontWeight::BOLD}
+                            text_color={cx.theme().foreground}
+                        >
+                            {"Email Confirmation"}
+                        </div>
+                        {status}
+                    </div>
+                    <div flex items_center gap_1>
+                        {gpui_component::button::Button::new("email_copy_btn")
+                            .outline()
+                            .small()
+                            .tooltip("Copy Text")
+                            .icon(Icon::empty().path("svg/copy.svg").small())
+                            .when(!is_mobile, |this| this.label("Copy Text"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(this.receipt.raw_text.clone()));
+                            }))}
+                        {gpui_component::button::Button::new("email_export_btn")
+                            .outline()
+                            .small()
+                            .tooltip("Export PDF")
+                            .icon(Icon::empty().path("svg/download.svg").small())
+                            .when(!is_mobile, |this| this.label("Export"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.export_pdf(cx);
+                            }))}
+                        {gpui_component::button::Button::new("email_print_btn")
+                            .outline()
+                            .small()
+                            .tooltip("Print")
+                            .icon(Icon::empty().path("svg/printer.svg").small())
+                            .when(!is_mobile, |this| this.label("Print"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.print_pdf(cx);
+                            }))}
+                    </div>
+                </div>
+            })
+            .child(rsx! {
+                <div flex_1 min_h_0 overflow_hidden>
+                    {div()
                         .id("email-scroll")
                         .relative()
                         .size_full()
-                        .child(
-                            div()
-                                .id("email-scroll-area")
-                                .absolute()
-                                .top_0()
-                                .left_0()
-                                .right_0()
-                                .bottom_0()
-                                .overflow_y_scroll()
-                                .track_scroll(&self.scroll_handle)
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .max_w(px(900.))
-                                        .mx_auto()
-                                        .p_6()
-                                        .child({
+                        .child(rsx! {
+                            <div
+                                id={"email-scroll-area"}
+                                absolute
+                                top_0
+                                left_0
+                                right_0
+                                bottom_0
+                                overflow_y_scroll
+                                track_scroll={&self.scroll_handle}
+                            >
+                                <div w_full max_w={px(900.)} mx_auto p_6>
+                                    {{
                                             let highlight_theme = std::sync::Arc::new(gpui_component::highlighter::HighlightTheme {
                                                 name: "plain".into(),
                                                 appearance: gpui_component::ThemeMode::Dark,
@@ -236,23 +222,26 @@ impl Render for EmailConfirmationView {
                                                 ..Default::default()
                                             };
 
-                                            div()
-                                                .text_sm()
-                                                .font_family(crate::platform::MONOSPACE_FONT)
-                                                .text_color(cx.theme().foreground)
-                                                .child(
-                                                    gpui_component::text::TextView::markdown(
+                                            rsx! {
+                                                <div
+                                                    text_sm
+                                                    font_family={crate::platform::MONOSPACE_FONT}
+                                                    text_color={cx.theme().foreground}
+                                                >
+                                                    {gpui_component::text::TextView::markdown(
                                                         "email-text",
                                                         self.receipt.raw_text.replace("\n", "\n\n")
                                                     )
                                                     .selectable(true)
-                                                    .style(text_style)
-                                                )
-                                        }),
-                                ),
-                        )
-                        .vertical_scrollbar(&self.scroll_handle),
-                ),
-            )
+                                                    .style(text_style)}
+                                                </div>
+                                            }
+                                    }}
+                                </div>
+                            </div>
+                        })
+                        .vertical_scrollbar(&self.scroll_handle)}
+                </div>
+            })
     }
 }

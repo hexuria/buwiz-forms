@@ -2,6 +2,7 @@ use crate::platform;
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 /// Event emitted when the user records a new hotkey or clears it.
 pub enum HotkeyRecorderEvent {
@@ -101,30 +102,33 @@ impl HotkeyRecorder {
 
     /// Render a single styled key pill.
     fn key_pill(label: &str, cx: &Context<'_, Self>) -> Div {
-        div()
-            .px_1p5()
-            .py_0p5()
-            .rounded(px(4.0))
-            .border_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().secondary)
-            .text_xs()
-            .font_weight(FontWeight::MEDIUM)
-            .text_color(cx.theme().foreground)
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .justify_center()
-            .min_w(px(22.0))
-            .child(label.to_string())
+        rsx! {
+            <div
+                px_1p5
+                py_0p5
+                rounded={px(4.0)}
+                border_1
+                border_color={cx.theme().border}
+                bg={cx.theme().secondary}
+                text_xs
+                font_weight={FontWeight::MEDIUM}
+                text_color={cx.theme().foreground}
+                flex_shrink_0
+                flex
+                items_center
+                justify_center
+                min_w={px(22.0)}
+            >
+                {label.to_string()}
+            </div>
+        }
     }
 
     /// Render a small "+" separator between pills.
     fn plus_separator(cx: &Context<'_, Self>) -> Div {
-        div()
-            .text_xs()
-            .text_color(cx.theme().muted_foreground)
-            .child("+")
+        rsx! {
+            <div text_xs text_color={cx.theme().muted_foreground}>{"+"}</div>
+        }
     }
 }
 
@@ -146,29 +150,29 @@ impl Render for HotkeyRecorder {
             .flex()
             .items_center()
             .gap_2()
-            .child(
-                div()
-                    .id("hotkey_recorder")
-                    .track_focus(&self.focus_handle)
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .px_3()
-                    .py_1p5()
-                    .rounded_lg()
-                    .border_1()
-                    .border_color(border_color)
-                    .bg(bg)
-                    .when(self.recording, |el| el.border_2())
-                    .on_click(cx.listener(|this, _ev: &ClickEvent, window, cx| {
+            .child(rsx! {
+                <div
+                    id="hotkey_recorder"
+                    track_focus={&self.focus_handle}
+                    cursor_pointer
+                    flex
+                    items_center
+                    gap_1
+                    px_3
+                    py_1p5
+                    rounded_lg
+                    border_1
+                    border_color={border_color}
+                    bg={bg}
+                    when={(self.recording, |el| el.border_2())}
+                    on_click={cx.listener(|this, _ev: &ClickEvent, window, cx| {
                         if this.recording {
                             this.cancel_recording(cx);
                         } else {
                             this.start_recording(window, cx);
                         }
-                    }))
-                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+                    })}
+                    on_key_down={cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                         if !this.recording {
                             return;
                         }
@@ -220,15 +224,13 @@ impl Render for HotkeyRecorder {
                                 cx.notify();
                             }
                         }
-                    }))
-                    .child(if self.recording {
+                    })}
+                >
+                    {if self.recording {
                         // Recording mode: pulsing red dot + prompt
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1p5()
-                            .child(
-                                div()
+                        rsx! {
+                            <div flex items_center gap_1p5>
+                                {div()
                                     .w(px(8.0))
                                     .h(px(8.0))
                                     .rounded_full()
@@ -239,20 +241,21 @@ impl Render for HotkeyRecorder {
                                             .repeat()
                                             .with_easing(bounce(ease_in_out)),
                                         |el, delta| el.opacity(0.3 + delta * 0.7),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(if self.recording_hint.is_some() {
+                                    )}
+                                <div
+                                    text_sm
+                                    text_color={if self.recording_hint.is_some() {
                                         cx.theme().danger
                                     } else {
                                         cx.theme().muted_foreground
-                                    })
-                                    .child(self.recording_hint.clone().unwrap_or_else(|| {
+                                    }}
+                                >
+                                    {self.recording_hint.clone().unwrap_or_else(|| {
                                         "Press modifiers + a key… (Backspace to clear)".to_string()
-                                    })),
-                            )
+                                    })}
+                                </div>
+                            </div>
+                        }
                     } else if let Some(ref combo) = self.current_key {
                         // Display mode: parse the stored combo into modifier
                         // pills + key pill (shows the actual captured combo).
@@ -271,36 +274,40 @@ impl Render for HotkeyRecorder {
                         if !labels.is_empty() {
                             row = row.child(Self::plus_separator(cx));
                         }
-                        row = row.child(
-                            div()
-                                .px_1p5()
-                                .py_0p5()
-                                .rounded(px(4.0))
-                                .border_1()
-                                .border_color(cx.theme().primary.opacity(0.5))
-                                .bg(cx.theme().primary.opacity(0.1))
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(cx.theme().primary)
-                                .flex_shrink_0()
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .min_w(px(22.0))
-                                .child(key),
-                        );
+                        row = row.child(rsx! {
+                            <div
+                                px_1p5
+                                py_0p5
+                                rounded={px(4.0)}
+                                border_1
+                                border_color={cx.theme().primary.opacity(0.5)}
+                                bg={cx.theme().primary.opacity(0.1)}
+                                text_xs
+                                font_weight={FontWeight::SEMIBOLD}
+                                text_color={cx.theme().primary}
+                                flex_shrink_0
+                                flex
+                                items_center
+                                justify_center
+                                min_w={px(22.0)}
+                            >
+                                {key}
+                            </div>
+                        });
 
                         row
                     } else {
                         // Empty state: no hotkey bound
-                        div().flex().items_center().child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground)
-                                .child("Not set — click to assign"),
-                        )
-                    }),
-            )
+                        rsx! {
+                            <div flex items_center>
+                                <div text_sm text_color={cx.theme().muted_foreground}>
+                                    {"Not set — click to assign"}
+                                </div>
+                            </div>
+                        }
+                    }}
+                </div>
+            })
             // Clear button (only visible when a key is bound and not recording)
             .when(self.current_key.is_some() && !self.recording, |el| {
                 el.child(

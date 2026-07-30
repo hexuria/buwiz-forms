@@ -13,12 +13,14 @@ use crate::views::form_2551q_view::{Form2551QEvent, Form2551QView};
 use crate::views::global_dashboard::{GlobalDashboardEvent, GlobalDashboardView};
 use crate::views::import_export::{ImportExportEvent, ImportExportView};
 use crate::views::lock_screen::{LockScreenEvent, LockScreenView};
+use crate::views::notifications::{NotificationsEvent, NotificationsView};
 use crate::views::profile_manager::ProfileManagerView;
 use crate::views::settings::{SettingsEvent, SettingsView};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::input::{InputEvent, InputState, OtpState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 use crate::components::rate_limiter::RateLimiter;
 use bir_core::db::Database;
@@ -61,6 +63,7 @@ pub enum ActiveView {
     Form1702MX,
     ProfileManager,
     CronTasks,
+    Notifications,
     ImportExport,
     Settings,
     AdminCalendarDashboard,
@@ -74,12 +77,76 @@ pub enum ProfileTargetAction {
     UnlockOnly,
 }
 
+/// A change to whether a taxpayer profile exists and is listed. These are the
+/// administrator-only actions: they are requested from the profile editor and
+/// always pass through `AppState::request_profile_lifecycle`, never applied
+/// directly by the view that asked for them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProfileLifecycleAction {
+    Archive,
+    Restore,
+    Delete,
+}
+
+/// Why a lifecycle request was refused before touching the database.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LifecycleRefusal {
+    /// Deleting is irreversible, so it is reachable only from the archived
+    /// state. An active profile must be archived first.
+    DeleteNeedsArchivedProfile,
+    /// The profile is already in the state the action would move it to.
+    AlreadyInTargetState,
+}
+
+impl LifecycleRefusal {
+    pub(crate) fn message(self, action: ProfileLifecycleAction) -> String {
+        match self {
+            Self::DeleteNeedsArchivedProfile => {
+                "Archive this profile before deleting it. Deleting cannot be undone.".to_string()
+            }
+            Self::AlreadyInTargetState => {
+                format!("This profile is already {}.", action.past_tense())
+            }
+        }
+    }
+}
+
+impl ProfileLifecycleAction {
+    /// Past-tense verb used in the notifications these actions push.
+    pub(crate) fn past_tense(self) -> &'static str {
+        match self {
+            Self::Archive => "archived",
+            Self::Restore => "restored",
+            Self::Delete => "deleted",
+        }
+    }
+
+    /// Whether this action is legal for a profile that is currently archived
+    /// (or not), independent of any UI that offered it.
+    ///
+    /// The editor only renders Delete for an archived profile, but a markup
+    /// condition is not an invariant: any other caller reaching
+    /// `perform_profile_lifecycle` would otherwise export-and-delete a live
+    /// profile in one step. The transition is checked here so the rule holds
+    /// wherever the request comes from.
+    pub(crate) fn refusal_for(self, is_archived: bool) -> Option<LifecycleRefusal> {
+        match (self, is_archived) {
+            (Self::Delete, false) => Some(LifecycleRefusal::DeleteNeedsArchivedProfile),
+            (Self::Archive, true) | (Self::Restore, false) => {
+                Some(LifecycleRefusal::AlreadyInTargetState)
+            }
+            _ => None,
+        }
+    }
+}
+
 pub struct AppState {
     pub(crate) active_view: ActiveView,
     pub(crate) profile_manager: Entity<ProfileManagerView>,
     pub(crate) dashboard_view: Entity<DashboardView>,
     pub(crate) global_dashboard_view: Entity<GlobalDashboardView>,
     pub(crate) cron_tasks_view: Entity<CronTasksView>,
+    pub(crate) notifications_view: Entity<NotificationsView>,
     pub(crate) import_export_view: Entity<ImportExportView>,
     pub(crate) settings_view: Entity<SettingsView>,
     pub(crate) admin_calendar_dashboard_view:
@@ -107,7 +174,6 @@ pub struct AppState {
     pub(crate) db: Arc<Mutex<Database>>,
     pub(crate) profiles: Vec<TaxpayerProfile>,
     pub(crate) active_profile_tin: Option<String>,
-    pub(crate) expanded_profile_tin: Option<String>,
     pub(crate) profile_filter: Entity<InputState>,
     pub(crate) sidebar_scroll: ScrollHandle,
     pub(crate) show_archived: bool,
@@ -133,6 +199,24 @@ pub struct AppState {
     pub(crate) hide_tax_profiles: bool,
     pub(crate) enable_profile_pins: bool,
     pub(crate) pending_admin_view: Option<ActiveView>,
+    /// A profile lifecycle change waiting behind the administrator prompt.
+    /// Archiving, restoring, and deleting a taxpayer profile are admin-only,
+    /// and the prompt is the same one that guards Settings and Background
+    /// Tasks - so the request is parked here and replayed once auth succeeds.
+    pub(crate) pending_admin_lifecycle: Option<(String, ProfileLifecycleAction)>,
+    /// A lifecycle change whose administrator prompt has just succeeded. The
+    /// prompt resolves in three places and the OS-authentication one has no
+    /// `Window` to hand, so the authorised action is parked here and applied
+    /// at the top of the next `render`, which does have one.
+    pub(crate) admin_lifecycle_authorized: Option<(String, ProfileLifecycleAction)>,
+    /// Set when a profile is deleted while its editor is open. The editor must
+    /// be cleared, but the delete completes inside an async task with no
+    /// `Window`, and `reset_for_new` needs one - so the reset is applied at the
+    /// top of the next `render`, the same way `admin_lifecycle_authorized` is.
+    pub(crate) profile_editor_needs_reset: bool,
+    /// Result of a background Google Calendar sync, waiting for a `render` that
+    /// holds a `Window` to turn it into a notification.
+    pub(crate) pending_calendar_notice: Option<(bool, String)>,
     pub(crate) admin_otp_state: Entity<OtpState>,
     pub(crate) admin_totp_state: Entity<OtpState>,
     pub(crate) admin_rate_limiter: RateLimiter,
@@ -293,6 +377,9 @@ impl AppState {
                                         .update(cx, |view, cx| view.load_settings(cx));
                                 }
                             }
+                            if let Some(pending) = this.pending_admin_lifecycle.take() {
+                                this.admin_lifecycle_authorized = Some(pending);
+                            }
                             this.admin_auth_error = None;
                             this.admin_otp_state
                                 .update(cx, |input, cx| input.set_value("", window, cx));
@@ -373,6 +460,9 @@ impl AppState {
                                         .update(cx, |view, cx| view.load_settings(cx));
                                 }
                             }
+                            if let Some(pending) = this.pending_admin_lifecycle.take() {
+                                this.admin_lifecycle_authorized = Some(pending);
+                            }
                             this.admin_totp_state
                                 .update(cx, |input, cx| input.set_value("", window, cx));
                             this.focus_handle.focus(window, cx);
@@ -410,6 +500,29 @@ impl AppState {
         let db_clone_cron = Arc::clone(&db);
         let cron_tasks_view = cx.new(|cx| CronTasksView::new(db_clone_cron, window, cx));
 
+        let db_clone_notifications = Arc::clone(&db);
+        let notifications_view =
+            cx.new(|cx| NotificationsView::new(db_clone_notifications, window, cx));
+
+        // The view emits rather than navigating itself, so routing stays here
+        // with the rest of the shell's knowledge of how views connect.
+        cx.subscribe_in(
+            &notifications_view,
+            window,
+            |this, _view, event: &NotificationsEvent, _window, cx| {
+                match event {
+                    // Both land in the profile manager; the Google reconnect
+                    // control lives on its Email Settings tab.
+                    NotificationsEvent::ReconnectGoogleAccount
+                    | NotificationsEvent::OpenProfileManager => {
+                        this.active_view = ActiveView::ProfileManager;
+                    }
+                }
+                cx.notify();
+            },
+        )
+        .detach();
+
         let db_clone_import = Arc::clone(&db);
         let import_export_view = cx.new(|cx| ImportExportView::new(db_clone_import, window, cx));
 
@@ -438,7 +551,6 @@ impl AppState {
                     });
 
                     this.active_profile_tin = None;
-                    this.expanded_profile_tin = None;
                     this.active_view = if this.profiles.is_empty() {
                         ActiveView::ProfileManager
                     } else {
@@ -573,11 +685,26 @@ impl AppState {
             },
         );
 
-        let profile_sub = cx.subscribe(
+        let profile_sub = cx.subscribe_in(
             &profile_manager,
-            |this: &mut Self, _entity, event: &crate::views::profile_manager::ProfileEvent, cx| {
+            window,
+            |this: &mut Self,
+             _entity,
+             event: &crate::views::profile_manager::ProfileEvent,
+             window,
+             cx| {
                 let saved_tin = match event {
                     crate::views::profile_manager::ProfileEvent::Saved(tin) => Some(tin.clone()),
+                    // Not a save: the editor is asking for an admin-gated
+                    // change and has written nothing. Route it through the
+                    // gate and stop - the write refreshes the list itself.
+                    crate::views::profile_manager::ProfileEvent::LifecycleRequested {
+                        tin,
+                        action,
+                    } => {
+                        this.request_profile_lifecycle(tin.clone(), *action, window, cx);
+                        return;
+                    }
                 };
 
                 if let Some(tin) = &saved_tin
@@ -694,6 +821,25 @@ impl AppState {
                     this.active_view = ActiveView::ProfileManager;
                     cx.notify();
                 }
+                DashboardEvent::EditProfile(tin) => {
+                    // The header's Profile Settings control. Reuses the normal
+                    // selection path so a PIN-protected profile still
+                    // authenticates before its editor opens.
+                    if let Some(profile) = this
+                        .profiles
+                        .iter()
+                        .find(|candidate| candidate.tin.full() == *tin)
+                        .cloned()
+                    {
+                        this.select_profile(profile, ProfileTargetAction::EditProfile, window, cx);
+                    }
+                }
+                DashboardEvent::AddToNativeCalendar(tin) => {
+                    this.add_profile_to_native_calendar(tin.clone(), window, cx);
+                }
+                DashboardEvent::SyncGoogleCalendar(tin) => {
+                    this.sync_profile_google_calendar(tin.clone(), window, cx);
+                }
             },
         )
         .detach();
@@ -704,6 +850,7 @@ impl AppState {
             dashboard_view,
             global_dashboard_view,
             cron_tasks_view,
+            notifications_view,
             import_export_view,
             form_2551q_view: None,
             pending_form_draft: None,
@@ -728,7 +875,6 @@ impl AppState {
             db,
             profiles,
             active_profile_tin: None,
-            expanded_profile_tin: None,
             profile_filter,
             sidebar_scroll: ScrollHandle::new(),
             show_archived: false,
@@ -754,6 +900,10 @@ impl AppState {
             hide_tax_profiles,
             enable_profile_pins,
             pending_admin_view: None,
+            pending_admin_lifecycle: None,
+            admin_lifecycle_authorized: None,
+            profile_editor_needs_reset: false,
+            pending_calendar_notice: None,
             admin_otp_state,
             admin_totp_state,
             admin_rate_limiter: RateLimiter::new(),
@@ -852,6 +1002,377 @@ impl AppState {
         }
     }
 
+    /// Writes this profile's deadlines as an `.ics` and hands it to whatever the
+    /// platform registered for calendar files - Calendar on macOS, the default
+    /// handler on Windows, `xdg-open` on Linux.
+    ///
+    /// This is the always-available calendar path: it needs no account and no
+    /// network. It renders the same event set the Google sync would push, so the
+    /// two cannot disagree about which obligations are deadlines.
+    fn add_profile_to_native_calendar(
+        &mut self,
+        tin: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(profile) = self
+            .profiles
+            .iter()
+            .find(|candidate| candidate.tin.full() == tin)
+            .cloned()
+        else {
+            push_notification(
+                "error",
+                "Calendar not created",
+                &format!("{tin} is no longer loaded."),
+                window,
+                cx,
+            );
+            return;
+        };
+
+        let built = match self.db.lock() {
+            Ok(db) => bir_core::google_calendar::build_desired_events(&db, &profile)
+                .map_err(|error| error.to_string()),
+            Err(_) => Err("The profile database is temporarily unavailable".to_string()),
+        };
+        let (events, excluded_undated) = match built {
+            Ok(pair) => pair,
+            Err(error) => {
+                push_notification("error", "Calendar not created", &error, window, cx);
+                return;
+            }
+        };
+
+        if events.is_empty() {
+            push_notification(
+                "info",
+                "Nothing to add",
+                "This profile has no dated deadlines for its registered Forms Set yet.",
+                window,
+                cx,
+            );
+            return;
+        }
+
+        let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+        let directory = bir_core::platform::data_dir().join("calendars");
+        let written = bir_core::calendar_ics::write_profile_calendar_ics(
+            &directory, &profile, &events, &stamp,
+        );
+
+        let path = match written {
+            Ok(path) => path,
+            Err(error) => {
+                push_notification(
+                    "error",
+                    "Calendar not created",
+                    &format!("Could not write the calendar file: {error}"),
+                    window,
+                    cx,
+                );
+                return;
+            }
+        };
+
+        if let Err(error) = open::that(&path) {
+            // The file is still on disk and importable by hand, so say where.
+            push_notification(
+                "error",
+                "Calendar file created",
+                &format!(
+                    "Saved to {} but no calendar application could be opened: {error}",
+                    path.display()
+                ),
+                window,
+                cx,
+            );
+            return;
+        }
+
+        let detail = if excluded_undated > 0 {
+            format!(
+                "{} deadlines handed to your calendar app. {excluded_undated} without a resolved date were skipped.",
+                events.len()
+            )
+        } else {
+            format!("{} deadlines handed to your calendar app.", events.len())
+        };
+        push_notification("success", "Added to Calendar", &detail, window, cx);
+    }
+
+    /// Pushes this profile's deadlines to its linked Google Calendar.
+    ///
+    /// `sync_profile_calendar` is blocking - an OAuth refresh plus one HTTP round
+    /// trip per event - so running it inline froze the whole window for its
+    /// duration. It goes to a worker thread instead, the same shape the editor's
+    /// own Calendar tab uses in `run_calendar_action`, and the result is parked
+    /// for `render` to surface because this completes without a `Window`.
+    fn sync_profile_google_calendar(
+        &mut self,
+        tin: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        push_notification(
+            "info",
+            "Syncing Google Calendar",
+            "Working in the background...",
+            window,
+            cx,
+        );
+
+        let db = self.db.clone();
+        cx.spawn(async move |this, cx| {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(bir_core::google_calendar::sync_profile_calendar(db, &tin));
+            });
+            let result = rx
+                .await
+                .unwrap_or_else(|_| Err(anyhow::anyhow!("Calendar worker stopped")));
+
+            let _ = this.update(cx, |this, cx| {
+                this.pending_calendar_notice = Some(match result {
+                    Ok(report) => {
+                        let mut parts = Vec::new();
+                        if report.inserted > 0 {
+                            parts.push(format!("{} added", report.inserted));
+                        }
+                        if report.updated > 0 {
+                            parts.push(format!("{} updated", report.updated));
+                        }
+                        if report.deleted > 0 {
+                            parts.push(format!("{} removed", report.deleted));
+                        }
+                        if report.excluded_undated > 0 {
+                            parts.push(format!("{} undated skipped", report.excluded_undated));
+                        }
+                        // Everything already matching is the steady state, so say
+                        // that rather than reporting a row of zeroes.
+                        let detail = if parts.is_empty() {
+                            format!("Already up to date - {} deadlines match.", report.unchanged)
+                        } else {
+                            parts.join(", ")
+                        };
+                        (true, detail)
+                    }
+                    Err(error) => (false, error.to_string()),
+                });
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    /// Whether an administrator credential is configured at all. With neither
+    /// an app-lock PIN nor an app TOTP secret there is nobody to authenticate
+    /// against, so the admin-only actions run unprompted - the same rule the
+    /// Settings and Background Tasks gates already follow.
+    fn admin_credential_configured(&self) -> (bool, bool) {
+        if let Ok(db) = self.db.lock() {
+            let pin = db.get_setting("app_lock_enabled").ok().flatten().as_deref() == Some("true");
+            let totp = db.get_setting("app_totp_secret").ok().flatten().is_some();
+            (pin, totp)
+        } else {
+            (false, false)
+        }
+    }
+
+    /// Entry point for every archive, restore, and delete. Prompts for the
+    /// administrator credential first when one is configured, parking the
+    /// request in `pending_admin_lifecycle` so it replays on success.
+    pub(crate) fn request_profile_lifecycle(
+        &mut self,
+        tin: String,
+        action: ProfileLifecycleAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.block_unsaved_compliance_navigation(window, cx) {
+            return;
+        }
+
+        let (is_app_lock_enabled, has_app_totp) = self.admin_credential_configured();
+
+        if is_app_lock_enabled || has_app_totp {
+            self.pending_admin_lifecycle = Some((tin, action));
+            self.admin_auth_error = None;
+            self.admin_os_auth_triggered = false;
+            self.admin_rate_limiter.reset();
+            if has_app_totp {
+                self.admin_totp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            } else {
+                self.admin_otp_state.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
+            }
+            cx.notify();
+        } else {
+            self.perform_profile_lifecycle(tin, action, window, cx);
+        }
+    }
+
+    /// Applies an already-authorised lifecycle change. Only ever reached from
+    /// `request_profile_lifecycle` or from the admin prompt succeeding.
+    pub(crate) fn perform_profile_lifecycle(
+        &mut self,
+        tin: String,
+        action: ProfileLifecycleAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(profile) = self
+            .profiles
+            .iter()
+            .find(|candidate| candidate.tin.full() == tin)
+            .cloned()
+        else {
+            push_notification(
+                "error",
+                "Profile unchanged",
+                &format!(
+                    "{tin} was not {}: it is no longer loaded.",
+                    action.past_tense()
+                ),
+                window,
+                cx,
+            );
+            return;
+        };
+
+        // The transition is validated against the profile's real stored state,
+        // not against whichever control happened to be on screen.
+        if let Some(refusal) = action.refusal_for(profile.is_archived) {
+            push_notification(
+                "error",
+                "Profile unchanged",
+                &refusal.message(action),
+                window,
+                cx,
+            );
+            return;
+        }
+
+        match action {
+            ProfileLifecycleAction::Archive => {
+                self.persist_profile_archived(profile, true, window, cx);
+                self.adopt_archived_state_in_editor(&tin, true, cx);
+            }
+            ProfileLifecycleAction::Restore => {
+                self.persist_profile_archived(profile, false, window, cx);
+                self.adopt_archived_state_in_editor(&tin, false, cx);
+            }
+            ProfileLifecycleAction::Delete => self.export_and_delete_profile(tin, cx),
+        }
+    }
+
+    /// Tells the open editor about an archived flag this method just wrote.
+    ///
+    /// The editor caches `stored_is_archived` at load time and writes it back on
+    /// every save. Archive and Restore are now reachable from inside that editor,
+    /// directly above its Save button, so without this the next save would revert
+    /// the change the user just made.
+    fn adopt_archived_state_in_editor(
+        &mut self,
+        tin: &str,
+        archived: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let editing_this_profile = self
+            .profile_manager
+            .read_with(cx, |view, cx| view.is_editing_tin(tin, cx));
+        if editing_this_profile {
+            self.profile_manager
+                .update(cx, |view, cx| view.adopt_archived_state(archived, cx));
+        }
+    }
+
+    /// Deleting a profile is irreversible, so it always writes a backup first:
+    /// the save dialog doubles as the confirmation, and cancelling it cancels
+    /// the deletion. The export must succeed before anything is removed.
+    fn export_and_delete_profile(&mut self, tin: String, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            // Safe: SystemTime arithmetic is infallible after UNIX_EPOCH.
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let Some(export_handle) = rfd::AsyncFileDialog::new()
+                .set_title("Save Profile Archive")
+                .set_file_name(format!("BIR_Archive_{tin}_{timestamp}.zip"))
+                .add_filter("Zip Archive", &["zip"])
+                .save_file()
+                .await
+            else {
+                return;
+            };
+            let export_dir = export_handle.path().to_path_buf();
+
+            let deletion_result = this.update(cx, |this, cx| {
+                let db = this
+                    .db
+                    .lock()
+                    .map_err(|_| "Database lock poisoned".to_string())?;
+                bir_core::export_profile_data(&db, &tin, &export_dir)
+                    .map_err(|error| format!("Profile export failed: {error}"))?;
+                db.delete_profile(&tin)
+                    .map_err(|error| format!("Profile deletion failed: {error}"))?;
+                drop(db);
+
+                this.profiles.retain(|p| p.tin.full() != tin);
+                if !this.profiles.iter().any(|p| p.is_archived) {
+                    this.show_archived = false;
+                }
+                // Delete is only reachable from this profile's own editor, so
+                // that editor is still open on a row that no longer exists. Its
+                // `editing_id` would make the next save fall through to the
+                // INSERT branch and resurrect the profile just deleted.
+                if this
+                    .profile_manager
+                    .read_with(cx, |view, cx| view.is_editing_tin(&tin, cx))
+                {
+                    this.profile_editor_needs_reset = true;
+                }
+                if this.active_profile_tin.as_ref() == Some(&tin) {
+                    this.active_profile_tin = None;
+                    this.active_view = ActiveView::ProfileManager;
+                }
+                cx.notify();
+                Ok::<(), String>(())
+            });
+
+            match deletion_result {
+                Ok(Ok(())) => {
+                    rfd::AsyncMessageDialog::new()
+                        .set_title("Profile Exported & Deleted")
+                        .set_description(format!("Saved to {}", export_dir.display()))
+                        .show()
+                        .await;
+                }
+                Ok(Err(error)) => {
+                    rfd::AsyncMessageDialog::new()
+                        .set_title("Profile Was Not Deleted")
+                        .set_description(error)
+                        .show()
+                        .await;
+                }
+                Err(error) => {
+                    rfd::AsyncMessageDialog::new()
+                        .set_title("Profile Was Not Deleted")
+                        .set_description(error.to_string())
+                        .show()
+                        .await;
+                }
+            }
+        })
+        .detach();
+    }
+
     pub(crate) fn request_admin_access(
         &mut self,
         target: ActiveView,
@@ -919,6 +1440,7 @@ impl AppState {
             ActiveView::GlobalDashboard => self.global_dashboard_view.clone().into_any_element(),
             ActiveView::ProfileManager => self.profile_manager.clone().into_any_element(),
             ActiveView::CronTasks => self.cron_tasks_view.clone().into_any_element(),
+            ActiveView::Notifications => self.notifications_view.clone().into_any_element(),
             ActiveView::ImportExport => self.import_export_view.clone().into_any_element(),
             ActiveView::Settings => self.settings_view.clone().into_any_element(),
             ActiveView::AdminCalendarDashboard => self
@@ -930,70 +1452,80 @@ impl AppState {
                 if let Some(view) = &self.form_2551q_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1701Q => {
                 if let Some(view) = &self.form_1701q_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1601C => {
                 if let Some(view) = &self.form_1601c_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form0619E => {
                 if let Some(view) = &self.form_0619e_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form0619F => {
                 if let Some(view) = &self.form_0619f_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form0605 => {
                 if let Some(view) = &self.form_0605_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form2550Q => {
                 if let Some(view) = &self.form_2550q_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1701 => {
                 if let Some(view) = &self.form_1701_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1702RT => {
                 if let Some(view) = &self.form_1702rt_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
             ActiveView::Form1702MX => {
                 if let Some(view) = &self.form_1702mx_view {
                     view.clone().into_any_element()
                 } else {
-                    div().child("No form loaded").into_any_element()
+                    let root = rsx! { <div>{"No form loaded"}</div> };
+                    root.into_any_element()
                 }
             }
         }
@@ -1432,6 +1964,33 @@ fn push_notification(level: &str, title: &str, message: &str, window: &mut Windo
 
 impl Render for AppState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Apply a lifecycle change the administrator prompt authorised. It
+        // lands here because this is the first point after the prompt
+        // resolves that is guaranteed to hold a `Window`.
+        if let Some((tin, action)) = self.admin_lifecycle_authorized.take() {
+            self.perform_profile_lifecycle(tin, action, window, cx);
+        }
+
+        // Clear an editor left bound to a profile that has since been deleted.
+        if std::mem::take(&mut self.profile_editor_needs_reset) {
+            self.profile_manager
+                .update(cx, |view, cx| view.reset_for_new(window, cx));
+        }
+
+        if let Some((ok, detail)) = self.pending_calendar_notice.take() {
+            push_notification(
+                if ok { "success" } else { "error" },
+                if ok {
+                    "Google Calendar synced"
+                } else {
+                    "Google Calendar not synced"
+                },
+                &detail,
+                window,
+                cx,
+            );
+        }
+
         // Set up window-aware subscription for global dashboard notifications (once)
         if !self.global_dashboard_notif_subscribed {
             self.global_dashboard_notif_subscribed = true;
@@ -1719,10 +2278,8 @@ impl Render for AppState {
         if self.is_locked
             && let Some(lock_screen) = &self.lock_screen_view
         {
-            return div()
-                .size_full()
-                .child(lock_screen.clone())
-                .into_any_element();
+            let root = rsx! { <div size_full>{lock_screen.clone()}</div> };
+            return root.into_any_element();
         }
 
         div()
@@ -1747,25 +2304,21 @@ impl Render for AppState {
             .on_action(cx.listener(Self::handle_minimize_window))
             .on_action(cx.listener(Self::handle_zoom_window))
             .on_action(cx.listener(Self::handle_toggle_fullscreen))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_1()
-                    .min_h_0()
-                    .when(!self.is_sidebar_hidden, |this| {
+            .child(rsx! {
+                <div
+                    flex
+                    flex_row
+                    flex_1
+                    min_h_0
+                    when={(!self.is_sidebar_hidden, |this| {
                         this.child(self.render_sidebar(window, cx))
-                    })
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .h_full()
-                            .overflow_hidden()
-                            .child(self.render_active_view(cx)),
-                    ),
-            )
+                    })}
+                >
+                    <div flex_1 flex flex_col h_full overflow_hidden>
+                        {self.render_active_view(cx)}
+                    </div>
+                </div>
+            })
             .child(crate::components::footer::render_footer(cx))
             .children(notification_layer)
             .children(self.render_profile_auth_overlay(window, cx))
@@ -1789,5 +2342,66 @@ impl Drop for AppState {
         {
             eprintln!("Warning: WAL checkpoint on shutdown failed: {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod profile_lifecycle_transition_tests {
+    use super::{LifecycleRefusal, ProfileLifecycleAction};
+
+    const ARCHIVED: bool = true;
+    const ACTIVE: bool = false;
+
+    /// The editor only renders Delete for an archived profile. That is a
+    /// markup condition, not an invariant - this is the invariant.
+    #[test]
+    fn deleting_an_active_profile_is_refused() {
+        assert_eq!(
+            ProfileLifecycleAction::Delete.refusal_for(ACTIVE),
+            Some(LifecycleRefusal::DeleteNeedsArchivedProfile),
+        );
+    }
+
+    #[test]
+    fn deleting_an_archived_profile_is_allowed() {
+        assert_eq!(ProfileLifecycleAction::Delete.refusal_for(ARCHIVED), None);
+    }
+
+    #[test]
+    fn archive_and_restore_are_allowed_only_from_the_opposite_state() {
+        assert_eq!(ProfileLifecycleAction::Archive.refusal_for(ACTIVE), None);
+        assert_eq!(ProfileLifecycleAction::Restore.refusal_for(ARCHIVED), None);
+    }
+
+    /// A double-submit must not re-write the same state.
+    #[test]
+    fn repeating_an_action_that_already_happened_is_refused() {
+        assert_eq!(
+            ProfileLifecycleAction::Archive.refusal_for(ARCHIVED),
+            Some(LifecycleRefusal::AlreadyInTargetState),
+        );
+        assert_eq!(
+            ProfileLifecycleAction::Restore.refusal_for(ACTIVE),
+            Some(LifecycleRefusal::AlreadyInTargetState),
+        );
+    }
+
+    /// The archive-first rule is the one the user has to act on, so it must
+    /// say what to do rather than only that something was refused.
+    #[test]
+    fn the_delete_refusal_names_the_required_step() {
+        let msg =
+            LifecycleRefusal::DeleteNeedsArchivedProfile.message(ProfileLifecycleAction::Delete);
+        assert!(msg.contains("Archive"), "{msg}");
+        assert!(msg.contains("cannot be undone"), "{msg}");
+    }
+
+    #[test]
+    fn the_already_in_state_refusal_names_the_state() {
+        assert!(
+            LifecycleRefusal::AlreadyInTargetState
+                .message(ProfileLifecycleAction::Archive)
+                .contains("already archived"),
+        );
     }
 }

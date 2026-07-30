@@ -12,6 +12,8 @@
 //! - `receipts` — Submission receipt tracking
 //! - `notices` — BIR notices, announcements, deadlines, penalties
 
+mod alerts;
+pub use alerts::{AlertAction, AlertRecordOutcome, AlertSeverity, AppAlert, kinds as alert_kinds};
 mod drafts;
 pub(crate) use drafts::{Claim1601CSubmissionResult, Claim2551QSubmissionResult};
 mod form_rule_state;
@@ -206,6 +208,32 @@ pub struct PenaltyCache {
 // =========================================================================
 // Error type
 // =========================================================================
+
+/// `security(1)` exit code for "the specified item could not be found".
+///
+/// macOS-only: the `security` CLI, and the read-then-create dance this guards,
+/// exist only on that platform.
+#[cfg(target_os = "macos")]
+const SECURITY_ERR_ITEM_NOT_FOUND: i32 = 44;
+
+/// Whether a failed keychain read means the master key is genuinely absent.
+///
+/// This single predicate is what stands between a first run and destroying an
+/// existing database. `security find-generic-password` fails for several
+/// reasons, and only one of them means "no key here":
+///
+/// - exit 44 - the item is not in the keychain. First run; safe to create one.
+/// - anything else - authorization denied, keychain locked, `securityd`
+///   unavailable, killed by a signal. A key may well exist and simply not be
+///   readable at this moment. Generating a replacement would overwrite it and
+///   leave the encrypted database unopenable forever.
+///
+/// Defaults to `false` for `None` (terminated by a signal), because an unknown
+/// failure must never be read as "absent".
+#[cfg(target_os = "macos")]
+fn keychain_miss_is_genuine(exit_code: Option<i32>) -> bool {
+    exit_code == Some(SECURITY_ERR_ITEM_NOT_FOUND)
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
@@ -499,10 +527,38 @@ impl Database {
                 info!("Loaded existing master key from native keychain (CLI)");
                 return Ok(hex_key);
             }
+            // A key is present but malformed. Replacing it would destroy the
+            // only means of decrypting an existing database, so stop.
+            return Err(DbError::KeychainCli(format!(
+                "The SQLCipher master key in the keychain is {} characters, expected 64. \
+                 Refusing to replace it - if it were regenerated the existing database \
+                 could never be decrypted again.",
+                hex_key.len()
+            )));
         }
 
-        // Key doesn't exist yet — generate and store
-        info!("Generating new master key and storing in native keychain (CLI)");
+        // Only exit code 44 means the item is genuinely absent. Every other
+        // failure - authorization denied, keychain locked, securityd
+        // unavailable - means a key may well exist and merely be unreadable
+        // right now. Treating those as "absent" and generating a replacement
+        // would overwrite the real key and render the database permanently
+        // undecryptable. That is not hypothetical: an unsigned local build is
+        // not the signed app, so macOS prompts, and a single dismissed prompt
+        // used to be enough to destroy the database.
+        if !keychain_miss_is_genuine(output.status.code()) {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(DbError::KeychainCli(format!(
+                "Could not read the existing SQLCipher master key (security exit {:?}): {}. \
+                 Refusing to generate a replacement, because that would overwrite the \
+                 existing key and make the database permanently unreadable. If a keychain \
+                 prompt appeared, approve it and retry.",
+                output.status.code(),
+                stderr.trim()
+            )));
+        }
+
+        // Genuinely absent: first run on this machine.
+        info!("No master key in keychain; generating and storing one (CLI)");
         let key: [u8; 32] = rand::random();
         let hex_key = hex::encode(key);
 
@@ -515,15 +571,22 @@ impl Database {
                 "sqlcipher_master_key",
                 "-w",
                 &hex_key,
-                "-U", // Update if exists
+                // Deliberately NOT -U. That flag means "update if exists" and
+                // was the mechanism by which a stale read could clobber a live
+                // key. Without it the add fails rather than overwrites, so this
+                // path cannot destroy an existing key even if it is reached in
+                // error.
             ])
             .output()
             .map_err(|e| DbError::KeychainCli(format!("Failed to run `security` CLI: {e}")))?;
 
-        if !add_output.status.success() {
-            let stderr = String::from_utf8_lossy(&add_output.stderr);
+        let add_stderr = String::from_utf8_lossy(&add_output.stderr);
+        // `security add-generic-password` reports an existing item on stderr but
+        // still exits 0, so the status alone cannot be trusted here.
+        if !add_output.status.success() || add_stderr.contains("already exists") {
             return Err(DbError::KeychainCli(format!(
-                "Failed to store master key in keychain: {stderr}"
+                "Failed to store master key in keychain: {}",
+                add_stderr.trim()
             )));
         }
 
@@ -751,6 +814,53 @@ pub fn parse_2551q_period(period: &str) -> Option<(u16, u8)> {
 // =========================================================================
 // Tests
 // =========================================================================
+
+#[cfg(all(test, target_os = "macos"))]
+mod keychain_miss_tests {
+    use super::{SECURITY_ERR_ITEM_NOT_FOUND, keychain_miss_is_genuine};
+
+    // This predicate decides whether the app may generate a new SQLCipher
+    // master key. Say yes when a key actually exists but is merely unreadable
+    // and the app overwrites it, making the encrypted database permanently
+    // unopenable. Every case below is a real failure mode of `security(1)`.
+
+    #[test]
+    fn exit_44_is_the_only_genuine_miss() {
+        assert!(keychain_miss_is_genuine(Some(SECURITY_ERR_ITEM_NOT_FOUND)));
+        assert_eq!(SECURITY_ERR_ITEM_NOT_FOUND, 44);
+    }
+
+    #[test]
+    fn authorization_denied_is_not_a_miss() {
+        // The user dismissed or denied the keychain prompt. A key exists.
+        assert!(!keychain_miss_is_genuine(Some(51)));
+        assert!(!keychain_miss_is_genuine(Some(1)));
+    }
+
+    #[test]
+    fn success_is_not_a_miss() {
+        assert!(!keychain_miss_is_genuine(Some(0)));
+    }
+
+    #[test]
+    fn killed_by_signal_is_not_a_miss() {
+        // No exit code at all. An unknown failure must never read as "absent".
+        assert!(!keychain_miss_is_genuine(None));
+    }
+
+    #[test]
+    fn no_other_code_in_a_wide_sweep_is_treated_as_a_miss() {
+        for code in -128..=255 {
+            if code == SECURITY_ERR_ITEM_NOT_FOUND {
+                continue;
+            }
+            assert!(
+                !keychain_miss_is_genuine(Some(code)),
+                "exit {code} must not be treated as a missing key"
+            );
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -6,6 +6,7 @@ use chrono::{Datelike, Local};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::sync::{Arc, Mutex};
 
 use crate::components::compliance_calendar::ComplianceCalendarEvent;
@@ -229,101 +230,72 @@ impl Render for GlobalDashboardView {
             calendar.set_data(self.deadlines.clone(), self.announcements.clone());
         });
 
-        div()
-            .id("global-dashboard")
-            .size_full()
-            .flex()
-            .flex_col()
-            .when(is_narrow, |this| this.p_4())
-            .when(!is_narrow, |this| this.p_8())
-            .gap_6()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_3xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Global Dashboard"),
-                    )
-                    .child(
-                        div()
-                            .text_base()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(format!(
-                                "Overview of all taxpayer profiles for {}",
-                                self.calendar_year
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .id("columns-container")
-                    .flex()
-                    .flex_wrap()
-                    .content_start()
-                    .items_start()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .gap_6()
-                    .mt_4()
-                    .child(
-                        // Left Column
-                        div()
-                            .id("left-column")
-                            .flex_1()
-                            .min_w(px(320.))
-                            .pr_2()
-                            .flex()
-                            .flex_col()
-                            .gap_6()
-                            .child(self.compliance_calendar.clone()),
-                    )
-                    .child(
-                        // Right Column
-                        div()
-                            .flex_1()
-                            .min_w(px(320.))
-                            .flex()
-                            .flex_col()
-                            .gap_6()
-                            .child(self.news_section(cx)),
-                    ),
-            )
+        rsx! {
+            <div
+                id={"global-dashboard"}
+                size_full
+                flex
+                flex_col
+                when={(is_narrow, |this| this.p_4())}
+                when={(!is_narrow, |this| this.p_8())}
+                gap_6
+            >
+                <div flex flex_col gap_2>
+                    <div
+                        text_3xl
+                        font_weight={FontWeight::BOLD}
+                        text_color={cx.theme().foreground}
+                    >
+                        {"Global Dashboard"}
+                    </div>
+                    <div text_base text_color={cx.theme().muted_foreground}>
+                        {format!(
+                            "Overview of all taxpayer profiles for {}",
+                            self.calendar_year
+                        )}
+                    </div>
+                </div>
+                <div
+                    id={"columns-container"}
+                    flex
+                    flex_wrap
+                    content_start
+                    items_start
+                    flex_1
+                    min_h_0
+                    overflow_y_scroll
+                    gap_6
+                    mt_4
+                >
+                    // Left Column
+                    <div id={"left-column"} flex_1 min_w={px(320.)} pr_2 flex flex_col gap_6>
+                        {self.compliance_calendar.clone()}
+                    </div>
+                    // Right Column
+                    <div flex_1 min_w={px(320.)} flex flex_col gap_6>
+                        {self.news_section(cx)}
+                    </div>
+                </div>
+            </div>
+        }
     }
 }
 
 impl GlobalDashboardView {
     fn news_section(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let mut news_list = div().id("news-list").flex().flex_col().gap_4().pr_2(); // add some padding
+        let mut news_list = rsx! { <div id={"news-list"} flex flex_col gap_4 pr_2 /> }; // add some padding
 
         for ann in self.announcements.iter().take(25) {
             news_list = news_list.child(Self::news_card(ann, cx));
         }
 
-        div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_2()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(cx.theme().foreground)
-                            .child("Important News"),
-                    )
-                    .child(if self.is_fetching_news {
+        rsx! {
+            <div flex flex_col gap_4>
+                <div flex flex_wrap gap_2 justify_between items_center>
+                    <div text_xl font_weight={FontWeight::BOLD} text_color={cx.theme().foreground}>
+                        {"Important News"}
+                    </div>
+                    {if self.is_fetching_news {
                         div()
                             .px_3()
                             .py_1()
@@ -354,9 +326,11 @@ impl GlobalDashboardView {
                                 this.refresh_news(cx);
                             }))
                             .into_any_element()
-                    }),
-            )
-            .child(news_list)
+                    }}
+                </div>
+                {news_list}
+            </div>
+        }
     }
 
     fn news_card(notice: &BirNotice, cx: &Context<Self>) -> gpui::Div {
@@ -369,58 +343,51 @@ impl GlobalDashboardView {
             bir_core::db::NoticeSourceKind::Manual => cx.theme().muted_foreground,
         };
 
-        div()
-            .w_full()
-            .p_4()
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded_xl()
-            .shadow_sm()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .child(
-                        div()
-                            .px_2()
-                            .py_0p5()
-                            .bg(badge_bg.opacity(0.1))
-                            .rounded_md()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(crate::theme::hue_on_tint(cx.theme(), badge_bg))
-                            .child(notice.source.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(notice.posted_at.clone().unwrap_or_default()),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(cx.theme().foreground)
-                    .child(if notice.title.len() > 150 {
+        rsx! {
+            <div
+                w_full
+                p_4
+                bg={cx.theme().background}
+                border_1
+                border_color={cx.theme().border}
+                rounded_xl
+                shadow_sm
+                flex
+                flex_col
+                gap_2
+            >
+                <div flex justify_between items_center>
+                    <div
+                        px_2
+                        py_0p5
+                        bg={badge_bg.opacity(0.1)}
+                        rounded_md
+                        text_xs
+                        font_weight={FontWeight::SEMIBOLD}
+                        text_color={crate::theme::hue_on_tint(cx.theme(), badge_bg)}
+                    >
+                        {notice.source.to_string()}
+                    </div>
+                    <div text_xs text_color={cx.theme().muted_foreground}>
+                        {notice.posted_at.clone().unwrap_or_default()}
+                    </div>
+                </div>
+                <div text_sm font_weight={FontWeight::BOLD} text_color={cx.theme().foreground}>
+                    {if notice.title.len() > 150 {
                         format!("{}...", &notice.title[..147])
                     } else {
                         notice.title.to_string()
-                    }),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .line_height(relative(1.4))
-                    .child(Self::clean_html_summary(&notice.body, 250)),
-            )
+                    }}
+                </div>
+                <div
+                    text_xs
+                    text_color={cx.theme().muted_foreground}
+                    line_height={relative(1.4)}
+                >
+                    {Self::clean_html_summary(&notice.body, 250)}
+                </div>
+            </div>
+        }
     }
 
     fn clean_html_summary(html: &str, max_len: usize) -> String {

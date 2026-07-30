@@ -54,9 +54,13 @@ dotenvy = "0.15.7"
 keyring = { version = "3" }
 
 # GPUI (Desktop)
-gpui = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e" }
-gpui_platform = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e", features = ["font-kit"] }
-gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "be0f5488a7050f14ed90081f68f450b07761ce93" }
+gpui = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
+gpui_platform = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5", features = ["font-kit"] }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "277f220a6196572116a8fd84fba6c36187094cab" }
+# Pure proc-macro (syn/quote/proc-macro2 only, no gpui dependency of its own),
+# so it inherits whatever `gpui` is in scope at the call site and cannot
+# introduce a second GPUI crate instance.
+gpui-rsx = "0.6"
 
 # Cargo resolves 1042 packages here: 1036 external dependencies against 6
 # workspace crates. Full debuginfo on all of them is what made target/ grow to
@@ -82,8 +86,10 @@ panic = "abort"
 strip = true
 opt-level = "z"
 
-# Redirect gpui-component's transitive dependency on upstream zed to our fork.
-# Without this, Cargo would pull two incompatible versions of gpui.
+# gpui-component declares its GPUI dependencies against zed git. Redirect them
+# onto gpui-ce so the whole graph resolves to a single GPUI instance.
 [patch."https://github.com/zed-industries/zed"]
-gpui = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e" }
-gpui_platform = { git = "https://github.com/codeitlikemiley/zed", rev = "da25af078f613bf52b515eded9175a1b397bbc5e" }
+gpui = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
+gpui_platform = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
+gpui_web = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }
+gpui_macros = { git = "https://github.com/hexuria/gpui-ce", rev = "590f086f0ead95aefab36c1a9affbb733eff4bf5" }

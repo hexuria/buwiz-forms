@@ -12,6 +12,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::scroll::ScrollableElement as _;
 use gpui_component::select::{SearchableVec, Select, SelectEvent, SelectItem, SelectState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
@@ -1444,12 +1445,11 @@ impl Form2551QView {
     }
 
     fn error_icon(_message: &str, cx: &Context<Self>) -> gpui::Div {
-        div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_color(cx.theme().danger)
-            .child(Icon::new(IconName::TriangleAlert).small())
+        rsx! {
+            <div flex items_center justify_center text_color={cx.theme().danger}>
+                {Icon::new(IconName::TriangleAlert).small()}
+            </div>
+        }
     }
 
     fn has_section_error(&self, section_id: &'static str) -> bool {
@@ -1606,78 +1606,76 @@ impl Render for Form2551QView {
         let title_block = <Self as FormViewTrait>::render_header(self, cx);
 
         let carry_banner = if let Some(label) = carry_label {
-            div()
-                .px_4()
-                .py_3()
-                .bg(cx.theme().accent)
-                .rounded_lg()
-                .border_1()
-                .border_color(cx.theme().primary)
-                .text_sm()
-                .text_color(cx.theme().foreground)
-                .child(label)
-                .into_any_element()
+            let banner = rsx! {
+                <div
+                    px_4
+                    py_3
+                    bg={cx.theme().accent}
+                    rounded_lg
+                    border_1
+                    border_color={cx.theme().primary}
+                    text_sm
+                    text_color={cx.theme().foreground}
+                >
+                    {label}
+                </div>
+            };
+            banner.into_any_element()
         } else {
             div().into_any_element()
         };
 
         let submission_claim_banner = if submission_claim_active {
-            div()
-                .px_4()
-                .py_3()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .bg(cx.theme().warning.opacity(0.1))
-                .rounded_lg()
-                .border_1()
-                .border_color(cx.theme().warning.opacity(0.35))
-                .text_color(cx.theme().foreground)
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(cx.theme().warning)
-                        .child(
-                            "Submission outcome pending — support-assisted reconciliation required",
-                        ),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .child("Do not submit this return again. Keep any BIR confirmation or receipt and contact support; the app will not retry or release this claim automatically."),
-                )
-                .into_any_element()
+            let banner = rsx! {
+                <div
+                    px_4
+                    py_3
+                    flex
+                    flex_col
+                    gap_1
+                    bg={cx.theme().warning.opacity(0.1)}
+                    rounded_lg
+                    border_1
+                    border_color={cx.theme().warning.opacity(0.35)}
+                    text_color={cx.theme().foreground}
+                >
+                    <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().warning}>
+                        {"Submission outcome pending — support-assisted reconciliation required"}
+                    </div>
+                    <div text_sm>
+                        {"Do not submit this return again. Keep any BIR confirmation or receipt and contact support; the app will not retry or release this claim automatically."}
+                    </div>
+                </div>
+            };
+            banner.into_any_element()
         } else {
             div().into_any_element()
         };
 
         let profile_resolution_banner = if let Some(error) = &self.draft.profile_resolution_error {
-            div()
-                .px_4()
-                .py_3()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .bg(cx.theme().danger.opacity(0.1))
-                .rounded_lg()
-                .border_1()
-                .border_color(cx.theme().danger.opacity(0.35))
-                .text_color(cx.theme().foreground)
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(cx.theme().danger)
-                        .child("Filing blocked — effective taxpayer profile is unresolved"),
-                )
-                .child(div().text_sm().child(error.clone()))
-                .child(
-                    div()
-                        .text_sm()
-                        .child("Review and confirm the COR/profile effective dates, then reopen or refresh this return."),
-                )
-                .into_any_element()
+            let banner = rsx! {
+                <div
+                    px_4
+                    py_3
+                    flex
+                    flex_col
+                    gap_1
+                    bg={cx.theme().danger.opacity(0.1)}
+                    rounded_lg
+                    border_1
+                    border_color={cx.theme().danger.opacity(0.35)}
+                    text_color={cx.theme().foreground}
+                >
+                    <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().danger}>
+                        {"Filing blocked — effective taxpayer profile is unresolved"}
+                    </div>
+                    <div text_sm>{error.clone()}</div>
+                    <div text_sm>
+                        {"Review and confirm the COR/profile effective dates, then reopen or refresh this return."}
+                    </div>
+                </div>
+            };
+            banner.into_any_element()
         } else {
             div().into_any_element()
         };
@@ -1690,107 +1688,101 @@ impl Render for Form2551QView {
             } else {
                 "This return remains an immutable historical snapshot. Revert it to Draft, or use the appropriate amendment workflow, before applying the current profile."
             };
-            div()
-                .px_4()
-                .py_3()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .bg(cx.theme().warning.opacity(0.1))
-                .rounded_lg()
-                .border_1()
-                .border_color(cx.theme().warning.opacity(0.35))
-                .text_color(cx.theme().foreground)
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(cx.theme().warning)
-                        .child("Profile changed after this return was reviewed"),
-                )
-                .child(div().text_sm().child(guidance))
-                .into_any_element()
+            let banner = rsx! {
+                <div
+                    px_4
+                    py_3
+                    flex
+                    flex_col
+                    gap_1
+                    bg={cx.theme().warning.opacity(0.1)}
+                    rounded_lg
+                    border_1
+                    border_color={cx.theme().warning.opacity(0.35)}
+                    text_color={cx.theme().foreground}
+                >
+                    <div text_sm font_weight={FontWeight::SEMIBOLD} text_color={cx.theme().warning}>
+                        {"Profile changed after this return was reviewed"}
+                    </div>
+                    <div text_sm>{guidance}</div>
+                </div>
+            };
+            banner.into_any_element()
         } else {
             div().into_any_element()
         };
 
         // Accordion wrapper macro/helper logic inline
         // filing_period content
-        let tax_period_basis_controls = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(Self::field_label("1. Taxable-period basis", cx))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_5()
-                    .child(
-                        div()
-                            .id("tax_period_calendar")
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(is_editable, |el| el.cursor_pointer())
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if !this.is_editable() {
-                                    return;
-                                }
-                                this.draft.tax_period_basis = TaxPeriodBasis::Calendar;
-                                this.draft.year_end_month = 12;
-                                this.year_end_month_input.update(cx, |input, cx| {
-                                    input.set_value("12", window, cx);
-                                });
-                                this.is_validated = false;
-                                this.sync_from_inputs(cx);
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_full()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if is_calendar {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    }),
-                            )
-                            .child(div().text_sm().child("Calendar")),
-                    )
-                    .child(
-                        div()
-                            .id("tax_period_fiscal")
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(is_editable, |el| el.cursor_pointer())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if !this.is_editable() {
-                                    return;
-                                }
-                                this.draft.tax_period_basis = TaxPeriodBasis::Fiscal;
-                                this.is_validated = false;
-                                this.sync_from_inputs(cx);
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_full()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if !is_calendar {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    }),
-                            )
-                            .child(div().text_sm().child("Fiscal")),
-                    ),
-            );
+        let tax_period_basis_controls = rsx! {
+            <div flex flex_col gap_2>
+                {Self::field_label("1. Taxable-period basis", cx)}
+                <div flex flex_wrap gap_5>
+                    <div
+                        id={"tax_period_calendar"}
+                        flex
+                        items_center
+                        gap_2
+                        when={(is_editable, |el| el.cursor_pointer())}
+                        on_click={cx.listener(|this, _, window, cx| {
+                            if !this.is_editable() {
+                                return;
+                            }
+                            this.draft.tax_period_basis = TaxPeriodBasis::Calendar;
+                            this.draft.year_end_month = 12;
+                            this.year_end_month_input.update(cx, |input, cx| {
+                                input.set_value("12", window, cx);
+                            });
+                            this.is_validated = false;
+                            this.sync_from_inputs(cx);
+                        })}
+                    >
+                        <div
+                            w_4
+                            h_4
+                            rounded_full
+                            border_1
+                            border_color={cx.theme().border}
+                            bg={if is_calendar {
+                                cx.theme().primary
+                            } else {
+                                cx.theme().background
+                            }}
+                        />
+                        <div text_sm>{"Calendar"}</div>
+                    </div>
+                    <div
+                        id={"tax_period_fiscal"}
+                        flex
+                        items_center
+                        gap_2
+                        when={(is_editable, |el| el.cursor_pointer())}
+                        on_click={cx.listener(|this, _, _, cx| {
+                            if !this.is_editable() {
+                                return;
+                            }
+                            this.draft.tax_period_basis = TaxPeriodBasis::Fiscal;
+                            this.is_validated = false;
+                            this.sync_from_inputs(cx);
+                        })}
+                    >
+                        <div
+                            w_4
+                            h_4
+                            rounded_full
+                            border_1
+                            border_color={cx.theme().border}
+                            bg={if !is_calendar {
+                                cx.theme().primary
+                            } else {
+                                cx.theme().background
+                            }}
+                        />
+                        <div text_sm>{"Fiscal"}</div>
+                    </div>
+                </div>
+            </div>
+        };
 
         let year_end_month_field = div()
             .w(px(200.))
@@ -1798,36 +1790,37 @@ impl Render for Form2551QView {
             .flex_col()
             .gap_2()
             .child(Self::field_label("2. Year-end month", cx))
-            .child(
-                div()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .rounded_md()
-                    .border_color(if self.get_error("year_end_month").is_some() {
+            .child(rsx! {
+                <div
+                    bg={cx.theme().background}
+                    border_1
+                    rounded_md
+                    border_color={if self.get_error("year_end_month").is_some() {
                         cx.theme().danger
                     } else {
                         cx.theme().border
-                    })
-                    .px_2()
-                    .py_1()
-                    .child(
-                        Input::new(&self.year_end_month_input)
-                            .disabled(!is_editable || is_calendar)
-                            .appearance(false),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(if is_calendar {
+                    }}
+                    px_2
+                    py_1
+                >
+                    {Input::new(&self.year_end_month_input)
+                        .disabled(!is_editable || is_calendar)
+                        .appearance(false)}
+                </div>
+            })
+            .child(rsx! {
+                <div text_xs text_color={cx.theme().muted_foreground}>
+                    {if is_calendar {
                         "Calendar filing fixes the year-end month at December (12)."
                     } else {
                         "Enter the fiscal year-end month as 1 through 12."
-                    }),
-            )
+                    }}
+                </div>
+            })
             .when_some(self.get_error("year_end_month").cloned(), |field, error| {
-                field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                field.child(rsx! {
+                    <div text_xs text_color={cx.theme().danger}>{error}</div>
+                })
             });
 
         let attached_sheets_field = div()
@@ -1836,28 +1829,30 @@ impl Render for Form2551QView {
             .flex_col()
             .gap_2()
             .child(Self::field_label("5. Number of attached sheets", cx))
-            .child(
-                div()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .rounded_md()
-                    .border_color(if self.get_error("number_of_attached_sheets").is_some() {
+            .child(rsx! {
+                <div
+                    bg={cx.theme().background}
+                    border_1
+                    rounded_md
+                    border_color={if self.get_error("number_of_attached_sheets").is_some() {
                         cx.theme().danger
                     } else {
                         cx.theme().border
-                    })
-                    .px_2()
-                    .py_1()
-                    .child(
-                        Input::new(&self.attached_sheets_input)
-                            .disabled(!is_editable)
-                            .appearance(false),
-                    ),
-            )
+                    }}
+                    px_2
+                    py_1
+                >
+                    {Input::new(&self.attached_sheets_input)
+                        .disabled(!is_editable)
+                        .appearance(false)}
+                </div>
+            })
             .when_some(
                 self.get_error("number_of_attached_sheets").cloned(),
                 |field, error| {
-                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                    field.child(rsx! {
+                        <div text_xs text_color={cx.theme().danger}>{error}</div>
+                    })
                 },
             );
 
@@ -1872,14 +1867,14 @@ impl Render for Form2551QView {
                     .flex_wrap()
                     .gap_x_6()
                     .gap_y_3()
-                    .child(
-                        div()
-                            .id("amended_toggle")
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(is_editable, |el| el.cursor_pointer())
-                            .on_click(cx.listener(move |this, _, _, cx| {
+                    .child(rsx! {
+                        <div
+                            id={"amended_toggle"}
+                            flex
+                            items_center
+                            gap_2
+                            when={(is_editable, |el| el.cursor_pointer())}
+                            on_click={cx.listener(move |this, _, _, cx| {
                                 if !this.is_editable() {
                                     return;
                                 }
@@ -1890,42 +1885,45 @@ impl Render for Form2551QView {
                                 }
                                 this.is_validated = false;
                                 this.sync_from_inputs(cx);
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_sm()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if is_amended {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    })
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(if is_amended {
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().primary_foreground)
-                                            .child("✓")
-                                    } else {
-                                        div()
-                                    }),
-                            )
-                            .child(div().text_sm().child("Amended Return")),
-                    )
+                            })}
+                        >
+                            <div
+                                w_4
+                                h_4
+                                rounded_sm
+                                border_1
+                                border_color={cx.theme().border}
+                                bg={if is_amended {
+                                    cx.theme().primary
+                                } else {
+                                    cx.theme().background
+                                }}
+                                flex
+                                items_center
+                                justify_center
+                            >
+                                {if is_amended {
+                                    rsx! {
+                                        <div text_xs text_color={cx.theme().primary_foreground}>
+                                            {"✓"}
+                                        </div>
+                                    }
+                                } else {
+                                    div()
+                                }}
+                            </div>
+                            <div text_sm>{"Amended Return"}</div>
+                        </div>
+                    })
                     .when(is_amended, |options| {
-                        options.child(
-                            div()
-                                .id("original_on_time_toggle")
-                                .flex()
-                                .items_center()
-                                .gap_2()
-                                .when(is_editable, |el| el.cursor_pointer())
-                                .on_click(cx.listener(move |this, _, _, cx| {
+                        options.child(rsx! {
+                            <div
+                                id={"original_on_time_toggle"}
+                                flex
+                                items_center
+                                gap_2
+                                when={(is_editable, |el| el.cursor_pointer())}
+                                on_click={cx.listener(move |this, _, _, cx| {
                                     if !this.is_editable() {
                                         return;
                                     }
@@ -1933,85 +1931,88 @@ impl Render for Form2551QView {
                                         !this.original_return_filed_and_paid_on_time;
                                     this.is_validated = false;
                                     this.sync_from_inputs(cx);
-                                }))
-                                .child(
-                                    div()
-                                        .w_4()
-                                        .h_4()
-                                        .rounded_sm()
-                                        .border_1()
-                                        .border_color(cx.theme().border)
-                                        .bg(if original_return_filed_and_paid_on_time {
-                                            cx.theme().primary
-                                        } else {
-                                            cx.theme().background
-                                        })
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(if original_return_filed_and_paid_on_time {
-                                            div()
-                                                .text_xs()
-                                                .text_color(cx.theme().primary_foreground)
-                                                .child("✓")
-                                        } else {
-                                            div()
-                                        }),
-                                )
-                                .child(div().text_sm().child("Original Return Filed/Paid On Time")),
-                        )
+                                })}
+                            >
+                                <div
+                                    w_4
+                                    h_4
+                                    rounded_sm
+                                    border_1
+                                    border_color={cx.theme().border}
+                                    bg={if original_return_filed_and_paid_on_time {
+                                        cx.theme().primary
+                                    } else {
+                                        cx.theme().background
+                                    }}
+                                    flex
+                                    items_center
+                                    justify_center
+                                >
+                                    {if original_return_filed_and_paid_on_time {
+                                        rsx! {
+                                            <div text_xs text_color={cx.theme().primary_foreground}>
+                                                {"✓"}
+                                            </div>
+                                        }
+                                    } else {
+                                        div()
+                                    }}
+                                </div>
+                                <div text_sm>{"Original Return Filed/Paid On Time"}</div>
+                            </div>
+                        })
                     })
-                    .child(
-                        div()
-                            .id("tax_relief_toggle")
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(is_editable, |el| el.cursor_pointer())
-                            .on_click(cx.listener(move |this, _, _, cx| {
+                    .child(rsx! {
+                        <div
+                            id={"tax_relief_toggle"}
+                            flex
+                            items_center
+                            gap_2
+                            when={(is_editable, |el| el.cursor_pointer())}
+                            on_click={cx.listener(move |this, _, _, cx| {
                                 if !this.is_editable() {
                                     return;
                                 }
                                 this.tax_relief = !this.tax_relief;
                                 this.is_validated = false;
                                 this.sync_from_inputs(cx);
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_sm()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if self.tax_relief {
-                                        cx.theme().primary
-                                    } else {
-                                        cx.theme().background
-                                    })
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .child(if self.tax_relief {
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().primary_foreground)
-                                            .child("✓")
-                                    } else {
-                                        div()
-                                    }),
-                            )
-                            .child(div().text_sm().child("Tax Relief")),
-                    ),
+                            })}
+                        >
+                            <div
+                                w_4
+                                h_4
+                                rounded_sm
+                                border_1
+                                border_color={cx.theme().border}
+                                bg={if self.tax_relief {
+                                    cx.theme().primary
+                                } else {
+                                    cx.theme().background
+                                }}
+                                flex
+                                items_center
+                                justify_center
+                            >
+                                {if self.tax_relief {
+                                    rsx! {
+                                        <div text_xs text_color={cx.theme().primary_foreground}>
+                                            {"✓"}
+                                        </div>
+                                    }
+                                } else {
+                                    div()
+                                }}
+                            </div>
+                            <div text_sm>{"Tax Relief"}</div>
+                        </div>
+                    }),
             );
 
-        let item_13_controls = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(Self::field_label("13. Income-tax-rate election", cx))
-            .child(
-                div().flex().flex_wrap().gap_5().children(
-                    [
+        let item_13_controls = rsx! {
+            <div flex flex_col gap_2>
+                {Self::field_label("13. Income-tax-rate election", cx)}
+                <div flex flex_wrap gap_5>
+                    {...[
                         (
                             "item13_not_applicable",
                             "Not applicable",
@@ -2023,73 +2024,74 @@ impl Render for Form2551QView {
                     .into_iter()
                     .map(|(id, label, election)| {
                         let selected = item_13_election == election;
-                        div()
-                            .id(id)
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(is_editable, |el| el.cursor_pointer())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if !this.is_editable() {
-                                    return;
-                                }
-                                this.draft.item_13_election = election;
-                                this.is_validated = false;
-                                this.sync_from_inputs(cx);
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_full()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if selected {
+                        rsx! {
+                            <div
+                                id={id}
+                                flex
+                                items_center
+                                gap_2
+                                when={(is_editable, |el| el.cursor_pointer())}
+                                on_click={cx.listener(move |this, _, _, cx| {
+                                    if !this.is_editable() {
+                                        return;
+                                    }
+                                    this.draft.item_13_election = election;
+                                    this.is_validated = false;
+                                    this.sync_from_inputs(cx);
+                                })}
+                            >
+                                <div
+                                    w_4
+                                    h_4
+                                    rounded_full
+                                    border_1
+                                    border_color={cx.theme().border}
+                                    bg={if selected {
                                         cx.theme().primary
                                     } else {
                                         cx.theme().background
-                                    }),
-                            )
-                            .child(div().text_sm().child(label))
-                    }),
-                ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(
-                        "This legal election is stored exactly as selected and is never inferred.",
-                    ),
-            );
+                                    }}
+                                />
+                                <div text_sm>{label}</div>
+                            </div>
+                        }
+                    })}
+                </div>
+                <div text_xs text_color={cx.theme().muted_foreground}>
+                    {"This legal election is stored exactly as selected and is never inferred."}
+                </div>
+            </div>
+        };
 
         let tax_relief_specification_field = div()
             .flex()
             .flex_col()
             .gap_2()
             .child(Self::field_label("12A. Tax-relief specification", cx))
-            .child(
-                div()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .rounded_md()
-                    .border_color(if self.get_error("tax_relief_specification").is_some() {
+            .child(rsx! {
+                <div
+                    bg={cx.theme().background}
+                    border_1
+                    rounded_md
+                    border_color={if self.get_error("tax_relief_specification").is_some() {
                         cx.theme().danger
                     } else {
                         cx.theme().border
-                    })
-                    .px_2()
-                    .py_1()
-                    .child(
-                        Input::new(&self.tax_relief_specification_input)
-                            .disabled(!is_editable)
-                            .appearance(false),
-                    ),
-            )
+                    }}
+                    px_2
+                    py_1
+                >
+                    {Input::new(&self.tax_relief_specification_input)
+                        .disabled(!is_editable)
+                        .appearance(false)}
+                </div>
+            })
             .when_some(
                 self.get_error("tax_relief_specification").cloned(),
                 |field, error| {
-                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                    field.child(rsx! {
+                        <div text_xs text_color={cx.theme().danger}>{error}</div>
+                    })
                 },
             );
 
@@ -2097,35 +2099,27 @@ impl Render for Form2551QView {
             .flex()
             .flex_col()
             .gap_5()
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_x_8()
-                    .gap_y_4()
-                    .items_start()
-                    .child(
-                        Self::readonly_field(
-                            "Taxable Year",
-                            &self.draft.taxable_year.to_string(),
-                            self.get_error("taxable_year"),
-                            cx,
-                        )
-                        .w(px(120.)),
+            .child(rsx! {
+                <div flex flex_wrap gap_x_8 gap_y_4 items_start>
+                    {Self::readonly_field(
+                        "Taxable Year",
+                        &self.draft.taxable_year.to_string(),
+                        self.get_error("taxable_year"),
+                        cx,
                     )
-                    .child(
-                        Self::readonly_field(
-                            "Quarter",
-                            &format!("Q{}", self.quarter),
-                            self.get_error("quarter"),
-                            cx,
-                        )
-                        .w(px(80.)),
+                    .w(px(120.))}
+                    {Self::readonly_field(
+                        "Quarter",
+                        &format!("Q{}", self.quarter),
+                        self.get_error("quarter"),
+                        cx,
                     )
-                    .child(tax_period_basis_controls)
-                    .child(year_end_month_field)
-                    .child(attached_sheets_field),
-            )
+                    .w(px(80.))}
+                    {tax_period_basis_controls}
+                    {year_end_month_field}
+                    {attached_sheets_field}
+                </div>
+            })
             .child(return_options)
             .when(self.tax_relief, |content| {
                 content.child(tax_relief_specification_field)
@@ -2173,14 +2167,14 @@ impl Render for Form2551QView {
             .gap_3()
             .when(is_editable, |controls| {
                 controls
-                    .child(
-                        div().min_w(px(280.)).flex_1().child(
-                            Select::new(&self.atc_select)
+                    .child(rsx! {
+                        <div min_w={px(280.)} flex_1>
+                            {Select::new(&self.atc_select)
                                 .placeholder("Choose an ATC code")
                                 .search_placeholder("Search ATC code or description")
-                                .disabled(schedule_row_count >= MAX_EDITABLE_SCHEDULE_1_ROWS),
-                        ),
-                    )
+                                .disabled(schedule_row_count >= MAX_EDITABLE_SCHEDULE_1_ROWS)}
+                        </div>
+                    })
                     .child(
                         gpui_component::button::Button::new("add_schedule_1_row")
                             .label("Add ATC Line")
@@ -2195,34 +2189,27 @@ impl Render for Form2551QView {
                             })),
                     )
             })
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(schedule_row_counter),
-            )
-            .child(
-                div()
-                    .w_full()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(
-                        "Use one line per distinct ATC. Combine businesses that share the same ATC; add another line when the ATC differs.",
-                    ),
-            )
+            .child(rsx! {
+                <div text_xs text_color={cx.theme().muted_foreground}>
+                    {schedule_row_counter}
+                </div>
+            })
+            .child(rsx! {
+                <div w_full text_xs text_color={cx.theme().muted_foreground}>
+                    {"Use one line per distinct ATC. Combine businesses that share the same ATC; add another line when the ATC differs."}
+                </div>
+            })
             .when(
                 schedule_row_count > FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY,
                 |controls| {
-                controls.child(
-                    div()
-                        .w_full()
-                        .text_xs()
-                        .text_color(cx.theme().warning)
-                        .child(format!(
+                controls.child(rsx! {
+                    <div w_full text_xs text_color={cx.theme().warning}>
+                        {format!(
                             "{} Schedule 1 continuation sheet(s) will be attached and counted in Item 5. The reviewed XML carries only six ATCs, so this draft can be saved and printed but cannot be queued or submitted until an official attachment protocol is verified.",
                             required_schedule_attachments
-                        )),
-                )
+                        )}
+                    </div>
+                })
             },
             );
 
@@ -2235,25 +2222,28 @@ impl Render for Form2551QView {
                 let err_id = format!("schedule_1_row_{}", i + 1);
                 let has_err = self.get_error(&err_id).is_some();
                 let input_component = if let Some(row_in) = self.row_inputs.get(i) {
-                    div()
-                        .bg(cx.theme().background)
-                        .border_1()
-                        .rounded_md()
-                        .border_color(if has_err {
-                            cx.theme().danger
-                        } else {
-                            cx.theme().border
-                        })
-                        .px_2()
-                        .py_1()
-                        .child(
-                            Input::new(&row_in.taxable_amount)
+                    let field = rsx! {
+                        <div
+                            bg={cx.theme().background}
+                            border_1
+                            rounded_md
+                            border_color={if has_err {
+                                cx.theme().danger
+                            } else {
+                                cx.theme().border
+                            }}
+                            px_2
+                            py_1
+                        >
+                            {Input::new(&row_in.taxable_amount)
                                 .disabled(!is_editable)
-                                .appearance(false),
-                        )
-                        .into_any_element()
+                                .appearance(false)}
+                        </div>
+                    };
+                    field.into_any_element()
                 } else {
-                    div().child("—").into_any_element()
+                    let placeholder = rsx! { <div>{"—"}</div> };
+                    placeholder.into_any_element()
                 };
                 let action_component = (is_editable && schedule_row_count > 1).then(|| {
                     gpui_component::button::Button::new(format!("remove_schedule_1_row_{}", i + 1))
@@ -2278,20 +2268,20 @@ impl Render for Form2551QView {
             })
             .collect::<Vec<_>>();
 
-        let schedule_one_content = div()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(schedule_controls)
-            .child(crate::components::form_parts::atc_schedule_table(
-                crate::components::form_parts::AtcScheduleTableProps {
-                    title: "",
-                    amount_col_label: "TAXABLE AMOUNT (₱)",
-                    is_mobile,
-                    rows: schedule_rows,
-                },
-                cx,
-            ));
+        let schedule_one_content = rsx! {
+            <div flex flex_col gap_4>
+                {schedule_controls}
+                {crate::components::form_parts::atc_schedule_table(
+                    crate::components::form_parts::AtcScheduleTableProps {
+                        title: "",
+                        amount_col_label: "TAXABLE AMOUNT (₱)",
+                        is_mobile,
+                        rows: schedule_rows,
+                    },
+                    cx,
+                )}
+            </div>
+        };
 
         let other_tax_credit_description_field = div()
             .flex()
@@ -2301,30 +2291,32 @@ impl Render for Form2551QView {
                 "17. Specify the other tax credit/payment",
                 cx,
             ))
-            .child(
-                div()
-                    .bg(cx.theme().background)
-                    .border_1()
-                    .rounded_md()
-                    .border_color(
+            .child(rsx! {
+                <div
+                    bg={cx.theme().background}
+                    border_1
+                    rounded_md
+                    border_color={
                         if self.get_error("other_tax_credit_description").is_some() {
                             cx.theme().danger
                         } else {
                             cx.theme().border
-                        },
-                    )
-                    .px_2()
-                    .py_1()
-                    .child(
-                        Input::new(&self.other_tax_credit_description_input)
-                            .disabled(!is_editable)
-                            .appearance(false),
-                    ),
-            )
+                        }
+                    }
+                    px_2
+                    py_1
+                >
+                    {Input::new(&self.other_tax_credit_description_input)
+                        .disabled(!is_editable)
+                        .appearance(false)}
+                </div>
+            })
             .when_some(
                 self.get_error("other_tax_credit_description").cloned(),
                 |field, error| {
-                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                    field.child(rsx! {
+                        <div text_xs text_color={cx.theme().danger}>{error}</div>
+                    })
                 },
             );
 
@@ -2342,15 +2334,14 @@ impl Render for Form2551QView {
                 cx.theme().border
             })
             .child(Self::field_label("Item 24 overpayment disposition", cx))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child("Select exactly one disposition for this overpayment."),
-            )
-            .child(
-                div().flex().flex_wrap().gap_5().children(
-                    [
+            .child(rsx! {
+                <div text_xs text_color={cx.theme().muted_foreground}>
+                    {"Select exactly one disposition for this overpayment."}
+                </div>
+            })
+            .child(rsx! {
+                <div flex flex_wrap gap_5>
+                    {...[
                         (
                             "overpayment_refund",
                             "To be refunded",
@@ -2365,41 +2356,46 @@ impl Render for Form2551QView {
                     .into_iter()
                     .map(|(id, label, disposition)| {
                         let selected = overpayment_disposition == disposition;
-                        div()
-                            .id(id)
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .when(is_editable, |el| el.cursor_pointer())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if !this.is_editable() {
-                                    return;
-                                }
-                                this.draft.overpayment_disposition = disposition;
-                                this.is_validated = false;
-                                this.sync_from_inputs(cx);
-                            }))
-                            .child(
-                                div()
-                                    .w_4()
-                                    .h_4()
-                                    .rounded_full()
-                                    .border_1()
-                                    .border_color(cx.theme().border)
-                                    .bg(if selected {
+                        rsx! {
+                            <div
+                                id={id}
+                                flex
+                                items_center
+                                gap_2
+                                when={(is_editable, |el| el.cursor_pointer())}
+                                on_click={cx.listener(move |this, _, _, cx| {
+                                    if !this.is_editable() {
+                                        return;
+                                    }
+                                    this.draft.overpayment_disposition = disposition;
+                                    this.is_validated = false;
+                                    this.sync_from_inputs(cx);
+                                })}
+                            >
+                                <div
+                                    w_4
+                                    h_4
+                                    rounded_full
+                                    border_1
+                                    border_color={cx.theme().border}
+                                    bg={if selected {
                                         cx.theme().primary
                                     } else {
                                         cx.theme().background
-                                    }),
-                            )
-                            .child(div().text_sm().child(label))
-                    }),
-                ),
-            )
+                                    }}
+                                />
+                                <div text_sm>{label}</div>
+                            </div>
+                        }
+                    })}
+                </div>
+            })
             .when_some(
                 self.get_error("overpayment_disposition").cloned(),
                 |field, error| {
-                    field.child(div().text_xs().text_color(cx.theme().danger).child(error))
+                    field.child(rsx! {
+                        <div text_xs text_color={cx.theme().danger}>{error}</div>
+                    })
                 },
             );
 
@@ -2503,30 +2499,28 @@ impl Render for Form2551QView {
                 false,
                 cx,
             ))
-            .child(
-                div()
-                    .pt_4()
-                    .border_t_1()
-                    .border_color(cx.theme().border)
-                    .child(crate::components::form_parts::computation_row_readonly(
+            .child(rsx! {
+                <div pt_4 border_t_1 border_color={cx.theme().border}>
+                    {crate::components::form_parts::computation_row_readonly(
                         "19. Tax Still Payable / (Overpayment)",
                         tax_payable,
                         true,
                         cx,
-                    )),
-            )
-            .child(
-                div()
-                    .pt_4()
-                    .child(crate::components::form_parts::penalty_summary_section(
+                    )}
+                </div>
+            })
+            .child(rsx! {
+                <div pt_4>
+                    {crate::components::form_parts::penalty_summary_section(
                         self.draft.surcharge,
                         self.draft.interest,
                         self.draft.compromise,
                         self.draft.total_penalties,
                         self.draft.total_amount_payable,
                         cx,
-                    )),
-            )
+                    )}
+                </div>
+            })
             .when(self.draft.total_amount_payable < 0.0, |content| {
                 content.child(overpayment_disposition_controls)
             });
@@ -2618,110 +2612,109 @@ impl Render for Form2551QView {
                 && overpayment_disposition_valid
         };
 
-        let form_content = div()
-            .w_full()
-            .max_w(px(900.))
-            .mx_auto()
-            .px_8()
-            .py_10()
-            .flex()
-            .flex_col()
-            .gap_8()
-            .child(title_block)
-            .child(carry_banner)
-            .child(submission_claim_banner)
-            .child(profile_resolution_banner)
-            .child(profile_snapshot_banner)
-            .child(crate::components::form_parts::form_accordion(
-                "acc_filing_period",
-                "FILING PERIOD",
-                self.show_filing_period,
-                is_filing_period_valid,
-                self.has_section_error("filing_period"),
-                cx.listener(|this: &mut Self, _, _, cx| {
-                    this.show_filing_period = !this.show_filing_period;
-                    cx.notify();
-                }),
-                filing_period_content.into_any_element(),
-                cx,
-            ))
-            .child(crate::components::form_parts::form_accordion(
-                "acc_background_info",
-                "PART I — BACKGROUND INFORMATION (pre-filled from profile)",
-                self.show_background_info,
-                is_background_info_valid,
-                self.has_section_error("background_info"),
-                cx.listener(|this: &mut Self, _, _, cx| {
-                    this.show_background_info = !this.show_background_info;
-                    cx.notify();
-                }),
-                background_info_content.into_any_element(),
-                cx,
-            ))
-            .child(crate::components::form_parts::form_accordion(
-                "acc_schedule_1",
-                "SCHEDULE 1 — COMPUTATION OF TAX",
-                self.show_schedule_1,
-                is_schedule_1_valid,
-                self.has_section_error("schedule_1"),
-                cx.listener(|this: &mut Self, _, _, cx| {
-                    this.show_schedule_1 = !this.show_schedule_1;
-                    cx.notify();
-                }),
-                schedule_one_content.into_any_element(),
-                cx,
-            ))
-            .child(crate::components::form_parts::form_accordion(
-                "acc_tax_computation",
-                "PART II — COMPUTATION OF TAX",
-                self.show_tax_computation,
-                is_tax_computation_valid,
-                self.has_section_error("tax_computation"),
-                cx.listener(|this: &mut Self, _, _, cx| {
-                    this.show_tax_computation = !this.show_tax_computation;
-                    cx.notify();
-                }),
-                tax_computation_content.into_any_element(),
-                cx,
-            ));
+        let form_content = rsx! {
+            <div w_full max_w={px(900.)} mx_auto px_8 py_10 flex flex_col gap_8>
+                {title_block}
+                {carry_banner}
+                {submission_claim_banner}
+                {profile_resolution_banner}
+                {profile_snapshot_banner}
+                {crate::components::form_parts::form_accordion(
+                    "acc_filing_period",
+                    "FILING PERIOD",
+                    self.show_filing_period,
+                    is_filing_period_valid,
+                    self.has_section_error("filing_period"),
+                    cx.listener(|this: &mut Self, _, _, cx| {
+                        this.show_filing_period = !this.show_filing_period;
+                        cx.notify();
+                    }),
+                    filing_period_content.into_any_element(),
+                    cx,
+                )}
+                {crate::components::form_parts::form_accordion(
+                    "acc_background_info",
+                    "PART I — BACKGROUND INFORMATION (pre-filled from profile)",
+                    self.show_background_info,
+                    is_background_info_valid,
+                    self.has_section_error("background_info"),
+                    cx.listener(|this: &mut Self, _, _, cx| {
+                        this.show_background_info = !this.show_background_info;
+                        cx.notify();
+                    }),
+                    background_info_content.into_any_element(),
+                    cx,
+                )}
+                {crate::components::form_parts::form_accordion(
+                    "acc_schedule_1",
+                    "SCHEDULE 1 — COMPUTATION OF TAX",
+                    self.show_schedule_1,
+                    is_schedule_1_valid,
+                    self.has_section_error("schedule_1"),
+                    cx.listener(|this: &mut Self, _, _, cx| {
+                        this.show_schedule_1 = !this.show_schedule_1;
+                        cx.notify();
+                    }),
+                    schedule_one_content.into_any_element(),
+                    cx,
+                )}
+                {crate::components::form_parts::form_accordion(
+                    "acc_tax_computation",
+                    "PART II — COMPUTATION OF TAX",
+                    self.show_tax_computation,
+                    is_tax_computation_valid,
+                    self.has_section_error("tax_computation"),
+                    cx.listener(|this: &mut Self, _, _, cx| {
+                        this.show_tax_computation = !this.show_tax_computation;
+                        cx.notify();
+                    }),
+                    tax_computation_content.into_any_element(),
+                    cx,
+                )}
+            </div>
+        };
 
         let status_pipeline = <Self as FormViewTrait>::render_status_pipeline(self, cx);
 
-        let status_banner = div()
-            .flex()
-            .items_center()
-            .justify_center()
-            .px_8()
-            .py_4()
-            .bg(cx.theme().secondary)
-            .border_b_1()
-            .border_color(cx.theme().border)
-            .child(status_pipeline);
+        let status_banner = rsx! {
+            <div
+                flex
+                items_center
+                justify_center
+                px_8
+                py_4
+                bg={cx.theme().secondary}
+                border_b_1
+                border_color={cx.theme().border}
+            >
+                {status_pipeline}
+            </div>
+        };
 
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .min_h_0()
-            .on_action(cx.listener(Self::on_submit_action))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_8()
-                    .py_4()
-                    .bg(cx.theme().background)
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .child(
-                        gpui_component::button::Button::new("back_btn")
-                            .label("← Back")
-                            .on_click(cx.listener(|_this, _, _, cx| {
-                                cx.emit(Form2551QEvent::BackToDashboard);
-                            })),
-                    )
-                    .child({
+        rsx! {
+            <div
+                size_full
+                flex
+                flex_col
+                min_h_0
+                on_action={cx.listener(Self::on_submit_action)}
+            >
+                <div
+                    flex
+                    items_center
+                    justify_between
+                    px_8
+                    py_4
+                    bg={cx.theme().background}
+                    border_b_1
+                    border_color={cx.theme().border}
+                >
+                    {gpui_component::button::Button::new("back_btn")
+                        .label("← Back")
+                        .on_click(cx.listener(|_this, _, _, cx| {
+                            cx.emit(Form2551QEvent::BackToDashboard);
+                        }))}
+                    {{
                         let mut toolbar = div().flex().items_center().gap_3();
 
                         match &self.draft.status {
@@ -2763,12 +2756,11 @@ impl Render for Form2551QView {
                             }
                             FilingStatus::Queued => {
                                 if submission_claim_active {
-                                    toolbar = toolbar.child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().warning)
-                                            .child("Contact support — reconciliation required"),
-                                    );
+                                    toolbar = toolbar.child(rsx! {
+                                        <div text_sm text_color={cx.theme().warning}>
+                                            {"Contact support — reconciliation required"}
+                                        </div>
+                                    });
                                 } else {
                                     toolbar = toolbar.child(
                                         gpui_component::button::Button::new("cancel_queue_btn")
@@ -2802,12 +2794,9 @@ impl Render for Form2551QView {
                                     );
                                 } else {
                                     toolbar = toolbar.child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap_2()
-                                            .child(
-                                                gpui_component::button::Button::new("mark_confirmed_manually_btn")
+                                        rsx! {
+                                            <div flex items_center gap_2>
+                                                {gpui_component::button::Button::new("mark_confirmed_manually_btn")
                                                     .label("Mark as Confirmed Manually")
                                                     .on_click(cx.listener(|this, _, window, cx| {
                                                         let before_confirmation = this.draft.clone();
@@ -2837,13 +2826,15 @@ impl Render for Form2551QView {
                                                         }
                                                         cx.emit(Form2551QEvent::Confirmed);
                                                         cx.notify();
-                                                    }))
-                                            )
+                                                    }))}
+                                            </div>
+                                        }
                                     ).child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(cx.theme().warning)
-                                            .child("⚠️ Auto-tracking disabled")
+                                        rsx! {
+                                            <div text_xs text_color={cx.theme().warning}>
+                                                {"⚠️ Auto-tracking disabled"}
+                                            </div>
+                                        }
                                     );
                                 }
                             }
@@ -2909,31 +2900,33 @@ impl Render for Form2551QView {
                         }
 
                         toolbar
-                    }),
-            )
-            .child(status_banner)
-            .child(
-                div().flex_1().min_h_0().overflow_hidden().child(
-                    div()
+                    }}
+                </div>
+                {status_banner}
+                <div flex_1 min_h_0 overflow_hidden>
+                    {div()
                         .id("form-2551q-scroll")
                         .relative()
                         .size_full()
-                        .child(
-                            div()
-                                .id("form-2551q-scroll-area")
-                                .absolute()
-                                .top_0()
-                                .left_0()
-                                .right_0()
-                                .bottom_0()
-                                .flex()
-                                .flex_col()
-                                .overflow_y_scroll()
-                                .track_scroll(&self.scroll_handle)
-                                .child(form_content),
-                        )
-                        .vertical_scrollbar(&self.scroll_handle),
-                ),
-            )
+                        .child(rsx! {
+                            <div
+                                id={"form-2551q-scroll-area"}
+                                absolute
+                                top_0
+                                left_0
+                                right_0
+                                bottom_0
+                                flex
+                                flex_col
+                                overflow_y_scroll
+                                track_scroll={&self.scroll_handle}
+                            >
+                                {form_content}
+                            </div>
+                        })
+                        .vertical_scrollbar(&self.scroll_handle)}
+                </div>
+            </div>
+        }
     }
 }

@@ -10,6 +10,7 @@ use gpui::*;
 use gpui_component::button::ButtonVariants;
 use gpui_component::input::{InputEvent, OtpInput, OtpState};
 use gpui_component::*;
+use gpui_rsx::rsx;
 
 /// Events emitted by the AuthGate.
 pub enum AuthGateEvent {
@@ -91,16 +92,9 @@ impl Render for AuthGateView {
         let error_msg = self.error_msg.clone();
         let os_triggered = self.os_auth_triggered;
 
-        div()
-            .absolute()
-            .inset_0()
-            .bg(cx.theme().background)
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .child(
-                div()
+        rsx! {
+            <div absolute inset_0 bg={cx.theme().background} flex flex_col items_center justify_center>
+                {div()
                     .flex()
                     .flex_col()
                     .items_center()
@@ -111,26 +105,20 @@ impl Render for AuthGateView {
                             .h(px(60.))
                             .object_fit(gpui::ObjectFit::Contain),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .text_xl()
-                                    .font_weight(FontWeight::BOLD)
-                                    .text_color(cx.theme().foreground)
-                                    .child(self.title.clone()),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(self.description.clone()),
-                            ),
-                    )
+                    .child(rsx! {
+                        <div flex flex_col items_center gap_1>
+                            <div
+                                text_xl
+                                font_weight={FontWeight::BOLD}
+                                text_color={cx.theme().foreground}
+                            >
+                                {self.title.clone()}
+                            </div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {self.description.clone()}
+                            </div>
+                        </div>
+                    })
                     .child(
                         OtpInput::new(&self.otp_state)
                             .groups(1)
@@ -138,21 +126,13 @@ impl Render for AuthGateView {
                             .disabled(os_triggered),
                     )
                     .when_some(error_msg, |this, msg| {
-                        this.child(
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().danger)
-                                .child(msg),
-                        )
+                        this.child(rsx! {
+                            <div text_sm text_color={cx.theme().danger}>{msg}</div>
+                        })
                     })
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .gap_4()
-                            .child(
-                                gpui_component::button::Button::new("auth_gate_os_override")
+                    .child(rsx! {
+                        <div flex flex_col items_center gap_4>
+                            {gpui_component::button::Button::new("auth_gate_os_override")
                                     .label(if os_triggered {
                                         "Waiting for OS..."
                                     } else {
@@ -242,10 +222,8 @@ impl Render for AuthGateView {
                                             );
                                             cx.notify();
                                         }
-                                    })),
-                            )
-                            .child(
-                                gpui_component::button::Button::new("auth_gate_cancel")
+                                    }))}
+                            {gpui_component::button::Button::new("auth_gate_cancel")
                                     .label("Cancel")
                                     .ghost()
                                     .small()
@@ -255,9 +233,10 @@ impl Render for AuthGateView {
                                             input.set_value("", window, cx);
                                         });
                                         cx.emit(AuthGateEvent::Cancelled);
-                                    })),
-                            ),
-                    ),
-            )
+                                    }))}
+                        </div>
+                    })}
+            </div>
+        }
     }
 }

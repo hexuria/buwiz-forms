@@ -5,6 +5,7 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::list::{List, ListDelegate, ListEvent, ListItem, ListState};
 use gpui_component::{ActiveTheme, Icon, IconName, IndexPath, h_flex, v_flex};
+use gpui_rsx::rsx;
 
 pub enum CommandPaletteEvent {
     SelectProfile(String),
@@ -60,15 +61,17 @@ impl ListDelegate for ProfileListDelegate {
             "ARCHIVED PROFILES"
         };
 
-        Some(
-            div()
-                .px_4()
-                .py_2()
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .text_color(cx.theme().muted_foreground)
-                .child(title),
-        )
+        Some(rsx! {
+            <div
+                px_4
+                py_2
+                text_xs
+                font_weight={FontWeight::BOLD}
+                text_color={cx.theme().muted_foreground}
+            >
+                {title}
+            </div>
+        })
     }
 
     fn render_item(
@@ -91,29 +94,24 @@ impl ListDelegate for ProfileListDelegate {
                 ListItem::new(ix)
                     .bg(bg_color)
                     .rounded_lg()
-                    .child(
-                        h_flex()
-                            .items_center()
-                            .gap_4()
-                            .px_4()
-                            .py_3()
-                            .child(
-                                Icon::new(IconName::Plus)
-                                    .text_color(if selected {
-                                        cx.theme().foreground
-                                    } else {
-                                        cx.theme().muted_foreground
-                                    })
-                                    .size(px(24.)),
-                            )
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(cx.theme().foreground)
-                                    .child(format!("Create new profile for \"{}\"", query)),
-                            ),
-                    )
+                    .child(rsx! {
+                        <h_flex items_center gap_4 px_4 py_3>
+                            {Icon::new(IconName::Plus)
+                                .text_color(if selected {
+                                    cx.theme().foreground
+                                } else {
+                                    cx.theme().muted_foreground
+                                })
+                                .size(px(24.))}
+                            <div
+                                text_lg
+                                font_weight={FontWeight::MEDIUM}
+                                text_color={cx.theme().foreground}
+                            >
+                                {format!("Create new profile for \"{}\"", query)}
+                            </div>
+                        </h_flex>
+                    })
                     .selected(selected),
             );
         }
@@ -128,42 +126,33 @@ impl ListDelegate for ProfileListDelegate {
             ListItem::new(ix)
                 .bg(bg_color)
                 .rounded_lg()
-                .child(
-                    h_flex()
-                        .items_center()
-                        .gap_4()
-                        .px_4()
-                        .py_3()
-                        .child(
-                            Icon::new(IconName::User)
-                                .text_color(if selected {
-                                    cx.theme().foreground
-                                } else {
+                .child(rsx! {
+                    <h_flex items_center gap_4 px_4 py_3>
+                        {Icon::new(IconName::User)
+                            .text_color(if selected {
+                                cx.theme().foreground
+                            } else {
+                                cx.theme().muted_foreground
+                            })
+                            .size(px(24.))}
+                        <v_flex>
+                            <div
+                                text_lg
+                                font_weight={FontWeight::MEDIUM}
+                                text_color={if p.is_archived {
                                     cx.theme().muted_foreground
-                                })
-                                .size(px(24.)),
-                        )
-                        .child(
-                            v_flex()
-                                .child(
-                                    div()
-                                        .text_lg()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(if p.is_archived {
-                                            cx.theme().muted_foreground
-                                        } else {
-                                            cx.theme().foreground
-                                        })
-                                        .child(p.full_name.clone()),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(cx.theme().muted_foreground)
-                                        .child(format!("TIN: {}", p.tin.full())),
-                                ),
-                        ),
-                )
+                                } else {
+                                    cx.theme().foreground
+                                }}
+                            >
+                                {p.full_name.clone()}
+                            </div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {format!("TIN: {}", p.tin.full())}
+                            </div>
+                        </v_flex>
+                    </h_flex>
+                })
                 .selected(selected)
         })
     }
@@ -419,27 +408,20 @@ impl EventEmitter<CommandPaletteEvent> for CommandPalette {}
 
 impl Render for CommandPalette {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .absolute()
-            .inset_0()
-            .bg(gpui::rgba(0x00000080))
-            .flex()
-            .justify_center()
-            .items_start()
-            .pt_32()
-            .child(
-                v_flex()
-                    .on_mouse_down_out(cx.listener(|_, _, _, cx| {
+        rsx! {
+            <div absolute inset_0 bg={gpui::rgba(0x00000080)} flex justify_center items_start pt_32>
+                <v_flex
+                    on_mouse_down_out={cx.listener(|_, _, _, cx| {
                         cx.emit(CommandPaletteEvent::Dismiss);
-                    }))
-                    .w(px(600.))
-                    .bg(cx.theme().background)
-                    .rounded_xl()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .shadow_2xl()
-                    .overflow_hidden()
-                    .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| {
+                    })}
+                    w={px(600.)}
+                    bg={cx.theme().background}
+                    rounded_xl
+                    border_1
+                    border_color={cx.theme().border}
+                    shadow_2xl
+                    overflow_hidden
+                    on_key_down={cx.listener(|this, ev: &KeyDownEvent, window, cx| {
                         match ev.keystroke.key.as_str() {
                             "escape" => cx.emit(CommandPaletteEvent::Dismiss),
                             "up" => {
@@ -533,31 +515,24 @@ impl Render for CommandPalette {
                             }
                             _ => {}
                         }
-                    }))
-                    .child(
-                        h_flex()
-                            .px_6()
-                            .py_4()
-                            .border_b_1()
-                            .border_color(cx.theme().border)
-                            .items_center()
-                            .child(
-                                div().w_full().text_xl().child(
-                                    Input::new(&self.input_state).appearance(false).w_full(),
-                                ),
-                            )
-                            .child(Button::new("close").ghost().icon(IconName::Close).on_click(
-                                cx.listener(|_, _, _, cx| cx.emit(CommandPaletteEvent::Dismiss)),
-                            )),
-                    )
-                    .child(
-                        v_flex().w_full().h(px(350.)).pt_2().child(
-                            List::new(&self.list_state)
-                                .w_full()
-                                .h_full()
-                                .paddings(gpui::Edges::all(px(8.))),
-                        ),
-                    ),
-            )
+                    })}
+                >
+                    <h_flex px_6 py_4 border_b_1 border_color={cx.theme().border} items_center>
+                        <div w_full text_xl>
+                            {Input::new(&self.input_state).appearance(false).w_full()}
+                        </div>
+                        {Button::new("close").ghost().icon(IconName::Close).on_click(
+                            cx.listener(|_, _, _, cx| cx.emit(CommandPaletteEvent::Dismiss)),
+                        )}
+                    </h_flex>
+                    <v_flex w_full h={px(350.)} pt_2>
+                        {List::new(&self.list_state)
+                            .w_full()
+                            .h_full()
+                            .paddings(gpui::Edges::all(px(8.)))}
+                    </v_flex>
+                </v_flex>
+            </div>
+        }
     }
 }

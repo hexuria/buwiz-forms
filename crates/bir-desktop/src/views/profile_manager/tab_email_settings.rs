@@ -1,6 +1,7 @@
 //! Email Settings tab — IMAP/OAuth authentication method selection and connection testing.
 
 use super::*;
+use gpui_rsx::rsx;
 
 impl ProfileManagerView {
     /// Render the "Email Settings" tab (tab index 2).
@@ -13,260 +14,189 @@ impl ProfileManagerView {
             return div().into_any_element();
         }
 
-        div()
-            .p_4()
-            .rounded_lg()
-            .border_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
-            .flex()
-            .flex_col()
-            .gap_4()
-            .w_full()
-            .min_w_0()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_4()
-                    .child(Self::field_label("Authentication Method", cx))
-                    .child(
-                        div()
-                            .flex()
-                            .gap_6()
-                            .child(
-                                div()
-                                    .id("app_password_select")
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.email_auth_method = EmailAuthMethod::AppPassword;
-                                        this.connection_test_message = None;
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .w_4()
-                                            .h_4()
-                                            .rounded_full()
-                                            .border_1()
-                                            .border_color(cx.theme().primary)
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(
-                                                if matches!(
-                                                    self.email_auth_method,
-                                                    EmailAuthMethod::AppPassword
-                                                ) {
-                                                    div()
-                                                        .w_2()
-                                                        .h_2()
-                                                        .rounded_full()
-                                                        .bg(cx.theme().primary)
+        let root = rsx! {
+            <div
+                p_4
+                rounded_lg
+                border_1
+                border_color={cx.theme().border}
+                bg={cx.theme().background}
+                flex
+                flex_col
+                gap_4
+                w_full
+                min_w_0
+            >
+                <div flex flex_col gap_4>
+                    {Self::field_label("Authentication Method", cx)}
+                    <div flex gap_6>
+                        <div
+                            id={"app_password_select"}
+                            flex
+                            items_center
+                            gap_2
+                            cursor_pointer
+                            on_click={cx.listener(|this, _, _, cx| {
+                                this.email_auth_method = EmailAuthMethod::AppPassword;
+                                this.connection_test_message = None;
+                                cx.notify();
+                            })}
+                        >
+                            <div
+                                w_4
+                                h_4
+                                rounded_full
+                                border_1
+                                border_color={cx.theme().primary}
+                                flex
+                                items_center
+                                justify_center
+                            >
+                                {if matches!(self.email_auth_method, EmailAuthMethod::AppPassword) {
+                                    div().w_2().h_2().rounded_full().bg(cx.theme().primary)
+                                } else {
+                                    div()
+                                }}
+                            </div>
+                            <div text_sm>{"App Password (Gmail/Outlook/Yahoo)"}</div>
+                        </div>
+                        <div
+                            id={"oauth_select"}
+                            flex
+                            items_center
+                            gap_2
+                            cursor_pointer
+                            on_click={cx.listener(|this, _, _, cx| {
+                                this.email_auth_method = EmailAuthMethod::GoogleOAuth;
+                                this.connection_test_message = None;
+                                cx.notify();
+                            })}
+                        >
+                            <div
+                                w_4
+                                h_4
+                                rounded_full
+                                border_1
+                                border_color={cx.theme().primary}
+                                flex
+                                items_center
+                                justify_center
+                            >
+                                {if matches!(self.email_auth_method, EmailAuthMethod::GoogleOAuth) {
+                                    div().w_2().h_2().rounded_full().bg(cx.theme().primary)
+                                } else {
+                                    div()
+                                }}
+                            </div>
+                            <div text_sm>{"Google Account (OAuth2)"}</div>
+                        </div>
+                    </div>
+                    {if matches!(self.email_auth_method, EmailAuthMethod::AppPassword) {
+                        rsx! {
+                            <div flex flex_col gap_3 w_full overflow_x_hidden>
+                                <div w_full>
+                                    {Self::field_label("IMAP Host", cx)}
+                                    {Input::new(&self.imap_host_input)}
+                                </div>
+                                <div w_full>
+                                    {Self::field_label("IMAP Email", cx)}
+                                    {Input::new(&self.imap_email_input)}
+                                </div>
+                                <div w_full>
+                                    {Self::field_label("App Password", cx)}
+                                    <div flex gap_2 items_center>
+                                        <div flex_1>
+                                            {Input::new(&self.imap_password_input)
+                                                .mask_toggle()
+                                                .disabled(!self.is_editing_password)}
+                                        </div>
+                                        {gpui_component::button::Button::new("edit_app_pw")
+                                            .ghost()
+                                            .label(
+                                                if self.is_editing_password
+                                                    && self.stored_imap_app_password.is_some()
+                                                {
+                                                    "Cancel"
                                                 } else {
-                                                    div()
+                                                    "Edit"
                                                 },
-                                            ),
-                                    )
-                                    .child(div().text_sm().child("App Password (Gmail/Outlook/Yahoo)")),
-                            )
-                            .child(
-                                div()
-                                    .id("oauth_select")
-                                    .flex()
-                                    .items_center()
-                                    .gap_2()
-                                    .cursor_pointer()
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.email_auth_method = EmailAuthMethod::GoogleOAuth;
-                                        this.connection_test_message = None;
-                                        cx.notify();
-                                    }))
-                                    .child(
-                                        div()
-                                            .w_4()
-                                            .h_4()
-                                            .rounded_full()
-                                            .border_1()
-                                            .border_color(cx.theme().primary)
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .child(
-                                                if matches!(
-                                                    self.email_auth_method,
-                                                    EmailAuthMethod::GoogleOAuth
-                                                ) {
-                                                    div()
-                                                        .w_2()
-                                                        .h_2()
-                                                        .rounded_full()
-                                                        .bg(cx.theme().primary)
-                                                } else {
-                                                    div()
-                                                },
-                                            ),
-                                    )
-                                    .child(div().text_sm().child("Google Account (OAuth2)")),
-                            ),
-                    )
-                    .child(
-                        if matches!(self.email_auth_method, EmailAuthMethod::AppPassword) {
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_3()
-                                .w_full()
-                                .overflow_x_hidden()
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .child(Self::field_label("IMAP Host", cx))
-                                        .child(Input::new(&self.imap_host_input)),
-                                )
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .child(Self::field_label("IMAP Email", cx))
-                                        .child(Input::new(&self.imap_email_input)),
-                                )
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .child(Self::field_label("App Password", cx))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .gap_2()
-                                                .items_center()
-                                                .child(
-                                                    div().flex_1().child(
-                                                        Input::new(&self.imap_password_input)
-                                                            .mask_toggle()
-                                                            .disabled(!self.is_editing_password),
-                                                    ),
-                                                )
-                                                .child(
-                                                    gpui_component::button::Button::new(
-                                                        "edit_app_pw",
-                                                    )
-                                                    .ghost()
-                                                    .label(
-                                                        if self.is_editing_password
-                                                            && self
-                                                                .stored_imap_app_password
-                                                                .is_some()
-                                                        {
-                                                            "Cancel"
-                                                        } else {
-                                                            "Edit"
-                                                        },
-                                                    )
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.is_editing_password =
-                                                            !this.is_editing_password;
-                                                        cx.notify();
-                                                    })),
-                                                ),
-                                        )
-                                        .child(self.field_error("imap_app_password", cx))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap_2()
-                                                .child(
-                                                    div()
-                                                        .flex()
-                                                        .items_center()
-                                                        .gap_1()
-                                                        .text_xs()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child("Get App Password:")
-                                                        .child(
-                                                            div()
-                                                                .id("link_google_app_pw")
-                                                                .text_xs()
-                                                                .text_color(gpui::Hsla::from(
-                                                                    gpui::rgba(0x3b82f6ff),
-                                                                ))
-                                                                .cursor_pointer()
-                                                                .hover(|s| s.underline())
-                                                                .child("Google")
-                                                                .on_click(|_, _, _| {
-                                                                    let _ = open::that(
-                                                                        "https://myaccount.google.com/apppasswords",
-                                                                    );
-                                                                }),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_xs()
-                                                                .text_color(
-                                                                    cx.theme().muted_foreground,
-                                                                )
-                                                                .child("·"),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .id("link_outlook_app_pw")
-                                                                .text_xs()
-                                                                .text_color(gpui::Hsla::from(
-                                                                    gpui::rgba(0x3b82f6ff),
-                                                                ))
-                                                                .cursor_pointer()
-                                                                .hover(|s| s.underline())
-                                                                .child("Outlook")
-                                                                .on_click(|_, _, _| {
-                                                                    let _ = open::that(
-                                                                        "https://account.live.com/proofs/AppPassword",
-                                                                    );
-                                                                }),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .text_xs()
-                                                                .text_color(
-                                                                    cx.theme().muted_foreground,
-                                                                )
-                                                                .child("·"),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .id("link_yahoo_app_pw")
-                                                                .text_xs()
-                                                                .text_color(gpui::Hsla::from(
-                                                                    gpui::rgba(0x3b82f6ff),
-                                                                ))
-                                                                .cursor_pointer()
-                                                                .hover(|s| s.underline())
-                                                                .child("Yahoo")
-                                                                .on_click(|_, _, _| {
-                                                                    let _ = open::that(
-                                                                        "https://login.yahoo.com/account/security/app-passwords",
-                                                                    );
-                                                                }),
-                                                        ),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .text_xs()
-                                                        .text_color(cx.theme().muted_foreground)
-                                                        .child("Note: You must enable 2-Step Verification (2FA) in your account settings before you can generate an App Password."),
-                                                ),
-                                        ),
-                                )
-                        } else {
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_3()
-                                .w_full()
-                                .overflow_x_hidden()
-                                .child(if self.oauth_connected {
+                                            )
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.is_editing_password =
+                                                    !this.is_editing_password;
+                                                cx.notify();
+                                            }))}
+                                    </div>
+                                    {self.field_error("imap_app_password", cx)}
+                                    <div flex flex_col gap_2>
+                                        <div
+                                            flex
+                                            items_center
+                                            gap_1
+                                            text_xs
+                                            text_color={cx.theme().muted_foreground}
+                                        >
+                                            {"Get App Password:"}
+                                            {div()
+                                                .id("link_google_app_pw")
+                                                .text_xs()
+                                                .text_color(gpui::Hsla::from(
+                                                    gpui::rgba(0x3b82f6ff),
+                                                ))
+                                                .cursor_pointer()
+                                                .hover(|s| s.underline())
+                                                .child("Google")
+                                                .on_click(|_, _, _| {
+                                                    let _ = open::that(
+                                                        "https://myaccount.google.com/apppasswords",
+                                                    );
+                                                })}
+                                            <div text_xs text_color={cx.theme().muted_foreground}>
+                                                {"·"}
+                                            </div>
+                                            {div()
+                                                .id("link_outlook_app_pw")
+                                                .text_xs()
+                                                .text_color(gpui::Hsla::from(
+                                                    gpui::rgba(0x3b82f6ff),
+                                                ))
+                                                .cursor_pointer()
+                                                .hover(|s| s.underline())
+                                                .child("Outlook")
+                                                .on_click(|_, _, _| {
+                                                    let _ = open::that(
+                                                        "https://account.live.com/proofs/AppPassword",
+                                                    );
+                                                })}
+                                            <div text_xs text_color={cx.theme().muted_foreground}>
+                                                {"·"}
+                                            </div>
+                                            {div()
+                                                .id("link_yahoo_app_pw")
+                                                .text_xs()
+                                                .text_color(gpui::Hsla::from(
+                                                    gpui::rgba(0x3b82f6ff),
+                                                ))
+                                                .cursor_pointer()
+                                                .hover(|s| s.underline())
+                                                .child("Yahoo")
+                                                .on_click(|_, _, _| {
+                                                    let _ = open::that(
+                                                        "https://login.yahoo.com/account/security/app-passwords",
+                                                    );
+                                                })}
+                                        </div>
+                                        <div text_xs text_color={cx.theme().muted_foreground}>
+                                            {"Note: You must enable 2-Step Verification (2FA) in your account settings before you can generate an App Password."}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    } else {
+                        rsx! {
+                            <div flex flex_col gap_3 w_full overflow_x_hidden>
+                                {if self.oauth_connected {
                                     let email = self.imap_email_input.read(cx).value();
                                     div()
                                         .text_sm()
@@ -276,8 +206,8 @@ impl ProfileManagerView {
                                         .child(format!("Connected as {}", email))
                                 } else {
                                     div()
-                                })
-                                .child(
+                                }}
+                                {
                                     div()
                                         .flex()
                                         .items_center()
@@ -358,19 +288,13 @@ impl ProfileManagerView {
                                                     )))
                                                     .child("● Connected ✓"),
                                             )
-                                        }),
-                                )
-                        },
-                    )
-                    .child(
-                        div()
-                            .mt_2()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .gap_4()
-                            .child(
-                                gpui_component::button::Button::new("test_connection")
+                                        })
+                                }
+                            </div>
+                        }
+                    }}
+                    <div mt_2 flex flex_col items_start gap_4>
+                        {gpui_component::button::Button::new("test_connection")
                                     .label(if matches!(
                                         self.email_auth_method,
                                         EmailAuthMethod::AppPassword
@@ -454,48 +378,47 @@ impl ProfileManagerView {
                                             });
                                         })
                                         .detach();
-                                    })),
-                            )
-                            .child(
-                                if let Some((success, msg)) = self.connection_test_message.clone() {
-                                    div()
-                                        .text_sm()
-                                        .whitespace_normal()
-                                        .w_full()
-                                        .overflow_x_hidden()
-                                        .text_color(if success {
-                                            gpui::Hsla::from(gpui::rgba(0x22c55eff))
-                                        } else {
-                                            gpui::Hsla::from(gpui::rgba(0xef4444ff))
-                                        })
-                                        .child(msg)
+                                    }))}
+                        {if let Some((success, msg)) = self.connection_test_message.clone() {
+                            div()
+                                .text_sm()
+                                .whitespace_normal()
+                                .w_full()
+                                .overflow_x_hidden()
+                                .text_color(if success {
+                                    gpui::Hsla::from(gpui::rgba(0x22c55eff))
                                 } else {
-                                    div()
-                                },
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mt_4()
-                            .pt_4()
-                            .border_t_1()
-                            .border_color(cx.theme().border)
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(if self.email_tracking_enabled {
-                                div()
-                                    .text_sm()
-                                    .text_color(crate::theme::success_on_tint(cx.theme()))
-                                    .child("● Automated BIR Receipt Tracking is active")
-                            } else {
-                                div()
-                                    .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child("○ Verify your connection to activate email tracking")
-                            }),
-                    ),
-            )
-            .into_any_element()
+                                    gpui::Hsla::from(gpui::rgba(0xef4444ff))
+                                })
+                                .child(msg)
+                        } else {
+                            div()
+                        }}
+                    </div>
+                    <div
+                        mt_4
+                        pt_4
+                        border_t_1
+                        border_color={cx.theme().border}
+                        flex
+                        items_center
+                        gap_2
+                    >
+                        {if self.email_tracking_enabled {
+                            div()
+                                .text_sm()
+                                .text_color(crate::theme::success_on_tint(cx.theme()))
+                                .child("● Automated BIR Receipt Tracking is active")
+                        } else {
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("○ Verify your connection to activate email tracking")
+                        }}
+                    </div>
+                </div>
+            </div>
+        };
+        root.into_any_element()
     }
 }

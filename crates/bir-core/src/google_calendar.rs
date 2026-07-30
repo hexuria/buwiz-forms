@@ -676,7 +676,10 @@ fn mask_tin(tin: &str) -> String {
     format!("TIN ending {suffix}")
 }
 
-fn profile_key(tin: &str) -> String {
+/// A profile's stable, non-identifying key: the SHA-256 of its TIN. Used to
+/// scope Google's extendedProperties and the iCalendar UID without writing a
+/// raw TIN into data that leaves the app.
+pub(crate) fn profile_key(tin: &str) -> String {
     hex::encode(Sha256::digest(tin.as_bytes()))
 }
 

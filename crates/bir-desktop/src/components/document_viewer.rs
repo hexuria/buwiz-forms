@@ -4,6 +4,7 @@ use gpui::{
     ScrollWheelEvent, Styled, Window, div, img, prelude::*, px,
 };
 use gpui_component::{ActiveTheme, Icon, IconName, Sizable};
+use gpui_rsx::rsx;
 use std::collections::HashMap;
 
 pub struct InteractiveDocumentViewer {
@@ -122,114 +123,105 @@ impl Render for InteractiveDocumentViewer {
         let bboxes = self.bboxes.clone();
         let active_field_id = self.active_field_id.clone();
 
-        div()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .bg(theme.background)
-            .border_1()
-            .border_color(theme.border)
-            .rounded_lg()
-            .overflow_hidden()
-            .child(
+        rsx! {
+            <div
+                flex_col
+                w_full
+                h_full
+                bg={theme.background}
+                border_1
+                border_color={theme.border}
+                rounded_lg
+                overflow_hidden
+            >
                 // Toolbar
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px_3()
-                    .py_2()
-                    .bg(theme.secondary.opacity(0.5))
-                    .border_b_1()
-                    .border_color(theme.border)
-                    .child(
-                        div()
+                <div
+                    flex
+                    items_center
+                    justify_between
+                    px_3
+                    py_2
+                    bg={theme.secondary.opacity(0.5)}
+                    border_b_1
+                    border_color={theme.border}
+                >
+                    <div flex items_center gap_1>
+                        {div()
+                            .cursor_pointer()
+                            .p_1()
+                            .rounded_md()
+                            .hover(|s| s.bg(theme.muted))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _window, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_zoom_out(cx);
+                                }),
+                            )
+                            .child(
+                                Icon::new(IconName::Minus)
+                                    .small()
+                                    .text_color(theme.muted_foreground),
+                            )}
+                        <div
+                            w={px(48.0)}
+                            flex
+                            justify_center
+                            text_xs
+                            font_weight={gpui::FontWeight::BOLD}
+                            text_color={theme.muted_foreground}
+                        >
+                            {format!("{}%", (self.scale * 100.0) as i32)}
+                        </div>
+                        {div()
+                            .cursor_pointer()
+                            .p_1()
+                            .rounded_md()
+                            .hover(|s| s.bg(theme.muted))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _window, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_zoom_in(cx);
+                                }),
+                            )
+                            .child(
+                                Icon::new(IconName::Plus)
+                                    .small()
+                                    .text_color(theme.muted_foreground),
+                            )}
+                        <div w={px(1.0)} h={px(16.0)} bg={theme.border} mx_1 />
+                        {div()
                             .flex()
                             .items_center()
                             .gap_1()
+                            .cursor_pointer()
+                            .px_2()
+                            .py_1()
+                            .rounded_md()
+                            .hover(|s| s.bg(theme.muted))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _window, cx| {
+                                    cx.stop_propagation();
+                                    this.handle_zoom_fit(cx);
+                                }),
+                            )
                             .child(
-                                div()
-                                    .cursor_pointer()
-                                    .p_1()
-                                    .rounded_md()
-                                    .hover(|s| s.bg(theme.muted))
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(|this, _, _window, cx| {
-                                            cx.stop_propagation();
-                                            this.handle_zoom_out(cx);
-                                        }),
-                                    )
-                                    .child(
-                                        Icon::new(IconName::Minus)
-                                            .small()
-                                            .text_color(theme.muted_foreground),
-                                    ),
+                                Icon::new(IconName::Maximize)
+                                    .small()
+                                    .text_color(theme.muted_foreground),
                             )
                             .child(
                                 div()
-                                    .w(px(48.0))
-                                    .flex()
-                                    .justify_center()
                                     .text_xs()
-                                    .font_weight(gpui::FontWeight::BOLD)
                                     .text_color(theme.muted_foreground)
-                                    .child(format!("{}%", (self.scale * 100.0) as i32)),
-                            )
-                            .child(
-                                div()
-                                    .cursor_pointer()
-                                    .p_1()
-                                    .rounded_md()
-                                    .hover(|s| s.bg(theme.muted))
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(|this, _, _window, cx| {
-                                            cx.stop_propagation();
-                                            this.handle_zoom_in(cx);
-                                        }),
-                                    )
-                                    .child(
-                                        Icon::new(IconName::Plus)
-                                            .small()
-                                            .text_color(theme.muted_foreground),
-                                    ),
-                            )
-                            .child(div().w(px(1.0)).h(px(16.0)).bg(theme.border).mx_1())
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap_1()
-                                    .cursor_pointer()
-                                    .px_2()
-                                    .py_1()
-                                    .rounded_md()
-                                    .hover(|s| s.bg(theme.muted))
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(|this, _, _window, cx| {
-                                            cx.stop_propagation();
-                                            this.handle_zoom_fit(cx);
-                                        }),
-                                    )
-                                    .child(
-                                        Icon::new(IconName::Maximize)
-                                            .small()
-                                            .text_color(theme.muted_foreground),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(theme.muted_foreground)
-                                            .child("Fit"),
-                                    ),
-                            ),
-                    ),
-            )
-            .child(
+                                    .child("Fit"),
+                            )}
+                    </div>
+                </div>
                 // Canvas Area
-                div()
+                {div()
                     .relative()
                     .w_full()
                     .h_full()
@@ -277,42 +269,47 @@ impl Render for InteractiveDocumentViewer {
                     }))
                     .child(
                         // Inner content that is scaled and panned
-                        div()
-                            .absolute()
-                            .top(px(self.pan_offset.y))
-                            .left(px(self.pan_offset.x))
-                            .w(px(virtual_w * self.scale))
-                            .h(px(virtual_h * self.scale))
-                            .child(img(self.document_path.clone()).w_full().h_full())
-                            .children(bboxes.into_iter().map(|(field_id, bbox)| {
-                                let ymin = bbox[0] as f32 / 1000.0;
-                                let xmin = bbox[1] as f32 / 1000.0;
-                                let ymax = bbox[2] as f32 / 1000.0;
-                                let xmax = bbox[3] as f32 / 1000.0;
+                        rsx! {
+                            <div
+                                absolute
+                                top={px(self.pan_offset.y)}
+                                left={px(self.pan_offset.x)}
+                                w={px(virtual_w * self.scale)}
+                                h={px(virtual_h * self.scale)}
+                            >
+                                {img(self.document_path.clone()).w_full().h_full()}
+                                {...bboxes.into_iter().map(|(field_id, bbox)| {
+                                    let ymin = bbox[0] as f32 / 1000.0;
+                                    let xmin = bbox[1] as f32 / 1000.0;
+                                    let ymax = bbox[2] as f32 / 1000.0;
+                                    let xmax = bbox[3] as f32 / 1000.0;
 
-                                let is_active = Some(field_id.clone()) == active_field_id;
+                                    let is_active = Some(field_id.clone()) == active_field_id;
 
-                                div()
-                                    .absolute()
-                                    .top(gpui::relative(ymin))
-                                    .left(gpui::relative(xmin))
-                                    .h(gpui::relative(ymax - ymin))
-                                    .w(gpui::relative(xmax - xmin))
-                                    .when(is_active, |this| {
-                                        this.bg(theme.info.opacity(0.2))
-                                            .border_2()
-                                            .border_color(theme.info)
-                                    })
-                                    .when(!is_active, |this| {
-                                        this.border_1()
-                                            .border_color(theme.primary.opacity(0.6))
-                                            .hover(|s| {
-                                                s.bg(theme.primary.opacity(0.1))
-                                                    .border_color(theme.primary)
-                                            })
-                                    })
-                            })),
-                    ),
-            )
+                                    div()
+                                        .absolute()
+                                        .top(gpui::relative(ymin))
+                                        .left(gpui::relative(xmin))
+                                        .h(gpui::relative(ymax - ymin))
+                                        .w(gpui::relative(xmax - xmin))
+                                        .when(is_active, |this| {
+                                            this.bg(theme.info.opacity(0.2))
+                                                .border_2()
+                                                .border_color(theme.info)
+                                        })
+                                        .when(!is_active, |this| {
+                                            this.border_1()
+                                                .border_color(theme.primary.opacity(0.6))
+                                                .hover(|s| {
+                                                    s.bg(theme.primary.opacity(0.1))
+                                                        .border_color(theme.primary)
+                                                })
+                                        })
+                                })}
+                            </div>
+                        },
+                    )}
+            </div>
+        }
     }
 }

@@ -1,6 +1,7 @@
 use bir_core::db::Database;
 use gpui::*;
 use gpui_component::*;
+use gpui_rsx::rsx;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -58,58 +59,23 @@ impl Render for ImportExportView {
         let bg = cx.theme().background;
         let border = cx.theme().border;
 
-        div()
-            .id("import_export_scroll")
-            .flex()
-            .flex_col()
-            .p_8()
-            .gap_6()
-            .overflow_y_scroll()
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(div().text_2xl().font_weight(FontWeight::BOLD).child("Import Data"))
-                    .child(
-                        div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Import a profile or database backup from a .zip file."),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_shrink_0()
-                    .bg(bg)
-                    .border_1()
-                    .border_color(border)
-                    .rounded_xl()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_start()
-                            .p_6()
-                            .gap_4()
-                            .border_b_1()
-                            .border_color(border)
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap_1()
-                                    .child(div().font_weight(FontWeight::SEMIBOLD).child("Smart Import"))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(cx.theme().muted_foreground)
-                                            .child("Select a .zip export archive. The app will automatically detect if it is a full database backup or a profile export and import it accordingly."),
-                                    ),
-                            )
-                            .child(
+        let root = rsx! {
+            <div id={"import_export_scroll"} flex flex_col p_8 gap_6 overflow_y_scroll>
+                <div flex flex_col gap_1>
+                    <div text_2xl font_weight={FontWeight::BOLD}>{"Import Data"}</div>
+                    <div text_color={cx.theme().muted_foreground}>
+                        {"Import a profile or database backup from a .zip file."}
+                    </div>
+                </div>
+                <div flex flex_col flex_shrink_0 bg={bg} border_1 border_color={border} rounded_xl overflow_hidden>
+                    <div flex flex_col items_start p_6 gap_4 border_b_1 border_color={border}>
+                        <div flex flex_col gap_1>
+                            <div font_weight={FontWeight::SEMIBOLD}>{"Smart Import"}</div>
+                            <div text_sm text_color={cx.theme().muted_foreground}>
+                                {"Select a .zip export archive. The app will automatically detect if it is a full database backup or a profile export and import it accordingly."}
+                            </div>
+                        </div>
+                        {
                                 gpui_component::button::Button::new("smart_import_btn")
                                     .label("Smart Import")
                                     .on_click(cx.listener(|_this, _ev, _window, cx| {
@@ -174,10 +140,12 @@ impl Render for ImportExportView {
                                                 _ => {}
                                             }
                                         }).detach();
-                                    })),
-                            )
-                    )
-            )
-            .into_any_element()
+                                    }))
+                        }
+                    </div>
+                </div>
+            </div>
+        };
+        root.into_any_element()
     }
 }
