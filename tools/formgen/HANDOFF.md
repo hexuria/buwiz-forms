@@ -68,12 +68,12 @@ reading a stale result as fact.
 | --- | --- |
 | Worktree | `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir/.claude/worktrees/pdf-native-extraction` |
 | Branch | `gol/pdf-native-form-extraction` |
-| HEAD | `d10e026` |
-| Working tree | **clean** (0 changed files) |
+| Starting HEAD for the current increment | `cf0ee1b` |
+| Current increment | Measurement-integrity fixes and overlap triage; inspect `git status` for whether they have been committed |
 | Main checkout | **clean** — `/Volumes/goldcoders/reverse-engineer-ebir-forms/bir`, untouched |
 | Nothing pushed | branch is local only |
 
-Nine commits, oldest first:
+Ten commits preceded the current increment, oldest first:
 
 ```
 8722df8  convert all 51 BIR forms from PDF content streams
@@ -85,6 +85,7 @@ b2bd2e9  goal, done-condition and the 138-finding ledger
 17dedc7  gate.py, the done-condition as one command
 8f19c58  the gate was green on five forms it never measured
 d10e026  hash artwork as it appears on paper, over white
+cf0ee1b  docs(formgen): how to use the handoff
 ```
 
 ⚠️ `b2bd2e9` is mislabelled. A careless `git add -A` swept 3,313 lines of
@@ -98,7 +99,7 @@ is simply wrong about its contents.
 cd /Volumes/goldcoders/reverse-engineer-ebir-forms/bir/.claude/worktrees/pdf-native-extraction
 python3 tools/formgen/gate.py                      # the done-condition, ~45 min
 python3 tools/formgen/gate.py --skip-regenerate    # score the tree as it stands, fast
-python3 tools/formgen/gate.py --only assertions    # one check while iterating
+python3 tools/formgen/gate.py --only assertions    # refresh + score assertions only
 cd forms && python3 -m http.server 4190            # browse the output
 ```
 
@@ -106,7 +107,7 @@ cd forms && python3 -m http.server 4190            # browse the output
 
 ## Current status: the gate FAILS, 3 of 10
 
-Measured on a clean regenerate at `d10e026`:
+Measured on a full regenerate from the current increment:
 
 ```
 PASS  self-tests     8 modules
@@ -124,8 +125,8 @@ PASS  determinism    byte-identical
 ### The eight assertions, individually
 
 ```
-inputs_over_printed_text          9/51 hold   ← the big one
-comb_slots_match_printed         21/51 hold
+inputs_over_printed_text         12/51 hold   ← 39 forms / 227 cells fail
+comb_slots_match_printed         27/51 hold   ← 24 forms / 255 cells fail
 money_boxes_have_inputs          47/51 hold   1601EQ, 1801, 2200A, 2200P
 rules_below_guide_cut            51/51 hold
 run_colour_matches_ir            51/51 hold
@@ -187,23 +188,68 @@ provenance.json}` with `base.css`, `fonts/` and `assets/` shared at the root.
 - **39 growable bands** driven at 1 row / capacity / capacity+4.
 - **Guide split** freed 6.56M pt² without moving a rule on any form.
 
+## Overlap triage — measured 2026-07-31
+
+The 42-form headline was not 42 separate defects. Two audit-oracle errors first
+made 13 cells look dirty when no live input was over ink:
+
+- five trailing page cells absorbed inputs from the inert growable-band
+  `<template>` that followed them;
+- eight malformed comb slots extended outside their `overflow:hidden` parent,
+  and the audit counted collisions in the clipped-away portion.
+
+`audit.py` now stops at `<template>` and clips slot boxes to the live parent.
+Its self-test proves both cases and also proves that a collision with a run owned
+by the same lattice cell still fails. `gate.py --only assertions` now refreshes
+that assertion audit into a temporary report and publishes it atomically; a
+failed refresh or coverage below 51 forms fails closed instead of scoring stale
+data. A full gate then measured:
+
+```
+inputs_over_printed_text   42 forms / 240 cells
+                         → 39 forms / 227 cells
+
+remaining 227 cells       = 194 comb + 33 plain
+comb cells                = 151 partly inked + 43 every-slot-inked
+visible input boxes       = 476 actually over printed glyph boxes
+```
+
+Ownership is diagnostic, never an exemption. Of the 194 comb cells, 184 hit only
+their own assigned run, five hit foreign runs, and five hit both. Some own-run
+cases are plainly unsafe live fields: 1606 `p2c135` puts both inputs over
+`TRANSACTION`; 1600WP `p1c0` puts all three over header text; 1700 `p1c21`
+puts five inputs over five printed zeroes.
+
+The overlap and comb problems are coupled. The independent printed-compartment
+oracle disagrees with the lattice on 29 of those 194 combs across 12 forms, every
+one an undercount. Do not add a slot-input mask on top of geometry whose slot
+count is already wrong.
+
 ## Next increment
 
-**Triage `inputs_over_printed_text` (42 forms).** The audit detail shows two
-distinct populations: inputs sitting over a form's *own printed label* (which may
-be correct — a label inside a field's box), and genuine overlap of pre-printed
-text. It is very unlikely to be 42 separate bugs. Classify before fixing.
+**Referee `comb_slots_match_printed` before changing `emit.py`.** The corrected
+audit reports 255 mismatching comb cells across 24 forms. Build the third check
+described below, decide which oracle is wrong, and repair the general lattice
+algorithm. No form-code exceptions and no raster result in the pipeline; a
+rendered crop may be used only for human inspection.
 
-Then, in rough order: `comb_slots_match_printed` (30, see the dispute below),
-`money_boxes_have_inputs` (4 forms), the three single-form failures, then the 52
-unresolved gating findings.
+After compartment truth is stable, the first conservative emission slice is the
+124 oracle-agreeing, own-run, partially inked combs: keep every physical
+compartment, omit inputs only from inked slots, preserve physical slot indexes,
+and make keyboard/paste plus growable-band cloning skip fixed slots. The 43
+fully inked combs, all foreign-run collisions, and the 33 plain fields remain
+separate failures until their geometry is decided.
+
+Then: `money_boxes_have_inputs` (4 forms), the three single-form failures, then
+the 52 unresolved gating findings.
 
 ## Open questions someone must actually decide
 
 1. **The comb-oracle dispute is unresolved.** `lattice.py`'s own measurement says
    merged combs went 471 → 13. An independent oracle over raw PDF drawing ops
-   says **204 genuine residual merges across 13 forms**. `audit.py`'s assertion
-   is a *third* independent measurement and says 30 forms fail. Nobody has
+   says **204 genuine residual merges across 13 forms**. `audit.py`'s corrected
+   assertion is a *third* independent measurement and says 255 cells across 24
+   forms fail. Nobody has
    refereed this. Do not pick a side by preference — build a check that decides
    it, ideally by counting compartments visible in a rendered crop. A comb whose
    slot count is wrong puts a typed digit on top of a divider bar.

@@ -203,9 +203,11 @@ def glyph_boxes(run: dict) -> list[Rect]:
 # --------------------------------------------------------------------------
 
 CELL_RE = re.compile(r'<div id="(p(\d+)c\d+)" class="([^"]*)"([^>]*)>')
-# The last cell on a page is followed by the page's closing tags or the band
-# script, so cell content has to stop there too.
-CELL_BOUNDARY_RE = re.compile(r'<div id="p\d+c\d+" class="|<div class="page |<script')
+# The last cell on a page is followed by the page's closing tags, an inert band
+# template, or the band script, so cell content has to stop there too. Template
+# inputs are blueprints, not live inputs belonging to the preceding cell.
+CELL_BOUNDARY_RE = re.compile(
+    r'<div id="p\d+c\d+" class="|<div class="page |<template|<script')
 STYLE_BOX_RE = re.compile(
     r'style="left:([-\d.]+)pt;top:([-\d.]+)pt;width:([-\d.]+)pt;height:([-\d.]+)pt"')
 SLOT_RE = re.compile(
@@ -277,13 +279,18 @@ def input_boxes(cell: Cell) -> list[Rect]:
 
     Comb inputs live inside their slot div and fill it; a plain text input fills
     the cell minus its declared inset. Both are absolute numbers in the markup,
-    so no layout pass is needed to know where a taxpayer can type.
+    so no layout pass is needed to know where a taxpayer can type. A comb slot
+    is clipped to its parent cell because `.f` uses `overflow:hidden`; geometry
+    outside that box cannot paint typed text over the page.
     """
     left, top, right, bottom = cell.rect
     out: list[Rect] = []
     for _, box, has_input in slot_boxes(cell):
         if has_input:
-            out.append(box)
+            clipped = (max(left, box[0]), max(top, box[1]),
+                       min(right, box[2]), min(bottom, box[3]))
+            if clipped[2] > clipped[0] and clipped[3] > clipped[1]:
+                out.append(clipped)
     for match in INPUT_RE.finditer(cell.inner):
         attrs = match.group(1)
         if "data-slot-index" in attrs:
@@ -1394,6 +1401,47 @@ def self_test() -> int:
                 "reflow_rate_without_description"):
         check(f"{key} must hold on the corrected fixture: "
               f"{ok['assertions'][key]['reason']}", ok[key] is True)
+
+    # A run assigned to the same lattice cell is still printed ink. Ownership
+    # explains the collision; it does not make a live input over that ink safe.
+    owned_layout = copy.deepcopy(layout)
+    owned_layout["pages"][0]["cells"][0]["text_run_ids"] = ["p1t0"]
+    owned = Bundle(slug="owned", ir=ir, layout=owned_layout, plan=None,
+                   form_html=html, guide_html=None, pdf=None)
+    check("an input over its own cell's printed run still fails",
+          check_inputs_over_printed_text(owned)["holds"] is False)
+
+    # The live page's last cell is immediately followed by inert band template
+    # markup. An input inside that template must not be attributed to the cell.
+    template_html = (
+        '<div class="page page-1" id="page-1" style="width:100pt;height:100pt">'
+        '<div class="t" id="p1t0" style="left:10pt;top:10pt">Rate?</div>'
+        '<div id="p1c9" class="c" data-cell-kind="label" '
+        'style="left:8pt;top:8pt;width:30pt;height:12pt"></div></div>'
+        '<template id="band-template-p1g0"><input type="text" class="fi" '
+        'style="inset:0pt 0pt 0pt 0pt"></template><script></script>')
+    template_cells = parse_cells(template_html)
+    template_bundle = Bundle(slug="template", ir=ir, layout=None, plan=None,
+                             form_html=template_html, guide_html=None, pdf=None)
+    check("template inputs do not belong to the preceding live cell",
+          len(template_cells) == 1
+          and not input_boxes(template_cells[0])
+          and check_inputs_over_printed_text(template_bundle)["holds"] is True)
+
+    # A malformed comb can put a slot outside its parent. The real `.f` clips
+    # that slot, so glyph ink in the clipped-away area is not under an input.
+    off_cell_html = (
+        '<div class="page page-1" id="page-1" style="width:100pt;height:100pt">'
+        '<div class="t" id="p1t0" style="left:10pt;top:10pt">Rate?</div>'
+        '<div id="p1c0" class="c f" data-cell-kind="mixed" '
+        'style="left:8pt;top:20pt;width:30pt;height:12pt">'
+        '<div class="s" data-slot="0" '
+        'style="left:0pt;top:-12pt;width:30pt;height:8pt">'
+        '<input type="text" class="fi fc" data-slot-index="0"></div></div></div>')
+    off_cell = Bundle(slug="off-cell", ir=ir, layout=None, plan=None,
+                      form_html=off_cell_html, guide_html=None, pdf=None)
+    check("comb input geometry clipped outside its parent cannot collide",
+          check_inputs_over_printed_text(off_cell)["holds"] is True)
 
     # Geometry helpers, where an off-by-one epsilon would silently disable an
     # assertion rather than break it.

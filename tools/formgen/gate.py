@@ -30,6 +30,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import tempfile
 from typing import Callable, Iterable
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -157,6 +158,34 @@ def audit_records() -> list[dict] | None:
     return [r for r in data if r.get("status") == "ok"]
 
 
+def refresh_assertions_report(
+    target: pathlib.Path = AUDIT_JSON,
+    scratch_root: pathlib.Path = BUILD,
+    runner: Callable[[list[str], int], tuple[int, str]] = run,
+) -> Result | None:
+    """Atomically refresh the assertion audit, or return a fail-closed result."""
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".assertions-", dir=scratch_root) as tmp:
+        fresh = pathlib.Path(tmp) / "audit.json"
+        code, out = runner(
+            [str(HERE / "audit.py"), "--assertions-only", "--out", str(fresh)],
+            5400,
+        )
+        if code != 0:
+            tail = out.strip().splitlines()[-1:] or ["no diagnostic"]
+            return Result("assertions", Verdict.UNEVALUABLE,
+                          f"assertion audit refresh failed: {tail[0]}")
+        if not isinstance(load(fresh), list):
+            return Result("assertions", Verdict.UNEVALUABLE,
+                          "assertion audit refresh produced no usable report")
+        try:
+            fresh.replace(target)
+        except OSError as error:
+            return Result("assertions", Verdict.UNEVALUABLE,
+                          f"could not publish refreshed assertion audit: {error}")
+    return None
+
+
 def _tally(name: str, keys: Iterable[str], pct_key: str | None = None) -> Result:
     records = audit_records()
     if records is None:
@@ -227,6 +256,9 @@ def check_assertions() -> Result:
     records = audit_records()
     if records is None:
         return Result("assertions", Verdict.UNEVALUABLE, "no audit report")
+    if len(records) != EXPECTED_FORMS:
+        return Result("assertions", Verdict.FAIL,
+                      f"audit covers {len(records)}/{EXPECTED_FORMS} forms")
     absent = [k for k in REQUIRED_ASSERTIONS if not any(k in r for r in records)]
     if absent:
         return Result("assertions", Verdict.UNEVALUABLE,
@@ -336,6 +368,35 @@ def self_test() -> int:
         failures.append(f"GOAL.md names 8 assertions, gate has "
                         f"{len(REQUIRED_ASSERTIONS)}")
 
+    with tempfile.TemporaryDirectory(prefix="formgen-gate-self-test-") as tmp:
+        root = pathlib.Path(tmp)
+        target = root / "audit.json"
+        target.write_text('[{"stale": true}]\n', encoding="utf-8")
+
+        refresh_failure = refresh_assertions_report(
+            target=target,
+            scratch_root=root,
+            runner=lambda _args, _timeout: (1, "synthetic refresh failure"),
+        )
+        if (refresh_failure is None
+                or refresh_failure.verdict is not Verdict.UNEVALUABLE):
+            failures.append("a failed assertion refresh must be UNEVALUABLE")
+        if load(target) != [{"stale": True}]:
+            failures.append("a failed assertion refresh must not publish partial data")
+
+        def fake_refresh(args: list[str], _timeout: int) -> tuple[int, str]:
+            out = pathlib.Path(args[args.index("--out") + 1])
+            out.write_text('[{"fresh": true}]\n', encoding="utf-8")
+            return 0, ""
+
+        refresh_success = refresh_assertions_report(
+            target=target,
+            scratch_root=root,
+            runner=fake_refresh,
+        )
+        if refresh_success is not None or load(target) != [{"fresh": True}]:
+            failures.append("a successful assertion refresh must publish fresh data")
+
     for name in failures:
         print(f"FAIL {name}", file=sys.stderr)
     print(f"gate self-test: {len(failures)} failure(s)", file=sys.stderr)
@@ -389,7 +450,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  audit.py failed:\n{out[-2000:]}", file=sys.stderr)
 
     wanted = args.only or list(CHECKS)
-    results = [CHECKS[name]() for name in wanted if name in CHECKS]
+    refresh_failure = None
+    if args.only and "assertions" in args.only:
+        print("refreshing assertion audit...", file=sys.stderr)
+        refresh_failure = refresh_assertions_report()
+
+    results = [
+        refresh_failure if name == "assertions" and refresh_failure is not None
+        else CHECKS[name]()
+        for name in wanted if name in CHECKS
+    ]
     if "determinism" in wanted or full:
         results.append(check_determinism(regenerate=full and not args.skip_regenerate))
 
