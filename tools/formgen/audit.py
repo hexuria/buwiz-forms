@@ -103,8 +103,9 @@ COMB_MINLEN_PT = 0.8
 COMB_YSLACK_PT = 0.5
 COMB_MAX_WIDTH_PT = 2.5   # 1.44pt group separators are in; column borders are not
 
-# How many offenders each detail record names before it truncates. Enough to act
-# on, not enough to turn the report into the corpus.
+# Default offender preview limit. Assertions that need exhaustive evidence may
+# opt out explicitly; the comb assertion does because its full disagreement set
+# is the evidence the referee needs.
 MAX_OFFENDERS = 12
 
 # The rate/reference tables. `reflow_rate_without_description` is about a
@@ -598,10 +599,18 @@ def held(**detail: Any) -> dict[str, Any]:
     return {"holds": True, "reason": "", "offenders": [], **detail}
 
 
-def broken(reason: str, offenders: Sequence[Any] = (), **detail: Any) -> dict[str, Any]:
+def broken(reason: str, offenders: Sequence[Any] = (),
+           *, offender_limit: int | None = MAX_OFFENDERS,
+           **detail: Any) -> dict[str, Any]:
+    all_offenders = list(offenders)
+    published = (all_offenders if offender_limit is None
+                 else all_offenders[:offender_limit])
     return {"holds": False, "reason": reason,
-            "offender_count": len(offenders),
-            "offenders": list(offenders)[:MAX_OFFENDERS], **detail}
+            "offender_count": len(all_offenders),
+            "offenders_published": len(published),
+            "offenders_omitted": len(all_offenders) - len(published),
+            "offenders_complete": len(published) == len(all_offenders),
+            "offenders": published, **detail}
 
 
 # --------------------------------------------------------------------------
@@ -692,7 +701,8 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
               "emission_behind_layout": stale_emission}
     if offenders:
         return broken(f"{len(offenders)} of {checked} combs disagree with the "
-                      f"printed compartment count", offenders, **counts)
+                      f"printed compartment count", offenders,
+                      offender_limit=None, **counts)
     return held(**counts)
 
 
@@ -1442,6 +1452,38 @@ def self_test() -> int:
                       form_html=off_cell_html, guide_html=None, pdf=None)
     check("comb input geometry clipped outside its parent cannot collide",
           check_inputs_over_printed_text(off_cell)["holds"] is True)
+
+    # Most assertion details are bounded previews, and say exactly what they
+    # omit. The comb assertion is the referee's evidence packet, so every
+    # offender must survive publication -- including the first one beyond the
+    # old twelve-item preview.
+    preview = broken("preview", list(range(MAX_OFFENDERS + 1)))
+    check("bounded offender previews state that one record was omitted",
+          len(preview["offenders"]) == MAX_OFFENDERS
+          and preview["offenders_published"] == MAX_OFFENDERS
+          and preview["offenders_omitted"] == 1
+          and preview["offenders_complete"] is False)
+
+    class CombPublicationFixture:
+        layout = {"pages": []}
+        doc = object()
+        cells: list[Cell] = []
+        relocated_cells: set[str] = set()
+        layout_pages = {1: {"cells": [
+            {"id": f"p1c{index}", "x0": 0.0, "y0": 0.0,
+             "x1": 40.0, "y1": 10.0, "comb": {"cells": 1}}
+            for index in range(MAX_OFFENDERS + 1)
+        ]}}
+        verticals = {1: [(20.0, 0.0, 10.0, 0.24)]}
+
+    complete = check_comb_slots_match_printed(CombPublicationFixture())
+    check("comb publication keeps the offender beyond the old preview limit",
+          complete["offender_count"] == MAX_OFFENDERS + 1
+          and complete["offenders_published"] == MAX_OFFENDERS + 1
+          and complete["offenders_omitted"] == 0
+          and complete["offenders_complete"] is True
+          and len(complete["offenders"]) == MAX_OFFENDERS + 1
+          and complete["offenders"][-1]["cell"] == f"p1c{MAX_OFFENDERS}")
 
     # Geometry helpers, where an off-by-one epsilon would silently disable an
     # assertion rather than break it.
