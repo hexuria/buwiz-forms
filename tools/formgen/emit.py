@@ -252,13 +252,130 @@ class Rect:
         return payload
 
 
-class RuleBackend:
-    """Paints rects and placed artwork. The only thing that differs per backend.
+# A placement matrix is applied only when it reproduces the box the extractor
+# also recorded. The two are independent views of the same placement -- the
+# matrix comes from get_image_info(), the box from get_image_rects() -- so a
+# disagreement means one of them is wrong about this instance, and the box is
+# the one the round-trip differ compares. Half the extractor's own 2dp
+# quantisation is the widest disagreement that is pure rounding.
+PLACEMENT_MATRIX_EPSILON_PT = 0.005
 
-    Images ride the backend too. An image is geometry in a box exactly as a
-    rule is, so routing it through the same code is what makes the round-trip a
-    comparison of *every* painted rectangle on the page rather than of the
-    rules alone.
+
+def matrix_box(matrix: Sequence[float]) -> tuple[float, float, float, float]:
+    """The axis-aligned box the unit square lands in under `matrix`."""
+    a, b, c, d, e, f = (float(v) for v in matrix)
+    xs = (e, a + e, c + e, a + c + e)
+    ys = (f, b + f, d + f, b + d + f)
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def placement_matrix(image: dict[str, Any]) -> list[float] | None:
+    """The image's 6-element PDF matrix, or None to fall back to its box.
+
+    A box cannot express a flip, and four forms place artwork with a negative
+    `d`: 1600-PT's masthead and 2550M's, 2551M's and 2553's seal all rendered
+    upside-down with their rim lettering reading bottom-to-top, because the IR's
+    x0..y1 is all the emitter used. 0605 places its seal with a small non-zero
+    `b`, which a box cannot express either.
+
+    The matrix maps the image's own unit square -- (0,0) at its top-left, y
+    downwards -- into page points, which is the same convention an SVG <image>
+    at (0,0) sized 1x1 uses, so carrying it needs no conversion and no
+    special-casing of the flip. `transform` is None wherever get_image_info()
+    and get_image_rects() could not be reconciled; that is extract.py's honest
+    answer and this returns None in turn rather than inventing an identity.
+    """
+    matrix = image.get("transform")
+    if not matrix or len(matrix) != 6:
+        return None
+    x0, y0, x1, y1 = matrix_box(matrix)
+    if max(abs(x0 - float(image["x0"])), abs(y0 - float(image["y0"])),
+           abs(x1 - float(image["x1"])), abs(y1 - float(image["y1"]))
+           ) > PLACEMENT_MATRIX_EPSILON_PT:
+        return None
+    return [float(v) for v in matrix]
+
+
+def path_data(path: dict[str, Any]) -> str:
+    """One non-rectilinear path as SVG path data, in page points.
+
+    The IR's ops are the PDF operators, and SVG's commands are the same
+    operators under different names, so this is a rename and not a conversion:
+    `l` is `L`, `c` is `C`, a `re` subpath is its four corners, and `closed`
+    (which extract.py *measures* rather than trusting the flag) is `Z`. No
+    coordinate is recomputed, which is what keeps a triangle's apex on the
+    source's own point.
+    """
+    parts: list[str] = []
+    for sub in path["subpaths"]:
+        ops = sub["ops"]
+        rect_only = all(op["op"] == "re" for op in ops)
+        if not rect_only:
+            start = sub["start"]
+            parts.append(f"M{fmt(start[0])} {fmt(start[1])}")
+        for op in ops:
+            points = [float(v) for v in op["points"]]
+            if op["op"] == "l":
+                for index in range(0, len(points), 2):
+                    parts.append(f"L{fmt(points[index])} {fmt(points[index + 1])}")
+            elif op["op"] == "c":
+                for index in range(0, len(points), 6):
+                    parts.append("C" + " ".join(fmt(v) for v in points[index:index + 6]))
+            elif op["op"] == "re":
+                # A rect is always its own closed subpath in the IR; it is
+                # written out in full here so that a subpath is never left
+                # relying on a `start` that belongs to a different operator.
+                x0, y0, x1, y1 = points
+                parts.append(f"M{fmt(x0)} {fmt(y0)}L{fmt(x1)} {fmt(y0)}"
+                             f"L{fmt(x1)} {fmt(y1)}L{fmt(x0)} {fmt(y1)}Z")
+            else:  # extract.py raises on anything else, so this cannot be reached
+                raise SystemExit(f"unknown path op {op['op']!r} in {path['id']}")
+        if sub["closed"] and not rect_only:
+            parts.append("Z")
+    return "".join(parts)
+
+
+def path_paints(path: dict[str, Any]) -> tuple[str | None, str | None]:
+    """(fill, stroke) as #rrggbb, either being None when the path has none.
+
+    Both are carried because a path may do both and the two differ: 2551M's
+    pre-printed decimal points are filled *and* stroked, so collapsing them to
+    one ink would lose the fact that the mark is 0.72pt wider than its fill.
+    """
+    has_fill = path.get("fill") is not None or path.get("fill_gray") is not None
+    has_stroke = (float(path.get("stroke_width_pt") or 0.0) > 0.0
+                  and (path.get("stroke") is not None
+                       or path.get("stroke_gray") is not None))
+    return (paint_color(path.get("fill"), path.get("fill_gray")) if has_fill else None,
+            paint_color(path.get("stroke"), path.get("stroke_gray")) if has_stroke else None)
+
+
+def path_svg(path: dict[str, Any]) -> str:
+    """The <path> element itself, shared by both backends.
+
+    `fill-rule` is only stated where the source stated it, so a path with the
+    nonzero default keeps the SVG default and the two documents stay
+    comparable.
+    """
+    fill, stroke = path_paints(path)
+    attributes = [f'd="{path_data(path)}"',
+                  f'fill="{fill}"' if fill else 'fill="none"']
+    if fill and path.get("even_odd"):
+        attributes.append('fill-rule="evenodd"')
+    if stroke:
+        attributes.append(f'stroke="{stroke}"')
+        attributes.append(f'stroke-width="{fmt(path["stroke_width_pt"])}"')
+    attributes.append(f'data-path-id="{esc_attr(str(path["id"]))}"')
+    return f'<path {" ".join(attributes)}/>'
+
+
+class RuleBackend:
+    """Paints rects, paths and placed artwork. The only thing that differs per backend.
+
+    Images and paths ride the backend too. Both are geometry in a box exactly as
+    a rule is, so routing them through the same code is what makes the
+    round-trip a comparison of *every* painted mark on the page rather than of
+    the rules alone.
     """
 
     name = ""
@@ -276,6 +393,9 @@ class RuleBackend:
         raise NotImplementedError
 
     def image(self, image: dict[str, Any], href: str, present: bool) -> str:
+        raise NotImplementedError
+
+    def path(self, path: dict[str, Any], page: dict[str, Any]) -> str:
         raise NotImplementedError
 
 
@@ -342,13 +462,24 @@ class SvgBackend(RuleBackend):
         return f'<g class="layer-band" id="band-rules-{band_id}">{body}</g>'
 
     def image(self, image: dict[str, Any], href: str, present: bool) -> str:
-        geometry = (f'x="{fmt(image["x0"])}" y="{fmt(image["y0"])}" '
-                    f'width="{fmt(image["x1"] - image["x0"])}" '
-                    f'height="{fmt(image["y1"] - image["y0"])}"')
+        matrix = placement_matrix(image)
+        if matrix is None:
+            geometry = (f'x="{fmt(image["x0"])}" y="{fmt(image["y0"])}" '
+                        f'width="{fmt(image["x1"] - image["x0"])}" '
+                        f'height="{fmt(image["y1"] - image["y0"])}"')
+        else:
+            # The unit square is the image's own space with (0,0) at its
+            # top-left, which is exactly what the matrix is defined against, so
+            # the placement is the source's matrix and nothing else.
+            geometry = ('x="0" y="0" width="1" height="1" transform="matrix('
+                        + ",".join(fmt(v) for v in matrix) + ')"')
         tag = (f'<image href="{esc_attr(href)}" {geometry} preserveAspectRatio="none" '
                if present else
                f'<rect fill="none" {geometry} data-missing-src="{esc_attr(href)}" ')
         return f'{tag}data-sha256="{esc_attr(image["sha256"])}"/>'
+
+    def path(self, path: dict[str, Any], page: dict[str, Any]) -> str:
+        return path_svg(path)
 
 
 class CssBackend(RuleBackend):
@@ -392,16 +523,50 @@ class CssBackend(RuleBackend):
         return f'<div class="layer-band" id="band-rules-{band_id}">{body}</div>'
 
     def image(self, image: dict[str, Any], href: str, present: bool) -> str:
-        style = style_attr((
-            ("left", f"{fmt(image['x0'])}pt"), ("top", f"{fmt(image['y0'])}pt"),
-            ("width", f"{fmt(image['x1'] - image['x0'])}pt"),
-            ("height", f"{fmt(image['y1'] - image['y0'])}pt"),
-        ))
+        matrix = placement_matrix(image)
+        if matrix is None:
+            style = style_attr((
+                ("left", f"{fmt(image['x0'])}pt"), ("top", f"{fmt(image['y0'])}pt"),
+                ("width", f"{fmt(image['x1'] - image['x0'])}pt"),
+                ("height", f"{fmt(image['y1'] - image['y0'])}pt"),
+            ))
+        else:
+            # A 1pt box scaled by the matrix: scale is unit-agnostic, so a and d
+            # land the same lengths the SVG backend does. Only the translation
+            # differs -- CSS `matrix()` takes it in px, never in the element's
+            # own unit -- so e and f are divided by the device pixel, which is
+            # exact in binary and therefore costs no precision.
+            style = style_attr((
+                ("left", "0"), ("top", "0"), ("width", "1pt"), ("height", "1pt"),
+                ("transform-origin", "0 0"),
+                ("transform", "matrix("
+                 + ",".join(fmt(v) for v in matrix[:4])
+                 + f",{fmt(matrix[4] / DEVICE_PX_PT)},{fmt(matrix[5] / DEVICE_PX_PT)})"),
+            ))
         common = (f'class="img" data-sha256="{esc_attr(image["sha256"])}" '
                   f'style="{esc_attr(style)}"')
         if present:
             return f'<img src="{esc_attr(href)}" alt="" {common}>'
         return f'<div data-missing-src="{esc_attr(href)}" {common}></div>'
+
+    def path(self, path: dict[str, Any], page: dict[str, Any]) -> str:
+        """A path cannot be a CSS box, so it is an SVG of its own.
+
+        No CSS property draws a Bezier, and 257 of the corpus's 944 paths are
+        filled curves. The element is page-sized with the page's own viewBox, so
+        the geometry inside it is identical to the SVG backend's and the two
+        backends still differ in exactly one thing: how *rules* are painted.
+        Document order is preserved, so the source's paint order survives.
+        """
+        style = style_attr((
+            ("position", "absolute"), ("left", "0"), ("top", "0"),
+            ("width", f"{fmt(page['width_pt'])}pt"),
+            ("height", f"{fmt(page['height_pt'])}pt"),
+        ))
+        return (f'<svg class="pl" xmlns="http://www.w3.org/2000/svg" '
+                f'viewBox="0 0 {fmt(page["width_pt"])} {fmt(page["height_pt"])}" '
+                f'preserveAspectRatio="none" style="{esc_attr(style)}">'
+                f'{path_svg(path)}</svg>')
 
 
 BACKENDS = {"svg": SvgBackend, "css": CssBackend}
@@ -417,13 +582,19 @@ class RunStyle:
 
     __slots__ = ("css", "scale_x", "baseline_offset_pt", "top_pt", "translate_y_pt",
                  "font_family", "font_file", "css_style", "font_face_weight",
-                 "unresolved")
+                 "unresolved", "ink")
 
     def __init__(self, css: dict[str, Any], scale_x: float | None,
                  baseline_offset_pt: float, top_pt: float, translate_y_pt: float,
                  font_family: str | None, font_file: str | None, css_style: str,
-                 unresolved: bool, font_face_weight: str = "100 900") -> None:
+                 unresolved: bool, font_face_weight: str = "100 900",
+                 ink: Ink | None = None) -> None:
         self.css = css
+        # What this run actually puts on the page: its ink and the anchor that
+        # ink sits on. A run with no padding is its own ink, so this is the
+        # identity for all but the padded ones. None means "not measured", and
+        # then the run's whole string is emitted at its first character's origin.
+        self.ink = ink
         self.scale_x = scale_x
         self.baseline_offset_pt = baseline_offset_pt
         self.top_pt = top_pt
@@ -436,6 +607,13 @@ class RunStyle:
         # fonts.py emitted `font_face` still produces what it produced before.
         self.font_face_weight = font_face_weight
         self.unresolved = unresolved
+
+    def text_of(self, run: dict[str, Any]) -> str:
+        return self.ink.text if self.ink is not None else run["text"]
+
+    def origin_of(self, run: dict[str, Any]) -> float:
+        return (self.ink.origin_x if self.ink is not None
+                else float(run["origin_x"] or 0.0))
 
 
 def _donor_face(faces: Sequence[dict[str, Any]], face: dict[str, Any]) -> dict[str, Any] | None:
@@ -461,29 +639,94 @@ def _horizontal_scale(entry: dict[str, Any], face: dict[str, Any]) -> float | No
     return None
 
 
-def _rescaled_letter_spacing(run: dict[str, Any], scale: float) -> float | None:
-    """Tracking for a run whose face is reached through scaleX(scale).
+def _source_tracking(run: dict[str, Any], first: int, last: int,
+                     scale: float) -> float | None:
+    """The source's own per-gap tracking across glyphs [first, last], un-scaled.
 
-    The scale multiplies the whole inline box, tracking included, exactly as
-    the PDF's Tz operator does. So if the unscaled face advances `natural` and
-    we add `sp` per gap, the painted advance is scale*(natural + sp*(n-1)).
-    `natural` is the PDF's own per-glyph advances divided by the scale -- the
-    Narrow face *is* the donor face scaled -- which cancels to
+    Derived from the IR alone, which is what makes it deterministic and free of
+    any platform font: `char_origin_offsets_pt` gives each glyph's painted
+    origin and `char_widths_pt` the advance the face itself would have made, so
+    their difference over a gap is the tracking the generator added there.
 
-        sp = (measured_advance - sum(char_widths)) / (scale * (n - 1))
-
-    i.e. the source's own tracking, un-scaled. This needs no font file and no
-    platform font, so it stays deterministic.
+    A scale multiplies the whole inline box, tracking included, exactly as the
+    PDF's Tz operator does: if the unscaled face advances `natural` and we add
+    `sp` per gap, the painted advance is scale*(natural + sp*(n-1)). The Narrow
+    face *is* the donor face scaled, so `natural` is the PDF's own advances
+    divided by the scale and the scale cancels to a single division here.
     """
-    gaps = len(run["text"]) - 1
+    gaps = last - first
     if gaps <= 0 or scale <= 0:
         return None
-    source_tracking = float(run["measured_advance_pt"]) - sum(run["char_widths_pt"])
-    spacing = source_tracking / (scale * gaps)
+    offsets = run["char_origin_offsets_pt"]
+    widths = run["char_widths_pt"]
+    if last >= len(offsets) or last >= len(widths):
+        return None
+    painted = float(offsets[last]) - float(offsets[first])
+    natural = sum(float(w) for w in widths[first:last])
+    spacing = (painted - natural) / (scale * gaps)
     if (abs(spacing) < LETTER_SPACING_EPSILON_PT
             and abs(spacing) * gaps < LETTER_SPACING_ACCUMULATED_PT):
         return None
     return round(spacing, 4)
+
+
+def _rescaled_letter_spacing(run: dict[str, Any], scale: float) -> float | None:
+    """Tracking for a run whose face is reached through scaleX(scale)."""
+    return _source_tracking(run, 0, len(run["text"]) - 1, scale)
+
+
+class Ink:
+    """The part of a run that puts ink on paper, and where its left edge sits.
+
+    A run's padding spaces are position, not content. The BIR generator writes a
+    checkbox label as `' 2nd '` and puts 6.86pt of the 9.36pt leading advance in
+    a TJ offset, so reproducing the string with the substitute face's own space
+    advance -- plus whatever share of the run's tracking the space happens to get
+    -- lands the ink somewhere else entirely: measured, 'Calendar' on 2550-DS,
+    2550Q and 1707A comes out 4.9-6.0pt to the left, inside the checkbox beside
+    it, and 2550Q's 'Quarter' 0.71pt to the right, on top of its neighbour.
+
+    So a padded run is emitted as its ink, anchored on the first *visible*
+    glyph's own origin, which is also the point verify.py measures. Nothing is
+    lost: a space paints nothing, and the advance it was carrying is expressed
+    by the anchor instead of by a font's space width.
+
+    Trimming is restricted to a run whose ink is a single word, and the
+    restriction is what keeps it honest rather than convenient. The font plan's
+    `letter-spacing` is a claim about the string the plan measured, so emitting a
+    different string means re-deriving it, and re-deriving it over a range that
+    still contains word gaps would smear those gaps across the letters -- the
+    same defect this is undoing. 4390 of the corpus's 10732 padded runs are
+    single-word; the rest keep their padding and today's rendering exactly.
+    """
+
+    __slots__ = ("text", "origin_x", "letter_spacing_pt", "trimmed")
+
+    def __init__(self, text: str, origin_x: float,
+                 letter_spacing_pt: float | None, trimmed: bool) -> None:
+        self.text = text
+        self.origin_x = origin_x
+        self.letter_spacing_pt = letter_spacing_pt
+        self.trimmed = trimmed
+
+
+def run_ink(run: dict[str, Any], scale: float | None) -> Ink:
+    """What to emit for one run: its ink, its anchor, and its own tracking."""
+    text = run["text"]
+    origin = float(run["origin_x"] or 0.0)
+    visible = [index for index, char in enumerate(text) if not char.isspace()]
+    if not visible:  # extract.py drops whitespace-only runs; this cannot happen
+        return Ink(text, origin, None, False)
+    first, last = visible[0], visible[-1]
+    if (first, last) == (0, len(text) - 1):
+        return Ink(text, origin, None, False)
+    if any(char.isspace() for char in text[first:last + 1]):
+        return Ink(text, origin, None, False)
+    offsets = run["char_origin_offsets_pt"]
+    if first >= len(offsets):
+        return Ink(text, origin, None, False)
+    return Ink(text[first:last + 1], origin + float(offsets[first]),
+               _source_tracking(run, first, last, scale if scale else 1.0), True)
 
 
 def _round_half_up(value: float) -> float:
@@ -584,7 +827,8 @@ def resolve_run_styles(ir: dict[str, Any], plan: dict[str, Any],
                 top_pt, translate_y, offset_pt = _vertical_placement(
                     float(run["baseline_y"]), offset_px)
                 styles[key] = RunStyle(css, None, offset_pt, top_pt, translate_y,
-                                       None, None, css["font-style"], True)
+                                       None, None, css["font-style"], True,
+                                       ink=run_ink(run, None))
                 continue
 
             face = faces[entry["face_key"]]
@@ -633,6 +877,7 @@ def resolve_run_styles(ir: dict[str, Any], plan: dict[str, Any],
                 unresolved=False,
                 font_face_weight=str(
                     (emitted_face.get("font_face") or {}).get("weight") or "100 900"),
+                ink=run_ink(run, scale),
             )
     return styles
 
@@ -651,11 +896,23 @@ FONT_CSS_MANAGED = frozenset({"transform", "transform-origin", "display"})
 
 
 def font_declarations(run: dict[str, Any], style: RunStyle) -> list[tuple[str, str | None]]:
-    """The plan's CSS for one run, verbatim, in a fixed order."""
+    """The plan's CSS for one run, verbatim, in a fixed order.
+
+    With one substitution, and only where the emitted string is not the string
+    the plan measured: the plan's `letter-spacing` is
+    (measured_advance - natural_advance) / gaps over that whole string, so it is
+    not this string's tracking once the padding spaces are gone. Ink re-derives
+    it over the glyphs actually emitted; see Ink for why that is restricted to a
+    run whose ink is one word.
+    """
     css = style.css
+    trimmed = style.ink.trimmed if style.ink is not None else False
     pairs: list[tuple[str, str | None]] = []
     for name in FONT_CSS_ORDER:
         value = css.get(name)
+        if name == "letter-spacing" and trimmed:
+            spacing = style.ink.letter_spacing_pt
+            value = None if spacing is None else f"{fmt(spacing)}pt"
         pairs.append((name, None if value is None else str(value)))
     for name in sorted(set(css) - set(FONT_CSS_ORDER) - FONT_CSS_MANAGED):
         value = css[name]
@@ -700,22 +957,24 @@ def text_markup(run: dict[str, Any], identifier: str, style: RunStyle,
                 extra: Sequence[tuple[str, str]] = ()) -> str:
     """One absolutely positioned run, anchored on its own glyph origin.
 
-    The anchor is the first glyph's origin_x and the run's baseline_y, never
-    the bbox: a bbox is ink extent and therefore depends on which glyphs happen
-    to be in the string. How those two numbers reach the page -- `left`/`top`
-    or a transform -- is decided by `transform_declarations`, because Chromium
-    snaps the two axes differently.
+    The anchor is the first *visible* glyph's origin_x and the run's baseline_y,
+    never the bbox: a bbox is ink extent and therefore depends on which glyphs
+    happen to be in the string. How those two numbers reach the page --
+    `left`/`top` or a transform -- is decided by `transform_declarations`,
+    because Chromium snaps the two axes differently. See Ink for why the padding
+    spaces are not part of what is emitted.
     """
+    origin = style.origin_of(run)
     pairs: list[tuple[str, str | None]] = [
-        ("left", "0" if is_scaled(style) else f"{fmt(run['origin_x'])}pt"),
+        ("left", "0" if is_scaled(style) else f"{fmt(origin)}pt"),
         ("top", f"{fmt(style.top_pt)}pt"),
     ]
     pairs.extend(font_declarations(run, style))
-    pairs.extend(transform_declarations(style, float(run["origin_x"])))
+    pairs.extend(transform_declarations(style, origin))
     attrs = "".join(f' {name}="{esc_attr(value)}"' for name, value in extra)
     unresolved = ' data-unresolved="true"' if style.unresolved else ""
     return (f'<div class="t" id="{identifier}" style="{esc_attr(style_attr(pairs))}"'
-            f'{attrs}{unresolved}>{esc_text(run["text"])}</div>')
+            f'{attrs}{unresolved}>{esc_text(style.text_of(run))}</div>')
 
 
 def text_json(run: dict[str, Any], identifier: str, style: RunStyle,
@@ -727,8 +986,8 @@ def text_json(run: dict[str, Any], identifier: str, style: RunStyle,
         "id": identifier,
         "row": row_index,
         "role": column_role,
-        "text": run["text"],
-        "x": round(float(run["origin_x"]), 4),
+        "text": style.text_of(run),
+        "x": round(style.origin_of(run), 4),
         "baseline_y": round(float(run["baseline_y"]), 4),
         "style": style_attr(font_declarations(run, style)),
         # The renderer re-derives `top` and the translateY residual from these
@@ -954,6 +1213,132 @@ def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
     return FieldBox(kind, inset, size, round(height, 4), spacing, capacity)
 
 
+# A cell whose own width is mostly pre-printed glyph ink is not a blank the
+# taxpayer can write in, whatever the box detector made of it: it is a table
+# cell whose text lattice.py assigned to a neighbour because the run crosses
+# cell boundaries. A majority is the test, and the corpus separates on it rather
+# than being tuned to it -- measured over all 4908 non-comb field cells, 50 sit
+# at 0.53-0.91 (every statutory bracket on 1700/1701/1701A/1701Q/1701MS page 2,
+# 2200A's "Unit of Measure Tax Rate" header, 2200P's "XP010 Lubricating Oils",
+# 1601EQ's and 1600WP's ATC rows, 2000-DST's rate table, 1801's OCT/TCT header)
+# and the next one down is at 0.44. Nothing lands between them. The remaining
+# 4858 are at 0.0.
+PREPRINTED_COVERAGE = 0.5
+
+
+class PrePrintedInk:
+    """Where one page's pre-printed glyphs put ink, asked per cell.
+
+    Ink, not run boxes. A run's bbox spans its whole line -- 'Amended Return?
+    Yes        No' is one run 132pt wide -- so measuring coverage from bboxes
+    reports every checkbox on the corpus as full and would delete the typing
+    surface from all of them. What occupies a box is the *non-space* glyphs,
+    and the IR states each one's origin and width, so this is measured rather
+    than inferred.
+
+    A run counts against a cell only when at least half of the run's own height
+    lies inside it. That is what distinguishes "this text is printed in this
+    box" from "the line above dips 0.4pt into it": 1604C, 2316 and 2200S all
+    have field cells that a neighbouring line grazes by 1-5% of its height.
+    """
+
+    __slots__ = ("_buckets",)
+
+    BUCKET_PT = 16.0
+
+    def __init__(self, runs: Sequence[dict[str, Any]]) -> None:
+        self._buckets: dict[int, list[tuple[float, float, list[tuple[float, float]]]]] = {}
+        for run in runs:
+            spans = _glyph_spans(run)
+            if not spans:
+                continue
+            y0, y1 = float(run["y0"]), float(run["y1"])
+            entry = (y0, y1, spans)
+            for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
+                self._buckets.setdefault(bucket, []).append(entry)
+
+    def coverage(self, cell: dict[str, Any]) -> float:
+        """Fraction of the cell's width covered by pre-printed glyph ink."""
+        width = float(cell["x1"]) - float(cell["x0"])
+        if width <= 0:
+            return 0.0
+        x0, x1 = float(cell["x0"]), float(cell["x1"])
+        y0, y1 = float(cell["y0"]), float(cell["y1"])
+        inside: list[tuple[float, float]] = []
+        seen: set[int] = set()
+        for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
+            for entry in self._buckets.get(bucket, ()):
+                if id(entry) in seen:
+                    continue
+                seen.add(id(entry))
+                run_y0, run_y1, spans = entry
+                overlap = min(y1, run_y1) - max(y0, run_y0)
+                if run_y1 <= run_y0 or overlap < 0.5 * (run_y1 - run_y0):
+                    continue
+                for span_x0, span_x1 in spans:
+                    low, high = max(x0, span_x0), min(x1, span_x1)
+                    if high > low:
+                        inside.append((low, high))
+        if not inside:
+            return 0.0
+        inside.sort()
+        covered = 0.0
+        low, high = inside[0]
+        for span_x0, span_x1 in inside[1:]:
+            if span_x0 > high:
+                covered += high - low
+                low, high = span_x0, span_x1
+            else:
+                high = max(high, span_x1)
+        covered += high - low
+        return covered / width
+
+
+def _glyph_spans(run: dict[str, Any]) -> list[tuple[float, float]]:
+    """Each non-space glyph's x extent, from the IR's own per-glyph metrics."""
+    origin = run.get("origin_x")
+    if origin is None:
+        return []
+    offsets = run.get("char_origin_offsets_pt") or []
+    widths = run.get("char_widths_pt") or []
+    spans: list[tuple[float, float]] = []
+    for index, char in enumerate(run["text"]):
+        if char.isspace() or index >= len(offsets) or index >= len(widths):
+            continue
+        start = float(origin) + float(offsets[index])
+        spans.append((start, start + float(widths[index])))
+    return spans
+
+
+def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None) -> tuple[bool, str]:
+    """Whether a taxpayer can type in this cell, and why.
+
+    Two rules, in this order, and the order is the point:
+
+      * **A comb-bearing cell is a field whatever text it also holds.** A comb
+        *is* the field -- N boxes drawn with tick marks -- and the pre-printed
+        "." or "%" inside it is decoration within that field, not a label. Only
+        `kind == "field"` used to reach an input, so 2000-DST's whole page-1
+        money grid (`kind="mixed", comb=yes`), 2200A's Part III and IV, 2200P's
+        Part III, 1801 item 24, 2316 items 23-24 and 1702EX item 18 had no way
+        to type an amount at all, headline payable included. 195 cells across
+        37 forms.
+      * **A blank the source printed over is not a blank.** Independently of
+        whether guides.py relocated the table it belongs to, a cell whose
+        geometry is filled with pre-printed text gets no input: on 1700 page 2 a
+        taxpayer could type over the statutory bracket "Not over P 250,000".
+        This is the belt to that fix's braces and it protects the forms whose
+        reference tables are never relocated.
+    """
+    if cell.get("comb"):
+        return True, "comb"
+    if cell["kind"] != "field":
+        return False, cell["kind"]
+    if ink is not None and ink.coverage(cell) > PREPRINTED_COVERAGE:
+        return False, "pre-printed"
+    return True, "field"
+
+
 class FieldPlan:
     """Every field on the sheet, and the CSS classes their metrics collapse to.
 
@@ -964,19 +1349,29 @@ class FieldPlan:
     pure function of the layout and therefore deterministic.
     """
 
-    __slots__ = ("face", "boxes", "classes", "small")
+    __slots__ = ("face", "boxes", "classes", "small", "blocked")
 
     def __init__(self, layout: dict[str, Any], face: FieldFace | None,
-                 warnings: list[str]) -> None:
+                 warnings: list[str], ir: dict[str, Any] | None = None) -> None:
         self.face = face
         self.boxes: dict[str, FieldBox] = {}
         self.classes: dict[tuple[float, float, float | None], str] = {}
         self.small: list[str] = []
+        # cell id -> why it has no typing surface, for the markup and the report.
+        self.blocked: dict[str, str] = {}
         if face is None:
             return
+        # Keyed by page index rather than zipped, so a layout page and an IR page
+        # cannot be paired by position if either list is ever ordered otherwise.
+        ink_by_page = {int(page["index"]): PrePrintedInk(page["text_runs"])
+                       for page in (ir or {}).get("pages", ())}
         for page in layout["pages"]:
+            ink = ink_by_page.get(int(page["index"]))
             for cell in page["cells"]:
-                if cell["kind"] != "field":
+                fillable, reason = field_verdict(cell, ink)
+                if not fillable:
+                    if reason == "pre-printed":
+                        self.blocked[cell["id"]] = reason
                     continue
                 box = field_box(cell, face)
                 if box is None:
@@ -999,6 +1394,17 @@ class FieldPlan:
                 f"{fmt(FIELD_MIN_SIZE_PT)}pt ({', '.join(self.small[:6])}"
                 f"{'...' if len(self.small) > 6 else ''}); the box is the source's own and "
                 f"is emitted as measured")
+        if self.blocked:
+            names = sorted(self.blocked)
+            warnings.append(
+                f"{len(names)} cell(s) the box detector called blank are filled with "
+                f"pre-printed text and get no typing surface ({', '.join(names[:6])}"
+                f"{'...' if len(names) > 6 else ''}); a taxpayer must not be able to "
+                f"type over a statutory rate")
+        if ir is None:
+            warnings.append(
+                "no IR was given to the field plan, so pre-printed occupancy is "
+                "unmeasured and a cell filled with statutory text may be editable")
 
     def __bool__(self) -> bool:
         return bool(self.boxes)
@@ -1139,14 +1545,23 @@ def cell_markup(cell: dict[str, Any], fields: FieldPlan | None = None,
         ("width", f"{fmt(width)}pt"), ("height", f"{fmt(height)}pt"),
     ))
     kind = cell["kind"]
-    classes = "c f" if kind == "field" else "c"
+    box = fields.of(cell["id"]) if fields is not None else None
+    if box is not None and box.kind == "comb" and not cell.get("comb"):
+        # A guide cut clipped this cell and its comb band went to the other
+        # piece. The field is that piece's; this one is a box, not a blank.
+        box = None
+    # `.f` is the field box -- the thing that clips a typed character to the box
+    # the source drew -- so it follows the typing surface and not the box
+    # detector's `kind`. A comb-bearing `mixed` cell is a field; a `field` cell
+    # filled with pre-printed text is not.
+    classes = "c f" if box is not None else "c"
     attrs = [f'{id_attribute}="{esc_attr(cell["id"])}"', f'class="{classes}"',
              f'data-cell-kind="{esc_attr(kind)}"',
              f'data-row="{cell["row"]}"', f'data-col="{cell["col"]}"']
     if not cell.get("rectangular", True):
         attrs.append('data-rectangular="false"')
-
-    box = fields.of(cell["id"]) if fields is not None else None
+    if fields is not None and fields.blocked.get(cell["id"]):
+        attrs.append('data-preprinted="true"')
     live = id_attribute == "id"
     if box is not None:
         attrs.append(f'data-field-kind="{esc_attr(box.kind)}"')
@@ -1529,45 +1944,89 @@ class PageSplit:
     """Which of one page's elements the document being emitted may carry.
 
     guides.py claims an element for the guide only when it lies *wholly* below
-    the cut, so a straddler is simply never claimed. That is the whole of "the
-    form wins every straddler" as far as the emitter is concerned: there is no
-    second rule here that could disagree with the detector's, and no element
-    can be dropped by both documents because the two sides are complements of
-    one set.
+    the cut. What crosses the cut is not awarded to either side any more: it is
+    **clipped**, and the plan carries both pieces. Awarding straddlers to the
+    form was chosen so a cut could never lose a rule and had the opposite
+    failure -- 1600-PT kept two 461pt verticals with nothing between them, an
+    empty three-sided box down two thirds of the page. So a straddler is carried
+    by both documents, each drawing its own piece, and `clipped` is what
+    substitutes the piece for the whole element.
+
+    Paths are split here rather than in the plan. guides.py predates the IR's
+    `paths` and claims no path ids, so the same rule it applies to every other
+    element -- wholly below the cut belongs to the guide -- is applied to paths
+    directly. It is not a cosmetic detail: 532 of 0605's 584 paths are on the
+    page whose whole content is guide material, and drawing them on the form
+    would put 532 marks on a sheet that has nothing else left on it.
     """
 
     __slots__ = ("guide_side", "rule_ids", "cell_ids", "run_indices",
-                 "fill_indices", "image_indices")
+                 "fill_indices", "image_indices", "path_ids", "pieces")
 
     def __init__(self, guide_side: bool, rule_ids: frozenset[str] = frozenset(),
                  cell_ids: frozenset[str] = frozenset(),
                  run_indices: frozenset[int] = frozenset(),
                  fill_indices: frozenset[int] = frozenset(),
-                 image_indices: frozenset[int] = frozenset()) -> None:
+                 image_indices: frozenset[int] = frozenset(),
+                 path_ids: frozenset[str] = frozenset(),
+                 pieces: dict[tuple[str, str], dict[str, Any]] | None = None) -> None:
         self.guide_side = guide_side
         self.rule_ids = rule_ids
         self.cell_ids = cell_ids
         self.run_indices = run_indices
         self.fill_indices = fill_indices
         self.image_indices = image_indices
+        self.path_ids = path_ids
+        # (kind, ref) -> this side's clipped geometry, for straddlers only.
+        self.pieces = dict(pieces or {})
 
     def _keep(self, ref: Any, claimed: frozenset) -> bool:
         return (ref in claimed) if self.guide_side else (ref not in claimed)
 
     def keep_rule(self, rule_id: str) -> bool:
-        return self._keep(rule_id, self.rule_ids)
+        return ("rule", rule_id) in self.pieces or self._keep(rule_id, self.rule_ids)
 
     def keep_cell(self, cell_id: str) -> bool:
-        return self._keep(cell_id, self.cell_ids)
+        return ("cell", cell_id) in self.pieces or self._keep(cell_id, self.cell_ids)
 
     def keep_run(self, run_index: int) -> bool:
         return self._keep(run_index, self.run_indices)
 
     def keep_fill(self, index: int) -> bool:
-        return self._keep(index, self.fill_indices)
+        return (("area_fill", f"#{index}") in self.pieces
+                or self._keep(index, self.fill_indices))
 
     def keep_image(self, index: int) -> bool:
-        return self._keep(index, self.image_indices)
+        return (("image", f"#{index}") in self.pieces
+                or self._keep(index, self.image_indices))
+
+    def keep_path(self, path_id: str) -> bool:
+        return self._keep(path_id, self.path_ids)
+
+    def clipped(self, item: dict[str, Any], kind: str, ref: str) -> dict[str, Any]:
+        """`item` with this side's box, when the cut passes through it.
+
+        Only the box is replaced. Tone, role and paint order are properties of
+        the ink and not of where it was cut, and a clipped rule is still the
+        same rule -- guides.py recomputes `length_pt` per piece for exactly that
+        reason, so that the round-trip differ is given the geometry the document
+        actually draws.
+        """
+        piece = self.pieces.get((kind, ref))
+        if piece is None:
+            return item
+        merged = dict(item)
+        merged.update({key: piece[key] for key in ("x0", "y0", "x1", "y1")
+                       if key in piece})
+        if kind == "cell":
+            # A band that fell on the other side of the cut is not this piece's
+            # to render, and a cut may not pass through one (guides.py refuses
+            # such a cut), so the count is 0 or all of them.
+            if "combs" in piece and not piece["combs"]:
+                merged.pop("comb", None)
+            if "text_run_ids" in piece:
+                merged["text_run_ids"] = list(piece["text_run_ids"])
+        return merged
 
     def without_band(self, rule_ids: Iterable[str], cell_ids: Iterable[str],
                      run_indices: Iterable[int]) -> "PageSplit":
@@ -1585,7 +2044,8 @@ class PageSplit:
                          self.rule_ids - frozenset(rule_ids),
                          self.cell_ids - frozenset(cell_ids),
                          self.run_indices - frozenset(run_indices),
-                         self.fill_indices, self.image_indices)
+                         self.fill_indices, self.image_indices, self.path_ids,
+                         self.pieces)
 
 
 WHOLE_PAGE = PageSplit(guide_side=False)
@@ -1622,6 +2082,7 @@ class DocumentSplit:
                 f"but the IR is {ir['form']['code']}-{ir['form']['revision']}")
 
         by_index = {int(page["index"]): page for page in ir["pages"]}
+        side = "guide" if document == "guide" else "form"
         for entry in plan.get("inline", []):
             index = int(entry["page"])
             page = by_index.get(index)
@@ -1634,6 +2095,10 @@ class DocumentSplit:
                 run_indices=frozenset(int(i) for i in entry["text_run_indices"]),
                 fill_indices=frozenset(int(i) for i in entry["area_fill_indices"]),
                 image_indices=frozenset(int(i) for i in entry["image_indices"]),
+                path_ids=_claimed_paths(page, float(entry["cut_y_pt"])),
+                pieces={(s["kind"], s["ref"]): s[side]
+                        for s in entry.get("straddlers", ())
+                        if s.get("disposition") == "clipped" and s.get(side)},
             )
             _validate_claims(claimed, page, index)
             self._pages[index] = claimed
@@ -1657,6 +2122,24 @@ class DocumentSplit:
     @property
     def standalone_pdfs(self) -> list[str]:
         return list((self.plan or {}).get("standalone_pdfs") or [])
+
+
+def _claimed_paths(page: dict[str, Any], cut_y: float) -> frozenset[str]:
+    """The path ids that lie wholly below the cut, i.e. the guide's.
+
+    The same test guides.py applies to rules, fills and images. A path that
+    *crosses* the cut would need clipping, which is a geometry operation on
+    Bezier segments rather than on a box; none occurs in this corpus, and one
+    that did would stay on the form -- losing a mark off the form is worse than
+    duplicating it -- and say so through `--self-test`.
+    """
+    return frozenset(str(path["id"]) for path in page.get("paths", ())
+                     if float(path["y0"]) >= cut_y)
+
+
+def straddling_paths(page: dict[str, Any], cut_y: float) -> list[str]:
+    return [str(path["id"]) for path in page.get("paths", ())
+            if float(path["y0"]) < cut_y < float(path["y1"])]
 
 
 def _validate_claims(split: PageSplit, page: dict[str, Any], index: int) -> None:
@@ -1871,18 +2354,71 @@ def _is_prose(runs: Sequence[dict[str, Any]],
     return True
 
 
-def _line_text(line: Sequence[dict[str, Any]]) -> str:
-    """One line's runs concatenated, with a space wherever the source left one."""
-    parts: list[str] = []
+def _line_pieces(line: Sequence[dict[str, Any]]) -> list[tuple[str, Any]]:
+    """One line's runs as (text, colour) pieces, spaced where the source was.
+
+    The colour travels with the text because the source's colour is content:
+    1600-PT and 1600-VT each carry 25 runs at 0xFFFFFF -- BIR reviewer initials,
+    invisible on the official's white paper -- inside the ATC table the guide
+    relocates. The form document has emitted every run's own colour all along;
+    the reflowed guide dropped it and published those initials in black, where
+    they read as ATC data. So the colour is carried here too, and white runs are
+    *not* filtered out: they are in the document, and a form may legitimately
+    set white text over a dark band.
+    """
+    pieces: list[tuple[str, Any]] = []
     previous: dict[str, Any] | None = None
     for run in line:
         if previous is not None:
             gap = float(run["x0"]) - float(previous["x1"])
             if gap > WORD_GAP_FRACTION * float(run["size_pt"]):
-                parts.append(" ")
-        parts.append(run["text"])
+                pieces.append((" ", previous.get("color")))
+        pieces.append((run["text"], run.get("color")))
         previous = run
-    return "".join(parts)
+    return pieces
+
+
+def _line_text(line: Sequence[dict[str, Any]]) -> str:
+    """One line's runs concatenated, with a space wherever the source left one."""
+    return "".join(text for text, _colour in _line_pieces(line))
+
+
+def _render_pieces(pieces: Sequence[tuple[str, Any]]) -> str:
+    """Escaped markup for one block: whitespace collapsed, colour preserved.
+
+    Whitespace is collapsed exactly as `" ".join(text.split())` collapses it --
+    this is a reading document and the source's line breaks are not its own --
+    and a colour is stated only where it is not the black the stylesheet already
+    sets, so a block whose every run is black emits the bytes it emitted before
+    colour was carried at all.
+    """
+    chars: list[tuple[str, Any]] = []
+    space = False
+    for text, colour in pieces:
+        for char in text:
+            if char.isspace():
+                space = True
+                continue
+            if space and chars:
+                # The space keeps the colour of the text *before* it, so a black
+                # word followed by a white one does not extend the white span
+                # backwards over the gap.
+                chars.append((" ", chars[-1][1]))
+            space = False
+            chars.append((char, colour))
+    out: list[str] = []
+    index = 0
+    while index < len(chars):
+        colour = chars[index][1]
+        stop = index
+        while stop < len(chars) and chars[stop][1] == colour:
+            stop += 1
+        body = esc_text("".join(char for char, _colour in chars[index:stop]))
+        css = text_color(colour)
+        out.append(body if css == "#000000"
+                   else f'<span style="color:{css}">{body}</span>')
+        index = stop
+    return "".join(out)
 
 
 def _is_heading(line: Sequence[dict[str, Any]], column_width: float) -> bool:
@@ -1893,18 +2429,18 @@ def _is_heading(line: Sequence[dict[str, Any]], column_width: float) -> bool:
 
 def _blocks_of_lines(lines: Sequence[Sequence[dict[str, Any]]],
                      column_width: float, heading_tag: str) -> list[tuple[str, str]]:
-    """One column's lines as (tag, text) blocks: headings and paragraphs."""
+    """One column's lines as (tag, markup) blocks: headings and paragraphs."""
     baselines = [_line_baseline(line) for line in lines]
     gaps = [b - a for a, b in zip(baselines, baselines[1:])]
     typical = _median(gaps) or 1.0
     right_edge = max((max(float(r["x1"]) for r in line) for line in lines), default=0.0)
 
     out: list[tuple[str, str]] = []
-    buffer: list[str] = []
+    buffer: list[tuple[str, Any]] = []
 
     def flush() -> None:
         if buffer:
-            out.append(("p", " ".join(" ".join(buffer).split())))
+            out.append(("p", _render_pieces(buffer)))
             buffer.clear()
 
     previous: Sequence[dict[str, Any]] | None = None
@@ -1914,7 +2450,7 @@ def _blocks_of_lines(lines: Sequence[Sequence[dict[str, Any]]],
             continue
         if _is_heading(line, column_width):
             flush()
-            out.append((heading_tag, " ".join(text.split())))
+            out.append((heading_tag, _render_pieces(_line_pieces(line))))
             previous = line
             continue
         if previous is not None:
@@ -1926,7 +2462,9 @@ def _blocks_of_lines(lines: Sequence[Sequence[dict[str, Any]]],
                     or _is_heading(previous, column_width)
                     or LIST_MARKER.match(text)):
                 flush()
-        buffer.append(text)
+        if buffer:
+            buffer.append((" ", None))
+        buffer.extend(_line_pieces(line))
         previous = line
     flush()
     return out
@@ -1979,14 +2517,14 @@ def _prose_markup(runs: Sequence[dict[str, Any]],
                 continue
             column_width = columns[index][1] - columns[index][0]
             parts.append(f'<div class="gl-col" data-column="{index}">')
-            for tag, text in _blocks_of_lines(lines, column_width, "h3"):
-                parts.append(f"<{tag}>{esc_text(text)}</{tag}>")
+            for tag, markup in _blocks_of_lines(lines, column_width, "h3"):
+                parts.append(f"<{tag}>{markup}</{tag}>")
             parts.append("</div>")
 
     emit_block(0)
     for index, line in enumerate(spanning_lines):
-        for tag, text in _blocks_of_lines([line], width, "h2"):
-            parts.append(f"<{tag}>{esc_text(text)}</{tag}>")
+        for tag, markup in _blocks_of_lines([line], width, "h2"):
+            parts.append(f"<{tag}>{markup}</{tag}>")
         emit_block(index + 1)
     return "".join(parts)
 
@@ -2003,9 +2541,9 @@ def _table_markup(runs: Sequence[dict[str, Any]],
     lines = _group_lines(runs)
     if len(grid) < 2:
         parts = ['<div class="gl-col" data-column="0">']
-        for tag, text in _blocks_of_lines(lines, grid[0][1] - grid[0][0] if grid else 1.0,
-                                          "h3"):
-            parts.append(f"<{tag}>{esc_text(text)}</{tag}>")
+        for tag, markup in _blocks_of_lines(lines, grid[0][1] - grid[0][0] if grid else 1.0,
+                                            "h3"):
+            parts.append(f"<{tag}>{markup}</{tag}>")
         parts.append("</div>")
         return "".join(parts)
 
@@ -2031,25 +2569,247 @@ def _table_markup(runs: Sequence[dict[str, Any]],
                 continue
             span, group = cells[index]
             attribute = f' colspan="{span}"' if span > 1 else ""
-            text = " ".join(_line_text(sorted(group, key=lambda r: float(r["origin_x"]))).split())
-            body.append(f"<{tag}{attribute}>{esc_text(text)}</{tag}>")
+            markup = _render_pieces(
+                _line_pieces(sorted(group, key=lambda r: float(r["origin_x"]))))
+            body.append(f"<{tag}{attribute}>{markup}</{tag}>")
             index += span
         rows.append(f"<tr>{''.join(body)}</tr>")
     return f'<table class="gl-table">{"".join(rows)}</table>'
 
 
-def reflow_page(page_ir: dict[str, Any], split: PageSplit) -> str:
-    """One page's guide region as flowing HTML."""
+def _lattice_rows(cells: Sequence[dict[str, Any]]
+                  ) -> list[tuple[float, list[dict[str, Any]]]]:
+    """The band's cells grouped into lattice rows, ordered down the page."""
+    by_row: dict[Any, list[dict[str, Any]]] = {}
+    for cell in cells:
+        by_row.setdefault(cell["row"], []).append(cell)
+    rows = [(min(float(c["y0"]) for c in group),
+             sorted(group, key=lambda c: (float(c["x0"]), c["id"])))
+            for group in by_row.values()]
+    rows.sort(key=lambda item: (item[0], item[1][0]["id"]))
+    return rows
+
+
+def _column_grid(cells: Sequence[dict[str, Any]]) -> list[float]:
+    """The band's column edges: every distinct cell edge, left to right."""
+    edges = sorted({round(float(c["x0"]), 2) for c in cells}
+                   | {round(float(c["x1"]), 2) for c in cells})
+    return edges
+
+
+def _cells_of_run(run: dict[str, Any], cells: Sequence[dict[str, Any]]
+                  ) -> list[dict[str, Any]]:
+    """The cells of one lattice row that this run puts ink in, left to right.
+
+    A run frequently spans several cells of its row, because the source draws a
+    statutory bracket as one string across the whole row: 1700's
+    " Over P 250,000 but not over P 400,000     20% of the excess over P 250,000 "
+    is a single run 280pt wide crossing both columns of TABLE 1. It is neither
+    split (there is nothing to split it on but a guess) nor dropped into the
+    column it happens to cover most, which left the row's description cell empty
+    and its rate cell holding both -- the exact pattern C9 is about. It is
+    reported as spanning, and the row emits it as one cell with a colspan.
+    """
+    centre = (float(run["y0"]) + float(run["y1"])) / 2.0
+    row = [cell for cell in cells if float(cell["y0"]) <= centre <= float(cell["y1"])]
+    hit = [cell for cell in row
+           if min(float(run["x1"]), float(cell["x1"]))
+           - max(float(run["x0"]), float(cell["x0"])) > COLUMN_OVERLAP_PT]
+    if not hit and row:
+        best = max(row, key=lambda cell: (
+            min(float(run["x1"]), float(cell["x1"]))
+            - max(float(run["x0"]), float(cell["x0"])), -float(cell["x0"])))
+        overlap = (min(float(run["x1"]), float(best["x1"]))
+                   - max(float(run["x0"]), float(best["x0"])))
+        hit = [best] if overlap > 0 else []
+    return sorted(hit, key=lambda cell: float(cell["x0"]))
+
+
+def _lattice_table_markup(runs: Sequence[dict[str, Any]],
+                          cells: Sequence[dict[str, Any]]) -> str:
+    """A relocated table rebuilt on the lattice's own rows and columns.
+
+    This is what keeps a rate attached to its nature of payment. The reflow used
+    to lay out one row per printed *line*, so a two-line ATC description stranded
+    its rate and code on a row whose description was empty: 1600-PT's guide read
+    "Franchise Tax on radio & TV broadcasting companies whose annual gross
+    receipts do not exceed P10M &" with no rate, and then a row containing only
+    "3% | WB 050". A reader can attach that rate to the wrong nature of payment,
+    which is the one defect in the 51-form review that is a correctness hazard
+    rather than an appearance one.
+
+    lattice.py already knows the row structure -- the table's own ruled grid --
+    so a row here is a lattice row and a cell holds every line of text that falls
+    inside it, however many lines that is.
+
+    Returns "" -- meaning "the caller should lay this section out from its lines"
+    -- unless the lattice describes *all* of the band's ink. That is an all-or-
+    nothing condition rather than a threshold, and the corpus separates on it
+    with nothing in between: 12 of the 14 ruled bands put every claimed run in a
+    cell, and the two that do not (0605 p2 and 2550M p3, both 0.67) would come
+    out as a structured table with a third of its content stranded in full-width
+    rows between the rows it belongs to, which is less readable than the uniform
+    line layout, not more.
+    """
+    rows = _lattice_rows(cells)
+    edges = _column_grid(cells)
+    if len(rows) < 2 or len(edges) < 3:
+        return ""
+    if any(not _cells_of_run(run, cells) for run in runs):
+        return ""
+
+    # The grid is built from the cells' own edges, so a cell's span is a pair of
+    # edge *indices* and needs no interval test. Asking which interval an edge
+    # falls into asks a question whose answer is on a boundary, and that is how
+    # the description column came to swallow the rate column beside it.
+    def edge_index(value: float) -> int:
+        return min(range(len(edges)), key=lambda i: (abs(edges[i] - value), i))
+
+    # Anchor cell id -> its runs, and how far right the widest of them reaches.
+    contents: dict[str, list[dict[str, Any]]] = {}
+    reach: dict[str, float] = {}
+    for run in runs:
+        hit = _cells_of_run(run, cells)
+        anchor = hit[0]["id"]
+        contents.setdefault(anchor, []).append(run)
+        reach[anchor] = max(reach.get(anchor, 0.0), float(hit[-1]["x1"]))
+
+    columns = len(edges) - 1
+    blocks: list[tuple[float, str]] = []
+    for position, (row_y, row_cells) in enumerate(rows):
+        body: list[str] = []
+        cursor = 0
+        heading = True
+        for cell in row_cells:
+            start = edge_index(float(cell["x0"]))
+            if start < cursor:  # a spanning run already covered this column
+                continue
+            group = sorted(contents.get(cell["id"], ()),
+                           key=lambda r: (float(r["baseline_y"]), float(r["origin_x"])))
+            stop = max(start + 1,
+                       edge_index(max(float(cell["x1"]),
+                                      reach.get(cell["id"], 0.0))))
+            while cursor < start:
+                body.append("<td></td>")
+                cursor += 1
+            pieces: list[tuple[str, Any]] = []
+            for line in _group_lines(group):
+                if pieces:
+                    pieces.append((" ", None))
+                pieces.extend(_line_pieces(line))
+            span = stop - cursor
+            attribute = f' colspan="{span}"' if span > 1 else ""
+            body.append(f"<td{attribute}>{_render_pieces(pieces)}</td>")
+            heading = heading and bool(group) and all(r.get("bold") for r in group)
+            cursor = stop
+        while cursor < columns:
+            body.append("<td></td>")
+            cursor += 1
+        tag = "th" if heading and position == 0 else "td"
+        if tag == "th":
+            body = [piece.replace("<td", "<th").replace("</td>", "</th>")
+                    for piece in body]
+        blocks.append((row_y, f"<tr>{''.join(body)}</tr>"))
+    blocks.sort(key=lambda item: item[0])
+    return f'<table class="gl-table">{"".join(body for _y, body in blocks)}</table>'
+
+
+# Two cell edges this close are the same edge. It is the extractor's own 2dp
+# quantisation, not a tolerance: an edge is stated to a hundredth of a point and
+# nothing between two hundredths exists to be confused.
+EDGE_EPSILON_PT = 0.01
+
+
+def _ruled_bands(cells: Sequence[dict[str, Any]]) -> list[tuple[float, float]]:
+    """The y intervals the lattice found ruled structure in, merged."""
+    spans = sorted((float(c["y0"]), float(c["y1"])) for c in cells)
+    merged: list[list[float]] = []
+    for y0, y1 in spans:
+        if merged and y0 <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], y1)
+        else:
+            merged.append([y0, y1])
+    return [(y0, y1) for y0, y1 in merged]
+
+
+def _region_sections(runs: Sequence[dict[str, Any]],
+                     cells: Sequence[dict[str, Any]]
+                     ) -> list[tuple[str, list[dict[str, Any]], list[dict[str, Any]]]]:
+    """Split a guide region into ruled and unruled stretches, in page order.
+
+    One region is regularly two documents. 2551M page 2 carries an unruled ATC
+    rate table and then the "Guidelines and Instructions" prose, and measuring
+    columns and ink-fill over the pair classified the whole thing as prose --
+    which is how its rate table came to be published as running text with the
+    column relationship destroyed. Splitting at the lattice's own boundary lets
+    each stretch be classified on its own evidence.
+
+    The split is on where the lattice found ruled cells, so it costs no
+    threshold: a stretch either has a ruled grid in it or it has not.
+    """
+    bands = _ruled_bands(cells)
+    if not bands or not runs:
+        return [("unruled", list(runs), [])]
+
+    def band_of(run: dict[str, Any]) -> int | None:
+        centre = (float(run["y0"]) + float(run["y1"])) / 2.0
+        for index, (y0, y1) in enumerate(bands):
+            if y0 <= centre <= y1:
+                return index
+        return None
+
+    keyed = sorted(((float(r["y0"]), float(r["x0"]), band_of(r), r) for r in runs),
+                   key=lambda item: (item[0], item[1]))
+    sections: list[tuple[str, list[dict[str, Any]], list[dict[str, Any]]]] = []
+    current: int | None = -1
+    for _y0, _x0, band, run in keyed:
+        if band != current or not sections:
+            current = band
+            if band is None:
+                sections.append(("unruled", [], []))
+            else:
+                y0, y1 = bands[band]
+                inside = [c for c in cells
+                          if float(c["y0"]) >= y0 - EDGE_EPSILON_PT
+                          and float(c["y1"]) <= y1 + EDGE_EPSILON_PT]
+                sections.append(("ruled", [], inside))
+        sections[-1][1].append(run)
+    return sections
+
+
+def reflow_page(page_ir: dict[str, Any], split: PageSplit,
+                page_layout: dict[str, Any] | None = None) -> str:
+    """One page's guide region as flowing HTML.
+
+    With a layout the region is split at the lattice's ruled bands and each
+    stretch is laid out as what it is; without one (a standalone guide PDF has
+    no lattice) the whole region is classified as before.
+    """
     runs = [run for index, run in enumerate(page_ir["text_runs"])
             if index in split.run_indices]
     if not runs:
         return ""
-    grid, flow = _column_bands(runs)
-    prose = _is_prose(runs, flow)
-    body = _prose_markup(runs, flow) if prose else _table_markup(runs, grid)
+    cells = [cell for cell in (page_layout or {}).get("cells", ())
+             if cell["id"] in split.cell_ids]
+    parts: list[str] = []
+    flows: list[str] = []
+    for kind, section_runs, section_cells in _region_sections(runs, cells):
+        if not section_runs:
+            continue
+        markup = (_lattice_table_markup(section_runs, section_cells)
+                  if kind == "ruled" else "")
+        if markup:
+            flows.append("lattice")
+            parts.append(markup)
+            continue
+        grid, flow = _column_bands(section_runs)
+        prose = _is_prose(section_runs, flow)
+        flows.append("prose" if prose else "table")
+        parts.append(_prose_markup(section_runs, flow) if prose
+                     else _table_markup(section_runs, grid))
     return (f'<section class="gl-page" data-page="{page_ir["index"]}" '
-            f'data-flow="{"prose" if prose else "table"}" '
-            f'data-columns="{len(flow) if prose else len(grid)}">{body}</section>')
+            f'data-flow="{",".join(flows)}" '
+            f'data-sections="{len(parts)}">{"".join(parts)}</section>')
 
 
 # ---------------------------------------------------------------------------
@@ -2344,7 +3104,10 @@ function applyCell(el,cell){
 function cellElement(cell){
   var el=document.createElement("div");
   el.id=cell.id;
-  el.className=cell.kind==="field"?"c f":"c";
+  /* `.f` follows the typing surface, not the box detector's kind: a comb cell
+     that also holds a pre-printed decimal point is a field. Mirrors
+     cell_markup(). */
+  el.className=cell.field?"c f":"c";
   el.setAttribute("data-cell-kind",cell.kind);
   el.setAttribute("data-row",cell.row);
   el.setAttribute("data-col",cell.col);
@@ -2630,14 +3393,25 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
     painted: list[tuple[tuple[int, int, float, float, str], str, Any]] = []
     for fill_index, fill in enumerate(page_ir["area_fills"]):
         if split.keep_fill(fill_index):
-            painted.append((paint_key(fill, ""), "rect", Rect.from_box(fill)))
+            painted.append((paint_key(fill, ""), "rect",
+                            Rect.from_box(split.clipped(fill, "area_fill",
+                                                        f"#{fill_index}"))))
     for rule in page_ir["rules"]:
         if rule["id"] not in band_rule_ids and split.keep_rule(rule["id"]):
+            clipped = split.clipped(rule, "rule", rule["id"])
             painted.append((paint_key(rule, rule["id"]), "rect",
-                            Rect.from_box(rule, rule["id"])))
+                            Rect.from_box(clipped, rule["id"])))
     for image_index, image in enumerate(page_ir["images"]):
         if split.keep_image(image_index):
             painted.append((paint_key(image, image["sha256"]), "image", image))
+    # Paths are the third kind of ink, and they paint in the same one order the
+    # rules and fills do: 0605 draws its "write here" markers and its
+    # pre-printed decimal points as filled paths interleaved with the boxes they
+    # sit in, so bucketing them into a layer of their own would be the same
+    # z-order guess the fills -> greys -> black bucketing was.
+    for path in page_ir.get("paths", ()):
+        if split.keep_path(path["id"]):
+            painted.append((paint_key(path, str(path["id"])), "path", path))
     painted.sort(key=operator.itemgetter(0))
 
     parts = [f'<div class="page page-{index}" id="page-{index}" '
@@ -2658,6 +3432,8 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
         run = []
         if kind == "image":
             parts.append(image_markup(payload, backend, options, warnings))
+        elif kind == "path":
+            parts.append(backend.path(payload, page_ir))
         else:
             run_role = payload.role
             run = [payload]
@@ -2684,7 +3460,7 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
     for cell in page_layout["cells"]:
         if cell["id"] in band_cell_ids or not split.keep_cell(cell["id"]):
             continue
-        parts.append(cell_markup(cell, fields))
+        parts.append(cell_markup(split.clipped(cell, "cell", cell["id"]), fields))
     parts.append("</div>")
 
     # -- growable bands: template + pre-rendered rows ------------------------
@@ -2709,6 +3485,27 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
 
     parts.append("</div>")
     return "".join(parts)
+
+
+def _form_side_inventory(page_ir: dict[str, Any], page_layout: dict[str, Any],
+                         split: PageSplit) -> dict[str, int]:
+    """How much of one page the form document still carries, per kind.
+
+    Counted from the same predicates emit_page() uses, so "nothing is left"
+    means the emitter would draw nothing rather than that a flag says so.
+    """
+    return {
+        "rules": sum(1 for r in page_ir["rules"] if split.keep_rule(r["id"])),
+        "area_fills": sum(1 for i in range(len(page_ir["area_fills"]))
+                          if split.keep_fill(i)),
+        "images": sum(1 for i in range(len(page_ir["images"])) if split.keep_image(i)),
+        "paths": sum(1 for p in page_ir.get("paths", ())
+                     if split.keep_path(str(p["id"]))),
+        "text_runs": sum(1 for i in range(len(page_ir["text_runs"]))
+                         if split.keep_run(i)),
+        "cells": sum(1 for c in page_layout["cells"] if split.keep_cell(c["id"])),
+        "growable": len(page_layout["growable"]),
+    }
 
 
 def doc_link_markup(href: str, label: str) -> str:
@@ -2849,13 +3646,17 @@ def _validate_guide_sources(split: DocumentSplit, ir: dict[str, Any],
                 f"{ir['form']['code']}-{ir['form']['revision']}")
 
 
-def build_reflow_guide(ir: dict[str, Any], split: DocumentSplit, options: Options,
+def build_reflow_guide(ir: dict[str, Any], layout: dict[str, Any],
+                       split: DocumentSplit, options: Options,
                        warnings: list[str]) -> tuple[str, list[str]]:
     """The guide as a readable document: no coordinates, therefore no overlap."""
     form = ir["form"]
     title = options.title or (f"BIR Form {form['code']} ({form['revision']}) "
                               f"-- Guidelines and Instructions")
     by_index = {int(page["index"]): page for page in ir["pages"]}
+    # The lattice is what tells a relocated *table* from relocated prose, so the
+    # guide reads the same layout the form does.
+    layout_by_index = {int(page["index"]): page for page in layout["pages"]}
     body = [f'<div class="gl">',
             doc_link_markup(options.form_href, "← Back to the form"),
             f"<h1>{esc_text(title)}</h1>",
@@ -2870,7 +3671,7 @@ def build_reflow_guide(ir: dict[str, Any], split: DocumentSplit, options: Option
             warnings.append(
                 f"page {index}: the guide region claims {len(images)} image(s); the "
                 f"reflowed guide drops them. Use --guide-layout absolute to keep them.")
-        body.append(reflow_page(page, split.page(index)))
+        body.append(reflow_page(page, split.page(index), layout_by_index.get(index)))
     body.append(standalone_pdf_markup(split, options, warnings))
     body.append("</div>")
 
@@ -2894,7 +3695,7 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
     split = DocumentSplit(options.guide_plan, ir, options.document)
     _validate_guide_sources(split, ir, options)
     if options.document == "guide" and options.guide_layout == "reflow":
-        return build_reflow_guide(ir, split, options, warnings)
+        return build_reflow_guide(ir, layout, split, options, warnings)
 
     backend = BACKENDS[options.rule_backend]()
     styles = resolve_run_styles(ir, plan, warnings)
@@ -2902,14 +3703,33 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
     # cell's typing surface is the same markup whichever document carries it --
     # which is what lets the split assertions compare the two halves against the
     # undivided document byte for byte.
-    fields = FieldPlan(layout, resolve_field_face(plan, warnings), warnings)
+    fields = FieldPlan(layout, resolve_field_face(plan, warnings), warnings, ir)
 
     # The form keeps every page at its full height even where the guide took the
     # lower 70% of one: the page box, the page count and @page are the form's
     # geometry, and the freed space is what a growable band expands into. The
     # guide document carries only the pages it actually has content on.
+    #
+    # A page the guide took *entirely* is the one exception, and it is not the
+    # same case: keeping it prints a blank sheet stapled into the middle of the
+    # form (2200P p3, 2550M p3 and p4, 0605 p2, 1702Q p3, 2553 p2 all did). There
+    # is no geometry left on it to preserve and no band that could expand into
+    # it, so the page leaves the form document. The reference the round-trip is
+    # scored against has to lose it too, or a correctly dropped sheet reads as a
+    # page-count mismatch; the emptiness is asserted here rather than trusted so
+    # that a page with anything left on it stays, whatever the plan says.
     wanted = (set(split.guide_pages) if options.document == "guide"
               else {int(page["index"]) for page in ir["pages"]})
+    if options.document == "form":
+        for page_ir, page_layout in zip(ir["pages"], layout["pages"]):
+            index = int(page_ir["index"])
+            remains = _form_side_inventory(page_ir, page_layout, split.page(index))
+            if index in split.guide_pages and not any(remains.values()):
+                wanted.discard(index)
+                warnings.append(
+                    f"page {index}: every element is guide material, so the form "
+                    f"document drops the page rather than printing a blank sheet. "
+                    f"Score the form against a reference with this page removed.")
 
     band_blobs: list[dict[str, Any]] = []
     pages = [emit_page(page_ir, page_layout, styles, backend, options, band_blobs,
@@ -2985,9 +3805,16 @@ CELL_RE = re.compile(r'<div id="([^"]+)" class="c[^"]*"')
 
 
 def _pages_of(html: str) -> dict[int, str]:
-    """The emitted document sliced per page, for per-page inventory checks."""
+    """The emitted document sliced per page, for per-page inventory checks.
+
+    The document's tail is cut off first. Without that the last page's slice
+    swallows the band blob and the scripts, and two documents with a different
+    *page count* then compare unequal on a page they both emitted identically --
+    which is exactly the shape of a form that dropped a wholly relocated page.
+    """
+    body = html.split('<script type="application/json"', 1)[0]
     out: dict[int, str] = {}
-    chunks = PAGE_SPLIT_RE.split(html)
+    chunks = PAGE_SPLIT_RE.split(body)
     for index in range(1, len(chunks) - 1, 2):
         out[int(chunks[index])] = chunks[index + 1]
     return out
@@ -2998,8 +3825,247 @@ INPUT_NAME_RE = re.compile(r'<input\b[^>]*\bname="([^"]+)"')
 INPUT_ID_RE = re.compile(r'<input\b[^>]*\bid="([^"]+)"')
 
 
-def field_assertions(layout: dict[str, Any], plan: dict[str, Any], html: str,
-                     rendered: str, failures: list[str]) -> None:
+def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
+                           plan: dict[str, Any], guide_plan: dict[str, Any] | None,
+                           failures: list[str]) -> None:
+    """The cases 2551Q does not contain, built rather than skipped.
+
+    A check that cannot be evaluated is a failure and not a pass -- that is the
+    failure mode this project has already been burned by, an audit that scored
+    137 real defects as clean because it only compared what it knew to compare.
+    2551Q has no non-rectilinear path, no flipped image, no cell filled with
+    statutory text, no page the guide took whole and no straddler, so every one
+    of those is staged on its own data here. Nothing is keyed on a form code:
+    what is asserted is the *behaviour*, on input shaped like the corpus's.
+    """
+    # -- paths: geometry, both paints, the fill rule, and the paint order ------
+    triangle = {
+        "id": "path0", "x0": 32.88, "y0": 27.6, "x1": 36.96, "y1": 31.44,
+        "fill": [0.0, 0.0, 0.0], "fill_gray": 0.0, "stroke": None,
+        "stroke_gray": None, "stroke_width_pt": 0.0, "even_odd": False,
+        "role": "structural", "paint_seq": 0, "paint_seq_max": 0,
+        "subpaths": [{"start": [32.88, 27.6], "closed": True, "ops": [
+            {"op": "l", "points": [36.96, 29.52]},
+            {"op": "l", "points": [32.88, 31.44]},
+            {"op": "l", "points": [32.88, 27.6]}]}],
+    }
+    dot = dict(triangle, id="path1", even_odd=True, stroke=[0.2, 0.2, 0.2],
+               stroke_gray=0.2, stroke_width_pt=0.24, paint_seq=1, paint_seq_max=2,
+               subpaths=[{"start": [10.0, 20.0], "closed": False, "ops": [
+                             {"op": "c", "points": [10.9, 20.0, 11.7, 20.7, 11.7, 21.5]}]},
+                         {"start": [1.0, 2.0], "closed": True, "ops": [
+                             {"op": "re", "points": [1.0, 2.0, 3.0, 4.5]}]}])
+    _check(path_data(triangle) == "M32.88 27.6L36.96 29.52L32.88 31.44L32.88 27.6Z",
+           "a filled triangle is one closed path on the source's own points",
+           path_data(triangle), failures)
+    _check(path_data(dot) == ("M10 20C10.9 20 11.7 20.7 11.7 21.5"
+                              "M1 2L3 2L3 4.5L1 4.5Z"),
+           "a curve keeps its control points and a `re` subpath its four corners",
+           path_data(dot), failures)
+    _check(path_paints(triangle) == ("#000000", None)
+           and path_paints(dot) == ("#000000", "#333333"),
+           "a path carries its fill and its outline separately",
+           f"{path_paints(triangle)} / {path_paints(dot)}", failures)
+    _check('fill-rule="evenodd"' in path_svg(dot)
+           and 'fill-rule' not in path_svg(triangle)
+           and 'stroke-width="0.24"' in path_svg(dot),
+           "even-odd and the stroke width are stated only where the source states them",
+           path_svg(dot), failures)
+
+    staged_ir = json.loads(json.dumps(ir))
+    page = staged_ir["pages"][0]
+    page["paths"] = [triangle, dot]
+    # A rule painted after the paths must still be emitted after them.
+    late = max(int(r["paint_seq"]) for r in page["rules"])
+    triangle["paint_seq"] = triangle["paint_seq_max"] = late + 1
+    for backend_name in sorted(BACKENDS):
+        html, _ = build_document(staged_ir, layout, plan,
+                                 Options(backend_name, "fonts", "assets", None, None, None))
+        drawn = re.findall(r'data-(?:rule|path)-id="([^"]+)"', html)
+        _check(drawn.count("path0") == 1 and drawn.count("path1") == 1,
+               f"{backend_name} every path is emitted exactly once",
+               f"{drawn.count('path0')}/{drawn.count('path1')}", failures)
+        _check("path1" in drawn and drawn.index("path1") < drawn.index("path0"),
+               f"{backend_name} paths paint in the source's content-stream order",
+               f"path1 at {drawn.index('path1')}, path0 at {drawn.index('path0')}",
+               failures)
+
+    # -- image placement: the matrix is carried, and only when it fits the box --
+    flipped = {"sha256": "f" * 64, "ext": "png", "x0": 30.48, "y0": 37.92,
+               "x1": 71.28, "y1": 74.64, "paint_seq": 0, "paint_seq_max": 0,
+               "transform": [40.8, 0.0, -0.0, -36.72, 30.48, 74.64]}
+    _check(placement_matrix(flipped) == [40.8, 0.0, -0.0, -36.72, 30.48, 74.64],
+           "a vertical flip is carried as the source's own matrix",
+           str(placement_matrix(flipped)), failures)
+    _check(placement_matrix(dict(flipped, transform=None)) is None
+           and placement_matrix(dict(flipped, x1=99.0)) is None,
+           "a missing or box-contradicting matrix falls back to the box",
+           "None for both", failures)
+    for backend_name, needle in (("svg", 'transform="matrix(40.8,0,0,-36.72,30.48,74.64)"'),
+                                 ("css", "matrix(40.8,0,0,-36.72,40.64,99.52)")):
+        staged = json.loads(json.dumps(ir))
+        staged["pages"][0]["images"] = [flipped]
+        html, _ = build_document(staged, layout, plan,
+                                 Options(backend_name, "fonts", "assets", None, None, None))
+        _check(needle in html, f"{backend_name} emits the flip",
+               needle, failures)
+
+    # -- C6 part 2: pre-printed text over a blank makes it uneditable ----------
+    staged_ir = json.loads(json.dumps(ir))
+    staged_layout = json.loads(json.dumps(layout))
+    victim = next((c for p in staged_layout["pages"] for c in p["cells"]
+                   if c["kind"] == "field" and not c.get("comb")
+                   and c["x1"] - c["x0"] > 20.0), None)
+    if victim is None:
+        _check(False, "C6 part 2 has a plain field cell to cover", "none found", failures)
+    else:
+        page_index = int(victim["id"][1:].split("c")[0])
+        page = next(p for p in staged_ir["pages"] if int(p["index"]) == page_index)
+        width = victim["x1"] - victim["x0"]
+        text = "Not over P 250,000"
+        each = width / len(text)
+        page["text_runs"].append({
+            "text": text, "font": "Arial", "family": "Arial", "size_pt": 7.0,
+            "bold": False, "italic": False, "serif": False, "monospace": False,
+            "superscript": False, "flags": 0, "color": 0,
+            "x0": victim["x0"], "y0": victim["y0"], "x1": victim["x1"],
+            "y1": victim["y1"], "baseline_y": victim["y1"], "origin_x": victim["x0"],
+            "ascender": 0.9, "descender": -0.2, "line_height_pt": 8.0,
+            "measured_advance_pt": width,
+            "char_origin_offsets_pt": [each * i for i in range(len(text))],
+            "char_advances_pt": [each] * len(text),
+            "char_widths_pt": [each] * len(text),
+            "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+        })
+        ink = PrePrintedInk(page["text_runs"])
+        _check(not field_verdict(victim, ink)[0]
+               and field_verdict(dict(victim, comb={"cells": 3}), ink)[0],
+               "pre-printed text blocks a plain field but never a comb",
+               f"coverage {ink.coverage(victim):.2f}", failures)
+        html, _ = build_document(staged_ir, staged_layout, plan,
+                                 Options("svg", "fonts", "assets", None, None, None))
+        cell = re.search(rf'<div id="{victim["id"]}"[^>]*>(<input[^>]*>)?', html)
+        _check(cell is not None and cell.group(1) is None
+               and 'data-preprinted="true"' in cell.group(0),
+               "a cell filled with pre-printed text is emitted without an input",
+               cell.group(0)[:80] if cell else "cell absent", failures)
+
+    # -- Ink: a padded single-word run is emitted as its ink, at its own origin -
+    padded = {"text": " No ", "origin_x": 231.17,
+              "char_origin_offsets_pt": [0.0, 9.36, 15.84, 20.88],
+              "char_widths_pt": [2.5, 6.5, 5.0, 2.5], "measured_advance_pt": 23.38}
+    ink = run_ink(padded, None)
+    _check(ink.trimmed and ink.text == "No" and abs(ink.origin_x - 240.53) < 1e-9,
+           "a padded run is anchored on its first visible glyph",
+           f"{ink.text!r} at {fmt(ink.origin_x)}", failures)
+    # The source put 6.86pt of extra advance in the leading space and none
+    # between N and o; the plan's uniform model gave that gap 2.2914pt of it,
+    # which is what made the round-trip read back ' N o  ' and stop matching.
+    _check(abs(ink.letter_spacing_pt or 0.0) <= 0.05,
+           "the padding's advance does not become tracking between the letters",
+           f"{ink.letter_spacing_pt}pt per gap", failures)
+    multi = dict(padded, text=" No Yes ")
+    _check(not run_ink(multi, None).trimmed,
+           "a run whose ink contains a word gap keeps its padding",
+           run_ink(multi, None).text, failures)
+
+    # -- C8: the reflowed guide carries a run's colour ------------------------
+    white = {"text": "MMC", "color": 16777215, "x0": 0.0, "x1": 10.0,
+             "size_pt": 6.0, "baseline_y": 10.0}
+    black = dict(white, text="ATC", color=0, x0=-20.0, x1=-10.0)
+    _check(_render_pieces(_line_pieces([black, white]))
+           == 'ATC <span style="color:#ffffff">MMC</span>',
+           "a white run stays white in the guide and a black one carries no span",
+           _render_pieces(_line_pieces([black, white])), failures)
+
+    if guide_plan is None:
+        return
+
+    # -- S3: a page whose every element is guide material leaves the form ------
+    staged_plan = json.loads(json.dumps(guide_plan))
+    staged_layout = json.loads(json.dumps(layout))
+    last = ir["pages"][-1]
+    # A page whose every element is guide material has no growable band left on
+    # it either -- all six such pages in the corpus have none -- and a band is
+    # content, so the emitter must keep a page that still has one.
+    staged_layout["pages"][-1]["growable"] = []
+    staged_plan["inline"] = [{
+        "page": int(last["index"]), "cut_y_pt": 0.0, "whole_page": True,
+        "rule_ids": [r["id"] for r in last["rules"]],
+        "cell_ids": [c["id"] for c in layout["pages"][-1]["cells"]],
+        "text_run_indices": list(range(len(last["text_runs"]))),
+        "area_fill_indices": list(range(len(last["area_fills"]))),
+        "image_indices": list(range(len(last["images"]))),
+        "straddlers": [],
+    }]
+    html, warnings = build_document(ir, staged_layout, plan, Options(
+        "svg", "fonts", "assets", None, None, None, staged_plan, "form"))
+    _check(f'id="page-{last["index"]}"' not in html
+           and any("blank sheet" in w for w in warnings),
+           "a wholly relocated page is dropped from the form, not printed blank",
+           f"{len(_pages_of(html))} pages emitted", failures)
+
+    # The control: emptiness is asserted from the emitter's own predicates, not
+    # taken from the plan's flag, so one element left behind keeps the page.
+    if last["rules"]:
+        held = json.loads(json.dumps(staged_plan))
+        held["inline"][0]["rule_ids"] = held["inline"][0]["rule_ids"][1:]
+        kept, _ = build_document(ir, staged_layout, plan, Options(
+            "svg", "fonts", "assets", None, None, None, held, "form"))
+        _check(f'id="page-{last["index"]}"' in kept,
+               "a page with one element left on it is not dropped",
+               f"{len(_pages_of(kept))} pages emitted", failures)
+    if layout["pages"][-1]["growable"]:
+        kept, _ = build_document(ir, layout, plan, Options(
+            "svg", "fonts", "assets", None, None, None, staged_plan, "form"))
+        _check(f'id="page-{last["index"]}"' in kept,
+               "a page that still carries a growable band is not dropped",
+               f"{len(_pages_of(kept))} pages emitted", failures)
+
+    # -- straddlers: the form draws its own clipped piece --------------------
+    first_page = ir["pages"][0]
+    rule = next((r for r in first_page["rules"] if r["y1"] - r["y0"] > 20.0), None)
+    if rule is None:
+        _check(False, "a straddling rule can be staged", "no tall rule", failures)
+        return
+    cut = (float(rule["y0"]) + float(rule["y1"])) / 2.0
+    staged_plan = json.loads(json.dumps(guide_plan))
+    staged_plan["inline"] = [{
+        "page": int(first_page["index"]), "cut_y_pt": cut, "whole_page": False,
+        "rule_ids": [], "cell_ids": [], "text_run_indices": [],
+        "area_fill_indices": [], "image_indices": [],
+        "straddlers": [{
+            "kind": "rule", "ref": rule["id"], "x0": rule["x0"], "y0": rule["y0"],
+            "x1": rule["x1"], "y1": rule["y1"], "detail": "", "disposition": "clipped",
+            "form": {"x0": rule["x0"], "y0": rule["y0"], "x1": rule["x1"], "y1": cut},
+            "guide": {"x0": rule["x0"], "y0": cut, "x1": rule["x1"], "y1": rule["y1"]},
+        }],
+    }]
+    form_html, _ = build_document(ir, layout, plan, Options(
+        "svg", "fonts", "assets", None, None, None, staged_plan, "form"))
+    guide_html, _ = build_document(ir, layout, plan, Options(
+        "svg", "fonts", "assets", None, None, None, staged_plan, "guide", "absolute"))
+    form_rect = re.search(rf'<rect x="[^"]*" y="([^"]*)" width="[^"]*" '
+                          rf'height="([^"]*)"[^>]*data-rule-id="{rule["id"]}"', form_html)
+    guide_rect = re.search(rf'<rect x="[^"]*" y="([^"]*)" width="[^"]*" '
+                           rf'height="([^"]*)"[^>]*data-rule-id="{rule["id"]}"', guide_html)
+    _check(form_rect is not None and guide_rect is not None,
+           "a clipped straddler is drawn by both documents",
+           f"form {bool(form_rect)}, guide {bool(guide_rect)}", failures)
+    if form_rect and guide_rect:
+        above = float(form_rect.group(1)), float(form_rect.group(2))
+        below = float(guide_rect.group(1)), float(guide_rect.group(2))
+        _check(abs(above[0] - float(rule["y0"])) < 0.005
+               and abs(above[0] + above[1] - cut) < 0.005
+               and abs(below[0] - cut) < 0.005
+               and abs(below[0] + below[1] - float(rule["y1"])) < 0.005,
+               "the two pieces meet at the cut and reconstruct the rule",
+               f"{above} + {below} for {rule['y0']}..{rule['y1']} cut {fmt(cut)}",
+               failures)
+
+
+def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, Any],
+                     html: str, rendered: str, failures: list[str]) -> None:
     """Every blank the source drew is typeable, exactly once, and prints clean.
 
     Counted against the *layout*, not against the markup, so an input the
@@ -3007,8 +4073,14 @@ def field_assertions(layout: dict[str, Any], plan: dict[str, Any], html: str,
     here than anywhere else in this module: a field that silently does not exist
     looks exactly like a form that prints correctly, which is precisely the
     state this layer was written to end.
+
+    "Every blank" is `field_verdict`'s answer, not `kind == "field"`. The two
+    disagree in both directions and each disagreement was a live defect: a
+    comb-bearing `mixed` cell is a field the old test did not expect (2000-DST's
+    entire money grid), and a `field` cell filled with statutory text is not one
+    (1700 page 2's tax brackets).
     """
-    fields = FieldPlan(layout, resolve_field_face(plan, []), [])
+    fields = FieldPlan(layout, resolve_field_face(plan, []), [], ir)
     expected: dict[str, int] = {}
     for page in layout["pages"]:
         for cell in page["cells"]:
@@ -3016,11 +4088,18 @@ def field_assertions(layout: dict[str, Any], plan: dict[str, Any], html: str,
             if box is not None:
                 expected[cell["id"]] = box.capacity or 1
 
-    field_cells = sum(1 for p in layout["pages"] for c in p["cells"]
-                      if c["kind"] == "field")
-    _check(len(expected) == field_cells,
-           "every field cell has a typing surface",
-           f"{len(expected)} of {field_cells} field cells", failures)
+    ink = {int(p["index"]): PrePrintedInk(p["text_runs"]) for p in ir["pages"]}
+    fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
+                if field_verdict(c, ink.get(int(p["index"])))[0]]
+    _check(len(expected) == len(fillable) and set(expected) == set(fillable),
+           "every fillable cell has a typing surface",
+           f"{len(expected)} of {len(fillable)} fillable cells", failures)
+
+    combs = {c["id"] for p in layout["pages"] for c in p["cells"] if c.get("comb")}
+    _check(combs <= set(expected),
+           "every comb is a field whatever text it also holds",
+           f"{len(combs)} comb cells, {len(combs - set(expected))} without a surface",
+           failures)
 
     names = INPUT_NAME_RE.findall(rendered)
     counts: dict[str, int] = {}
@@ -3088,31 +4167,64 @@ def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
         guide_pages = _pages_of(guide_html)
         claimed = {int(e["page"]): e for e in guide_plan["inline"]}
 
-        _check(sorted(form_pages) == sorted(whole_pages),
-               f"{backend_name} form keeps every page",
-               f"{sorted(form_pages)} == {sorted(whole_pages)}", failures)
+        # Every page except one the guide took whole: that page has no geometry
+        # left to preserve and printed as a blank sheet stapled into the form.
+        relocated = {int(e["page"]) for e in guide_plan["inline"] if e.get("whole_page")}
+        expected_pages = sorted(set(whole_pages) - relocated)
+        _check(sorted(form_pages) == expected_pages,
+               f"{backend_name} form keeps every page it did not wholly relocate",
+               f"{sorted(form_pages)} == {expected_pages} "
+               f"({len(relocated)} relocated whole)", failures)
         _check(sorted(guide_pages) == sorted(claimed),
                f"{backend_name} guide carries only pages with a guide region",
                f"{sorted(guide_pages)} == {sorted(claimed)}", failures)
 
         for index, body in whole_pages.items():
             entry = claimed.get(index)
+            if index not in form_pages and index not in guide_pages:
+                _check(bool(entry and entry.get("whole_page")),
+                       f"{backend_name} p{index} is emitted by one document or claimed whole",
+                       f"whole_page={bool(entry and entry.get('whole_page'))}", failures)
+                continue
             band_rules = set(re.findall(r'id="band-rules-([^"]+)"', body))
 
+            # A clipped straddler is on both sides, as two pieces neither of
+            # which is the whole element, so it is counted out of the identity
+            # comparison and checked on its own below. 2551Q has none, so the
+            # numbers here are unchanged for the form --self-test runs on.
+            clipped = [s for s in (entry or {}).get("straddlers", ())
+                       if s.get("disposition") == "clipped"]
+            extra_rects = sum(1 for s in clipped
+                              if s["kind"] in ("rule", "area_fill", "image"))
+            clipped_refs = {s["ref"] for s in clipped}
             for label, pattern in (("rect", RECT_RE), ("text run", RUN_RE)):
+                allowance = extra_rects if label == "rect" else 0
                 everything = pattern.findall(body)
                 mine = pattern.findall(form_pages[index])
                 theirs = pattern.findall(guide_pages.get(index, ""))
-                _check(len(mine) + len(theirs) == len(everything),
+                _check(len(mine) + len(theirs) == len(everything) + allowance,
                        f"{backend_name} p{index} {label}s sum to the whole",
-                       f"{len(mine)} form + {len(theirs)} guide == {len(everything)}",
+                       f"{len(mine)} form + {len(theirs)} guide == {len(everything)}"
+                       f"{f' + {allowance} clipped' if allowance else ''}",
                        failures)
                 # Order is preserved on both sides, so a positional comparison
                 # is enough to prove nothing was re-laid-out.
-                merged = sorted(mine + theirs)
-                _check(merged == sorted(everything),
+                # Identity is asserted over the marks that carry an id, which is
+                # every rule and every text run. An area fill and an image carry
+                # no id, so a clipped one of those cannot be told apart from its
+                # own whole; on a page that has one, those are held to the count
+                # above and to the reconstruction guides.py proves.
+                anonymous = any(s["kind"] in ("area_fill", "image") for s in clipped)
+                def identified(items: Sequence[str]) -> list[str]:
+                    return sorted(item for item in items
+                                  if not any(f'"{ref}"' in item for ref in clipped_refs)
+                                  and (not anonymous or "data-rule-id=" in item
+                                       or label != "rect"))
+                _check(identified(mine + theirs) == identified(everything),
                        f"{backend_name} p{index} {label}s are byte-identical after the split",
-                       f"{len(everything)} compared", failures)
+                       f"{len(everything)} compared, {len(clipped_refs)} clipped"
+                       f"{', anonymous fills held to the count' if anonymous else ''}",
+                       failures)
 
             if entry is None:
                 _check(form_pages[index] == body,
@@ -3131,18 +4243,22 @@ def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
             _check(all_rules <= (form_rules | guide_rules),
                    f"{backend_name} p{index} no structural rule is lost by the split",
                    f"{len(all_rules - (form_rules | guide_rules))} lost", failures)
-            _check(not (form_rules & guide_rules),
+            shared = (form_rules & guide_rules) - clipped_refs
+            _check(not shared,
                    f"{backend_name} p{index} no rule is emitted twice",
-                   f"{len(form_rules & guide_rules)} shared", failures)
+                   f"{len(shared)} shared beyond the {len(clipped_refs)} clipped",
+                   failures)
             _check(set(entry["rule_ids"]) & form_rules == set(),
                    f"{backend_name} p{index} the form drops exactly the claimed rules",
                    f"{len(set(entry['rule_ids']) & form_rules)} claimed rules kept",
                    failures)
 
-            # Straddlers: claimed by nobody, therefore the form's.
+            # Straddlers are clipped, so both documents draw the piece on their
+            # own side of the cut and neither may lose the element.
             straddling_rules = [s["ref"] for s in entry["straddlers"] if s["kind"] == "rule"]
-            _check(all(ref in form_rules for ref in straddling_rules),
-                   f"{backend_name} p{index} the form keeps every straddling rule",
+            _check(all(ref in form_rules and ref in guide_rules
+                       for ref in straddling_rules),
+                   f"{backend_name} p{index} both documents draw every straddling rule",
                    f"{len(straddling_rules)} straddler(s)", failures)
 
             _check(not (set(entry["rule_ids"]) & band_rules),
@@ -3154,10 +4270,13 @@ def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
             form_cells = set(CELL_RE.findall(form_pages[index]))
             guide_cells = set(CELL_RE.findall(guide_pages.get(index, "")))
             whole_cells = set(CELL_RE.findall(whole_pages[index]))
-            _check(form_cells | guide_cells == whole_cells and not (form_cells & guide_cells),
+            clipped_cells = {s["ref"] for s in entry.get("straddlers", ())
+                             if s["kind"] == "cell" and s.get("disposition") == "clipped"}
+            _check(form_cells | guide_cells == whole_cells
+                   and not ((form_cells & guide_cells) - clipped_cells),
                    f"{backend_name} p{index} cells partition exactly",
-                   f"{len(form_cells)} + {len(guide_cells)} == {len(whole_cells)}",
-                   failures)
+                   f"{len(form_cells)} + {len(guide_cells)} == {len(whole_cells)}, "
+                   f"{len(clipped_cells)} clipped", failures)
 
     # The reflowed guide is a different document, so it is checked for what it
     # promises: every claimed run present, exactly once, and no coordinates.
@@ -3352,7 +4471,7 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
         _check(not bad, "comb slot counts match the layout",
                f"{len(comb_cells)} comb cells, {len(bad)} wrong", failures)
 
-        field_assertions(layout, plan, html, rendered, failures)
+        field_assertions(ir, layout, plan, html, rendered, failures)
 
         bands = [(p["index"], g) for p in layout["pages"] for g in p["growable"]]
         for page_index, band in bands:
@@ -3431,9 +4550,13 @@ def self_test(ir_path: pathlib.Path, layout_path: pathlib.Path,
             _check(first == second,
                    f"{layout_name} guide output is byte-identical across runs",
                    f"{len(first)} chars", failures)
+        print("constructed cases", file=sys.stderr)
+        constructed_assertions(ir, layout, plan, guide_plan, failures)
     else:
         print(f"form/guide split: skipped, no guide plan at {guide_plan_path}",
               file=sys.stderr)
+        print("constructed cases", file=sys.stderr)
+        constructed_assertions(ir, layout, plan, None, failures)
 
     print(f"\n{'FAILED: ' + ', '.join(failures) if failures else 'all assertions passed'}",
           file=sys.stderr)

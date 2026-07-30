@@ -8,14 +8,14 @@
   "sha256": "6ea2ef0f6c84a68ef1c50ad63f4ff0e95a68258f52b62b98f305c861c8b75d55",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 1,
   "pages": 1,
   "paper": "612.0x936.0",
   "uniform_paper": true,
   "fonts": [
     "Arial"
   ],
-  "rules": 427,
+  "rules": 349,
   "text_runs": 182,
   "images": 1,
   "cells": 161,
@@ -59,7 +59,7 @@
       "1600WP Guide.pdf"
     ]
   },
-  "html_bytes": 206482,
+  "html_bytes": 205544,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

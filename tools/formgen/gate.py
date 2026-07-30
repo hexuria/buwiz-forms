@@ -164,6 +164,18 @@ def _tally(name: str, keys: Iterable[str], pct_key: str | None = None) -> Result
     if len(records) != EXPECTED_FORMS:
         return Result(name, Verdict.FAIL,
                       f"audit covers {len(records)}/{EXPECTED_FORMS} forms")
+
+    # A form whose round trip hard-failed reports every total as 0, because the
+    # differ never walked its pages. Counting those zeros as "clean" is how this
+    # gate came to report `rules clean on 51/51` while five forms had not been
+    # measured at all -- the same disease the gate exists to cure, in the gate.
+    unmeasured = [r["slug"] for r in records if r.get("measured") is False]
+    if unmeasured:
+        return Result(name, Verdict.UNEVALUABLE,
+                      f"{len(unmeasured)} form(s) not measured "
+                      f"({', '.join(unmeasured[:5])}); their totals are zeros "
+                      f"from a hard failure, not results")
+
     bad: list[str] = []
     for key in keys:
         offenders = [r for r in records if r.get(key)]

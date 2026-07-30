@@ -733,6 +733,13 @@ def detect_page(ir_page: dict[str, Any],
     guide_rules = [r["id"] for r in ir_page["rules"] if r["y0"] >= cut_y]
     guide_fills = [i for i, f in enumerate(ir_page["area_fills"]) if f["y0"] >= cut_y]
     guide_images = [i for i, m in enumerate(ir_page["images"]) if m["y0"] >= cut_y]
+    # Paths arrived with IR schema 2, after this module was written, so they were
+    # silently never claimed. 0605 page 2 relocated every rule, run and fill and
+    # still kept 532 stroked dashes, which left the page looking non-empty to
+    # everything reading the plan while emit.py correctly printed nothing. Same
+    # geometric rule as every other bucket: top edge at or below the cut.
+    guide_paths = [i for i, p in enumerate(ir_page.get("paths") or ())
+                   if p["y0"] >= cut_y]
     straddlers = collect_straddlers(cut_y, ir_page, layout_page)
 
     field_cells = [c for c in layout_page["cells"] if c["kind"] == "field"]
@@ -756,6 +763,7 @@ def detect_page(ir_page: dict[str, Any],
         "cell_ids": guide_cells,
         "rule_ids": guide_rules,
         "area_fill_indices": guide_fills,
+        "path_indices": guide_paths,
         "image_indices": guide_images,
         "detector": chosen.detector,
         "marker": chosen.marker,
@@ -873,6 +881,7 @@ def build_plan(ir: dict[str, Any], layout: dict[str, Any],
             "guide_cells": sum(len(e["cell_ids"]) for e in inline),
             "guide_rules": sum(len(e["rule_ids"]) for e in inline),
             "guide_area_fills": sum(len(e["area_fill_indices"]) for e in inline),
+            "guide_paths": sum(len(e.get("path_indices") or ()) for e in inline),
             "guide_images": sum(len(e["image_indices"]) for e in inline),
             "straddlers": sum(len(e["straddlers"]) for e in inline),
             "clipped": sum(1 for e in inline for s in e["straddlers"]
@@ -906,6 +915,9 @@ def check_partition(plan: dict[str, Any], ir: dict[str, Any],
              list(range(len(ir_page["text_runs"])))),
             ("area_fill", [f["y0"] for f in ir_page["area_fills"]], entry["area_fill_indices"],
              list(range(len(ir_page["area_fills"])))),
+            ("path", [p["y0"] for p in (ir_page.get("paths") or ())],
+             entry.get("path_indices") or [],
+             list(range(len(ir_page.get("paths") or ())))),
             ("image", [m["y0"] for m in ir_page["images"]], entry["image_indices"],
              list(range(len(ir_page["images"])))),
             ("rule", [r["y0"] for r in ir_page["rules"]], entry["rule_ids"],

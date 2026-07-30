@@ -16,18 +16,21 @@ Usage:
         --form-code 2551Q --revision 2018 \
         --expected-sha256 <64 hex> \
         --out build/ir/2551q-2018.ir.json
+
+    python3 tools/formgen/extract.py --self-test
 """
 
 from __future__ import annotations
 
 import argparse
 import collections
+import copy
 import hashlib
 import json
 import math
 import pathlib
 import sys
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 try:
     import fitz  # PyMuPDF
@@ -828,6 +831,22 @@ def painted_pixmap(doc: fitz.Document, xref: int) -> fitz.Pixmap:
     return fitz.Pixmap(base, mask)
 
 
+def pixmap_sha256(pix: fitz.Pixmap) -> str | None:
+    """Digest a pixmap's samples, normalised to RGB, or None if undecodable.
+
+    Factored out so the self-test can hash the *base* image with the same
+    formula the IR uses for the painted one. Two spellings of one digest would
+    drift, and then a compositing regression would read as a hash difference
+    rather than as the missing mask it is.
+    """
+    if pix.colorspace is None:
+        return None
+    if pix.colorspace.n != 3:
+        pix = fitz.Pixmap(fitz.csRGB, pix)
+    return hashlib.sha256(
+        f"{pix.width}x{pix.height}:".encode() + pix.samples).hexdigest()
+
+
 def decoded_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
     """Hash an image's painted samples, normalised to RGB.
 
@@ -841,13 +860,7 @@ def decoded_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
     as "unknown", never "equal".
     """
     try:
-        pix = painted_pixmap(doc, xref)
-        if pix.colorspace is None:
-            return None
-        if pix.colorspace.n != 3:
-            pix = fitz.Pixmap(fitz.csRGB, pix)
-        return hashlib.sha256(
-            f"{pix.width}x{pix.height}:".encode() + pix.samples).hexdigest()
+        return pixmap_sha256(painted_pixmap(doc, xref))
     except Exception:  # noqa: BLE001 - undecodable is a real answer, not a failure
         return None
 
@@ -1081,20 +1094,708 @@ def extract(pdf_path: pathlib.Path, form_code: str, revision: str,
     }
 
 
+# ---------------------------------------------------------------------------
+# Self-test
+# ---------------------------------------------------------------------------
+
+# Where the pinned source PDFs live. The default matches batch.py's, so the
+# self-test runs with no arguments -- which is how gate.py invokes it.
+SELF_TEST_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
+
+# code -> (path under the source root, revision, sha256 of the pinned bytes).
+#
+# The assertions below are measured against the real corpus, never a synthetic
+# fixture: a fixture would encode what this module already believes, and every
+# property here was established by reading these exact files. Each is pinned by
+# hash, because a self-test that silently scored a different revision of a form
+# would be worse than none.
+#
+# Naming forms here is not the per-form special-casing the constraints forbid.
+# No extraction behaviour keys on a code; these are the *subjects* of the
+# assertions rather than exceptions to them, and each fixture earns its place by
+# exercising a property no other form does.
+SELF_TEST_FIXTURES: dict[str, tuple[str, str, str]] = {
+    # The reference form: paper, determinism, and 572 comb dividers.
+    "2551Q": ("2551Qv2018/2551Q Jan 2018 ENCS final rev 3_copy.pdf", "2018",
+              "1f270ecf66d778836a14697863e420ff65d5ed0a5576a6cf58b97c9a8e8c9b24"),
+    # Non-rectilinear ink: filled triangles and Bezier decimal points.
+    "0605": ("0605/0605version1999_09.02.2022_copy.pdf", "1999",
+             "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f"),
+    # Soft masks: two /SMask placements whose base streams are /Matte padding.
+    "1604E": ("1604Ev2018/1604E Jan 2018 ENCS Final2.pdf", "2018",
+              "1db203442630c74ff4c95b509e204f542c5ba8fb1bd812440793e314ce709876"),
+    # A vertically flipped placement, and four unmappable Wingdings glyphs.
+    "2550M": ("2550M/bir2550m.pdf", "2007",
+              "9fb4101ace8c781436dac85df138a8fb9790775291affe2dada030c490d0d2b6"),
+    # The other three unmappable glyphs.
+    "2553": ("2553v1999/42792553.pdf", "1999",
+             "e52f96fe48aba2890078f889930744a4e13a4defe1284aa9c5292e2c702a20e5"),
+    # Twelve leaning stroked separators that must stay rules.
+    "2316": ("2316v2021/2316 Sep 2021 ENCS_Final_corrected.pdf", "2021",
+             "8e927e65b096d7a786ba7d36c55c28ee3de3546278880d9de8c11a91d1b48d60"),
+}
+
+# (code, width_pt, height_pt, page_count). Folio, not A4 and not Letter.
+SELF_TEST_PAPER = ("2551Q", 612.0, 936.0, 2)
+
+# The form whose two extractions must serialise identically.
+SELF_TEST_DETERMINISM_FORM = "2551Q"
+
+# (code, image xref, its /SMask xref). The base stream here is 39 compressed
+# bytes of flat black; the mask is the whole picture.
+SELF_TEST_MASKED = ("1604E", 39, 40)
+
+# (code, image xref) whose placement matrix has a negative `d` -- the seal that
+# rendered upside-down while the IR carried only a bounding box.
+SELF_TEST_FLIPPED = ("2550M", 51)
+
+# 0605 page 1: 30 lone "write here" triangles plus 3 that share a path with a
+# rect, and 10 pre-printed decimal points drawn as filled Bezier circles.
+SELF_TEST_PATHS_FORM = "0605"
+SELF_TEST_TRIANGLES = 33
+SELF_TEST_DECIMAL_POINTS = 10
+
+# The thickness extract_segments invents for a zero-width `l` op. 0605's ink is
+# all triangles and circles, so after the diagonal paths stopped being forced
+# axis-aligned the form carries no rule of this thickness at all -- the bucket
+# was entirely the invented default.
+SELF_TEST_PHANTOM_THICKNESS_PT = 0.24
+
+# Characters whose presence in a run must be corroborated by the source's own
+# glyph log: both are what a mis-read symbolic glyph looks like when it lands as
+# something that reads as content.
+SELF_TEST_CORROBORATED_CHARACTERS = {"?": 0x003F, "§": 0x00A7}
+
+# The seven glyphs rawdict mis-reported. Wingdings glyph 131 with no ToUnicode
+# CMap; rawdict offers the WinAnsi meaning of byte 0xA7, which this font does not
+# use, so a section sign appears where the file states nothing at all.
+SELF_TEST_RETEXTED_GLYPHS = {"2550M": 4, "2553": 3}
+SELF_TEST_RETEXTED_GLYPH_ID = 131
+SELF_TEST_RETEXTED_RAWDICT_CODEPOINT = 0x00A7
+
+# 2316's stroked box separators: they lean up to 0.24pt across 14.96pt, well
+# inside their own 0.45pt stroke width, so they ink the same pixels as a bar and
+# must stay in `rules` where lattice.py can find a box side.
+SELF_TEST_BAR_LIKE_FORM = "2316"
+SELF_TEST_LEANING_BARS = 12
+
+
+def texttrace_codepoints(page: fitz.Page) -> dict[tuple[float, float], set[int]]:
+    """Every codepoint get_texttrace() reports, keyed by glyph origin.
+
+    Deliberately *not* the view extract_text_runs reads. rawdict guesses a
+    WinAnsi meaning for a byte in a symbolic font with no ToUnicode CMap, which
+    is how seven glyphs came to read as section signs; get_texttrace() answers
+    U+FFFD instead. Checking emitted text against this map is therefore a check
+    against the file rather than against the same guess.
+    """
+    by_origin: dict[tuple[float, float], set[int]] = collections.defaultdict(set)
+    for span in page.get_texttrace():
+        for char in span["chars"]:
+            by_origin[(q(char[2][0]), q(char[2][1]))].add(char[0])
+    return dict(by_origin)
+
+
+def base_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
+    """The digest of an image with its soft mask deliberately discarded.
+
+    This is what the IR used to carry, and the only way to prove compositing
+    actually happened: 1604E's masked base streams are flat /Matte padding, so a
+    painted digest equal to this one means the mask was dropped again.
+    """
+    try:
+        base = fitz.Pixmap(doc, xref)
+        if base.alpha:
+            base = fitz.Pixmap(base, 0)
+        return pixmap_sha256(base)
+    except Exception:  # noqa: BLE001 - undecodable is a real answer here too
+        return None
+
+
+def leaning_bars(page: fitz.Page) -> list[dict[str, Any]]:
+    """Every `l` op that leans off-axis, with the bar it must have become.
+
+    The bar geometry is re-derived from the op rather than read back out of
+    extract_segments, so the check compares two independent statements: what the
+    content stream draws, and what the IR ended up holding.
+    """
+    bars: list[dict[str, Any]] = []
+    for item in page.get_drawings():
+        width = float(item.get("width") or 0.0)
+        for op in item["items"]:
+            if op[0] != "l":
+                continue
+            p0, p1 = op[1], op[2]
+            lean = min(abs(p0.x - p1.x), abs(p0.y - p1.y))
+            if lean <= AXIS_EPSILON_PT:
+                continue
+            half = width / 2.0
+            if abs(p0.y - p1.y) <= abs(p0.x - p1.x):
+                bar = {"axis": "h", "near": q(p0.y - half), "far": q(p0.y + half),
+                       "start": q(min(p0.x, p1.x)), "end": q(max(p0.x, p1.x))}
+            else:
+                bar = {"axis": "v", "near": q(p0.x - half), "far": q(p0.x + half),
+                       "start": q(min(p0.y, p1.y)), "end": q(max(p0.y, p1.y))}
+            bar.update(page=page.number + 1, lean_pt=round(lean, 3),
+                       stroke_width_pt=q(width),
+                       bar_like=is_bar_like(p0, p1, width),
+                       rectilinear=is_rectilinear(item))
+            bars.append(bar)
+    return bars
+
+
+def paint_order_desync_probes(page: fitz.Page,
+                              drawings: list[dict[str, Any]]) -> dict[str, bool]:
+    """Whether paint_order refuses a drawings list the bbox log cannot explain.
+
+    The reconciliation must raise rather than fall back: a fallback publishes a
+    plausible document whose z-order is not the source's, and z-order is the
+    whole reason this data exists. Both directions are probed because they trip
+    different branches -- a short list runs out of slots mid-log, a long one is
+    left holding an unconsumed drawing.
+    """
+    probes: dict[str, bool] = {}
+    for name, mutated in (("fewer_drawings_than_ops", drawings[:-1]),
+                          ("more_drawings_than_ops", [*drawings, drawings[-1]])):
+        try:
+            paint_order(page, mutated)
+        except SystemExit:
+            probes[name] = True
+        else:
+            probes[name] = False
+    return probes
+
+
+def gather_evidence(source_root: pathlib.Path) -> dict[str, Any]:
+    """Extract every fixture once, plus the source facts the checks compare to.
+
+    Everything a check reads lives in this bundle, and nothing in it is a live
+    fitz object. That is what lets mutation_probes deep-copy it, break one
+    property, and watch exactly one check trip.
+    """
+    evidence: dict[str, Any] = {
+        "ir": {}, "serialisations": [], "base_pixel_sha256": {},
+        "codepoints": {}, "leaning_bars": {}, "desync": {},
+    }
+    for code, (relative, revision, digest) in SELF_TEST_FIXTURES.items():
+        path = source_root / relative
+        # extract() verifies the pin, so a swapped file fails here by name.
+        evidence["ir"][code] = extract(path, code, revision, digest)
+        doc = fitz.open(path)
+        evidence["codepoints"][code] = {
+            page.number + 1: texttrace_codepoints(page) for page in doc}
+        evidence["leaning_bars"][code] = [bar for page in doc
+                                          for bar in leaning_bars(page)]
+        first = doc[0]
+        evidence["desync"][code] = paint_order_desync_probes(
+            first, list(first.get_drawings()))
+        evidence["base_pixel_sha256"][code] = {
+            image["xref"]: base_pixel_sha256(doc, image["xref"])
+            for page in evidence["ir"][code]["pages"] for image in page["images"]}
+        doc.close()
+
+    code = SELF_TEST_DETERMINISM_FORM
+    relative, revision, digest = SELF_TEST_FIXTURES[code]
+    again = extract(source_root / relative, code, revision, digest)
+    evidence["serialisations"] = [
+        json.dumps(evidence["ir"][code], ensure_ascii=False),
+        json.dumps(again, ensure_ascii=False),
+    ]
+    return evidence
+
+
+def check_determinism(evidence: dict[str, Any]) -> list[str]:
+    """Two extractions of one PDF must serialise to the same bytes."""
+    payloads = evidence["serialisations"]
+    if len(payloads) != 2:
+        return [f"determinism needs two extractions, got {len(payloads)}"]
+    if payloads[0] != payloads[1]:
+        return [f"two extractions of {SELF_TEST_DETERMINISM_FORM} differ: "
+                f"{len(payloads[0])} vs {len(payloads[1])} chars"]
+    return []
+
+
+def check_paper(evidence: dict[str, Any]) -> list[str]:
+    """Paper is the PDF's own MediaBox, per page, exactly."""
+    code, width, height, page_count = SELF_TEST_PAPER
+    ir = evidence["ir"][code]
+    paper = ir["paper"]
+    failures: list[str] = []
+    if (paper["width_pt"], paper["height_pt"]) != (width, height):
+        failures.append(f"{code} paper {paper['width_pt']}x{paper['height_pt']}pt "
+                        f"!= {width}x{height}pt")
+    if not paper["uniform"]:
+        failures.append(f"{code} paper is not uniform: {paper['distinct_sizes']}")
+    if len(ir["pages"]) != page_count:
+        failures.append(f"{code} has {len(ir['pages'])} pages, expected {page_count}")
+    if ir["source"]["page_count"] != page_count:
+        failures.append(f"{code} source page_count {ir['source']['page_count']} "
+                        f"!= {page_count}")
+    off = [page["index"] for page in ir["pages"]
+           if (page["width_pt"], page["height_pt"]) != (width, height)]
+    if off:
+        failures.append(f"{code} pages {off} are not {width}x{height}pt")
+    return failures
+
+
+def check_paint_seq(evidence: dict[str, Any]) -> list[str]:
+    """Every piece of ink knows where it sits in the page's paint order."""
+    failures: list[str] = []
+    for code, ir in evidence["ir"].items():
+        for page in ir["pages"]:
+            for kind in ("rules", "area_fills", "paths", "images"):
+                for position, item in enumerate(page[kind]):
+                    first = item.get("paint_seq")
+                    last = item.get("paint_seq_max")
+                    label = f"{code} p{page['index']} {kind}[{position}]"
+                    if not isinstance(first, int) or first < 0:
+                        failures.append(f"{label} paint_seq is {first!r}")
+                    elif not isinstance(last, int) or last < first:
+                        failures.append(f"{label} paint_seq_max {last!r} < {first}")
+    return failures
+
+
+def check_paint_order_reconciliation(evidence: dict[str, Any]) -> list[str]:
+    """The reconciliation raises on disagreement; it never falls back."""
+    failures: list[str] = []
+    for code, probes in evidence["desync"].items():
+        if not probes:
+            failures.append(f"{code}: no reconciliation probe ran")
+        for name, raised in sorted(probes.items()):
+            if not raised:
+                failures.append(f"{code}: paint_order accepted a desynced "
+                                f"drawings list ({name})")
+    return failures
+
+
+def check_soft_masks(evidence: dict[str, Any]) -> list[str]:
+    """A masked placement reports its mask, and its digest is the composite's."""
+    failures: list[str] = []
+    code, xref, mask_xref = SELF_TEST_MASKED
+    named = [image for page in evidence["ir"][code]["pages"]
+             for image in page["images"] if image["xref"] == xref]
+    if not named:
+        failures.append(f"{code} xref {xref} is not placed on any page")
+    for image in named:
+        if not image["masked"] or image["smask_xref"] != mask_xref:
+            failures.append(f"{code} xref {xref} reports masked="
+                            f"{image['masked']} smask_xref={image['smask_xref']}, "
+                            f"expected True/{mask_xref}")
+
+    # The general property, over every masked placement in every fixture: the
+    # painted digest must differ from the base stream's own bytes and from the
+    # base image's pixels, or the mask was discarded somewhere.
+    for code, ir in evidence["ir"].items():
+        for page in ir["pages"]:
+            for image in page["images"]:
+                if not image["masked"]:
+                    continue
+                label = f"{code} p{page['index']} xref {image['xref']}"
+                if not image["smask_xref"]:
+                    failures.append(f"{label} is masked with no smask_xref")
+                if image["pixel_sha256"] is None:
+                    failures.append(f"{label} has no pixel_sha256 to compare")
+                    continue
+                if image["pixel_sha256"] == image["sha256"]:
+                    failures.append(f"{label} pixel digest equals the compressed "
+                                    f"stream digest")
+                base = evidence["base_pixel_sha256"][code].get(image["xref"])
+                if base is None:
+                    failures.append(f"{label} base image could not be decoded")
+                elif image["pixel_sha256"] == base:
+                    failures.append(f"{label} pixel digest equals the unmasked "
+                                    f"base image's -- the soft mask was dropped")
+                if not image["asset_file"].endswith(".png"):
+                    failures.append(f"{label} asset {image['asset_file']} cannot "
+                                    f"carry alpha")
+    return failures
+
+
+def check_transforms(evidence: dict[str, Any]) -> list[str]:
+    """Every placement carries its full matrix, and the flip is still negative."""
+    failures: list[str] = []
+    for code, ir in evidence["ir"].items():
+        for page in ir["pages"]:
+            for image in page["images"]:
+                matrix = image["transform"]
+                if not isinstance(matrix, list) or len(matrix) != 6:
+                    failures.append(f"{code} p{page['index']} xref {image['xref']} "
+                                    f"transform is {matrix!r}, expected 6 elements")
+
+    code, xref = SELF_TEST_FLIPPED
+    matrices = [image["transform"] for page in evidence["ir"][code]["pages"]
+                for image in page["images"] if image["xref"] == xref]
+    if not matrices:
+        failures.append(f"{code} xref {xref} is not placed on any page")
+    for matrix in matrices:
+        if not isinstance(matrix, list) or len(matrix) != 6:
+            continue  # already reported above
+        if matrix[3] >= 0:
+            failures.append(f"{code} xref {xref} has d={matrix[3]}, expected a "
+                            f"negative `d` (the vertical flip)")
+    return failures
+
+
+def is_filled_triangle(path: dict[str, Any]) -> bool:
+    """A filled path holding a closed three-segment straight-line subpath.
+
+    Three of 0605's thirty markers share their path with a rect, so the test is
+    on the subpath rather than on the whole path's op census.
+    """
+    if path["fill"] is None:
+        return False
+    return any(sub["closed"] and len(sub["ops"]) == 3
+               and all(op["op"] == "l" for op in sub["ops"])
+               for sub in path["subpaths"])
+
+
+def is_filled_curve_mark(path: dict[str, Any]) -> bool:
+    """A filled path made only of curves: the pre-printed decimal points."""
+    if path["fill"] is None:
+        return False
+    ops = [op for sub in path["subpaths"] for op in sub["ops"]]
+    return bool(ops) and all(op["op"] == "c" for op in ops)
+
+
+def check_paths(evidence: dict[str, Any]) -> list[str]:
+    """Non-rectilinear ink survives whole, and invents no hairlines on the way."""
+    ir = evidence["ir"][SELF_TEST_PATHS_FORM]
+    page = ir["pages"][0]
+    failures: list[str] = []
+
+    triangles = [path["id"] for path in page["paths"] if is_filled_triangle(path)]
+    if len(triangles) != SELF_TEST_TRIANGLES:
+        failures.append(f"{SELF_TEST_PATHS_FORM} page 1 has {len(triangles)} filled "
+                        f"triangle paths, expected {SELF_TEST_TRIANGLES}")
+    marks = [path["id"] for path in page["paths"] if is_filled_curve_mark(path)]
+    if len(marks) != SELF_TEST_DECIMAL_POINTS:
+        failures.append(f"{SELF_TEST_PATHS_FORM} page 1 has {len(marks)} filled "
+                        f"decimal-point marks, expected {SELF_TEST_DECIMAL_POINTS}")
+
+    phantom = [f"p{page['index']}:{rule['id']}" for page in ir["pages"]
+               for rule in page["rules"]
+               if rule["thickness_pt"] == SELF_TEST_PHANTOM_THICKNESS_PT]
+    if phantom:
+        failures.append(f"{SELF_TEST_PATHS_FORM} carries {len(phantom)} rule(s) at "
+                        f"the invented {SELF_TEST_PHANTOM_THICKNESS_PT}pt default "
+                        f"({', '.join(phantom[:5])})")
+    return failures
+
+
+def check_codepoints(evidence: dict[str, Any]) -> list[str]:
+    """No run holds a character the source did not state.
+
+    The corroboration is against get_texttrace()'s glyph log, not against the
+    rawdict reading the run came from, because the two disagree and rawdict is
+    the one that guesses.
+    """
+    failures: list[str] = []
+    for code, ir in evidence["ir"].items():
+        by_page = evidence["codepoints"][code]
+        for page in ir["pages"]:
+            stated = by_page.get(page["index"]) or {}
+            for run in page["text_runs"]:
+                offsets = run["char_origin_offsets_pt"]
+                for index, char in enumerate(run["text"]):
+                    expected = SELF_TEST_CORROBORATED_CHARACTERS.get(char)
+                    if expected is None:
+                        continue
+                    label = (f"{code} p{page['index']} {char!r} in "
+                             f"{run['text'][:32]!r}")
+                    if run["origin_x"] is None or index >= len(offsets):
+                        failures.append(f"{label} has no origin to corroborate")
+                        continue
+                    origin = (q(run["origin_x"] + offsets[index]), run["baseline_y"])
+                    drawn = stated.get(origin)
+                    if drawn is None:
+                        failures.append(f"{label} sits at {origin}, which the "
+                                        f"source's glyph log does not mention")
+                    elif expected not in drawn:
+                        failures.append(f"{label} where the source drew "
+                                        f"{sorted(hex(c) for c in drawn)}")
+
+    for code, ir in evidence["ir"].items():
+        expected = SELF_TEST_RETEXTED_GLYPHS.get(code, 0)
+        carried = [(page["index"], run) for page in ir["pages"]
+                   for run in page["text_runs"] if run["unmapped_glyphs"]]
+        total = sum(len(run["unmapped_glyphs"]) for _, run in carried)
+        if total != expected:
+            failures.append(f"{code} carries {total} unmapped glyph(s), "
+                            f"expected {expected}")
+        for index, run in carried:
+            for glyph in run["unmapped_glyphs"]:
+                label = f"{code} p{index} glyph {glyph['index']}"
+                if glyph["glyph_id"] != SELF_TEST_RETEXTED_GLYPH_ID:
+                    failures.append(f"{label} is glyph id {glyph['glyph_id']}, "
+                                    f"expected {SELF_TEST_RETEXTED_GLYPH_ID}")
+                if run["text"][glyph["index"]] != UNMAPPED_CODEPOINT:
+                    failures.append(f"{label} reads "
+                                    f"{run['text'][glyph['index']]!r}, expected "
+                                    f"{UNMAPPED_CODEPOINT!r}")
+                if glyph["rawdict_codepoint"] != SELF_TEST_RETEXTED_RAWDICT_CODEPOINT:
+                    failures.append(
+                        f"{label} records rawdict codepoint "
+                        f"{hex(glyph['rawdict_codepoint'])}, expected "
+                        f"{hex(SELF_TEST_RETEXTED_RAWDICT_CODEPOINT)} -- the "
+                        f"substitution this field exists to record")
+    return failures
+
+
+def bar_matches_rule(rule: dict[str, Any], bar: dict[str, Any]) -> bool:
+    """Whether this rule is the bar a leaning segment must have become.
+
+    The rule may be longer than the segment: extract_segments unions collinear
+    spans, so a separator drawn as one op merges with anything it abuts. The
+    near/far edges are exact; the length is containment.
+    """
+    if rule["axis"] != bar["axis"]:
+        return False
+    if rule["axis"] == "h":
+        near, far, start, end = rule["y0"], rule["y1"], rule["x0"], rule["x1"]
+    else:
+        near, far, start, end = rule["x0"], rule["x1"], rule["y0"], rule["y1"]
+    return (abs(near - bar["near"]) <= JOIN_EPSILON_PT
+            and abs(far - bar["far"]) <= JOIN_EPSILON_PT
+            and start <= bar["start"] + JOIN_EPSILON_PT
+            and end >= bar["end"] - JOIN_EPSILON_PT)
+
+
+def check_bar_like(evidence: dict[str, Any]) -> list[str]:
+    """A segment leaning less than its own stroke width stays a rule.
+
+    2316's twelve box separators are the case that makes exact axis alignment the
+    wrong test: they lean up to 0.24pt over as much as 14.96pt, a third of their
+    0.45pt stroke width, so they ink the same pixels as a bar. Diverting them to
+    `paths` would move real structure out of lattice.py's reach for no visual
+    gain, so this asserts they are still rules -- and that the form gained no
+    paths at all.
+    """
+    code = SELF_TEST_BAR_LIKE_FORM
+    ir = evidence["ir"][code]
+    bars = evidence["leaning_bars"][code]
+    failures: list[str] = []
+
+    if len(bars) != SELF_TEST_LEANING_BARS:
+        failures.append(f"{code} draws {len(bars)} leaning segment(s), expected "
+                        f"{SELF_TEST_LEANING_BARS}")
+
+    pages = {page["index"]: page for page in ir["pages"]}
+    for bar in bars:
+        where = (f"{code} p{bar['page']} {bar['axis']} at {bar['near']} "
+                 f"{bar['start']}->{bar['end']} (lean {bar['lean_pt']}pt of "
+                 f"{bar['stroke_width_pt']}pt stroke)")
+        if not bar["bar_like"]:
+            failures.append(f"{where} is no longer bar-like")
+        if not bar["rectilinear"]:
+            failures.append(f"{where} was diverted to extract_paths")
+        page = pages.get(bar["page"])
+        if page is None:
+            failures.append(f"{where} is on a page the IR does not have")
+            continue
+        matched = [rule["id"] for rule in page["rules"]
+                   if bar_matches_rule(rule, bar)]
+        if len(matched) != 1:
+            failures.append(f"{where} matches {len(matched)} rule(s) {matched[:4]}, "
+                            f"expected exactly 1")
+
+    diverted = [f"p{page['index']}:{len(page['paths'])}" for page in ir["pages"]
+                if page["paths"]]
+    if diverted:
+        failures.append(f"{code} gained non-rectilinear paths ({', '.join(diverted)}); "
+                        f"its ink is entirely rects and bar-like segments")
+    return failures
+
+
+SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] = (
+    ("determinism", check_determinism),
+    ("paper", check_paper),
+    ("paint-seq", check_paint_seq),
+    ("paint-order-reconciliation", check_paint_order_reconciliation),
+    ("soft-masks", check_soft_masks),
+    ("transforms", check_transforms),
+    ("paths", check_paths),
+    ("codepoints", check_codepoints),
+    ("is-bar-like", check_bar_like),
+)
+
+
+def mutate_determinism(evidence: dict[str, Any]) -> None:
+    evidence["serialisations"][1] += " "
+
+
+def mutate_paper(evidence: dict[str, Any]) -> None:
+    evidence["ir"][SELF_TEST_PAPER[0]]["paper"]["height_pt"] = 792.0
+
+
+def mutate_paint_seq(evidence: dict[str, Any]) -> None:
+    del evidence["ir"]["2551Q"]["pages"][0]["rules"][0]["paint_seq"]
+
+
+def mutate_paint_order_reconciliation(evidence: dict[str, Any]) -> None:
+    evidence["desync"]["2551Q"]["fewer_drawings_than_ops"] = False
+
+
+def mutate_soft_masks(evidence: dict[str, Any]) -> None:
+    """Restore the pre-compositing digest: the mask silently dropped again."""
+    code, xref, _ = SELF_TEST_MASKED
+    for page in evidence["ir"][code]["pages"]:
+        for image in page["images"]:
+            if image["xref"] == xref:
+                image["pixel_sha256"] = evidence["base_pixel_sha256"][code][xref]
+
+
+def mutate_transforms(evidence: dict[str, Any]) -> None:
+    """Flip the flip back, as a bounding box would have."""
+    code, xref = SELF_TEST_FLIPPED
+    for page in evidence["ir"][code]["pages"]:
+        for image in page["images"]:
+            if image["xref"] == xref and image["transform"]:
+                image["transform"][3] = abs(image["transform"][3])
+
+
+def mutate_paths(evidence: dict[str, Any]) -> None:
+    """Drop one marker, as the rule classifier used to."""
+    page = evidence["ir"][SELF_TEST_PATHS_FORM]["pages"][0]
+    for position, path in enumerate(page["paths"]):
+        if is_filled_triangle(path):
+            del page["paths"][position]
+            return
+
+
+def mutate_codepoints(evidence: dict[str, Any]) -> None:
+    """Print the section sign rawdict offered, where the file states nothing."""
+    for page in evidence["ir"]["2550M"]["pages"]:
+        for run in page["text_runs"]:
+            if run["unmapped_glyphs"]:
+                index = run["unmapped_glyphs"][0]["index"]
+                run["text"] = (run["text"][:index] + "§" + run["text"][index + 1:])
+                return
+
+
+def mutate_bar_like(evidence: dict[str, Any]) -> None:
+    """Divert one leaning separator to paths, as exact alignment would have."""
+    code = SELF_TEST_BAR_LIKE_FORM
+    bar = evidence["leaning_bars"][code][0]
+    for page in evidence["ir"][code]["pages"]:
+        if page["index"] != bar["page"]:
+            continue
+        page["rules"] = [rule for rule in page["rules"]
+                         if not bar_matches_rule(rule, bar)]
+
+
+SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ...] = (
+    ("determinism", "one serialisation gains a byte", mutate_determinism),
+    ("paper", "2551Q's height becomes Letter", mutate_paper),
+    ("paint-seq", "a rule loses its paint_seq", mutate_paint_seq),
+    ("paint-order-reconciliation", "a desync is accepted instead of raising",
+     mutate_paint_order_reconciliation),
+    ("soft-masks", "a masked image reports its unmasked pixels", mutate_soft_masks),
+    ("transforms", "2550M's seal loses its vertical flip", mutate_transforms),
+    ("paths", "one filled triangle is dropped", mutate_paths),
+    ("codepoints", "an unmappable glyph prints as a section sign", mutate_codepoints),
+    ("is-bar-like", "a leaning separator loses its rule", mutate_bar_like),
+)
+
+
+def mutation_probes(evidence: dict[str, Any], stream: Any) -> list[str]:
+    """Confirm every check can fail, by breaking its subject and re-running it.
+
+    A self-test that cannot fail is worthless, and every assertion above is of
+    the form "the corpus says X" -- so the only way to know one is wired to the
+    corpus is to change the corpus in memory and watch it trip. Each probe also
+    requires that *only* its own check trips, which is what stops a broad check
+    from standing in for a missing one.
+    """
+    checks = dict(SELF_TEST_CHECKS)
+    failures: list[str] = []
+    if set(name for name, _, _ in SELF_TEST_MUTATIONS) != set(checks):
+        failures.append("every check needs a mutation that trips it; "
+                        f"{sorted(set(checks) - {n for n, _, _ in SELF_TEST_MUTATIONS})} "
+                        "have none")
+    for name, description, mutate in SELF_TEST_MUTATIONS:
+        broken = copy.deepcopy(evidence)
+        mutate(broken)
+        tripped = sorted(other for other, check in checks.items() if check(broken))
+        if name not in tripped:
+            failures.append(f"mutation '{description}' did not trip {name}")
+        extra = [other for other in tripped if other != name]
+        if extra:
+            failures.append(f"mutation '{description}' also tripped {extra}")
+        print(f"  probe {name:<27} {'OK' if not extra and name in tripped else 'WEAK'}"
+              f"  ({description})", file=stream)
+    return failures
+
+
+def self_test(source_root: pathlib.Path) -> int:
+    """Assert Round 1's properties against the real PDFs, then prove they can fail.
+
+    Absence is a failure, not a skip: a self-test that quietly passes because it
+    could not find its sources is the same green tick this project has already
+    been burned by.
+    """
+    missing = [f"{code}: {source_root / relative}"
+               for code, (relative, _, _) in SELF_TEST_FIXTURES.items()
+               if not (source_root / relative).is_file()]
+    if missing:
+        print(f"self-test cannot run -- {len(missing)} source PDF(s) absent under "
+              f"{source_root}:", file=sys.stderr)
+        for entry in missing:
+            print(f"  {entry}", file=sys.stderr)
+        print("Pass --source-root if the pinned PDFs live elsewhere.", file=sys.stderr)
+        return 2
+
+    evidence = gather_evidence(source_root)
+    failures: list[str] = []
+    for name, check in SELF_TEST_CHECKS:
+        found = check(evidence)
+        failures.extend(found)
+        print(f"  {name:<27} {'PASS' if not found else f'{len(found)} FAILURE(S)'}",
+              file=sys.stderr)
+        for message in found:
+            print(f"    FAIL {message}", file=sys.stderr)
+
+    weak = mutation_probes(evidence, sys.stderr)
+    failures.extend(weak)
+    for message in weak:
+        print(f"    FAIL {message}", file=sys.stderr)
+
+    print(f"self-test: {'PASS' if not failures else f'{len(failures)} FAILURE(S)'} "
+          f"over {len(SELF_TEST_FIXTURES)} pinned PDFs", file=sys.stderr)
+    return 1 if failures else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--pdf", required=True, type=pathlib.Path)
-    parser.add_argument("--form-code", required=True)
-    parser.add_argument("--revision", required=True)
+    # --pdf, --form-code and --revision describe one conversion, so they are
+    # required for one -- but --self-test names its own pinned corpus and takes
+    # none of them, which is how gate.py invokes it.
+    parser.add_argument("--pdf", type=pathlib.Path, default=None)
+    parser.add_argument("--form-code", default=None)
+    parser.add_argument("--revision", default=None)
     parser.add_argument("--expected-sha256", default=None,
                         help="Fail unless the PDF hashes to this. Omit only while exploring.")
     parser.add_argument("--out", type=pathlib.Path, default=None,
                         help="Write IR JSON here (default: stdout).")
     parser.add_argument("--summary", action="store_true",
                         help="Print a human-readable summary to stderr.")
+    parser.add_argument("--self-test", action="store_true",
+                        help="Assert this module's properties against the pinned "
+                             "source PDFs and exit non-zero on failure.")
+    parser.add_argument("--source-root", type=pathlib.Path,
+                        default=SELF_TEST_SOURCE_ROOT,
+                        help="Where --self-test looks for the pinned PDFs.")
     args = parser.parse_args(argv)
 
+    if args.self_test:
+        return self_test(args.source_root)
+
+    absent = [name for name, value in (("--pdf", args.pdf),
+                                       ("--form-code", args.form_code),
+                                       ("--revision", args.revision)) if value is None]
+    if absent:
+        return print(f"missing required argument(s): {', '.join(absent)}",
+                     file=sys.stderr) or 2
     if not args.pdf.is_file():
         return print(f"no such PDF: {args.pdf}", file=sys.stderr) or 2
 

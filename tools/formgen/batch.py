@@ -6,7 +6,7 @@ hand-maintainable HTML/CSS bundle under forms/, then gets archived: from that
 point the HTML is the artefact people edit, and this script exists only as the
 record of how it was derived.
 
-Because the HTML becomes hand-maintained, three things matter more than they
+Because the HTML becomes hand-maintained, four things matter more than they
 would in a normal build:
 
   * Every bundle carries provenance.json (source files, SHA-256, page geometry,
@@ -18,6 +18,11 @@ would in a normal build:
     own form.css, and the guide document's own rules land in guide.css.
     A fix to the page scaffolding is then one edit, not 48.
   * Fonts live once at forms/fonts/, not once per form.
+  * Artwork is staged as the picture the page paints, which for the 37
+    soft-masked placements is not the PDF's image stream: extract.asset_for_xref
+    composites the mask. The file keeps the base stream's hash as its name, so a
+    bundle written by an older run holds the wrong bytes under the right name and
+    has to be overwritten rather than left alone.
 
 Two documents per bundle
 ------------------------
@@ -202,24 +207,67 @@ def extract_images(pdf: pathlib.Path, assets: pathlib.Path) -> int:
     emit.py resolves images by content hash, so this has to run before it or the
     form gets placeholders. Naming by hash also means the seal shared by several
     forms is stored once and cannot be silently swapped for different bytes.
+
+    The bytes come from extract.asset_for_xref(), not from doc.extract_image().
+    37 placements across 19 forms declare a /SMask, and for those the base stream
+    is not the picture: 1604E xref 39 is 39 compressed bytes of flat black that
+    its mask shapes away to nothing, so painting the base put a black block over
+    the official's "BCS/ Item:" label, and its neighbour xref 37 is the 0xD9
+    decorative grey wherever the mask is opaque and /Matte black elsewhere.
+    asset_for_xref composites the mask and returns PNG.
+
+    The file *name* does not change under compositing: asset_file_name() keys it
+    to the sha256 of the base stream, which is also what the IR's `sha256` and
+    emit.py's assets/<sha256>.<ext> lookup carry. Verified over the corpus -- all
+    37 masked bases are already `png`, so not one of the 119 asset names moves.
+    That is why the write is conditional on the *bytes* and not on the file
+    existing: the composited asset lands under the name the base image already
+    occupies, and `if not target.exists()` would keep serving last run's black
+    rectangle from a pool that is shared between forms and kept between runs.
+
+    The count returned is how many distinct assets this PDF needs, not how many
+    files this call happened to create. It reaches provenance.json, and "files
+    created" is a property of the pool's history rather than of the form: every
+    committed provenance.json says 0 today because that run found the pool already
+    populated, and once the write became conditional on bytes the first of two
+    consecutive regenerates would have said 37 and the second 0 -- a byte-identical
+    forms/ is one of the gate's checks.
     """
     import fitz  # local import: only the driver needs it
+    import extract  # same reason, and it exits the process when fitz is absent
 
     assets.mkdir(parents=True, exist_ok=True)
-    written = 0
     doc = fitz.open(pdf)
+    needed: dict[str, bytes] = {}
+    seen: set[int] = set()
     for page in doc:
         for info in page.get_images(full=True):
-            try:
-                payload = doc.extract_image(info[0])
-            except Exception:  # noqa: BLE001 - a broken XObject must not stop the form
+            # One XObject placed on three pages is one asset. Compositing a soft
+            # mask decodes two pixmaps, so ask for each xref exactly once.
+            xref = int(info[0])
+            if xref in seen:
                 continue
-            data = payload["image"]
-            target = assets / f"{hashlib.sha256(data).hexdigest()}.{payload.get('ext', 'png')}"
-            if not target.exists():
-                target.write_bytes(data)
-                written += 1
-    return written
+            seen.add(xref)
+            asset = extract.asset_for_xref(doc, xref)
+            if asset is None:  # a broken XObject must not stop the form
+                continue
+            name, data = asset
+            if needed.get(name, data) != data:
+                # Unrepresentable downstream: emit.py resolves artwork by this
+                # name, so one of the two pictures would be served for both.
+                # extract.py's 1:1 base-stream-to-mask mapping says this cannot
+                # happen for this corpus; said out loud rather than assumed,
+                # because the failure would be a wrong picture on a printed form
+                # instead of a crash.
+                print(f"  asset name collision: {pdf.name} xref {xref} claims "
+                      f"{name} with different bytes", file=sys.stderr)
+                continue
+            needed[name] = data
+    for name, data in needed.items():
+        target = assets / name
+        if not target.is_file() or target.read_bytes() != data:
+            target.write_bytes(data)
+    return len(needed)
 
 
 def run_stage(args: list[str]) -> tuple[bool, str]:
@@ -271,7 +319,15 @@ def stage_fonts(plan_path: pathlib.Path, fonts_dir: pathlib.Path) -> None:
     files its @font-face rules point at are actually there and the check is only
     worth anything if nothing had to be staged by hand. A newly mapped family
     would otherwise render from a platform fallback while the plan went on
-    reporting advances for the font we meant to ship.
+    reporting advances for the font we meant to ship. A face fonts.py newly
+    resolves -- the glyph-131 substitution being the current case -- is staged
+    here on the run that first resolves it, with no separate step to forget.
+
+    Restaged when the bytes differ, not merely when the file is absent. A WOFF2 is
+    named by family and weight rather than by content hash, so an upgraded face
+    keeps its name, and "copy only if missing" would ship last version's outlines
+    under this version's metrics for ever. This is the same staleness that let the
+    pre-composite base images survive in the asset pool; see extract_images.
     """
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     root = pathlib.Path(plan["generator"]["fonts_root"])
@@ -282,7 +338,8 @@ def stage_fonts(plan_path: pathlib.Path, fonts_dir: pathlib.Path) -> None:
             continue
         source = root / relative
         target = fonts_dir / pathlib.PurePosixPath(relative).name
-        if source.is_file() and not target.is_file():
+        if source.is_file() and (not target.is_file()
+                                 or target.read_bytes() != source.read_bytes()):
             shutil.copy2(source, target)
 
 
@@ -666,6 +723,53 @@ def planned_outputs(records: list[dict[str, Any]], out_root: pathlib.Path,
     return {path.resolve() for path in planned}
 
 
+ASSET_REF_RE = re.compile(r"assets/([0-9a-f]{64}\.[a-z0-9]+)")
+
+
+def referenced_assets(records: list[dict[str, Any]]) -> set[str]:
+    """The asset file names the emitted documents actually load.
+
+    Read back out of the HTML, not derived from the IR, because the document is
+    the only authority on what it draws: an image the guide reflow does not
+    render leaves an asset in the pool that nothing loads.
+    """
+    names: set[str] = set()
+    for record in records:
+        for path in (record.get("html"), (record.get("guide_build") or {}).get("html")):
+            if path and pathlib.Path(path).is_file():
+                names |= set(ASSET_REF_RE.findall(
+                    pathlib.Path(path).read_text(encoding="utf-8")))
+    return names
+
+
+def report_unreferenced_assets(records: list[dict[str, Any]]) -> None:
+    """Say which staged assets no emitted document loads. Nothing is removed.
+
+    Deciding this is what keeps the tracked-file guard honest once artwork bytes
+    change. The tempting rule -- "an asset nothing references is a legitimate
+    removal, unlike a font or a bundle file" -- is right about *reachability*: an
+    asset is only ever reached through a document that names it by content hash,
+    so an unreferenced one is dead weight. It is wrong about *cause*. The one
+    unreferenced asset in this corpus is 1702Q's page-3 artwork, and it is
+    unreferenced because its page was relocated into the guide region and the
+    guide document does not render images -- which is the defect emit.py already
+    warns about, not a picture the form stopped needing. Acting on reachability
+    would have deleted a tracked file to tidy away the evidence of a bug.
+
+    So package() still stages the whole pool, tracked assets stay planned, the
+    guard stays silent for artwork, and the fact is printed instead. When an asset
+    really is withdrawn, `--allow-removals` is still the deliberate override; it
+    exists precisely because a removal has to be asked for.
+    """
+    pools = {pathlib.Path(r["html"]).parent / "assets" for r in records}
+    pool = {p.name for d in pools if d.is_dir() for p in d.iterdir() if p.is_file()}
+    stale = sorted(pool - referenced_assets(records))
+    if stale:
+        print(f"{len(stale)} staged asset(s) referenced by no emitted document "
+              f"(staged anyway, not removed): {', '.join(n[:12] for n in stale)}",
+              file=sys.stderr)
+
+
 def drop_reason(path: pathlib.Path, out_root: pathlib.Path) -> str:
     """Why this run does not write a file that is committed under `out_root`."""
     top = path.relative_to(out_root).parts[0]
@@ -745,6 +849,14 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
 
     check_tracked_files(ok, out_root, fonts_src, complete_run=complete_run,
                         allow_removals=allow_removals)
+    # Only a whole successful run can judge this, for the same reason it is the
+    # only run that can judge an orphan: a slice leaves every other form's
+    # artwork in the shared pool, and a form that failed to emit leaves its own
+    # there -- unreferenced by design rather than dropped. Measured: a run with
+    # 39 of 51 forms failing at the fonts stage reported 83 unreferenced assets,
+    # which is a report about the failures and not about the artwork.
+    if complete_run and len(ok) == len(records):
+        report_unreferenced_assets(ok)
 
     # A declaration shared by every form belongs in base.css. Anything else is
     # form-specific. This is computed, not curated, so it cannot drift. Only the

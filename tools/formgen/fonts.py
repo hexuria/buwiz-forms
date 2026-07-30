@@ -117,6 +117,71 @@ Absence is now its own verdict, on its own line, with its own count:
     problem even though it is not a metric one, so it stays visible in the plan
     and the substitution is emitted for `emit.py` to apply.
 
+GLYPHS THE SOURCE ITSELF DOES NOT NAME
+--------------------------------------
+Absence has a second form, and it is worse because it looks like content. Seven
+glyphs across 2550M page 4 and 2553 page 2 are drawn from a symbolic Wingdings
+face with no usable ToUnicode CMap. `get_text("rawdict")` reports them as U+00A7
+SECTION SIGN -- the WinAnsi meaning of the byte 0xA7, from a font that does not
+use WinAnsi -- while `get_texttrace()` reports U+FFFD and glyph id 131. Nothing
+downstream could tell that was a guess: the sheet printed "§" where a list
+marker belongs and every count still came out right.
+
+extract.py now carries the honest reading -- U+FFFD in `text`, plus
+`unmapped_glyphs` naming the glyph id -- and this module looks the *glyph id* up
+rather than the character. Wingdings glyph 131 is the same drawing the sheets
+with a usable encoding spell U+F0A7, so it folds onto the table entry that
+already describes it and inherits that entry's verdict. See
+SYMBOL_GLYPH_CODEPOINTS for the measurement, and `run_codepoints` for the fold.
+
+U+FFFD itself must never be looked up in a face. Arimo and Tinos both *contain*
+U+FFFD, so a plain coverage test calls it present and then measures its 0.8403em
+placeholder against the source glyph's own advance -- a fabricated ~0.4pt
+"metric error" for a character nobody set. UNSTATED_CODEPOINTS settles that
+before any face is asked, the same way `has()` settles ordinary coverage.
+
+WORD SPACING IS NOT LETTER SPACING
+----------------------------------
+Tracking used to be one number per run: (measured advance - natural advance),
+spread over every gap as `letter-spacing`. That is right for a run the generator
+*tracked* and wrong for a run it *justified*, because justification widens the
+spaces and leaves the letters alone. 2553 page 2 is the case that shows it. Run
+22 needs +1.201pt per gap under the single-number model -- 0.1221em of tracking
+on every glyph of a 9.84pt line, which is exactly what "tracked out" looks
+like -- when the truth is +0.049pt of tracking and +6.921pt on each of its seven
+spaces.
+
+The two are separable from data the IR already carries. `char_advances_pt[i]` is
+an origin-to-origin distance, so it holds the generator's Tc, Tw and TJ for that
+one gap; the residual against our face's advance is therefore measurable *per
+gap* instead of only in total. Grouping those residuals by whether the gap
+follows a word separator splits Tw from Tc, and CSS reproduces each with the
+property that means it: `letter-spacing` for the letters, `word-spacing` for the
+separators.
+
+Two things keep this from being a trade:
+
+  * Both candidates are evaluated as they would be **emitted** -- gated and
+    rounded -- and the separated pair is taken only when it does not increase
+    the run's worst accumulated glyph-origin error. No run's geometry can come
+    out worse than it was.
+  * That error is reported rather than summarised away, per run
+    (`origin_drift_pt`, with `origin_drift_pt_if_uniform` beside it) and per
+    face. It is the quantity verify.py compares, and it is not the same as
+    `width_residual_pt`: a spacing too small before a word gap and too large
+    after it cancels in the total width while leaving an interior glyph points
+    away from its origin. One CSS pair cannot reproduce a line whose word gaps
+    genuinely differ from each other, and where it cannot, the plan says by how
+    much instead of implying it fits.
+
+The case CSS cannot express at all is a run that opens with indentation spaces
+and then justifies: `word-spacing` applies to every separator in the box, so
+widening the interior gaps widens the indent too. Measured on 2553 p2 r59, the 8
+leading spaces carry +0.07pt each while the interior spaces carry +0.90..+1.14,
+and no (letter, word) pair fits both. Those runs keep the single-number model --
+through the guard above, not through a rule about leading spaces -- and taking
+the run origin after the indent is emit.py's half of the fix.
+
 HOW WE GET THE SHIPPED FACE'S METRICS
 -------------------------------------
 The repo ships Arimo and Roboto Condensed as variable WOFF2, and MuPDF
@@ -169,6 +234,38 @@ LETTER_SPACING_EPSILON_PT = 0.01
 # A 131-glyph run at 0.009pt of tracking per gap drifts 1.2pt if it is dropped,
 # which is a whole character of error at 8pt.
 LETTER_SPACING_ACCUMULATED_PT = 0.05
+
+# word-spacing is gated by the same two numbers, against its own count of word
+# separators rather than the run's gap count. The reasoning is identical -- a
+# spacing too small to see still accumulates -- and giving it a second pair of
+# constants would only invite the two to drift apart.
+
+# The CSS word-separator characters, restricted to the one the corpus contains.
+# Sweeping all 17,983 text runs of all 51 forms finds 76,250 U+0020 and no other
+# whitespace or separator codepoint at all. The set is named rather than inlined
+# so that adding one is a visible edit, and UNMODELLED_WORD_SEPARATORS makes a
+# form that carries one of the others fail loudly: a separator this module did
+# not know about would land in the letter group and have its word gap smeared
+# back across the glyphs, which is the very defect this model exists to fix.
+WORD_SEPARATORS = frozenset({0x0020})
+UNMODELLED_WORD_SEPARATORS = frozenset({
+    0x00A0,   # NO-BREAK SPACE
+    0x1361,   # ETHIOPIC WORDSPACE
+    0x10100, 0x10101,  # AEGEAN WORD SEPARATOR LINE / DOT
+    0x1039F,  # UGARITIC WORD DIVIDER
+    0x1091F,  # PHOENICIAN WORD SEPARATOR
+})
+
+# A run keeps the single-number model unless separating letter from word spacing
+# leaves its worst accumulated glyph-origin error no larger. Compared with this
+# much slack rather than exactly, so a tie goes to the more faithful description
+# instead of to the last bit of a float sum.
+SPACING_CHOICE_SLACK_PT = 1e-9
+
+# Accumulated glyph-origin error worth telling a reader about, per face. Set to
+# verify.py's own position tolerance: below it every glyph in the run lands where
+# the PDF put it, and above it at least one does not.
+ORIGIN_DRIFT_WARN_PT = 0.25
 
 # Tracking tighter than this is condensed type, not incidental kerning. It is
 # worth flagging because the usual cause is a wrongly chosen (too wide) face --
@@ -1161,6 +1258,77 @@ BLACK_CIRCLE = 0x25CF
 BULLET = 0x2022
 WINGDINGS_SQUARE_BULLET = 0xF0A7
 
+# What extract.py writes into `text` where the PDF drew a glyph whose codepoint
+# the file never states. It is a marker, not a character the document asked for.
+UNMAPPED_CODEPOINT = 0xFFFD
+
+# Codepoints that may never be looked up in a face, whatever the face contains.
+# Arimo and Tinos both carry U+FFFD (0.8403em of diamond-and-question-mark), so
+# the ordinary coverage test calls it present and then measures that placeholder
+# against the source glyph's own advance -- 0.4575em for the Wingdings square,
+# i.e. a fabricated ~0.4pt "metric error" for a character nobody set. Absence has
+# to be decided from what the *source* stated, not from what the substitute
+# happens to draw, so this is settled in resolve_glyph before `has()` is asked.
+UNSTATED_CODEPOINTS = frozenset({UNMAPPED_CODEPOINT})
+
+# Names for absent codepoints that GLYPH_SUBSTITUTIONS does not describe, so a
+# warning can say what went wrong rather than "unknown glyph". A codepoint here
+# is deliberately *not* a substitution-table entry: the table's rows are claims
+# about a specific drawing, and the honest claim about an unnamed glyph id is
+# that we know one was drawn and do not know which.
+ABSENT_GLYPH_NAMES = {
+    UNMAPPED_CODEPOINT: "GLYPH THE SOURCE DOES NOT NAME (no ToUnicode, and no "
+                        "entry in SYMBOL_GLYPH_CODEPOINTS for its glyph id)",
+}
+
+# (family, glyph id) -> the codepoint this module reasons about instead.
+#
+# Wingdings glyph 131 is the glyph the sheets with a usable encoding spell
+# U+F0A7: byte 0xA7 folds to PUA F000+0xA7 by the same rule as
+# SYMBOL_ENCODED_FAMILIES, and the advance agrees. Measured over all 7
+# occurrences -- 2550M page 4 at 8.25pt (3.78pt) and 6.75pt (3.09pt x3), 2553
+# page 2 at 9.84pt (4.51pt x3) -- the PDF records 0.4578..0.4583em against the
+# 0.4575em pinned for U+F0A7 out of Wingdings' own hmtx. That is a spread of
+# 0.0008em, four times inside SOURCE_ADVANCE_TOLERANCE_EM, so this is a
+# re-spelling of a glyph the table already covers and not a new entry; it
+# inherits U+F0A7's verdict, which is `unrepresentable`.
+#
+# Unrepresentable is the measurement's answer, not an omission. Asking arimo,
+# tinos and roboto-condensed (latin and latin-ext, 400 and 700) for every square
+# and block -- U+25A0, U+25A1, U+25A3, U+25AA, U+25AB, U+25AC, U+25AE, U+25FB..
+# U+25FE, U+2586..U+2589, U+2596, U+2610..U+2612, U+220E -- returns nothing at
+# all. The only filled marks any of them draw are discs: U+2022 BULLET at
+# 0.3501em and U+00B7 MIDDLE DOT at 0.333em, against the 0.2891 x 0.2891em of
+# square ink wanted. A disc is not a square, and on a tax form these mark
+# statutory list items, so the shape is not ours to change; the plan warns
+# instead. `substitution_table_failures` re-derives that absence from the shipped
+# files on every self-test, so this comment cannot outlive the fonts.
+SYMBOL_GLYPH_CODEPOINTS = {("Wingdings", 131): WINGDINGS_SQUARE_BULLET}
+
+
+def run_codepoints(run: dict[str, Any]) -> list[int]:
+    """The codepoint to look each character of a run up by, one per character.
+
+    Two folds, answering different questions. `normalised_codepoint` re-encodes a
+    symbol face's byte as the private-use codepoint the rest of this module
+    reasons about. This function additionally overrules the *character* at every
+    position where the IR says the source never stated one: there `text` carries
+    U+FFFD and `unmapped_glyphs` names the glyph that was actually drawn.
+
+    A position whose glyph id has no entry in SYMBOL_GLYPH_CODEPOINTS keeps
+    U+FFFD and is therefore reported unrepresentable and warned about, rather
+    than guessed at. That is the honest verdict: a glyph was drawn and we cannot
+    say which one.
+    """
+    family = run["family"]
+    codepoints = [normalised_codepoint(family, char) for char in run["text"]]
+    for entry in run.get("unmapped_glyphs") or []:
+        index = int(entry["index"])
+        if 0 <= index < len(codepoints):
+            codepoints[index] = SYMBOL_GLYPH_CODEPOINTS.get(
+                (family, int(entry["glyph_id"])), UNMAPPED_CODEPOINT)
+    return codepoints
+
 # The package whose metrics the pinned replacement figures below describe. Every
 # occurrence in this corpus is set in a sans family -- Arial, which resolves to
 # Arimo, and Calibri, which has no plan yet but would not resolve to a serif --
@@ -1273,15 +1441,23 @@ class GlyphResolution:
         return self.status != PRESENT
 
 
-def resolve_glyph(face: MetricFace, family: str, char: str) -> GlyphResolution:
+def resolve_glyph(face: MetricFace, codepoint: int, char: str) -> GlyphResolution:
     """Decide what a shipped face draws for one character, before measuring it.
 
     Every advance in this module goes through here first. `char_advance_pt` will
     happily answer for a codepoint the face has never heard of -- it returns
     gid 0's width -- so the coverage question has to be settled before the
     measurement, not inferred from it afterwards.
+
+    `codepoint` is the caller's, from `run_codepoints`, rather than derived from
+    `char` here. The two disagree exactly where it matters: a symbol face's byte
+    folds to a private-use codepoint, and an unmapped glyph's character is a
+    U+FFFD marker that names no glyph the document contains.
     """
-    codepoint = normalised_codepoint(family, char)
+    if codepoint in UNSTATED_CODEPOINTS:
+        # Absence by construction, ahead of any coverage test: see
+        # UNSTATED_CODEPOINTS for why asking the face is the wrong question.
+        return GlyphResolution(char, codepoint, UNREPRESENTABLE, None, None)
     if face.has(codepoint):
         return GlyphResolution(char, codepoint, PRESENT, codepoint, None)
     substitution = GLYPH_SUBSTITUTIONS.get(codepoint)
@@ -1352,7 +1528,8 @@ class AbsentGlyphTally:
         return {
             "codepoint": format_codepoint(self.codepoint),
             "char": self.char,
-            "name": substitution.name if substitution else None,
+            "name": (substitution.name if substitution
+                     else ABSENT_GLYPH_NAMES.get(self.codepoint)),
             "status": self.status,
             "count": self.count,
             "sizes_pt": sorted(self.sizes_pt),
@@ -1387,6 +1564,219 @@ def tally_absent(store: dict[int, AbsentGlyphTally], resolution: GlyphResolution
 def absent_records(store: dict[int, AbsentGlyphTally]) -> list[dict[str, Any]]:
     """Absent-glyph tallies, ordered by codepoint so two runs serialise alike."""
     return [store[codepoint].as_record() for codepoint in sorted(store)]
+
+
+# ---------------------------------------------------------------------------
+# Tracking: letter spacing and word spacing, separately
+# ---------------------------------------------------------------------------
+
+
+def spacing_is_worth_emitting(value_pt: float, count: int) -> bool:
+    """Whether a spacing of `value_pt` over `count` gaps has to be written out.
+
+    Two thresholds, and the second is the one that earns its keep: spacing too
+    small to see per gap still accumulates over the run.
+    """
+    return (abs(value_pt) >= LETTER_SPACING_EPSILON_PT
+            or abs(value_pt) * count >= LETTER_SPACING_ACCUMULATED_PT)
+
+
+def authored_spacing_pt(value_pt: float, count: int, scale: float) -> float | None:
+    """The CSS value to write for a page-space spacing, or None to omit it.
+
+    Divide before rounding, never after: both letter-spacing and word-spacing sit
+    inside the scaled box and are scaled with it, so it is the quotient the
+    transform lands on `value_pt`, and the quotient is what has to be
+    representable at the emitted precision.
+    """
+    if not spacing_is_worth_emitting(value_pt, count):
+        return None
+    return r4(value_pt / scale)
+
+
+def gated_spacing_pair(letter_pt: float, word_pt: float, gaps: int,
+                       separator_gaps: int,
+                       scale: float) -> tuple[float | None, float | None]:
+    """The two authored values, gated together rather than one at a time.
+
+    Each component on its own may be dropped only while it accumulates less than
+    LETTER_SPACING_ACCUMULATED_PT across the run. Gating them independently would
+    let two sub-threshold omissions add to twice that bound, which is exactly the
+    guarantee the single-number model used to give for free -- so when their sum
+    crosses it, both are written out. A spacing that really is negligible then
+    appears as a negligible number, which costs nothing and keeps the bound
+    provable rather than merely observed.
+    """
+    letter_css = authored_spacing_pt(letter_pt, gaps, scale)
+    word_css = authored_spacing_pt(word_pt, separator_gaps, scale)
+    dropped = ((0.0 if letter_css is not None else letter_pt * gaps)
+               + (0.0 if word_css is not None else word_pt * separator_gaps))
+    if abs(dropped) >= LETTER_SPACING_ACCUMULATED_PT:
+        return r4(letter_pt / scale), r4(word_pt / scale)
+    return letter_css, word_css
+
+
+def origin_drift_pt(origin_offsets: Sequence[float], css_advances: Sequence[float],
+                    separator: Sequence[bool], letter_pt: float,
+                    word_pt: float) -> float:
+    """Worst glyph-origin error one spacing pair leaves in a run.
+
+    The stricter of the two costs this module reports, and not the same question
+    as `width_residual_pt`. Total width can come out exact while an interior
+    glyph sits points away from where the PDF put it, because a gap that is too
+    narrow before a word space and too wide after it cancels in the sum.
+    verify.py's `Interior` check is this same quantity measured on the round-trip,
+    and its docstring records 7.44pt of it -- thirty times the position
+    tolerance -- caused by the single-number model. So this is what decides
+    whether a run is right.
+
+    Compared against `char_origin_offsets_pt` rather than against a running sum
+    of `char_advances_pt`, and that is not interchangeable: every advance is
+    quantised to 2dp, so summing 130 of them accumulates up to 0.65pt of pure
+    rounding, which is four times what this function is trying to detect.
+    extract.py records each offset as a single subtraction rounded once for
+    exactly this reason.
+    """
+    running_css = 0.0
+    separators = 0
+    worst = 0.0
+    for index in range(len(separator)):
+        running_css += css_advances[index]
+        separators += 1 if separator[index] else 0
+        placed = running_css + letter_pt * (index + 1) + word_pt * separators
+        worst = max(worst, abs(placed - float(origin_offsets[index + 1])))
+    return worst
+
+
+class RunSpacing:
+    """One run's emitted spacing, and what emitting it costs in glyph origins.
+
+    Both `*_css_pt` values are authored, pre-transform numbers; the page-space
+    quantities a reader compares against the IR are the properties below, which
+    put the scale back. `None` means the property is omitted from the CSS
+    entirely, which is not the same as zero: it says the gate decided the run
+    does not need it.
+    """
+
+    __slots__ = ("letter_css_pt", "word_css_pt", "gaps", "separator_gaps",
+                 "separated", "drift_pt", "uniform_drift_pt", "scale",
+                 "measurable")
+
+    def __init__(self, letter_css_pt: float | None, word_css_pt: float | None,
+                 gaps: int, separator_gaps: int, separated: bool,
+                 drift_pt: float | None, uniform_drift_pt: float | None,
+                 scale: float, measurable: bool = True) -> None:
+        self.letter_css_pt = letter_css_pt
+        self.word_css_pt = word_css_pt
+        self.gaps = gaps
+        self.separator_gaps = separator_gaps
+        self.separated = separated
+        self.drift_pt = drift_pt
+        self.uniform_drift_pt = uniform_drift_pt
+        self.scale = scale
+        self.measurable = measurable
+
+    @property
+    def letter_pt(self) -> float:
+        return (self.letter_css_pt or 0.0) * self.scale
+
+    @property
+    def word_pt(self) -> float:
+        return (self.word_css_pt or 0.0) * self.scale
+
+    @property
+    def applied_pt(self) -> float:
+        """Total width the emitted properties add to the run, in page space."""
+        return self.letter_pt * self.gaps + self.word_pt * self.separator_gaps
+
+    @property
+    def model(self) -> str:
+        return "letter+word" if self.separated else "letter-uniform"
+
+
+def derive_spacing(text: str, css_advances: Sequence[float],
+                   origin_offsets: Sequence[float], natural_pt: float,
+                   measured_pt: float, scale: float) -> RunSpacing:
+    """Recover the generator's letter spacing and word spacing for one run.
+
+    The single-number model -- (measured - natural) spread over every gap -- is
+    the right description of a run that was *tracked* and the wrong description
+    of one that was *justified*: justification widens the spaces, and smearing
+    that residual across the letters tracks the whole line out. Splitting them
+    needs a per-gap measurement, and `char_origin_offsets_pt` is one: the
+    difference of two consecutive offsets is the distance the pen actually
+    travelled over that gap, so subtracting our face's advance leaves the Tc, Tw
+    and TJ the generator applied there and nothing else.
+
+    Offsets, not `char_advances_pt`. The advances are individually correct and
+    quantised to 2dp, so a running sum of 130 of them carries up to 0.65pt of
+    accumulated rounding -- larger than the word gaps this is trying to find, and
+    the reason an earlier draft of this function reported a 0.145pt width miss on
+    a run whose real error was 0.0005pt. Each offset is one subtraction rounded
+    once.
+
+    Group the residuals by whether the gap follows a word separator and the two
+    means are the two CSS properties. Both candidate pairs are then scored as
+    they would be emitted -- through the gate, through the rounding -- and the
+    separated pair is taken only if it leaves no glyph further from its origin
+    than the single number does. So this can improve a run and cannot cost one,
+    and the runs it cannot improve are named by the cost it reports rather than
+    by a rule about what they look like.
+
+    A run with no separator, or with nothing but separators, has no split to
+    make and keeps the single number byte-for-byte -- which is most short field
+    labels in the corpus, and is why this change moves only the runs it means to.
+    """
+    gaps = len(text) - 1
+    if gaps <= 0:
+        return RunSpacing(None, None, 0, 0, False, 0.0, 0.0, scale)
+
+    uniform_pt = (measured_pt - natural_pt) / gaps
+    separator = [ord(char) in WORD_SEPARATORS for char in text[:gaps]]
+    separator_gaps = sum(separator)
+    uniform_css = authored_spacing_pt(uniform_pt, gaps, scale)
+
+    # Without exact origin offsets there is nothing to group by that is not
+    # mostly quantisation. An IR old enough to lack the field falls back to the
+    # single number and says so, exactly as verify.py does: re-extract, do not
+    # lean on a fallback that reports rounding as a defect.
+    measurable = (len(origin_offsets) == len(text)
+                  and len(css_advances) == len(text))
+    if not measurable:
+        return RunSpacing(uniform_css, None, gaps, separator_gaps, False,
+                          None, None, scale, measurable=False)
+
+    residuals = [float(origin_offsets[i + 1]) - float(origin_offsets[i])
+                 - css_advances[i] for i in range(gaps)]
+    uniform_drift = origin_drift_pt(origin_offsets, css_advances, separator,
+                                    (uniform_css or 0.0) * scale, 0.0)
+
+    letters = [residuals[i] for i in range(gaps) if not separator[i]]
+    spaces = [residuals[i] for i in range(gaps) if separator[i]]
+    if letters and spaces:
+        letter_pt = sum(letters) / len(letters)
+        word_pt = sum(spaces) / len(spaces) - letter_pt
+        letter_css, word_css = gated_spacing_pair(
+            letter_pt, word_pt, gaps, separator_gaps, scale)
+        drift = origin_drift_pt(origin_offsets, css_advances, separator,
+                                (letter_css or 0.0) * scale,
+                                (word_css or 0.0) * scale)
+        if drift <= uniform_drift + SPACING_CHOICE_SLACK_PT:
+            return RunSpacing(letter_css, word_css, gaps, separator_gaps, True,
+                              drift, uniform_drift, scale)
+
+    # Separating would move some glyph further from its PDF origin. The cause in
+    # every corpus instance is a run that opens with indentation spaces and then
+    # justifies: CSS applies word-spacing to every separator in the box, so
+    # widening the interior gaps widens the indent by the same amount and no pair
+    # fits both. Keep the model that measures better; the plan reports the cost.
+    return RunSpacing(uniform_css, None, gaps, separator_gaps, False,
+                      uniform_drift, uniform_drift, scale)
+
+
+def unmodelled_separator_codepoints(text: str) -> list[int]:
+    """CSS word separators in `text` that WORD_SEPARATORS does not model."""
+    return sorted({ord(char) for char in text} & UNMODELLED_WORD_SEPARATORS)
 
 
 # ---------------------------------------------------------------------------
@@ -1431,7 +1821,23 @@ class FaceEvidence:
         self.glyphs: list[GlyphSample] = []
         self.run_natural: list[tuple[float, dict[str, Any], float]] = []
         self.run_residual: list[tuple[float, dict[str, Any]]] = []
+        # The spacing model's own share of run_residual: everything except the
+        # final glyph's advance-box delta, which is a face-metric fact and is
+        # governed by metric_check, not by anything letter-spacing can do.
+        self.span_residual: list[tuple[float, dict[str, Any]]] = []
         self.tracking_em: list[float] = []
+        # Word spacing is kept apart from `tracking_em` rather than averaged into
+        # it: they are different generator operators (Tw against Tc) and mixing
+        # them is precisely the error this module stopped making. Only runs that
+        # actually separated contribute, so a face with no justified text reports
+        # no word spacing instead of reporting zero.
+        self.word_spacing_em: list[float] = []
+        self.separated_runs = 0
+        # (drift, drift-if-uniform, run) for every run, substituted ones
+        # included: this is what the emitted CSS costs in glyph origins, and a
+        # substitution's contribution to that cost is real even though it says
+        # nothing about the generator's spacing.
+        self.origin_drift: list[tuple[float, float, dict[str, Any]]] = []
         self.runs = 0
         # Glyphs the face could not draw as written, kept strictly out of
         # `self.glyphs`: they carry no advance measurement of this face, only a
@@ -1589,19 +1995,38 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
                 # characters are still there and the pinned table already knows
                 # which of them nothing bundled can draw. Counting them here is
                 # what keeps Calibri's 405 bullets in the corpus report instead
-                # of vanishing with the family that has no plan yet.
-                for char in text:
-                    codepoint = normalised_codepoint(run["family"], char)
-                    if codepoint not in GLYPH_SUBSTITUTIONS:
+                # of vanishing with the family that has no plan yet -- and it is
+                # the only place the Wingdings glyphs are seen at all, since
+                # Wingdings has no family plan and never will have one.
+                unresolved_substitutions: list[dict[str, Any]] = []
+                for position, (char, codepoint) in enumerate(
+                        zip(text, run_codepoints(run))):
+                    if (codepoint not in GLYPH_SUBSTITUTIONS
+                            and codepoint not in UNSTATED_CODEPOINTS):
                         continue
                     absent_in_unresolved[codepoint] += 1
-                    tally_absent(absent_corpus,
-                                 GlyphResolution(char, codepoint, UNREPRESENTABLE,
-                                                 None, GLYPH_SUBSTITUTIONS[codepoint]),
-                                 size, run["family"], text,
+                    resolution = GlyphResolution(
+                        char, codepoint, UNREPRESENTABLE, None,
+                        GLYPH_SUBSTITUTIONS.get(codepoint))
+                    tally_absent(absent_corpus, resolution, size,
+                                 run["family"], text,
                                  status=table_status(codepoint))
+                    # Emitted for an unresolved face too, with the PDF's own
+                    # advance on both sides: there is no CSS face to be narrower
+                    # than, so the correction is zero and the record exists to
+                    # give emit.py the position and the verdict. Without it the
+                    # only trace of these seven glyphs would be a corpus count.
+                    width = float(run["char_widths_pt"][position]) \
+                        if position < len(run["char_widths_pt"]) else 0.0
+                    unresolved_substitutions.append(_substitution_record(
+                        resolution, position, size, width, width))
                 entry["css"] = None
                 entry["unresolved"] = True
+                # Same three keys as a resolved run, so a consumer branches on a
+                # key's value and never on its existence.
+                entry["substitutions"] = unresolved_substitutions
+                entry["has_substitution"] = False
+                entry["has_unrepresentable_glyph"] = bool(unresolved_substitutions)
                 run_entries.append(entry)
                 continue
 
@@ -1614,14 +2039,18 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
             # CSS values have to be divided back out.
             scale = scales.get(key, 1.0)
             natural = 0.0
+            # Per-character page-space advances, kept rather than only summed:
+            # derive_spacing needs them gap by gap to tell Tw from Tc.
+            css_advances: list[float] = []
             substitutions: list[dict[str, Any]] = []
             unrepresentable_here = 0
-            for position, (char, pdf_width) in enumerate(
-                    zip(text, run["char_widths_pt"])):
-                resolution = resolve_glyph(face, run["family"], char)
+            for position, (char, pdf_width, codepoint) in enumerate(
+                    zip(text, run["char_widths_pt"], run_codepoints(run))):
+                resolution = resolve_glyph(face, codepoint, char)
                 css_width = resolution_advance_pt(
                     resolution, face, size, weight, float(pdf_width)) * scale
                 natural += css_width
+                css_advances.append(css_width)
                 if not resolution.absent:
                     store.glyphs.append(
                         GlyphSample(char, size, css_width, float(pdf_width), text[:32]))
@@ -1646,26 +2075,65 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
                 store.run_natural.append((abs(natural - measured), run, natural))
 
             # Tracking: what the generator added on top of the face's own
-            # advances (this PDF uses Tc plus per-glyph TJ nudges). CSS
-            # letter-spacing is the only lever that reproduces it.
-            gaps = len(text) - 1
-            spacing = (measured - natural) / gaps if gaps > 0 else 0.0
-            emitted = None
-            if (abs(spacing) >= LETTER_SPACING_EPSILON_PT
-                    or abs(spacing) * gaps >= LETTER_SPACING_ACCUMULATED_PT):
-                # letter-spacing lives inside the scaled box and is scaled with
-                # it, so author the pre-image and let the transform land it on
-                # `spacing`. Round after dividing, not before.
-                emitted = r4(spacing / scale)
-            applied = (emitted or 0.0) * scale * gaps
+            # advances. It used both Tc and Tw, so it takes both CSS properties
+            # to reproduce -- see derive_spacing for why one number is not enough
+            # and how the choice between the models is made and priced.
+            spacing = derive_spacing(text, css_advances,
+                                     run.get("char_origin_offsets_pt") or [],
+                                     natural, measured, scale)
+            if not spacing.measurable and len(text) > 1:
+                warnings.append(
+                    f"page {page['index']} run {index}: no char_origin_offsets_pt, "
+                    f"so letter spacing and word spacing could not be separated "
+                    f"and this run keeps one smeared number. Re-extract the IR; "
+                    f"summing char_advances_pt instead would report up to 0.65pt "
+                    f"of 2dp quantisation as tracking.")
+            emitted = spacing.letter_css_pt
+            letter_pt = spacing.letter_pt
+            applied = spacing.applied_pt
+
+            # width_residual_pt splits cleanly into two terms with different
+            # owners, and separating them is what stops one hiding inside the
+            # other. The spacing model owns the glyph-origin span; the final
+            # glyph's advance box is a face-metric fact that metric_check already
+            # judges. The old single-number model made the total come out exact by
+            # rolling the second term into the first -- which is to say, by
+            # displacing every glyph in the run to make its right-hand edge land.
+            offsets = run.get("char_origin_offsets_pt") or []
+            origin_span_pt = float(offsets[-1]) if spacing.measurable else None
+            span_residual = (sum(css_advances[:-1]) + applied - origin_span_pt
+                             if origin_span_pt is not None else None)
+            final_glyph_residual = (
+                css_advances[-1] - float(run["char_widths_pt"][-1])
+                if css_advances and run["char_widths_pt"] else None)
+
+            if spacing.drift_pt is not None:
+                store.origin_drift.append(
+                    (spacing.drift_pt, spacing.uniform_drift_pt or 0.0, run))
             if not substituted_here:
                 store.run_residual.append((abs(natural + applied - measured), run))
-                store.tracking_em.append(spacing / size if size else 0.0)
+                if span_residual is not None:
+                    store.span_residual.append((abs(span_residual), run))
+                store.tracking_em.append(letter_pt / size if size else 0.0)
+                if spacing.separated:
+                    store.separated_runs += 1
+                    if size and spacing.word_css_pt is not None:
+                        store.word_spacing_em.append(spacing.word_pt / size)
 
-            if spacing / size <= CONDENSED_TRACKING_EM and size and not substituted_here:
+            unmodelled = unmodelled_separator_codepoints(text)
+            if unmodelled:
+                warnings.append(
+                    f"page {page['index']} run {index}: contains "
+                    + ", ".join(format_codepoint(c) for c in unmodelled)
+                    + ", which CSS treats as a word separator but WORD_SEPARATORS "
+                      "does not model. Its word gap has been measured as letter "
+                      "tracking and smeared across the run's glyphs; add it to "
+                      "WORD_SEPARATORS and re-measure.")
+
+            if letter_pt / size <= CONDENSED_TRACKING_EM and size and not substituted_here:
                 warnings.append(
                     f"page {page['index']} run {index}: condensed tracking "
-                    f"{spacing / size:+.4f}em ({format_pt(spacing)} at "
+                    f"{letter_pt / size:+.4f}em ({format_pt(letter_pt)} at "
                     f"{format_pt(size)}) on {text[:32]!r} -- verify this is real "
                     f"tracking and not a too-wide substitute face")
 
@@ -1675,6 +2143,12 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
                 "font-weight": weight,
                 "font-style": "italic" if run["italic"] else "normal",
                 "letter-spacing": format_pt(emitted) if emitted is not None else None,
+                # Only ever present on a run whose residual really is
+                # concentrated in its word separators. Omitted rather than set to
+                # 0pt otherwise, so that a stylesheet diff shows justification
+                # appearing where the generator justified and nowhere else.
+                "word-spacing": (format_pt(spacing.word_css_pt)
+                                 if spacing.word_css_pt is not None else None),
                 "line-height": format_pt(float(run["line_height_pt"])),
                 # The advance model above is a plain sum of hmtx advances. Every
                 # shipped family carries GPOS `kern` (and some also GSUB `liga`),
@@ -1699,8 +2173,35 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
             # whenever scale is 1.0, which is every run of an unscaled family.
             entry["letter_spacing_css_pt"] = emitted
             entry["letter_spacing_pt"] = r4(emitted * scale) if emitted is not None else None
-            entry["letter_spacing_em"] = r4(spacing / size) if size else None
+            entry["letter_spacing_em"] = r4(letter_pt / size) if size else None
+            entry["word_spacing_css_pt"] = spacing.word_css_pt
+            entry["word_spacing_pt"] = (r4(spacing.word_pt)
+                                        if spacing.word_css_pt is not None else None)
+            entry["word_spacing_em"] = (r4(spacing.word_pt / size)
+                                        if size and spacing.word_css_pt is not None
+                                        else None)
+            entry["spacing_model"] = spacing.model
+            entry["word_separator_gaps"] = spacing.separator_gaps
             entry["width_residual_pt"] = r4(natural + applied - measured)
+            # width_residual_pt = origin_span_residual_pt + final_glyph_residual_pt
+            # (to one 4dp rounding). The first is the spacing model's; the second
+            # is the final glyph's own advance against the PDF's box for it, and
+            # belongs to metric_check.
+            entry["origin_span_residual_pt"] = (r4(span_residual)
+                                                if span_residual is not None else None)
+            entry["final_glyph_residual_pt"] = (r4(final_glyph_residual)
+                                                if final_glyph_residual is not None
+                                                else None)
+            # The cost of the emitted spacing where it is actually paid. Total
+            # width can be exact while an interior glyph is points off its
+            # origin, so this is the number to read, and `_if_uniform` is what
+            # the single-number model would have cost the same run -- the two
+            # together are the proof that separating never made a run worse.
+            entry["origin_drift_pt"] = (r4(spacing.drift_pt)
+                                        if spacing.drift_pt is not None else None)
+            entry["origin_drift_pt_if_uniform"] = (
+                r4(spacing.uniform_drift_pt)
+                if spacing.uniform_drift_pt is not None else None)
             # Present on every run so a consumer can branch on one key rather
             # than on a key's existence, and so a diff shows a substitution
             # appearing rather than a field appearing.
@@ -1733,6 +2234,29 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
                     f"{check['max_advance_delta_pt']}pt (limit "
                     f"{METRIC_COMPATIBLE_MAX_DELTA_PT}pt)")
 
+    # Origin drift is a cost, not a failure, and it is pre-existing: it is the
+    # part of the generator's per-glyph TJ that no pair of CSS spacing properties
+    # can reproduce. One warning per face, naming the worst run, because a
+    # cost nobody reads is a cost nobody paid attention to -- and because the
+    # audit that scored 137 real defects as clean did so by summarising exactly
+    # this kind of number away.
+    for record in faces_out:
+        drift = ((record.get("tracking_check") or {}).get("origin_drift") or {})
+        worst = drift.get("max_origin_drift_pt")
+        if worst is None or worst <= ORIGIN_DRIFT_WARN_PT:
+            continue
+        where = drift.get("worst_origin_drift") or {}
+        warnings.append(
+            f"ORIGIN DRIFT {record['face_key']}: the emitted spacing leaves a "
+            f"glyph {worst}pt from where the PDF put it (tolerance "
+            f"{ORIGIN_DRIFT_WARN_PT}pt), worst on {where.get('text')!r} at "
+            f"{where.get('size_pt')}pt; {drift.get('runs_over_position_tolerance')} "
+            f"of {drift.get('runs')} runs are over it. The single-number model "
+            f"would have cost {drift.get('max_origin_drift_pt_if_uniform')}pt on "
+            f"the same runs, so this is not a regression -- it is per-glyph TJ "
+            f"that neither letter-spacing nor word-spacing can express, and it "
+            f"needs the run split at the gaps that disagree.")
+
     return {
         "schema_version": SCHEMA_VERSION,
         "form": ir["form"],
@@ -1746,12 +2270,29 @@ def evaluate(ir: dict[str, Any], library: FaceLibrary,
             "brotli_provider": library.provider,
             "fonts_root": str(library.fonts_root),
             "letter_spacing_model":
-                "spacing is derived per run as (measured_advance - CSS natural "
-                "advance) / (glyphs - 1), i.e. glyph-origin semantics. Blink adds "
+                "spacing is derived per gap, not per run: char_advances_pt[i] is "
+                "an origin-to-origin distance, so residual[i] = that minus our "
+                "face's advance is the generator's Tc/Tw/TJ for that one gap. "
+                "Grouping the residuals by whether the gap follows a word "
+                "separator gives letter-spacing (the non-separator mean) and "
+                "word-spacing (the separator mean minus it); a run with no "
+                "separator keeps the single number (measured_advance - CSS "
+                "natural advance) / (glyphs - 1) it always had. Blink adds "
                 "letter-spacing after the final glyph too, so an inline box "
                 "measures one spacing unit wider than measured_advance_pt; every "
                 "glyph origin still lands where the PDF put it, which is what "
                 "verify.py compares. Do not right-align a spaced run.",
+            "word_spacing_model":
+                "word-spacing is emitted only when the separated pair leaves no "
+                "glyph further from its PDF origin than the single number does "
+                "(runs[].origin_drift_pt against origin_drift_pt_if_uniform), so "
+                "the split can improve a run and cannot cost one. The case it "
+                "cannot fix is a run that opens with indentation spaces and then "
+                "justifies: CSS applies word-spacing to every separator in the "
+                "box, so no pair fits a +0.07pt indent gap and a +1.02pt word "
+                "gap at once. Those runs keep the single number and report their "
+                "drift; taking the run origin after the indent is emit.py's.",
+            "word_separators": sorted(format_codepoint(c) for c in WORD_SEPARATORS),
             "shaping": "font-kerning and ligatures are disabled in every emitted "
                        "CSS block; both shipped families carry GPOS kern and the "
                        "advance proof is a plain sum of hmtx advances",
@@ -1803,7 +2344,8 @@ def _absence_warnings(absent: dict[int, AbsentGlyphTally],
                 f"compromise, not a metric one -- it is excluded from the "
                 f"advance proof and reported in glyph_substitutions.")
         else:
-            name = tally.substitution.name if tally.substitution else "unknown glyph"
+            name = (tally.substitution.name if tally.substitution
+                    else ABSENT_GLYPH_NAMES.get(codepoint, "unknown glyph"))
             out.append(
                 f"UNREPRESENTABLE {format_codepoint(codepoint)} {name} "
                 f"x{tally.count} [{where}]{caveat}: no bundled face contains it "
@@ -1986,6 +2528,48 @@ def _embedded_flag(ir: dict[str, Any], basefonts: Sequence[str]) -> bool | None:
     return None
 
 
+def _origin_drift_record(store: FaceEvidence) -> dict[str, Any]:
+    """What the emitted spacing costs this face in glyph origins.
+
+    Reported over *every* run, substituted ones included, because this is not a
+    statement about the generator's operators -- it is the error a reader will
+    measure on the page. `_if_uniform` is the same quantity under the
+    single-number model this module used to emit, so the pair is the standing
+    proof that separating letter from word spacing never moved a glyph further
+    from where the PDF put it.
+
+    A drift above ORIGIN_DRIFT_WARN_PT is a run whose gaps genuinely differ from
+    each other -- per-glyph TJ, or a justified line that also carries
+    indentation. No (letter-spacing, word-spacing) pair can reproduce one, so the
+    honest report is the size of the miss, not a smaller-looking summary.
+    """
+    if not store.origin_drift:
+        return {"runs": 0}
+    worst = max(store.origin_drift, key=lambda item: item[0])
+    return {
+        "basis": "worst accumulated glyph-origin error left by the emitted "
+                 "letter-spacing/word-spacing pair, per run. Stricter than "
+                 "width_residual_pt, which only checks the total.",
+        "runs": len(store.origin_drift),
+        "max_origin_drift_pt": r4(worst[0]),
+        "mean_origin_drift_pt": r4(sum(item[0] for item in store.origin_drift)
+                                   / len(store.origin_drift)),
+        "max_origin_drift_pt_if_uniform": r4(
+            max(item[1] for item in store.origin_drift)),
+        "mean_origin_drift_pt_if_uniform": r4(
+            sum(item[1] for item in store.origin_drift) / len(store.origin_drift)),
+        "runs_over_position_tolerance": sum(
+            1 for item in store.origin_drift if item[0] > ORIGIN_DRIFT_WARN_PT),
+        "position_tolerance_pt": ORIGIN_DRIFT_WARN_PT,
+        "worst_origin_drift": {
+            "text": worst[2]["text"][:48],
+            "size_pt": r4(worst[2]["size_pt"]),
+            "drift_pt": r4(worst[0]),
+            "drift_pt_if_uniform": r4(worst[1]),
+        },
+    }
+
+
 def _tracking_record(store: FaceEvidence) -> dict[str, Any]:
     """Per-face tracking evidence, over runs whose width model is uncontaminated.
 
@@ -1995,15 +2579,33 @@ def _tracking_record(store: FaceEvidence) -> dict[str, Any]:
     that into the face's tracking would report a quarter-em of `Tc` that no Tc
     operator ever emitted. The affected runs still get their own letter-spacing
     in `runs`; what is excluded is only their contribution to this summary.
+
+    Word spacing is reported beside letter spacing and never inside it: they are
+    two different generator operators, and averaging a justified line's Tw into
+    its Tc is the defect this model was written to stop making. Origin drift is
+    reported for every run whether or not it separated -- see
+    `_origin_drift_record`.
     """
+    drift = _origin_drift_record(store)
     if not store.run_natural:
         return {"runs": 0,
-                "runs_excluded_for_substitution": store.substituted_runs}
+                "runs_excluded_for_substitution": store.substituted_runs,
+                "origin_drift": drift}
     worst_natural = max(store.run_natural, key=lambda item: item[0])
     worst_residual = max(store.run_residual, key=lambda item: item[0])
     return {
+        "runs_word_spaced": store.separated_runs,
+        "word_spacing_em": ({
+            "min": r4(min(store.word_spacing_em)),
+            "max": r4(max(store.word_spacing_em)),
+            "mean": r4(sum(store.word_spacing_em) / len(store.word_spacing_em)),
+        } if store.word_spacing_em else None),
+        "origin_drift": drift,
         "basis": "run advance: CSS face natural width vs IR measured_advance_pt; "
-                 "the gap is the generator's Tc/TJ tracking, not a face mismatch. "
+                 "the gap is the generator's Tc/Tw/TJ tracking, not a face "
+                 "mismatch. letter_spacing_em is the Tc half only -- the Tw half "
+                 "is word_spacing_em, over the runs_word_spaced runs whose "
+                 "residual proved to be concentrated in their word separators. "
                  "Runs containing a substituted glyph are excluded and counted "
                  "in runs_excluded_for_substitution.",
         "runs": len(store.run_natural),
@@ -2024,6 +2626,12 @@ def _tracking_record(store: FaceEvidence) -> dict[str, Any]:
         },
         "max_residual_after_letter_spacing_pt": r4(worst_residual[0]),
         "worst_residual_text": worst_residual[1]["text"][:48],
+        # The spacing model's own share of the residual above. This is the number
+        # that has to be near zero: the rest of max_residual_after_letter_spacing
+        # is the final glyph's advance-box delta, which metric_check owns and
+        # which no spacing property should be used to absorb.
+        "max_origin_span_residual_pt": (r4(max(item[0] for item in store.span_residual))
+                                        if store.span_residual else None),
     }
 
 
@@ -2169,6 +2777,22 @@ def print_face_table(plan: dict[str, Any], stream: Any = sys.stderr) -> None:
               f"{track['max_residual_after_letter_spacing_pt']:.4f}pt"
               + (f"  [{excluded} runs excluded: substituted glyph]" if excluded else ""),
               file=stream)
+        # Word spacing and origin drift get their own line under the face rather
+        # than more columns on that one: they are separate measurements, and the
+        # drift figure has to sit next to what the old model would have cost or
+        # it reads as a regression.
+        word = track.get("word_spacing_em")
+        drift = track.get("origin_drift") or {}
+        if word:
+            print(f"{'':34} word-spacing {word['min']:+.4f}..{word['max']:+.4f}em "
+                  f"(mean {word['mean']:+.4f}em) on {track['runs_word_spaced']} "
+                  f"justified runs", file=stream)
+        if drift.get("max_origin_drift_pt") is not None:
+            print(f"{'':34} origin drift max {drift['max_origin_drift_pt']:.4f}pt "
+                  f"(uniform model {drift['max_origin_drift_pt_if_uniform']:.4f}pt), "
+                  f"mean {drift['mean_origin_drift_pt']:.4f}pt, "
+                  f"{drift['runs_over_position_tolerance']}/{drift['runs']} runs over "
+                  f"{drift['position_tolerance_pt']}pt", file=stream)
 
     used = plan["glyph_substitutions"]["used"]
     if used:
@@ -2210,6 +2834,37 @@ SELF_TEST_UNREPRESENTABLE_SQUARES = 2
 # per-mille of an em is four times the PDF width table's own precision, so this
 # catches a mis-transcribed pin without firing on rounding.
 SOURCE_ADVANCE_TOLERANCE_EM = 0.002
+
+# The third self-test document set. 2551Q proves the substitution path stays
+# inert where coverage is complete and 1601C proves it behaves where it is not
+# and the source *states* the codepoint. These two are the only forms in the
+# corpus where the source states no codepoint at all, and both are needed: 2550M
+# carries four of the seven glyphs at two sizes and 2553 the other three, so
+# pinning one alone would let a regression that stops reading the field on one
+# page pass on the other. 2553 is additionally the corpus's worst justified text,
+# which makes it the document S6 has to be measured on.
+SELF_TEST_UNMAPPED_IRS = (pathlib.Path("build/ir/2553-1999.ir.json"),
+                          pathlib.Path("build/ir/2550m-2007.ir.json"))
+
+# Wingdings glyph-131 occurrences per form. Counts, not "more than zero", so a
+# regression that double-counts or silently loses a page fails instead of
+# passing quietly -- the failure mode this project has already been burned by.
+SELF_TEST_UNMAPPED_SQUARES = {"2553": 3, "2550M": 4}
+
+# What 2553's justified prose must report once letter and word spacing are
+# separated. Bounds with margin rather than exact floats: the measurements move
+# with a fontsource release, the facts do not.
+#
+#   * letter tracking on Times New Roman fell from a max of 0.1221em -- a whole
+#     line of 9.84pt prose tracked out by 1.2pt per glyph -- to 0.0614em, which
+#     is the sheet's genuinely letterspaced headings and nothing else;
+#   * 56 of its 81 Times New Roman runs are justified and now carry word-spacing;
+#   * the worst accumulated glyph-origin error on that face fell from 11.5342pt
+#     to 7.2862pt, a 36.8% recovery. The remainder is per-glyph TJ that no CSS
+#     spacing pair can express, and is reported rather than hidden.
+SELF_TEST_MAX_LETTER_SPACING_EM = 0.08
+SELF_TEST_MIN_WORD_SPACED_RUNS = 40
+SELF_TEST_MIN_DRIFT_RECOVERY = 0.30
 
 
 def substitution_table_failures(library: FaceLibrary) -> list[str]:
@@ -2273,6 +2928,72 @@ def substitution_table_failures(library: FaceLibrary) -> list[str]:
                         f"{format_codepoint(codepoint)}: pinned replacement "
                         f"advance {pinned}em is not what {package} {subset} "
                         f"draws ({observed:.4f}em); the stated cost is wrong")
+    return failures
+
+
+def spacing_invariant_failures(plan: dict[str, Any]) -> list[str]:
+    """Run-level invariants the spacing model must hold on any document at all.
+
+    Shared by every self-test half rather than written once per form, because
+    these are properties of the model and not of a particular sheet. A half that
+    skipped them would be a half in which the model could quietly break.
+
+    The residual check is model-aware, and that is the point rather than a
+    convenience: a separated run is answerable for the glyph-origin span, which
+    it fits exactly, and a uniform run is answerable for the total measured
+    width, which it fits by construction. Neither may be asked to absorb the
+    other's error, and the difference between the two is the final glyph's own
+    advance box -- a face-metric fact that metric_check judges and that no
+    spacing property should be used to hide.
+    """
+    failures: list[str] = []
+    for entry in plan["runs"]:
+        if entry.get("css") is None:
+            continue
+        where = f"page {entry['page']} run {entry['run_index']}"
+        css = entry["css"]
+        model = entry.get("spacing_model")
+        if model not in ("letter+word", "letter-uniform"):
+            failures.append(f"{where}: unknown spacing model {model!r}")
+        authored = entry.get("word_spacing_css_pt")
+        if (css.get("word-spacing") is None) != (authored is None):
+            failures.append(
+                f"{where}: css word-spacing {css.get('word-spacing')!r} and "
+                f"word_spacing_css_pt {authored!r} disagree on presence")
+        if authored is not None:
+            if model != "letter+word":
+                failures.append(
+                    f"{where}: word-spacing emitted under the {model} model")
+            if r4(authored * entry["horizontal_scale"]) != entry["word_spacing_pt"]:
+                failures.append(
+                    f"{where}: authored word-spacing {authored}pt does not scale "
+                    f"to the effective {entry['word_spacing_pt']}pt")
+        # THE licence for separating the two spacings: it may improve a run and
+        # may never cost one. Compared at the emitted precision, since both
+        # fields are r4'd -- this is rounding, not slack.
+        drift = entry.get("origin_drift_pt")
+        uniform = entry.get("origin_drift_pt_if_uniform")
+        if drift is not None and uniform is not None and drift > uniform + 0.0001:
+            failures.append(
+                f"{where}: the emitted spacing leaves a glyph {drift}pt from its "
+                f"PDF origin where the single-number model would have left it "
+                f"{uniform}pt. Separating letter from word spacing must never "
+                f"cost geometry.")
+        # A single-glyph run has no gap, so no spacing is emitted for it and there
+        # is no spacing model to hold to anything: its whole residual is that one
+        # glyph's advance against the PDF's box for it, which is metric_check's
+        # to judge and, where the glyph was substituted, is the substitution's
+        # stated cost. 18 runs in the corpus are a lone U+25CF, and blaming their
+        # 1.5194pt bullet shortfall on letter-spacing would be reading the wrong
+        # meter.
+        if (entry.get("chars") or 0) < 2:
+            continue
+        residual = (entry.get("origin_span_residual_pt") if model == "letter+word"
+                    else entry.get("width_residual_pt"))
+        if residual is not None and abs(residual) > LETTER_SPACING_ACCUMULATED_PT:
+            failures.append(
+                f"{where}: the {model} model misses its own target by "
+                f"{r4(residual)}pt (limit {LETTER_SPACING_ACCUMULATED_PT}pt)")
     return failures
 
 
@@ -2452,12 +3173,11 @@ def self_test(ir_path: pathlib.Path, fonts_root: pathlib.Path | None) -> int:
             failures.append(
                 f"{where}: authored letter-spacing {authored}pt does not scale to "
                 f"the effective {effective}pt")
-        if abs(entry["width_residual_pt"]) > LETTER_SPACING_ACCUMULATED_PT:
-            failures.append(
-                f"{where}: emitted CSS misses the measured width by "
-                f"{entry['width_residual_pt']}pt")
     if scaled_runs != 10:
         failures.append(f"expected 10 scaled runs on 2551Q, got {scaled_runs}")
+
+    # 6b. The spacing model's own invariants, on this document like any other.
+    failures.extend(spacing_invariant_failures(plan))
 
     # 7. The pinned substitution table still describes the fonts on disk.
     failures.extend(substitution_table_failures(library))
@@ -2510,8 +3230,10 @@ def pdf_advances_em(ir: dict[str, Any], codepoint: int) -> list[float]:
 
     The pinned `source_advance_em` figures are the whole basis for saying how
     much a substitution costs, so they are checked against the document rather
-    than trusted. Sizes come from the same runs, and the symbol fold is applied
-    here too -- so the Wingdings pin is validated against both spellings.
+    than trusted. Sizes come from the same runs, and the full fold is applied
+    here too -- so the Wingdings pin is validated against all three spellings:
+    the bare byte, the private-use codepoint, and the glyph id of a run whose
+    font states no codepoint at all.
     """
     out: list[float] = []
     for page in ir["pages"]:
@@ -2519,8 +3241,9 @@ def pdf_advances_em(ir: dict[str, Any], codepoint: int) -> list[float]:
             size = float(run["size_pt"])
             if not size:
                 continue
-            for char, width in zip(run["text"], run["char_widths_pt"]):
-                if normalised_codepoint(run["family"], char) == codepoint:
+            for run_codepoint, width in zip(run_codepoints(run),
+                                            run["char_widths_pt"]):
+                if run_codepoint == codepoint:
                     out.append(float(width) / size)
     return out
 
@@ -2664,11 +3387,17 @@ def substitution_self_test(ir_path: pathlib.Path,
                     f"page {entry['page']} run {entry['run_index']}: the stand-in "
                     f"for {record['from']} is not narrower than the character it "
                     f"replaces, so the measured cost is wrong")
-            if abs(entry["width_residual_pt"]) > LETTER_SPACING_ACCUMULATED_PT:
+            # Model-aware for the same reason spacing_invariant_failures is: a
+            # separated run answers for the glyph-origin span, not for a total
+            # width that also contains the final glyph's own advance delta.
+            residual = (entry["origin_span_residual_pt"]
+                        if entry["spacing_model"] == "letter+word"
+                        else entry["width_residual_pt"])
+            if residual is not None and abs(residual) > LETTER_SPACING_ACCUMULATED_PT:
                 failures.append(
                     f"page {entry['page']} run {entry['run_index']}: substituted "
-                    f"run misses the PDF's measured width by "
-                    f"{entry['width_residual_pt']}pt")
+                    f"run misses its {entry['spacing_model']} target by "
+                    f"{residual}pt")
             break
     if substituted_runs != SELF_TEST_ARIAL_BOLD_BLACK_CIRCLES:
         failures.append(
@@ -2707,6 +3436,9 @@ def substitution_self_test(ir_path: pathlib.Path,
                 f"{package!r}, not {SUBSTITUTION_REFERENCE_PACKAGE}; the pinned "
                 f"substitution costs do not describe that face")
 
+    # 7c. The spacing model's own invariants hold with substitutions present too.
+    failures.extend(spacing_invariant_failures(plan))
+
     # 8. The table still matches the shipped fonts, and the plan is deterministic
     #    with substitutions in it.
     failures.extend(substitution_table_failures(library))
@@ -2728,6 +3460,201 @@ def substitution_self_test(ir_path: pathlib.Path,
     print(f"substitution self-test OK: {block['substituted_occurrences']} "
           f"substituted, {block['unrepresentable_occurrences']} unrepresentable "
           f"on {plan['form']['code']}-{plan['form']['revision']}", file=sys.stdout)
+    return 0
+
+
+def unmapped_self_test(ir_paths: Sequence[pathlib.Path],
+                       fonts_root: pathlib.Path | None) -> int:
+    """Assert the glyph-id fold and the word-spacing split on the real 2553/2550M.
+
+    The two halves above cannot reach either. 2551Q sets nothing the shipped
+    faces lack and nothing the generator justified; 1601C's Wingdings font
+    carries a usable encoding, so its square bullet arrives already spelled
+    U+F0A7 and the glyph-id path is never taken. These two sheets are the only
+    ones where `get_text("rawdict")` guessed a codepoint outright -- and 2553 is
+    where the single-number spacing model does its worst visible damage -- so
+    this is the document set that holds both fixes to their evidence.
+    """
+    if fonts_root is None:
+        print("unmapped self-test needs node_modules/@fontsource-variable",
+              file=sys.stderr)
+        return 2
+    missing = [str(path) for path in ir_paths if not path.is_file()]
+    if missing:
+        print(f"unmapped self-test needs the real IRs at {', '.join(missing)}",
+              file=sys.stderr)
+        return 2
+
+    library = FaceLibrary(fonts_root)
+    failures: list[str] = []
+
+    # 1. The glyph-id fold itself, before any document. Glyph 131 of Wingdings is
+    #    the square bullet; an id the table does not name must stay U+FFFD rather
+    #    than borrow the nearest entry.
+    folded = run_codepoints({"family": "Wingdings", "text": chr(UNMAPPED_CODEPOINT),
+                             "unmapped_glyphs": [{"index": 0, "glyph_id": 131,
+                                                  "rawdict_codepoint": 0xA7}]})
+    if folded != [WINGDINGS_SQUARE_BULLET]:
+        failures.append(
+            f"Wingdings glyph 131 must fold onto "
+            f"{format_codepoint(WINGDINGS_SQUARE_BULLET)}, got "
+            f"{[format_codepoint(c) for c in folded]}")
+    unknown = run_codepoints({"family": "Wingdings", "text": chr(UNMAPPED_CODEPOINT),
+                              "unmapped_glyphs": [{"index": 0, "glyph_id": 9999,
+                                                   "rawdict_codepoint": 0xA7}]})
+    if unknown != [UNMAPPED_CODEPOINT]:
+        failures.append(
+            f"an unnamed glyph id must stay {format_codepoint(UNMAPPED_CODEPOINT)} "
+            f"and be reported unrepresentable, got "
+            f"{[format_codepoint(c) for c in unknown]}")
+
+    # 2. U+FFFD is never looked up in a face. Arimo has it, so a coverage test
+    #    would call it present and measure a 0.8403em placeholder as if it were
+    #    the source glyph's advance.
+    arimo = library.load(SUBSTITUTION_REFERENCE_PACKAGE, 400, "normal")
+    if arimo is None:
+        failures.append("could not load arimo to check the U+FFFD guard")
+    else:
+        if not arimo.has(UNMAPPED_CODEPOINT):
+            failures.append(
+                "arimo no longer contains U+FFFD, so UNSTATED_CODEPOINTS is "
+                "guarding against something that cannot happen; re-derive it")
+        guarded = resolve_glyph(arimo, UNMAPPED_CODEPOINT, chr(UNMAPPED_CODEPOINT))
+        if guarded.status != UNREPRESENTABLE or guarded.drawn_codepoint is not None:
+            failures.append(
+                f"U+FFFD resolved to {guarded.status} drawing "
+                f"{guarded.drawn_codepoint!r}; a glyph the source did not name "
+                f"has no advance to measure and must never enter the proof")
+
+    plans: dict[str, dict[str, Any]] = {}
+    for path in ir_paths:
+        ir = json.loads(path.read_text(encoding="utf-8"))
+        plan = evaluate(ir, library)
+        code = plan["form"]["code"]
+        plans[code] = plan
+        used = {entry["codepoint"]: entry for entry in
+                plan["glyph_substitutions"]["used"]}
+
+        # 3. The seven glyphs, per form, reported as the square and not as a
+        #    section sign and not as a replacement mark.
+        expected = SELF_TEST_UNMAPPED_SQUARES.get(code)
+        square = used.get(format_codepoint(WINGDINGS_SQUARE_BULLET))
+        if expected is None:
+            failures.append(f"no pinned glyph-131 count for {code}")
+        elif square is None or square["count"] != expected:
+            failures.append(
+                f"{code}: expected {expected} occurrences of "
+                f"{format_codepoint(WINGDINGS_SQUARE_BULLET)}, got "
+                f"{square['count'] if square else 0}. rawdict reports these as "
+                f"U+00A7 SECTION SIGN; if the count is 0 the glyph id is no "
+                f"longer being read and the sheet is printing a section sign.")
+        elif square["status"] != UNREPRESENTABLE or square["replacement"] is not None:
+            failures.append(
+                f"{code}: {format_codepoint(WINGDINGS_SQUARE_BULLET)} is a filled "
+                f"square and nothing bundled draws one; it must stay "
+                f"unrepresentable rather than borrow a disc, got {square}")
+        if format_codepoint(UNMAPPED_CODEPOINT) in used:
+            failures.append(
+                f"{code}: {format_codepoint(UNMAPPED_CODEPOINT)} survived to the "
+                f"report, so a drawn glyph is unaccounted for rather than folded "
+                f"onto the entry that describes it")
+        if 0x00A7 in {ord(c) for page in ir["pages"]
+                      for run in page["text_runs"] if run["family"] == "Wingdings"
+                      for c in run["text"]}:
+            failures.append(
+                f"{code}: a Wingdings run still carries U+00A7, which is what "
+                f"rawdict guessed; extract.py should be carrying U+FFFD plus the "
+                f"glyph id instead")
+
+        # 4. Every one is warned about by name and by severity.
+        for codepoint, entry in used.items():
+            if not any(warning.startswith(UNREPRESENTABLE.upper())
+                       and codepoint in warning for warning in plan["warnings"]
+                       if entry["status"] == UNREPRESENTABLE):
+                failures.append(f"{code}: {codepoint} is absent but no "
+                                f"UNREPRESENTABLE warning names it")
+
+        # 5. The pinned source advance is this document's too. pdf_advances_em
+        #    applies the same fold, so the U+F0A7 pin is now validated against
+        #    the spelling that carries no codepoint at all.
+        for codepoint, substitution in sorted(GLYPH_SUBSTITUTIONS.items()):
+            observed = pdf_advances_em(ir, codepoint)
+            if not observed:
+                continue
+            drift = max(abs(v - substitution.source_advance_em) for v in observed)
+            if drift > SOURCE_ADVANCE_TOLERANCE_EM:
+                failures.append(
+                    f"{code}: pinned source advance "
+                    f"{substitution.source_advance_em}em for "
+                    f"{format_codepoint(codepoint)} is {drift:.4f}em away from "
+                    f"what the PDF carries ({min(observed):.4f}.."
+                    f"{max(observed):.4f}em)")
+
+        # 6. The spacing model's invariants, and determinism, on both documents.
+        failures.extend(f"{code}: {failure}"
+                        for failure in spacing_invariant_failures(plan))
+        again = json.dumps(evaluate(ir, FaceLibrary(fonts_root)), sort_keys=False)
+        if again != json.dumps(plan, sort_keys=False):
+            failures.append(f"{code}: output is not deterministic across runs")
+
+    # 7. S6, measured on the sheet it was written against. The claim is not that
+    #    2553 now lays out perfectly -- it does not, and the residual is
+    #    reported -- but that the justification is being read as justification.
+    serif = next((face for face in plans["2553"]["faces"]
+                  if face["family"] in ("TimesNewRoman", "Times New Roman")
+                  and face["css_weight"] == 400
+                  and face["status"] == "resolved"), None)
+    if serif is None:
+        failures.append("2553 must resolve a Times New Roman 400 face")
+    else:
+        track = serif["tracking_check"] or {}
+        spacing = track.get("letter_spacing_em") or {}
+        worst_letter = max(abs(spacing.get("min") or 0.0),
+                           abs(spacing.get("max") or 0.0))
+        if worst_letter > SELF_TEST_MAX_LETTER_SPACING_EM:
+            failures.append(
+                f"2553 {serif['face_key']}: letter tracking reaches "
+                f"{worst_letter}em, over {SELF_TEST_MAX_LETTER_SPACING_EM}em. That "
+                f"is the justification being smeared across the glyphs again -- "
+                f"the single-number model reached 0.1221em here.")
+        if (track.get("runs_word_spaced") or 0) < SELF_TEST_MIN_WORD_SPACED_RUNS:
+            failures.append(
+                f"2553 {serif['face_key']}: only {track.get('runs_word_spaced')} "
+                f"runs carry word-spacing, expected at least "
+                f"{SELF_TEST_MIN_WORD_SPACED_RUNS}; its page 2 is justified prose")
+        if not track.get("word_spacing_em"):
+            failures.append(f"2553 {serif['face_key']}: no word-spacing reported")
+        drift = track.get("origin_drift") or {}
+        emitted = drift.get("max_origin_drift_pt")
+        uniform = drift.get("max_origin_drift_pt_if_uniform")
+        if not emitted or not uniform:
+            failures.append(f"2553 {serif['face_key']}: no origin drift reported")
+        else:
+            recovery = (uniform - emitted) / uniform
+            if recovery < SELF_TEST_MIN_DRIFT_RECOVERY:
+                failures.append(
+                    f"2553 {serif['face_key']}: separating the two spacings "
+                    f"recovers only {recovery:.1%} of the worst glyph-origin "
+                    f"error ({uniform}pt -> {emitted}pt), under the pinned "
+                    f"{SELF_TEST_MIN_DRIFT_RECOVERY:.0%}")
+
+    for code, plan in plans.items():
+        print(f"== {code}-{plan['form']['revision']}", file=sys.stdout)
+        print_face_table(plan, sys.stdout)
+        for warning in plan["warnings"]:
+            if warning.startswith((UNREPRESENTABLE.upper(), "ORIGIN DRIFT")):
+                print(f"  - {warning}", file=sys.stdout)
+        print("", file=sys.stdout)
+
+    if failures:
+        for failure in failures:
+            print(f"FAIL: {failure}", file=sys.stdout)
+        return 1
+    total = sum(SELF_TEST_UNMAPPED_SQUARES.values())
+    print(f"unmapped/word-spacing self-test OK: {total} glyph-131 occurrences "
+          f"resolved to {format_codepoint(WINGDINGS_SQUARE_BULLET)} across "
+          f"{', '.join(sorted(plans))}, none printing a section sign",
+          file=sys.stdout)
     return 0
 
 
@@ -2777,16 +3704,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             return self_test(args.ir, fonts_root)
         ir_path = locate_ir(here, SELF_TEST_IR)
         substitution_ir = locate_ir(here, SELF_TEST_SUBSTITUTION_IR)
-        if ir_path is None or substitution_ir is None:
-            missing = SELF_TEST_IR if ir_path is None else SELF_TEST_SUBSTITUTION_IR
-            print(f"self-test could not locate {missing}", file=sys.stderr)
+        unmapped_irs = [locate_ir(here, relative)
+                        for relative in SELF_TEST_UNMAPPED_IRS]
+        wanted = [(ir_path, SELF_TEST_IR), (substitution_ir, SELF_TEST_SUBSTITUTION_IR),
+                  *zip(unmapped_irs, SELF_TEST_UNMAPPED_IRS)]
+        absent = [str(relative) for found, relative in wanted if found is None]
+        if absent:
+            print(f"self-test could not locate {', '.join(absent)}", file=sys.stderr)
             return 2
-        # Both halves always run and both statuses are kept: a coverage
-        # regression must not hide behind a passing 2551Q, and a 2551Q failure
-        # must not stop the substitution report being printed.
+        assert ir_path is not None and substitution_ir is not None
+        # Every half always runs and every status is kept: a coverage regression
+        # must not hide behind a passing 2551Q, a 2551Q failure must not stop the
+        # substitution report being printed, and neither may suppress the
+        # glyph-id and word-spacing evidence, which is the only place the two
+        # newest fixes are measured at all.
         status = self_test(ir_path, fonts_root)
         print("", file=sys.stdout)
-        return substitution_self_test(substitution_ir, fonts_root) or status
+        status = substitution_self_test(substitution_ir, fonts_root) or status
+        print("", file=sys.stdout)
+        return unmapped_self_test(
+            [path for path in unmapped_irs if path is not None], fonts_root) or status
 
     if args.ir is None or not args.ir.is_file():
         print(f"no such IR: {args.ir}", file=sys.stderr)

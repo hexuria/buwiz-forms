@@ -8,7 +8,7 @@
   "sha256": "5277addc6778c96a53fde99b8664b1a5213fcea638dea06033c9acf22ee73c25",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 3,
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
@@ -70,7 +70,7 @@
       "1601-EQ Guide January 2019 ENCS rev.pdf"
     ]
   },
-  "html_bytes": 756819,
+  "html_bytes": 757976,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

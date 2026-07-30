@@ -8,7 +8,7 @@
   "sha256": "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
   "stage_failed": null,
   "error": null,
-  "images_extracted": 0,
+  "images_extracted": 3,
   "pages": 2,
   "paper": "612.0x1008.0",
   "uniform_paper": true,
@@ -61,7 +61,7 @@
       "2550Q guidelines April 2024_final.pdf"
     ]
   },
-  "html_bytes": 657038,
+  "html_bytes": 660423,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
