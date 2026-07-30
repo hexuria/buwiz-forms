@@ -826,6 +826,12 @@ impl AppState {
                         this.select_profile(profile, ProfileTargetAction::EditProfile, window, cx);
                     }
                 }
+                DashboardEvent::AddToNativeCalendar(tin) => {
+                    this.add_profile_to_native_calendar(tin.clone(), window, cx);
+                }
+                DashboardEvent::SyncGoogleCalendar(tin) => {
+                    this.sync_profile_google_calendar(tin.clone(), window, cx);
+                }
             },
         )
         .detach();
@@ -983,6 +989,149 @@ impl AppState {
                     view.edit_profile(profile.clone(), window, cx);
                 });
             }
+        }
+    }
+
+    /// Writes this profile's deadlines as an `.ics` and hands it to whatever the
+    /// platform registered for calendar files - Calendar on macOS, the default
+    /// handler on Windows, `xdg-open` on Linux.
+    ///
+    /// This is the always-available calendar path: it needs no account and no
+    /// network. It renders the same event set the Google sync would push, so the
+    /// two cannot disagree about which obligations are deadlines.
+    fn add_profile_to_native_calendar(
+        &mut self,
+        tin: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(profile) = self
+            .profiles
+            .iter()
+            .find(|candidate| candidate.tin.full() == tin)
+            .cloned()
+        else {
+            push_notification(
+                "error",
+                "Calendar not created",
+                &format!("{tin} is no longer loaded."),
+                window,
+                cx,
+            );
+            return;
+        };
+
+        let built = match self.db.lock() {
+            Ok(db) => bir_core::google_calendar::build_desired_events(&db, &profile)
+                .map_err(|error| error.to_string()),
+            Err(_) => Err("The profile database is temporarily unavailable".to_string()),
+        };
+        let (events, excluded_undated) = match built {
+            Ok(pair) => pair,
+            Err(error) => {
+                push_notification("error", "Calendar not created", &error, window, cx);
+                return;
+            }
+        };
+
+        if events.is_empty() {
+            push_notification(
+                "info",
+                "Nothing to add",
+                "This profile has no dated deadlines for its registered Forms Set yet.",
+                window,
+                cx,
+            );
+            return;
+        }
+
+        let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+        let directory = bir_core::platform::data_dir().join("calendars");
+        let written = bir_core::calendar_ics::write_profile_calendar_ics(
+            &directory, &profile, &events, &stamp,
+        );
+
+        let path = match written {
+            Ok(path) => path,
+            Err(error) => {
+                push_notification(
+                    "error",
+                    "Calendar not created",
+                    &format!("Could not write the calendar file: {error}"),
+                    window,
+                    cx,
+                );
+                return;
+            }
+        };
+
+        if let Err(error) = open::that(&path) {
+            // The file is still on disk and importable by hand, so say where.
+            push_notification(
+                "error",
+                "Calendar file created",
+                &format!(
+                    "Saved to {} but no calendar application could be opened: {error}",
+                    path.display()
+                ),
+                window,
+                cx,
+            );
+            return;
+        }
+
+        let detail = if excluded_undated > 0 {
+            format!(
+                "{} deadlines handed to your calendar app. {excluded_undated} without a resolved date were skipped.",
+                events.len()
+            )
+        } else {
+            format!("{} deadlines handed to your calendar app.", events.len())
+        };
+        push_notification("success", "Added to Calendar", &detail, window, cx);
+    }
+
+    /// Pushes this profile's deadlines to its linked Google Calendar. Only
+    /// offered when a link exists, but re-checked here rather than trusted.
+    fn sync_profile_google_calendar(
+        &mut self,
+        tin: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let db = self.db.clone();
+        let result = bir_core::google_calendar::sync_profile_calendar(db, &tin);
+        match result {
+            Ok(report) => {
+                let mut parts = Vec::new();
+                if report.inserted > 0 {
+                    parts.push(format!("{} added", report.inserted));
+                }
+                if report.updated > 0 {
+                    parts.push(format!("{} updated", report.updated));
+                }
+                if report.deleted > 0 {
+                    parts.push(format!("{} removed", report.deleted));
+                }
+                if report.excluded_undated > 0 {
+                    parts.push(format!("{} undated skipped", report.excluded_undated));
+                }
+                // Everything already matching is the steady state, so say that
+                // plainly rather than reporting a row of zeroes.
+                let detail = if parts.is_empty() {
+                    format!("Already up to date - {} deadlines match.", report.unchanged)
+                } else {
+                    parts.join(", ")
+                };
+                push_notification("success", "Google Calendar synced", &detail, window, cx)
+            }
+            Err(error) => push_notification(
+                "error",
+                "Google Calendar not synced",
+                &error.to_string(),
+                window,
+                cx,
+            ),
         }
     }
 

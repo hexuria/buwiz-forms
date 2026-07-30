@@ -17,6 +17,7 @@
 
 pub mod background_cron;
 pub mod bir_xml;
+pub mod calendar_ics;
 pub mod calendar_rules;
 pub mod crypto;
 pub mod db;
