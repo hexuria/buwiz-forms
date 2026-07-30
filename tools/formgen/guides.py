@@ -3,15 +3,15 @@
 
 A BIR sheet carries two documents printed on the same paper. One is the form:
 the boxes a taxpayer fills in, whose geometry is the whole point of this
-pipeline. The other is reference material -- ATC code tables, "Guidelines and
-Instructions", penalty schedules -- which nobody fills in and which the BIR does
-not require on the filed sheet.
+pipeline. The other is reference material -- ATC code tables, statutory rate
+tables, "Guidelines and Instructions", treaty-code lists -- which nobody fills
+in and which the BIR does not require on the filed sheet.
 
 Splitting them is worth doing twice over:
 
-  * It frees space. The guide region occupies a mean 67% of the page it sits on
-    (min 38%, max 93%), and that is exactly the room a growable band needs
-    before it has to spill onto a continuation page.
+  * It frees space. The guide region occupies a mean 60% of the page it sits on,
+    and that is exactly the room a growable band needs before it has to spill
+    onto a continuation page.
   * It separates content whose parity does not matter from content whose parity
     is the entire objective. A mis-set line in an ATC table costs nothing; a
     mis-set line in a money comb is the bug we are here to prevent.
@@ -19,24 +19,74 @@ Splitting them is worth doing twice over:
 How the cut is found
 --------------------
 
-Lexically, by three STRICT markers. Strictness is the load-bearing part. A
-loose /penalt/ pattern was tried and is wrong: it matches "Add: Penalties",
-which is a *form* line on 1601C, 1603Q, 1600-PT and 2551Q, and cutting there
-would throw away fillable fields.
+Three detectors *propose* a cut on a page. One admissibility test judges all
+three, and the topmost surviving proposal wins, because a higher cut relocates
+strictly more reference material and the test is what guarantees it relocates
+nothing fillable.
 
-Structurally, by what lies below the candidate. The lexical hit only proposes a
-cut; the region below it has to look like reference material to be accepted --
-substantial prose (>= 25 text runs) and essentially nothing fillable
-(<= max(4, 5% of the page's field cells)). That second test is what actually
-decides, and it is what rejects the ATC-code *column headers* that appear on
-the fillable face of 1700, 1701, 1701Q, 1702EX and friends: those headings sit
-above a hundred field cells, so no cut is taken.
+  1. `marker` -- one of three STRICT lexical markers. Strictness is load-bearing:
+     a loose /penalt/ pattern was tried and is wrong, because it matches
+     "Add: Penalties", a *form* line on 1601C, 1603Q, 1600-PT and 2551Q.
+  2. `reference-band` -- purely structural, no lexicon at all. Grown upward from
+     the foot of the page one lattice row at a time for as long as each row is
+     pre-printed table material. This is what finds the statutory tax-bracket
+     tables on 1700/1701/1701A/1701Q/1701MS, the DST rate table on 2000-DST, the
+     treaty-code lists on 1601-FQ and 1602Q, and the ATC table under Part VI of
+     2552 -- none of which carries a usable marker. Keywords were refused here
+     on purpose; the structural signal is the one that has never lied.
+  3. `unfillable-page` -- a page with nothing fillable on it anywhere is
+     reference material entire, and cuts at 0.0. Two shapes reach it: a page with
+     no cells at all (2550M p4, 2553 p2, 2200P p3 -- full pages of guidelines,
+     two of which head themselves "GUIDELINES AND INSTRUCTIONS" with no trailing
+     "for BIR Form No. ...", so no marker fires), and a page whose every row the
+     walk below cleared (0605 p2, 1702Q p3, 2550M p3 -- pages that are nothing
+     but an ATC table).
 
-Membership is geometric. An element belongs to the guide only if it lies wholly
-below the cut. Anything crossing the cut is a straddler, and **the form always
-wins a straddler** -- losing a rule off the form is a defect, carrying a stray
-guide rule on the form is cosmetic. Straddlers are reported individually
-because they are where a split can go wrong.
+The admissibility test (`cut_objections`)
+-----------------------------------------
+
+Over-detection is the dangerous failure: relocating a fillable box silently
+removes it from the form, while missing a table only leaves reference material
+on the sheet, where emit.py's own "no input over pre-printed text" rule still
+protects the taxpayer. So the test is asymmetric on purpose, and every cut --
+lexical or structural -- must clear all of it:
+
+  * `admissible_cut_limit()` walks up from the foot of the page and refuses to
+    pass a row that holds a comb, or a row whose entry box continues a column of
+    entry boxes from the row above (the cut would sever a fillable column). No
+    cut may go above where that walk stopped. This one test is what rejects the
+    ATC column *headers* on the fillable faces of 1700, 1701, 1701Q and 1702EX,
+    and it is what stops the 1600-PT band at its ATC title instead of eating the
+    Schedule 1 total row one line higher.
+  * every relocated empty box must be explained. An empty enclosed cell is
+    either pre-printed table whitespace (some cell in its own lattice column
+    carries pre-printed text: a blank ATC slot in a code table), or a frame
+    gutter (tall, narrow, spanning three or more rows: the strip between the two
+    tax tables on 1700), or it is a form control and the cut is refused. That is
+    what keeps the two "8% in lieu of Graduated Rates" checkboxes on 1701A p2
+    and the signature/accreditation boxes on 1604C/E/F p1 out of the guide.
+  * no text run may straddle the cut: a run of glyphs cannot be rendered twice.
+
+Counting was tried and refused. An allowance of "<= max(4, 5% of field cells)"
+passes 5 relocated boxes out of 86 as easily as it passes 5 spurious slivers,
+and on 1600-PT it accepted a cut through the Schedule 1 total row. Classify
+every box and explain each one, or refuse the cut.
+
+Membership and clipping
+-----------------------
+
+Membership is geometric: an element belongs to the guide if it lies wholly below
+the cut. An element crossing the cut used to be awarded to the form outright, on
+the grounds that a cut must never *lose* a rule. That has the opposite failure
+and it is a blocker on 2000-OT: the relocated table's grey title band and its
+full-height outer verticals stayed behind, drawing an empty three-sided box down
+two thirds of the page with nothing inside it.
+
+So straddlers are **clipped**, not awarded. The portion above the cut stays with
+the form, the portion below goes to the guide, and both portions are emitted, so
+each document gets a complete and self-consistent set. Nothing is lost and no
+judgement about intent is needed. A text run is the one thing that cannot be
+clipped, so a cut that splits one is inadmissible instead.
 
 Standalone guides
 -----------------
@@ -77,23 +127,58 @@ REPO = HERE.parent.parent
 #   - the en dash in the "table" pattern is what BIR actually prints; the hyphen
 #     and em dash are there because three sheets differ.
 #   - "^\s*table \d+" is anchored: "see Table 2 below" is prose inside a form.
+#   - the trailing "for" stays. Four sheets head their guidelines without it, and
+#     dropping it would buy nothing while costing the guarantee that the pattern
+#     cannot fire mid-form: 0605 p2, 2550M p4 and 2553 p2 are whole unfillable
+#     pages and cut at 0.0, above where the heading sits, and 2551M p2 is already
+#     cut 162pt higher by the alphanumeric-tax-code marker.
 MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("guidelines-and-instructions", re.compile(r"guidelines?\s+and\s+instructions?\s+for", re.I)),
     ("table-n", re.compile(r"^\s*table\s+\d+\s*[-–—]", re.I)),
     ("alphanumeric-tax-code", re.compile(r"alphanumeric tax code", re.I)),
 )
 
-# A guide region is prose. Fewer runs than this and the "marker" is a stray
-# heading with nothing under it -- 1701MS page 2 ends with a two-row rate table
-# 14 runs long, which is form content, not a guide.
+BAND_PATTERN = "reference-band"
+UNFILLABLE_PATTERN = "unfillable-page"
+
+# A marker hit is one string. Before a cut is taken on that evidence alone the
+# region below it has to be prose: fewer runs than this and the "marker" is a
+# stray heading with nothing under it.
 MIN_GUIDE_TEXT_RUNS = 25
 
-# ...and a guide region has essentially nothing fillable in it. The floor of 4
-# absorbs the one or two spurious slivers the lattice finds at a table's edge
-# (2000-OT page 2 has two, 1600-PT four); the 5% term keeps the allowance
-# proportionate on dense sheets rather than fixed.
-GUIDE_FIELD_CELL_FLOOR = 4
-GUIDE_FIELD_CELL_FRACTION = 0.05
+# The structural band arrives with far more evidence than a string -- every row
+# in it has been shown to be pre-printed table material -- so it does not need
+# the prose floor, which would reject the 22-run tax-bracket tables on 1700 and
+# 1701Q. It needs enough of a table to be a table.
+MIN_BAND_TEXT_RUNS = 12
+MIN_BAND_ROWS = 3
+MIN_BAND_CELLS = 4
+
+# An unfillable page still has to have something on it to be worth moving, and
+# the prose floor is the right bar for that.
+MIN_UNFILLABLE_TEXT_RUNS = MIN_GUIDE_TEXT_RUNS
+
+# Rounded cut values are compared against unrounded tops; 0.005 is half the last
+# reported digit, so the comparison agrees with the report by construction.
+EPS_PT = 0.005
+
+# Lattice coordinates land on the same edge to well under a tenth of a point;
+# 0.6 is loose enough to absorb that and far tighter than any real gap.
+ALIGN_TOL_PT = 0.6
+
+# Two cells are "loosely in one column" when they overlap by this much of the
+# narrower one. Used only to decide whether a cut would sever a column of entry
+# boxes, where being generous means stopping earlier, which is the safe side.
+COLUMN_OVERLAP_FRACTION = 0.6
+
+# A vacant cell this many lattice rows tall, taller than it is wide, is a frame
+# gutter rather than a row's entry box: the 13 x 69pt strip between TABLE 1 and
+# TABLE 2 on 1700 p2 belongs to no row and nobody can write in it.
+GUTTER_MIN_ROW_SPAN = 3
+
+# Pre-printed text has to actually sit inside a box before it explains it away;
+# a point of shared edge is not text in a cell.
+TEXT_IN_CELL_MIN_PT = 1.0
 
 # batch.py skips these; for this module they are the target, not the noise.
 GUIDE_NAME_MARKERS = ("guide", "guidelines", "instruction", "annex")
@@ -117,25 +202,217 @@ REVISION_OVERRIDES = {
     "2551M": "2002",    # p1 masthead "April  2002  (ENCS)" at (476.4, 99.36) pt
 }
 
-SCHEMA_VERSION = 1
+# 2 adds the three-detector record (`detector`, `walk_limit_pt`, `vacancies`,
+# `whole_page`, `rejected`) and replaces wholesale straddler ownership with
+# per-side clipped geometry on every straddler.
+SCHEMA_VERSION = 2
 DEFAULT_SOURCE_ROOT = pathlib.Path("~/Downloads/forms").expanduser()
 
 
 # --------------------------------------------------------------------------
-# detection
+# geometry helpers
+# --------------------------------------------------------------------------
+
+def box(item: dict[str, Any]) -> dict[str, float]:
+    return {"x0": item["x0"], "y0": item["y0"], "x1": item["x1"], "y1": item["y1"]}
+
+
+def loosely_one_column(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Do these two boxes share a column, generously?"""
+    overlap = min(a["x1"], b["x1"]) - max(a["x0"], b["x0"])
+    narrower = min(a["x1"] - a["x0"], b["x1"] - b["x0"])
+    return narrower > 0.0 and overlap >= COLUMN_OVERLAP_FRACTION * narrower
+
+
+def exactly_one_column(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """Are these two boxes the same lattice column?
+
+    Exact, not generous. A table column's cells share both x edges to well
+    inside a tenth of a point; a wide declaration paragraph merely *contains*
+    the signature box under it, and must not be allowed to explain it away.
+    """
+    return (abs(a["x0"] - b["x0"]) <= ALIGN_TOL_PT
+            and abs(a["x1"] - b["x1"]) <= ALIGN_TOL_PT)
+
+
+def contains(outer: dict[str, Any], inner: dict[str, Any]) -> bool:
+    return (outer["x0"] <= inner["x0"] + ALIGN_TOL_PT
+            and outer["x1"] >= inner["x1"] - ALIGN_TOL_PT
+            and outer["y0"] <= inner["y0"] + ALIGN_TOL_PT
+            and outer["y1"] >= inner["y1"] - ALIGN_TOL_PT)
+
+
+def text_sits_in(cell: dict[str, Any], text_runs: Sequence[dict[str, Any]]) -> bool:
+    """Does any pre-printed run land inside this cell's box?
+
+    Cell membership in lattice.py gives a run to the single smallest cell
+    containing its centre, so a run spanning a divider leaves the cell it
+    overlaps looking empty. On 1700 p2 that is why four cells of the tax-bracket
+    table report as fillable: ' Over P 250,000 but not over P 400,000  20%' is
+    one run crossing the column rule. Overlap, not ownership, is the question
+    being asked here.
+    """
+    for run in text_runs:
+        if (min(cell["x1"], run["x1"]) - max(cell["x0"], run["x0"]) > TEXT_IN_CELL_MIN_PT
+                and min(cell["y1"], run["y1"]) - max(cell["y0"], run["y0"]) > TEXT_IN_CELL_MIN_PT):
+            return True
+    return False
+
+
+def comb_bands(cell: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every comb band in a cell. `combs` is present only when there is more
+    than one, and `comb` is then the widest of them, so the union is what must be
+    checked -- not either key alone."""
+    bands = list(cell.get("combs") or ())
+    if not bands and "comb" in cell:
+        bands = [cell["comb"]]
+    return bands
+
+
+def is_gutter(cell: dict[str, Any]) -> bool:
+    return (cell["row_span"] >= GUTTER_MIN_ROW_SPAN
+            and (cell["y1"] - cell["y0"]) > (cell["x1"] - cell["x0"]))
+
+
+def is_control(cell: dict[str, Any], cells: Sequence[dict[str, Any]]) -> bool:
+    """An empty box nested inside a cell that carries text is a tick box.
+
+    1701A p2 prints "8% in lieu of Graduated Rates under Section 24(A) and 40%
+    OSD" as one bordered line with two 13 x 11.5pt boxes inside it. They are the
+    only fillable thing between the form and the tax table, they are what a
+    taxpayer ticks, and no table-whitespace rule may be allowed to swallow them.
+    """
+    return any(other["id"] != cell["id"] and other["text_run_ids"]
+               and contains(other, cell) for other in cells)
+
+
+# --------------------------------------------------------------------------
+# the box census: which empty cells are fillable
+# --------------------------------------------------------------------------
+
+@dataclasses.dataclass(frozen=True)
+class Vacancy:
+    """An empty enclosed cell, and what it turned out to be."""
+    cell_id: str
+    verdict: str             # whitespace | gutter | control | unexplained
+
+    @property
+    def fillable(self) -> bool:
+        return self.verdict in ("control", "unexplained")
+
+
+def empty_boxes(ir_page: dict[str, Any],
+                layout_page: dict[str, Any]) -> list[dict[str, Any]]:
+    """Cells that hold no pre-printed ink and are enclosed enough to write in."""
+    runs = ir_page["text_runs"]
+    return [c for c in layout_page["cells"]
+            if c["kind"] == "field" and not text_sits_in(c, runs)]
+
+
+def classify_vacancy(cell: dict[str, Any], band: Sequence[dict[str, Any]],
+                     cells: Sequence[dict[str, Any]]) -> Vacancy:
+    """Decide what one empty box inside a candidate guide region really is.
+
+    `band` is every cell the cut would relocate; a column is judged from the
+    band alone, never from the whole page. Judging page-wide would let a money
+    column's own header ("Amount of Tax Withheld (6)") vouch for the money boxes
+    beneath it, which is precisely backwards.
+    """
+    if is_gutter(cell):
+        return Vacancy(cell["id"], "gutter")
+    if is_control(cell, cells):
+        return Vacancy(cell["id"], "control")
+    for other in band:
+        if other["id"] != cell["id"] and other["text_run_ids"] and exactly_one_column(other, cell):
+            return Vacancy(cell["id"], "whitespace")
+    return Vacancy(cell["id"], "unexplained")
+
+
+# --------------------------------------------------------------------------
+# how high a cut may go
+# --------------------------------------------------------------------------
+
+def row_cells(cells: Sequence[dict[str, Any]], y_lattice: Sequence[float],
+              index: int) -> list[dict[str, Any]]:
+    """Cells that start in lattice row `index`."""
+    top, bottom = y_lattice[index], y_lattice[index + 1]
+    return [c for c in cells if top - EPS_PT <= c["y0"] < bottom - EPS_PT]
+
+
+def cells_ending_at(cells: Sequence[dict[str, Any]], y: float) -> list[dict[str, Any]]:
+    return [c for c in cells if abs(c["y1"] - y) <= ALIGN_TOL_PT]
+
+
+def severed_columns(line_y: float, cells: Sequence[dict[str, Any]],
+                    row: Sequence[dict[str, Any]],
+                    box_ids: frozenset[str]) -> list[tuple[str, str]]:
+    """Entry boxes this line would cut off from the column they belong to.
+
+    A pre-printed table can perfectly well have two blank cells stacked in one
+    column -- 1601-FQ's ATC table leaves the WC column empty for two rows
+    running -- so a stack of blanks alone proves nothing. What proves it is the
+    *company* the lower blank keeps: a row with more pre-printed cells than
+    empty ones is a table row, and a row where the empty boxes are the majority
+    is somebody's entry row. Only the latter can sever a column.
+    """
+    boxes = [c for c in row if c["id"] in box_ids and not is_gutter(c)]
+    printed = [c for c in row if c["text_run_ids"]]
+    if len(printed) > len(boxes):
+        return []
+    above = [c for c in cells_ending_at(cells, line_y)
+             if c["id"] in box_ids and not is_gutter(c)]
+    return [(b["id"], a["id"]) for b in boxes for a in above if loosely_one_column(a, b)]
+
+
+def admissible_cut_limit(ir_page: dict[str, Any],
+                         layout_page: dict[str, Any]) -> tuple[float, str]:
+    """The topmost y a cut may take on this page, and why it stops there.
+
+    Walks up from the foot of the page one lattice row at a time. A comb is a
+    fillable field by definition, and a severed entry column is a form table, so
+    either one ends the walk. Reaching the top of the lattice means 0.0: no cell
+    can begin above the first lattice line, so nothing fillable lives up there.
+    """
+    cells = layout_page["cells"]
+    y_lattice = layout_page["y_lattice"]
+    if not cells or len(y_lattice) < 2:
+        return 0.0, "no cells on the page"
+    box_ids = frozenset(c["id"] for c in empty_boxes(ir_page, layout_page))
+
+    for index in range(len(y_lattice) - 2, -1, -1):
+        line_y = y_lattice[index]
+        row = row_cells(cells, y_lattice, index)
+        combs = [c["id"] for c in row if "comb" in c]
+        if combs:
+            return line_y, f"comb {combs[0]} in the next row down"
+        severed = severed_columns(line_y, cells, row, box_ids)
+        if severed:
+            return line_y, f"cut would sever fillable column {severed[0][1]} -> {severed[0][0]}"
+    return 0.0, "no fillable row above the foot of the page"
+
+
+# --------------------------------------------------------------------------
+# candidates and the one test that judges them
 # --------------------------------------------------------------------------
 
 @dataclasses.dataclass(frozen=True)
 class Candidate:
-    """A lexical hit that proposes a cut, before the structural test runs."""
+    """A proposed cut, before the admissibility test runs."""
     cut_y: float
     marker: str
     pattern: str
+    detector: str
+    min_text_runs: int
 
 
 @dataclasses.dataclass(frozen=True)
 class Straddler:
-    """An element crossing the cut. Awarded to the form, reported regardless."""
+    """An element crossing the cut, clipped so both documents are complete.
+
+    `form` and `guide` are the clipped geometry for each side. Both are present
+    for everything except a text run, which cannot be split and is therefore
+    never allowed to straddle an accepted cut.
+    """
     kind: str                # rule | area_fill | image | text_run | cell
     ref: str                 # rule/cell id, or "#<index>" for the index-keyed lists
     x0: float
@@ -143,10 +420,14 @@ class Straddler:
     x1: float
     y1: float
     detail: str              # why it is interesting: cell kind, fill tone, ...
+    disposition: str         # clipped | form
+    form: dict[str, Any] | None
+    guide: dict[str, Any] | None
 
     def as_dict(self) -> dict[str, Any]:
         return {"kind": self.kind, "ref": self.ref, "x0": self.x0, "y0": self.y0,
-                "x1": self.x1, "y1": self.y1, "detail": self.detail}
+                "x1": self.x1, "y1": self.y1, "detail": self.detail,
+                "disposition": self.disposition, "form": self.form, "guide": self.guide}
 
 
 def marker_hit(text: str) -> tuple[str, str] | None:
@@ -158,7 +439,7 @@ def marker_hit(text: str) -> tuple[str, str] | None:
     return None
 
 
-def page_candidates(text_runs: Sequence[dict[str, Any]]) -> list[Candidate]:
+def marker_candidates(text_runs: Sequence[dict[str, Any]]) -> list[Candidate]:
     """Every lexical hit on the page, topmost first.
 
     Keyed on the run's top edge, not its baseline: the cut has to fall above the
@@ -174,88 +455,275 @@ def page_candidates(text_runs: Sequence[dict[str, Any]]) -> list[Candidate]:
         # First wins, so the reported marker is stable under pattern reordering
         # only if MARKERS is; that ordering is fixed above.
         if cut_y not in found:
-            found[cut_y] = Candidate(cut_y=cut_y, marker=run["text"].strip(), pattern=hit[1])
+            found[cut_y] = Candidate(cut_y=cut_y, marker=run["text"].strip(),
+                                     pattern=hit[1], detector="marker",
+                                     min_text_runs=MIN_GUIDE_TEXT_RUNS)
     return [found[y] for y in sorted(found)]
 
 
-def field_cell_allowance(field_cell_count: int) -> float:
-    return max(float(GUIDE_FIELD_CELL_FLOOR), GUIDE_FIELD_CELL_FRACTION * field_cell_count)
+def unfillable_page_candidate(ir_page: dict[str, Any], layout_page: dict[str, Any],
+                              limit_y: float) -> Candidate | None:
+    """A page with nothing fillable on it anywhere is reference material entire.
+
+    Two shapes reach this. 2550M page 4 and 2553 page 2 are full pages of
+    guidelines whose heading stops at "GUIDELINES AND INSTRUCTIONS", with no
+    "for BIR Form No. ..." for the lexical marker to match; rather than loosen
+    the marker -- which would then also fire mid-form -- this asks the structural
+    question, and a page with no cells has nothing anyone could fill in. 0605
+    page 2, 1702Q page 3 and 2550M page 3 are the other shape: pages that are
+    nothing but an ATC table, where the row walk found no fillable row above the
+    foot of the page. Both mean the same thing, so both cut at 0.0 and the page
+    leaves whole, running head and outer frame included -- which is also how the
+    form stops being left with a page of clipped frame slivers on it.
+
+    The cut still has to clear cut_objections(): an isolated tick box or entry
+    box anywhere on the page is enough to refuse it, because the row walk only
+    ever stops for combs and for severed columns.
+    """
+    if limit_y > EPS_PT:
+        return None
+    if len(ir_page["text_runs"]) < MIN_UNFILLABLE_TEXT_RUNS:
+        return None
+    first = min(ir_page["text_runs"], key=lambda r: (r["y0"], r["x0"]))
+    return Candidate(cut_y=0.0, marker=first["text"].strip(), pattern=UNFILLABLE_PATTERN,
+                     detector=UNFILLABLE_PATTERN, min_text_runs=MIN_UNFILLABLE_TEXT_RUNS)
 
 
-def below(items: Iterable[dict[str, Any]], cut_y: float) -> list[dict[str, Any]]:
-    """Elements lying wholly below the cut. Touching the cut counts as below."""
-    return [item for item in items if item["y0"] >= cut_y]
+def band_candidate(ir_page: dict[str, Any], layout_page: dict[str, Any],
+                   limit_y: float) -> Candidate | None:
+    """The topmost lattice line that puts a whole pre-printed table below it.
+
+    Grows the band upward from the foot of the page, keeping the highest line
+    that still passes every objection. No keywords: a rate table is recognised
+    by being a contiguous run of rows whose cells hold pre-printed text, hold no
+    comb, and hold no unexplained empty box.
+    """
+    cells = layout_page["cells"]
+    y_lattice = layout_page["y_lattice"]
+    if not cells or len(y_lattice) < 2:
+        return None
+
+    best: Candidate | None = None
+    rows = 0
+    for index in range(len(y_lattice) - 2, -1, -1):
+        line_y = y_lattice[index]
+        if line_y < limit_y - EPS_PT:
+            break
+        rows += 1
+        band = [c for c in cells if c["y0"] >= line_y - EPS_PT]
+        if rows < MIN_BAND_ROWS or len(band) < MIN_BAND_CELLS:
+            continue
+        candidate = Candidate(cut_y=line_y, marker="", pattern=BAND_PATTERN,
+                              detector=BAND_PATTERN, min_text_runs=MIN_BAND_TEXT_RUNS)
+        if cut_objections(candidate, ir_page, layout_page, limit_y):
+            continue
+        best = candidate
+    if best is None:
+        return None
+    below = [r for r in ir_page["text_runs"] if r["y0"] >= best.cut_y - EPS_PT]
+    first = min(below, key=lambda r: (r["y0"], r["x0"]))
+    return dataclasses.replace(best, marker=first["text"].strip())
+
+
+def cut_objections(candidate: Candidate, ir_page: dict[str, Any],
+                   layout_page: dict[str, Any], limit_y: float) -> list[str]:
+    """Every reason this cut may not be taken. Empty means take it.
+
+    One test for all three detectors. A lexical hit is one string of evidence
+    and gets no more latitude than a structural band for it.
+    """
+    cut_y = candidate.cut_y
+    problems: list[str] = []
+
+    if cut_y < limit_y - EPS_PT:
+        problems.append(f"cut {cut_y:.2f} is above the admissible limit {limit_y:.2f}")
+
+    runs_below = sum(1 for r in ir_page["text_runs"] if r["y0"] >= cut_y - EPS_PT)
+    if runs_below < candidate.min_text_runs:
+        problems.append(f"only {runs_below} text run(s) below the cut, "
+                        f"{candidate.min_text_runs} needed")
+
+    split = [i for i, r in enumerate(ir_page["text_runs"]) if r["y0"] < cut_y < r["y1"]]
+    if split:
+        problems.append(f"text run #{split[0]} straddles the cut and cannot be clipped")
+
+    # A comb *band* split down the middle is a mangled field; a comb *cell* whose
+    # box merely crosses the cut is not. 2551M p2c0 is a one-bordered 267pt walk
+    # artefact holding the whole schedule and a spurious 2-slot comb 14pt from
+    # the page top: refusing the cut for that would leave 853pt of ATC table on
+    # the form to protect a comb the cut never touches.
+    for cell in layout_page["cells"]:
+        for comb in comb_bands(cell):
+            if comb["y0"] < cut_y < comb["y1"]:
+                problems.append(f"comb band in cell {cell['id']} straddles the cut")
+                break
+
+    band = [c for c in layout_page["cells"] if c["y0"] >= cut_y - EPS_PT]
+    band_ids = frozenset(c["id"] for c in band)
+    for cell in empty_boxes(ir_page, layout_page):
+        crosses = cell["y0"] < cut_y < cell["y1"]
+        if cell["id"] not in band_ids and not crosses:
+            continue
+        verdict = classify_vacancy(cell, band, layout_page["cells"])
+        if verdict.fillable:
+            where = "split" if crosses else "relocate"
+            problems.append(f"would {where} fillable box {cell['id']} ({verdict.verdict})")
+    return problems
+
+
+# --------------------------------------------------------------------------
+# clipping
+# --------------------------------------------------------------------------
+
+def clip_rule(rule: dict[str, Any], cut_y: float) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split a straddling rule at the cut, recomputing its length.
+
+    `length_pt` is a derived field and the round-trip differ compares it. A
+    clipped rule that keeps the original length is exactly the false mismatch
+    this pipeline must not manufacture, so it is recomputed per side, on the
+    rule's own axis.
+    """
+    def piece(y0: float, y1: float) -> dict[str, Any]:
+        span = (rule["x1"] - rule["x0"]) if rule["axis"] == "h" else (y1 - y0)
+        return {"x0": rule["x0"], "y0": round(y0, 2), "x1": rule["x1"], "y1": round(y1, 2),
+                "thickness_pt": rule["thickness_pt"], "length_pt": round(span, 2)}
+    return piece(rule["y0"], cut_y), piece(cut_y, rule["y1"])
+
+
+def clip_area(item: dict[str, Any], cut_y: float) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split a straddling fill or image box at the cut.
+
+    An image is clipped, never resampled: the payload and `pixel_sha256` stay
+    exactly as extracted and each side renders the same picture through a clip
+    rectangle. Cropping the pixels would move the hash and break the artwork
+    proof for a reason that has nothing to do with artwork.
+    """
+    above = dict(box(item)); above["y1"] = round(cut_y, 2)
+    below = dict(box(item)); below["y0"] = round(cut_y, 2)
+    return above, below
+
+
+def clip_cell(cell: dict[str, Any], cut_y: float,
+              run_top: dict[str, float]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split a straddling cell, sending each of its runs to the side it sits on.
+
+    The cut edge is not printed ink, so `border_at_cut` is False on both pieces:
+    emit.py must not paint a border there or the split shows up as a rule the
+    official does not have.
+
+    `combs` names the comb bands each piece keeps. A cut may not pass through a
+    band (cut_objections refuses that), so every band lands wholly on one side
+    and the piece that has it is the piece that renders the field.
+    """
+    above_runs = [t for t in cell["text_run_ids"] if run_top.get(t, 0.0) < cut_y]
+    below_runs = [t for t in cell["text_run_ids"] if run_top.get(t, 0.0) >= cut_y]
+    bands = comb_bands(cell)
+    above = dict(box(cell))
+    above.update({"y1": round(cut_y, 2), "text_run_ids": above_runs,
+                  "border_at_cut": False, "cut_edge": "bottom",
+                  "combs": sum(1 for b in bands if b["y1"] <= cut_y + EPS_PT)})
+    below = dict(box(cell))
+    below.update({"y0": round(cut_y, 2), "text_run_ids": below_runs,
+                  "border_at_cut": False, "cut_edge": "top",
+                  "combs": sum(1 for b in bands if b["y0"] >= cut_y - EPS_PT)})
+    return above, below
 
 
 def straddling(items: Iterable[dict[str, Any]], cut_y: float) -> list[dict[str, Any]]:
     return [item for item in items if item["y0"] < cut_y < item["y1"]]
 
 
-def structurally_valid(cut_y: float, text_runs: Sequence[dict[str, Any]],
-                       field_cells: Sequence[dict[str, Any]]) -> tuple[bool, int, int]:
-    """The test that actually decides. Returns (valid, runs below, fields below)."""
-    runs_below = len(below(text_runs, cut_y))
-    fields_below = len(below(field_cells, cut_y))
-    valid = (runs_below >= MIN_GUIDE_TEXT_RUNS
-             and fields_below <= field_cell_allowance(len(field_cells)))
-    return valid, runs_below, fields_below
-
-
 def collect_straddlers(cut_y: float, ir_page: dict[str, Any],
                        layout_page: dict[str, Any]) -> list[Straddler]:
+    """Every element the cut passes through, with its clipped geometry."""
     out: list[Straddler] = []
+
     for rule in straddling(ir_page["rules"], cut_y):
+        form, guide = clip_rule(rule, cut_y)
         out.append(Straddler("rule", rule["id"], rule["x0"], rule["y0"], rule["x1"], rule["y1"],
-                             f"{rule['axis']} {rule['thickness_pt']}pt gray={rule['gray']}"))
+                             f"{rule['axis']} {rule['thickness_pt']}pt gray={rule['gray']}",
+                             "clipped", form, guide))
     for index, fill in enumerate(ir_page["area_fills"]):
         if fill["y0"] < cut_y < fill["y1"]:
+            form, guide = clip_area(fill, cut_y)
             out.append(Straddler("area_fill", f"#{index}", fill["x0"], fill["y0"],
-                                 fill["x1"], fill["y1"], f"gray={fill['gray']}"))
+                                 fill["x1"], fill["y1"], f"gray={fill['gray']}",
+                                 "clipped", form, guide))
     for index, image in enumerate(ir_page["images"]):
         if image["y0"] < cut_y < image["y1"]:
+            form, guide = clip_area(image, cut_y)
             out.append(Straddler("image", f"#{index}", image["x0"], image["y0"],
-                                 image["x1"], image["y1"], image["sha256"][:12]))
+                                 image["x1"], image["y1"], image["sha256"][:12],
+                                 "clipped", form, guide))
+    # A run of glyphs cannot be split, so an accepted cut never crosses one --
+    # cut_objections() rejects the cut instead. The branch stays because a
+    # rejected candidate is still reported, and reporting it needs the shape.
     for index, run in enumerate(ir_page["text_runs"]):
         if run["y0"] < cut_y < run["y1"]:
             out.append(Straddler("text_run", f"#{index}", run["x0"], run["y0"],
-                                 run["x1"], run["y1"], repr(run["text"][:40])))
+                                 run["x1"], run["y1"], repr(run["text"][:40]),
+                                 "form", box(run), None))
 
-    # A straddling cell is the worst case: it stays with the form, but the runs
-    # it owns may sit below the cut and therefore leave with the guide. emit.py
-    # has to render that cell without them, so the count is reported here rather
-    # than left to be discovered at emit time.
     run_top = {f"p{ir_page['index']}t{i}": r["y0"]
                for i, r in enumerate(ir_page["text_runs"])}
     for cell in straddling(layout_page["cells"], cut_y):
-        orphaned = sum(1 for t in cell["text_run_ids"] if run_top.get(t, 0.0) >= cut_y)
+        form, guide = clip_cell(cell, cut_y, run_top)
         detail = f"kind={cell['kind']}"
-        if orphaned:
-            detail += f" loses {orphaned}/{len(cell['text_run_ids'])} runs to the guide"
+        if guide["text_run_ids"]:
+            detail += (f" {len(guide['text_run_ids'])}/{len(cell['text_run_ids'])} "
+                       f"run(s) go with the guide")
         out.append(Straddler("cell", cell["id"], cell["x0"], cell["y0"],
-                             cell["x1"], cell["y1"], detail))
+                             cell["x1"], cell["y1"], detail, "clipped", form, guide))
     return out
 
 
-def detect_page(ir_page: dict[str, Any], layout_page: dict[str, Any]) -> dict[str, Any] | None:
-    """Find the guide region on one page, or None.
+# --------------------------------------------------------------------------
+# detection
+# --------------------------------------------------------------------------
 
-    Topmost valid candidate wins: a page with both a table heading and a
-    guidelines heading is one guide region starting at the first of them.
+def below(items: Iterable[dict[str, Any]], cut_y: float) -> list[dict[str, Any]]:
+    """Elements lying wholly below the cut. Touching the cut counts as below."""
+    return [item for item in items if item["y0"] >= cut_y]
+
+
+def page_candidates(ir_page: dict[str, Any], layout_page: dict[str, Any],
+                    limit_y: float) -> list[Candidate]:
+    """Every proposal on this page, in a fixed order so ties resolve the same way."""
+    proposals: list[Candidate] = []
+    unfillable = unfillable_page_candidate(ir_page, layout_page, limit_y)
+    if unfillable is not None:
+        proposals.append(unfillable)
+    proposals.extend(marker_candidates(ir_page["text_runs"]))
+    band = band_candidate(ir_page, layout_page, limit_y)
+    if band is not None:
+        proposals.append(band)
+    return proposals
+
+
+def detect_page(ir_page: dict[str, Any],
+                layout_page: dict[str, Any]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Find the guide region on one page. Returns (entry or None, rejections).
+
+    The topmost admissible proposal wins: a higher cut relocates strictly more
+    reference material, and cut_objections() is what makes "higher" safe.
     """
     text_runs = ir_page["text_runs"]
-    field_cells = [c for c in layout_page["cells"] if c["kind"] == "field"]
+    limit_y, limit_reason = admissible_cut_limit(ir_page, layout_page)
 
-    chosen: Candidate | None = None
-    runs_below = fields_below = 0
-    for candidate in page_candidates(text_runs):
-        valid, runs_below, fields_below = structurally_valid(
-            candidate.cut_y, text_runs, field_cells)
-        if valid:
-            chosen = candidate
-            break
-    if chosen is None:
-        return None
+    accepted: list[Candidate] = []
+    rejected: list[dict[str, Any]] = []
+    for candidate in page_candidates(ir_page, layout_page, limit_y):
+        problems = cut_objections(candidate, ir_page, layout_page, limit_y)
+        if problems:
+            rejected.append({"page": ir_page["index"], "cut_y_pt": round(candidate.cut_y, 2),
+                             "detector": candidate.detector, "marker": candidate.marker,
+                             "objections": problems})
+        else:
+            accepted.append(candidate)
+    if not accepted:
+        return None, rejected
 
+    chosen = min(accepted, key=lambda c: c.cut_y)
     cut_y = chosen.cut_y
     height = ir_page["height_pt"]
     reclaimed = height - cut_y
@@ -267,6 +735,18 @@ def detect_page(ir_page: dict[str, Any], layout_page: dict[str, Any]) -> dict[st
     guide_images = [i for i, m in enumerate(ir_page["images"]) if m["y0"] >= cut_y]
     straddlers = collect_straddlers(cut_y, ir_page, layout_page)
 
+    field_cells = [c for c in layout_page["cells"] if c["kind"] == "field"]
+    band = [c for c in layout_page["cells"] if c["y0"] >= cut_y - EPS_PT]
+    band_ids = frozenset(c["id"] for c in band)
+    vacancies = [classify_vacancy(c, band, layout_page["cells"])
+                 for c in empty_boxes(ir_page, layout_page) if c["id"] in band_ids]
+
+    # Nothing of the page is left on the form: emit.py has an empty page, not a
+    # page with a stub on it, and should drop it rather than print blank paper.
+    whole_page = (len(guide_runs) == len(text_runs)
+                  and len(guide_cells) == len(layout_page["cells"])
+                  and not [s for s in straddlers if s.kind in ("rule", "area_fill", "image")])
+
     return {
         "page": ir_page["index"],
         "cut_y_pt": round(cut_y, 2),
@@ -277,14 +757,21 @@ def detect_page(ir_page: dict[str, Any], layout_page: dict[str, Any]) -> dict[st
         "rule_ids": guide_rules,
         "area_fill_indices": guide_fills,
         "image_indices": guide_images,
+        "detector": chosen.detector,
         "marker": chosen.marker,
         "marker_pattern": chosen.pattern,
-        "text_runs_below": runs_below,
-        "field_cells_below": fields_below,
+        "whole_page": whole_page,
+        "walk_limit_pt": round(limit_y, 2),
+        "walk_limit_reason": limit_reason,
+        "text_runs_below": len([r for r in text_runs if r["y0"] >= cut_y]),
+        "field_cells_below": len(below(field_cells, cut_y)),
         "field_cells_on_page": len(field_cells),
-        "field_cell_allowance": round(field_cell_allowance(len(field_cells)), 2),
+        "vacancies": {
+            "whitespace": sum(1 for v in vacancies if v.verdict == "whitespace"),
+            "gutter": sum(1 for v in vacancies if v.verdict == "gutter"),
+        },
         "straddlers": [s.as_dict() for s in straddlers],
-    }
+    }, rejected
 
 
 # --------------------------------------------------------------------------
@@ -353,9 +840,13 @@ def build_plan(ir: dict[str, Any], layout: dict[str, Any],
     if len(ir["pages"]) != len(layout["pages"]):
         raise ValueError("IR and layout disagree on page count")
 
-    inline = [entry for entry in
-              (detect_page(ip, lp) for ip, lp in zip(ir["pages"], layout["pages"]))
-              if entry is not None]
+    inline: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    for ir_page, layout_page in zip(ir["pages"], layout["pages"]):
+        entry, refused = detect_page(ir_page, layout_page)
+        rejected.extend(refused)
+        if entry is not None:
+            inline.append(entry)
 
     key = form_key(ir["form"]["code"], ir["form"]["revision"])
     guides = (standalone or {}).get(key, [])
@@ -365,11 +856,16 @@ def build_plan(ir: dict[str, Any], layout: dict[str, Any],
         "schema_version": SCHEMA_VERSION,
         "form": dict(ir["form"]),
         "inline": inline,
+        # Why a page was *not* cut, on every page where something was proposed.
+        # The audit passed 137 real defects once; a detector that cannot explain
+        # its refusals is how that happens.
+        "rejected": rejected,
         "standalone_pdf": str(guides[0]) if guides else None,
         "standalone_pdfs": [str(p) for p in guides],
         "stats": {
             "pages": len(ir["pages"]),
             "pages_with_guide": len(inline),
+            "whole_pages": sum(1 for e in inline if e["whole_page"]),
             "reclaimed_pct_mean": round(sum(pcts) / len(pcts)) if pcts else 0,
             "reclaimed_pct_min": min(pcts) if pcts else 0,
             "reclaimed_pct_max": max(pcts) if pcts else 0,
@@ -379,6 +875,10 @@ def build_plan(ir: dict[str, Any], layout: dict[str, Any],
             "guide_area_fills": sum(len(e["area_fill_indices"]) for e in inline),
             "guide_images": sum(len(e["image_indices"]) for e in inline),
             "straddlers": sum(len(e["straddlers"]) for e in inline),
+            "clipped": sum(1 for e in inline for s in e["straddlers"]
+                           if s["disposition"] == "clipped"),
+            "detectors": {name: sum(1 for e in inline if e["detector"] == name)
+                          for name in ("marker", BAND_PATTERN, UNFILLABLE_PATTERN)},
         },
     }
 
@@ -390,7 +890,9 @@ def check_partition(plan: dict[str, Any], ir: dict[str, Any],
     emit.py will ask "does this element go in the form or the guide?" exactly
     once per element. If the answer is ever "both" or "neither", the sheet
     silently loses or duplicates geometry, so the invariant is checked here
-    rather than trusted.
+    rather than trusted. A clipped straddler is the one element that is legally
+    in both, and the proof for it is that its two pieces meet at the cut and
+    span exactly the original: no ink is lost and none is drawn twice.
     """
     problems: list[str] = []
     by_page = {e["page"]: e for e in plan["inline"]}
@@ -420,11 +922,52 @@ def check_partition(plan: dict[str, Any], ir: dict[str, Any],
                 problems.append(f"page {ir_page['index']} {kind}: unknown refs {sorted(unknown)[:3]}")
             for ref, top in zip(all_refs, tops):
                 # cut_y_pt is rounded for the report; compare with the same slack.
-                should_be_guide = top >= cut_y - 0.005
+                should_be_guide = top >= cut_y - EPS_PT
                 if should_be_guide != (ref in guide_set):
                     problems.append(
                         f"page {ir_page['index']} {kind} {ref}: top {top} vs cut {cut_y} "
                         f"but {'in' if ref in guide_set else 'not in'} the guide")
+        problems.extend(check_clips(entry, ir_page, layout_page))
+    return problems
+
+
+def check_clips(entry: dict[str, Any], ir_page: dict[str, Any],
+                layout_page: dict[str, Any]) -> list[str]:
+    """Each clipped straddler's two pieces must reconstruct the original exactly."""
+    problems: list[str] = []
+    cut_y = entry["cut_y_pt"]
+    page = ir_page["index"]
+    cells = {c["id"]: c for c in layout_page["cells"]}
+    rules = {r["id"]: r for r in ir_page["rules"]}
+
+    for straddler in entry["straddlers"]:
+        ref, kind = straddler["ref"], straddler["kind"]
+        if straddler["disposition"] != "clipped":
+            if kind != "text_run":
+                problems.append(f"page {page} {kind} {ref}: not clipped and not a text run")
+            continue
+        form, guide = straddler["form"], straddler["guide"]
+        if form is None or guide is None:
+            problems.append(f"page {page} {kind} {ref}: clipped but a side is missing")
+            continue
+        if abs(form["y1"] - cut_y) > EPS_PT or abs(guide["y0"] - cut_y) > EPS_PT:
+            problems.append(f"page {page} {kind} {ref}: pieces do not meet at the cut")
+        if abs(form["y0"] - straddler["y0"]) > EPS_PT or abs(guide["y1"] - straddler["y1"]) > EPS_PT:
+            problems.append(f"page {page} {kind} {ref}: pieces do not span the original")
+        if form["y1"] <= form["y0"] or guide["y1"] <= guide["y0"]:
+            problems.append(f"page {page} {kind} {ref}: a piece has no height")
+        if kind == "rule":
+            axis = rules[ref]["axis"]
+            for side, piece in (("form", form), ("guide", guide)):
+                span = (piece["x1"] - piece["x0"]) if axis == "h" else (piece["y1"] - piece["y0"])
+                if abs(piece["length_pt"] - round(span, 2)) > EPS_PT:
+                    problems.append(f"page {page} rule {ref}: {side} length_pt "
+                                    f"{piece['length_pt']} != {round(span, 2)}")
+        if kind == "cell":
+            owned = sorted(cells[ref]["text_run_ids"])
+            split = sorted([*form["text_run_ids"], *guide["text_run_ids"]])
+            if owned != split:
+                problems.append(f"page {page} cell {ref}: runs {split} != owned {owned}")
     return problems
 
 
@@ -459,8 +1002,8 @@ def print_corpus_table(rows: Sequence[tuple[str, dict[str, Any]]],
         print(line, file=stream)
 
     w(f"{'form':<26} {'pg':>3} {'guide page':>10} {'cut pt':>8} {'reclaim':>8} "
-      f"{'%':>4} {'runs':>5} {'fld':>4} {'std':>4}  marker")
-    w("-" * 118)
+      f"{'%':>4} {'runs':>5} {'fld':>4} {'std':>4}  {'detector':<15} marker")
+    w("-" * 132)
     with_inline = with_standalone = neither = 0
     pcts: list[int] = []
     for slug, plan in rows:
@@ -478,28 +1021,46 @@ def print_corpus_table(rows: Sequence[tuple[str, dict[str, Any]]],
             with_standalone += 1
         for n, entry in enumerate(plan["inline"]):
             pcts.append(entry["reclaimed_pct"])
+            whole = " [whole page]" if entry["whole_page"] else ""
             w(f"{slug if n == 0 else '':<26} {plan['stats']['pages'] if n == 0 else '':>3} "
               f"{entry['page']:>10} {entry['cut_y_pt']:>8.2f} {entry['reclaimed_pt']:>8.2f} "
               f"{entry['reclaimed_pct']:>4} {entry['text_runs_below']:>5} "
               f"{entry['field_cells_below']:>4} "
-              f"{('yes' if has_std else '-') if n == 0 else '':>4}  {entry['marker'][:48]}")
-    w("-" * 118)
+              f"{('yes' if has_std else '-') if n == 0 else '':>4}  {entry['detector']:<15} "
+              f"{entry['marker'][:40]}{whole}")
+    w("-" * 132)
     pages = sum(p["stats"]["pages"] for _, p in rows)
     w(f"{len(rows)} forms, {pages} pages: {len(pcts)} guide pages on {with_inline} forms; "
       f"{with_standalone} forms have a standalone guide PDF; {neither} have neither.")
     if pcts:
-        w(f"reclaimed: mean {round(sum(pcts) / len(pcts))}%  min {min(pcts)}%  max {max(pcts)}%")
+        w(f"reclaimed: mean {round(sum(pcts) / len(pcts))}%  min {min(pcts)}%  max {max(pcts)}%"
+          f"  total {round(sum(e['reclaimed_pt'] for _, p in rows for e in p['inline']))}pt")
+    by_detector: dict[str, int] = {}
+    for _, plan in rows:
+        for entry in plan["inline"]:
+            by_detector[entry["detector"]] = by_detector.get(entry["detector"], 0) + 1
+    w(f"detectors: {by_detector}")
 
     w()
-    w("straddling elements (form wins every one):")
+    w("straddling elements (clipped at the cut; the form keeps the part above it):")
     total = 0
     for slug, plan in rows:
         for entry in plan["inline"]:
             for s in entry["straddlers"]:
                 total += 1
+                clip = (f"form y {s['form']['y0']:.2f}->{s['form']['y1']:.2f} | "
+                        f"guide y {s['guide']['y0']:.2f}->{s['guide']['y1']:.2f}"
+                        if s["disposition"] == "clipped" else "KEPT WHOLE BY THE FORM")
                 w(f"  {slug:<24} p{entry['page']} {s['kind']:<9} {s['ref']:<7} "
-                  f"y {s['y0']:.2f}->{s['y1']:.2f}  {s['detail']}")
+                  f"y {s['y0']:.2f}->{s['y1']:.2f}  {clip}  {s['detail']}")
     w(f"  {total} straddler(s)")
+
+    w()
+    w("proposals refused (why a page was not cut, or not cut higher):")
+    for slug, plan in rows:
+        for refusal in plan["rejected"]:
+            w(f"  {slug:<24} p{refusal['page']} {refusal['detector']:<15} "
+              f"cut {refusal['cut_y_pt']:>7.2f}  {refusal['objections'][0]}")
 
     w()
     w("standalone guide PDFs:")
@@ -542,22 +1103,43 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
 
     guide_pages = [(slug, e) for slug, p in rows for e in p["inline"]]
     forms_with = [slug for slug, p in rows if p["inline"]]
-    check(len(guide_pages) == 17, f"expected 17 guide pages, got {len(guide_pages)}")
-    check(len(forms_with) == 17, f"expected 17 forms with a guide, got {len(forms_with)}")
+    check(len(guide_pages) == 28, f"expected 28 guide pages, got {len(guide_pages)}")
+    check(len(forms_with) == 27, f"expected 27 forms with a guide, got {len(forms_with)}")
 
     pcts = [e["reclaimed_pct"] for _, e in guide_pages]
-    check(round(sum(pcts) / len(pcts)) == 67, f"expected mean reclaim 67%, got {pcts}")
-    check(min(pcts) == 38, f"expected min reclaim 38%, got {min(pcts)}")
-    check(max(pcts) == 93, f"expected max reclaim 93%, got {max(pcts)}")
+    check(round(sum(pcts) / len(pcts)) == 60, f"expected mean reclaim 60%, got {pcts}")
+    check(min(pcts) == 9, f"expected min reclaim 9%, got {min(pcts)}")
+    check(max(pcts) == 100, f"expected max reclaim 100%, got {max(pcts)}")
 
-    # The four cuts measured by the validated prototype, to the hundredth.
+    # Cut, field cells below, runs below, reclaimed %, detector. Every detector,
+    # every C6 blocker page, and the cuts the validated prototype measured to the
+    # hundredth. `field_cells_below` counts cells lattice.py called `field`,
+    # including the ones a pre-printed run crosses; the corpus-wide assertion
+    # further down is what proves none of them is actually fillable.
     expected = {
-        ("1603q-2018", 2): (284.54, 0, 171, 70),
-        ("1600-pt-2018", 2): (286.02, 4, 126, 69),
-        ("2551q-2018", 2): (295.51, 3, 93, 68),
-        ("2550m-undated", 3): (72.52, 4, 124, 93),
+        ("1603q-2018", 2): (284.54, 0, 171, 70, "marker"),
+        ("1600-pt-2018", 2): (283.91, 4, 126, 70, BAND_PATTERN),
+        ("2551q-2018", 2): (292.43, 2, 93, 69, BAND_PATTERN),
+        # 2551M keeps its cut only because the comb test asks about comb *bands*:
+        # p2c0's box crosses the cut, its 2-slot comb sits 100pt above it.
+        ("2551m-2002", 2): (154.32, 0, 213, 85, "marker"),
+        # The tax-bracket tables C6 called a blocker: a taxpayer could type over
+        # "Not over P 250,000". Partial cuts -- the fillable face above them is
+        # untouched, which is what the seven-page guard below proves.
+        ("1700-2018", 2): (837.56, 9, 22, 11, BAND_PATTERN),
+        ("1701ms-2024", 2): (838.43, 6, 22, 10, BAND_PATTERN),
+        ("1701q-2018", 2): (769.46, 9, 22, 18, BAND_PATTERN),
+        ("1701a-2018", 2): (854.84, 9, 22, 9, BAND_PATTERN),
+        ("2000-dst-2018", 2): (538.03, 7, 137, 43, BAND_PATTERN),
+        ("2552-2018", 2): (801.52, 2, 23, 14, BAND_PATTERN),
+        # Whole pages: 2550M p3 is nothing but its ATC table, so the marker cut at
+        # 72.52 that left the running head behind is superseded by cutting at 0.
+        ("2550m-2007", 3): (0.0, 4, 125, 100, UNFILLABLE_PATTERN),
+        ("2550m-2007", 4): (0.0, 0, 143, 100, UNFILLABLE_PATTERN),
+        ("2553-1999", 2): (0.0, 0, 94, 100, UNFILLABLE_PATTERN),
+        ("0605-1999", 2): (0.0, 6, 281, 100, UNFILLABLE_PATTERN),
     }
-    for (slug, page), (cut, fields, runs, pct) in expected.items():
+    for (slug, page), (cut, fields, runs, pct, detector) in expected.items():
         entry = next((e for e in plans[slug]["inline"] if e["page"] == page), None)
         if entry is None:
             failures.append(f"{slug} p{page}: no guide detected")
@@ -569,16 +1151,59 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
               f"{slug} p{page}: {entry['text_runs_below']} runs below, expected {runs}")
         check(entry["reclaimed_pct"] == pct,
               f"{slug} p{page}: reclaimed {entry['reclaimed_pct']}%, expected {pct}%")
+        check(entry["detector"] == detector,
+              f"{slug} p{page}: detector {entry['detector']}, expected {detector}")
 
-    # The false positives the structural test exists to reject. Every one of
-    # these pages carries an ATC or rate-table heading over fillable form.
+    # The seven pages a cut must never eat. Four take no cut at all. Three --
+    # 1700 p2, 1701MS p2, 2552 p2 -- end in a statutory rate or ATC table and
+    # take a small partial cut, leaving the fillable face above it untouched;
+    # C6 lists two of them as blockers for exactly that table. So the assertion
+    # is the property that matters rather than "no cut": nothing fillable moves.
     for slug, page in (("1701-2018", 1), ("1701q-2018", 1), ("1702ex-2018", 1),
-                       ("1700-2018", 2), ("1601eq-2019", 2), ("2552-2018", 2),
-                       ("1701ms-2024", 2)):
+                       ("1601eq-2019", 2)):
         entry = next((e for e in plans[slug]["inline"] if e["page"] == page), None)
         check(entry is None, f"{slug} p{page}: cut a guide out of fillable form")
+    for slug, page in (("1700-2018", 2), ("1701ms-2024", 2), ("2552-2018", 2)):
+        entry = next((e for e in plans[slug]["inline"] if e["page"] == page), None)
+        check(entry is not None and entry["reclaimed_pct"] <= 15,
+              f"{slug} p{page}: expected a small partial cut, got {entry}")
 
-    # Exhaustive and disjoint, on every form, not just the interesting ones.
+    # Corpus-wide, and the reason the seven-page list is no longer the guard:
+    # no cut anywhere may relocate a comb, a fillable box or a growable band.
+    for slug, plan in rows:
+        ir, layout = load_pair(ir_dir, layout_dir, slug)
+        by_page = {e["page"]: e for e in plan["inline"]}
+        for ir_page, layout_page in zip(ir["pages"], layout["pages"]):
+            entry = by_page.get(ir_page["index"])
+            if entry is None:
+                continue
+            cut_y = entry["cut_y_pt"]
+            claimed = set(entry["cell_ids"])
+            # Comb *bands*, not comb cells: 2551M p2c0 is a one-bordered walk
+            # artefact whose box crosses the cut while its comb band sits 100pt
+            # above it, and the band is what must stay whole and stay on the form.
+            combs = [f"{c['id']} y{b['y0']}-{b['y1']}" for c in layout_page["cells"]
+                     for b in comb_bands(c)
+                     if b["y0"] >= cut_y - EPS_PT or b["y0"] < cut_y < b["y1"]]
+            check(not combs, f"{slug} p{ir_page['index']}: cut relocates or splits "
+                             f"comb band(s) {combs[:3]}")
+            band = [c for c in layout_page["cells"] if c["y0"] >= cut_y - EPS_PT]
+            for cell in empty_boxes(ir_page, layout_page):
+                if cell["id"] not in claimed:
+                    continue
+                verdict = classify_vacancy(cell, band, layout_page["cells"])
+                check(not verdict.fillable,
+                      f"{slug} p{ir_page['index']}: relocates fillable box "
+                      f"{cell['id']} ({verdict.verdict})")
+            # A growable band is a repeating *fillable* table by construction, so
+            # it must stay wholly above the cut -- not straddle it, not follow it.
+            for growable in layout_page.get("growable") or ():
+                check(growable["y1"] <= cut_y + EPS_PT,
+                      f"{slug} p{ir_page['index']}: growable {growable['id']} "
+                      f"y{growable['y0']}-{growable['y1']} is not above the cut {cut_y}")
+
+    # Exhaustive and disjoint, on every form, not just the interesting ones,
+    # and every clipped straddler reconstructs the element it came from.
     for slug, plan in rows:
         ir, layout = load_pair(ir_dir, layout_dir, slug)
         for problem in check_partition(plan, ir, layout):
@@ -654,17 +1279,30 @@ def print_summary(slug: str, plan: dict[str, Any], stream: Any = sys.stderr) -> 
     for entry in plan["inline"]:
         print(f"  page {entry['page']}: cut y={entry['cut_y_pt']}pt  "
               f"reclaims {entry['reclaimed_pt']}pt ({entry['reclaimed_pct']}%)  "
-              f"{entry['text_runs_below']} runs / {entry['field_cells_below']} field cells below "
-              f"(allowance {entry['field_cell_allowance']})", file=stream)
-        print(f"           marker [{entry['marker_pattern']}] {entry['marker']!r}", file=stream)
+              f"{entry['text_runs_below']} runs / {entry['field_cells_below']} field cells below"
+              f"{'  [whole page]' if entry['whole_page'] else ''}", file=stream)
+        print(f"           detector [{entry['detector']}] {entry['marker']!r}", file=stream)
+        print(f"           admissible above y={entry['walk_limit_pt']} "
+              f"({entry['walk_limit_reason']}); relocated empty boxes: "
+              f"{entry['vacancies']['whitespace']} table whitespace, "
+              f"{entry['vacancies']['gutter']} frame gutter", file=stream)
         print(f"           guide takes {len(entry['rule_ids'])} rules, "
               f"{len(entry['area_fill_indices'])} fills, {len(entry['image_indices'])} images, "
               f"{len(entry['cell_ids'])} cells, {len(entry['text_run_indices'])} runs",
               file=stream)
         for s in entry["straddlers"]:
-            print(f"           STRADDLES {s['kind']} {s['ref']} "
-                  f"y {s['y0']:.2f}->{s['y1']:.2f} ({s['detail']}) -- kept by the form",
-                  file=stream)
+            if s["disposition"] == "clipped":
+                print(f"           CLIPPED {s['kind']} {s['ref']} "
+                      f"y {s['y0']:.2f}->{s['y1']:.2f} ({s['detail']}) -- form keeps "
+                      f"{s['form']['y0']:.2f}->{s['form']['y1']:.2f}, guide takes "
+                      f"{s['guide']['y0']:.2f}->{s['guide']['y1']:.2f}", file=stream)
+            else:
+                print(f"           STRADDLES {s['kind']} {s['ref']} "
+                      f"y {s['y0']:.2f}->{s['y1']:.2f} ({s['detail']}) -- kept by the form",
+                      file=stream)
+    for refusal in plan["rejected"]:
+        print(f"  page {refusal['page']}: refused {refusal['detector']} cut at "
+              f"{refusal['cut_y_pt']}pt -- {refusal['objections'][0]}", file=stream)
     print(f"  standalone guide PDF: {plan['standalone_pdf'] or 'none'}", file=stream)
 
 

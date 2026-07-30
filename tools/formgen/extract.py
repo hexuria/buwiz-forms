@@ -34,7 +34,9 @@ try:
 except ImportError:  # pragma: no cover - environment guard
     sys.exit("PyMuPDF is required: pip install pymupdf")
 
-SCHEMA_VERSION = 1
+# 2: pages gained `paths` (non-rectilinear ink), images gained `transform` and
+# soft-mask fields, and text runs gained `unmapped_glyphs`.
+SCHEMA_VERSION = 2
 
 # Coordinates are quantised to this many decimal places before any grouping.
 # The BIR generator emits values with at most 2dp, so this is lossless for the
@@ -49,6 +51,17 @@ MAX_RULE_THICKNESS_PT = 1.5
 # Joints are patched by exact corner squares, so a positive epsilon is only
 # needed to absorb float error, not to bridge real gaps.
 JOIN_EPSILON_PT = 0.011
+
+# The floor on "these two points coincide": it decides where one subpath ends and
+# the next begins, and it is the alignment tolerance for a zero-width path. The
+# generator emits exact values, so this only absorbs float noise; a real segment
+# is compared against its own stroke width instead, in is_bar_like.
+AXIS_EPSILON_PT = 1e-6
+
+# MuPDF reports this codepoint for a glyph it could not map to Unicode. It is
+# the honest answer and the only one this module will substitute; see
+# extract_text_runs.
+UNMAPPED_CODEPOINT = "�"
 
 
 def q(value: float) -> float:
@@ -244,6 +257,46 @@ def paint_order(page: fitz.Page, drawings: Sequence[dict[str, Any]]) -> PaintOrd
     return PaintOrder(fill, stroke, images, ordinal)
 
 
+def is_bar_like(p0: fitz.Point, p1: fitz.Point, thickness: float) -> bool:
+    """Whether a line segment inks the same pixels as an axis-aligned bar.
+
+    Exact alignment is the wrong test, and 2316 is why: twelve of its box
+    separators are stroked segments that lean 0.17pt across 14.5pt, a third of
+    their own 0.45pt stroke width. The bar and the segment cover the same ink, and
+    the bar is what lattice.py has to see to find a box side, so calling those
+    twelve "diagonal" would move real structure out of `rules` to no visual gain.
+
+    A filled edge is the opposite case. It has no stroke width, so any lean at all
+    is shape rather than rule -- which is exactly the 0605 triangle whose three
+    edges the classifier was flattening into hairlines.
+    """
+    lean = min(abs(p0.x - p1.x), abs(p0.y - p1.y))
+    return lean <= max(thickness, AXIS_EPSILON_PT)
+
+
+def is_rectilinear(item: dict[str, Any]) -> bool:
+    """Whether every op in this path is representable as an axis-aligned bar.
+
+    A path that is not is more than mis-measured by the rule classifier below --
+    it is silently *changed* by it. 0605 draws each "write here" marker as one
+    filled triangle; forced through the classifier its three edges become three
+    axis-aligned hairlines and the fill is discarded, so a solid black arrow
+    prints as a light grey open "F". Such paths are extracted whole instead, by
+    extract_paths.
+
+    A curve is never bar-like: 0605's pre-printed decimal points are four `c` ops
+    each and no bar describes a circle, however small.
+    """
+    thickness = float(item.get("width") or 0.0)
+    for op in item["items"]:
+        if op[0] == "re":
+            continue
+        if op[0] == "l" and is_bar_like(op[1], op[2], thickness):
+            continue
+        return False
+    return True
+
+
 def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> list[Segment]:
     """Turn every filled rect into maximal horizontal and vertical bars.
 
@@ -269,6 +322,8 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
             v_groups[(x0, x1, gray, rgb)].append((y0, y1, seq))
 
     for index, item in enumerate(drawings):
+        if not is_rectilinear(item):
+            continue  # extract_paths owns it, whole
         # A path may both fill and stroke. The fill paints bars and tint bands;
         # the stroke paints outlines. Forms differ in which they use -- 2551Q is
         # almost entirely filled bars, while 2316 draws 95 of its boxes as
@@ -342,7 +397,7 @@ def extract_area_fills(drawings: Sequence[dict[str, Any]],
     fills: list[dict[str, Any]] = []
     for index, item in enumerate(drawings):
         fill = item.get("fill")
-        if fill is None:
+        if fill is None or not is_rectilinear(item):
             continue
         seq = order.fill[index] if order.fill[index] >= 0 else order.stroke[index]
         gray = to_gray(fill)
@@ -364,6 +419,138 @@ def extract_area_fills(drawings: Sequence[dict[str, Any]],
             })
     fills.sort(key=lambda f: (f["y0"], f["x0"]))
     return fills
+
+
+# ---------------------------------------------------------------------------
+# Non-rectilinear paths
+# ---------------------------------------------------------------------------
+
+
+def subpaths_of(items: Sequence[Sequence[Any]]) -> list[dict[str, Any]]:
+    """Group one path's ops into subpaths, each with its own start point.
+
+    get_drawings() reports no moveto, so the only evidence that a new subpath
+    began is that an op does not start where the previous one ended. `re` and
+    `qu` are always closed subpaths of their own.
+
+    Coordinates follow SVG's convention -- the start point is stated once and
+    each op then carries only the points that op introduces -- because that is
+    also how the PDF operators are written, so nothing is derived here.
+
+    `closed` is measured, not declared: get_drawings() carries a single
+    closePath flag for the whole path, which says nothing about which subpath it
+    applied to, while "the last point coincides with the first" is a fact.
+    """
+    subs: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    cursor: fitz.Point | None = None
+
+    for op in items:
+        kind = op[0]
+        if kind == "re":
+            rect = op[1]
+            subs.append({
+                "start": [q(rect.x0), q(rect.y0)],
+                "closed": True,
+                "ops": [{"op": "re",
+                         "points": [q(rect.x0), q(rect.y0), q(rect.x1), q(rect.y1)]}],
+            })
+            current, cursor = None, None
+            continue
+        if kind == "qu":
+            corners = [op[1].ul, op[1].ur, op[1].lr, op[1].ll]
+            subs.append({
+                "start": [q(corners[0].x), q(corners[0].y)],
+                "closed": True,
+                "ops": [{"op": "l", "points": [q(p.x), q(p.y)]} for p in corners[1:]],
+            })
+            current, cursor = None, None
+            continue
+        if kind not in ("l", "c"):
+            # Silently dropping an op would publish a path that is not the
+            # source's while looking like one.
+            raise SystemExit(f"unknown path op {kind!r}")
+
+        points = list(op[1:])
+        first, last = points[0], points[-1]
+        if (current is None or cursor is None
+                or abs(first.x - cursor.x) > AXIS_EPSILON_PT
+                or abs(first.y - cursor.y) > AXIS_EPSILON_PT):
+            current = {"start": [q(first.x), q(first.y)], "closed": False, "ops": []}
+            subs.append(current)
+        current["ops"].append({
+            "op": kind,
+            "points": [c for p in points[1:] for c in (q(p.x), q(p.y))],
+        })
+        cursor = last
+
+    for sub in subs:
+        if sub["closed"] or not sub["ops"]:
+            continue
+        tail = sub["ops"][-1]["points"]
+        sub["closed"] = tail[-2:] == sub["start"]
+    return subs
+
+
+def extract_paths(drawings: Sequence[dict[str, Any]],
+                  order: PaintOrder) -> list[dict[str, Any]]:
+    """Paths that no axis-aligned bar can represent, kept whole and in paint order.
+
+    A third kind of ink beside rules and area fills. Two families appear in this
+    corpus and both were being lost:
+
+      * The solid "write here" triangles (0605, 1600WP, 2550M, 2551M, 2553).
+        These reached the rule classifier, which flattened each one into three
+        hairlines and dropped the fill.
+      * The pre-printed decimal points inside money boxes (0605, 2551M, 2553).
+        These are filled Bezier circles about 1.7 x 1.5pt. They were dropped
+        outright -- not, as it looked, because MAX_RULE_THICKNESS_PT rejected a
+        shape that is thin on one axis only, but because only `re` and `l` ops
+        ever reached either classifier and a circle is four `c` ops.
+
+    Both colours are recorded separately: a path may fill and stroke, and 2551M's
+    decimal points do both, so collapsing them to one "ink" would lose the fact
+    that the mark is 0.72pt wider than its fill.
+    """
+    paths: list[dict[str, Any]] = []
+    for index, item in enumerate(drawings):
+        if is_rectilinear(item):
+            continue
+        fill = item.get("fill")
+        stroke = item.get("color")
+        stroke_width = float(item.get("width") or 0.0)
+        if stroke is not None and stroke_width <= 0:
+            stroke = None
+        if fill is None and stroke is None:
+            continue
+
+        fill_gray = to_gray(fill)
+        stroke_gray = to_gray(stroke)
+        rect = item["rect"]
+        # The fill lands under the stroke, so the first op is the fill's when
+        # there is one -- the same reconciliation extract_segments makes.
+        first = order.fill[index] if order.fill[index] >= 0 else order.stroke[index]
+        last = order.stroke[index] if order.stroke[index] >= 0 else order.fill[index]
+        paths.append({
+            "id": None,  # assigned after the sort so ids read in document order
+            "x0": q(rect.x0), "y0": q(rect.y0), "x1": q(rect.x1), "y1": q(rect.y1),
+            "fill": [round(float(c), 4) for c in fill[:3]] if fill is not None and len(fill) >= 3 else None,
+            "fill_gray": fill_gray,
+            "stroke": [round(float(c), 4) for c in stroke[:3]] if stroke is not None and len(stroke) >= 3 else None,
+            "stroke_gray": stroke_gray,
+            "stroke_width_pt": q(stroke_width) if stroke is not None else 0.0,
+            "even_odd": bool(item.get("even_odd")),
+            # The tone of the ink that decides whether this mark is structure:
+            # the fill when the path has one, otherwise the outline.
+            "role": classify_tone(fill_gray if fill is not None else stroke_gray),
+            "subpaths": subpaths_of(item["items"]),
+            "paint_seq": first,
+            "paint_seq_max": last,
+        })
+    paths.sort(key=lambda p: (p["y0"], p["x0"]))
+    for position, path in enumerate(paths):
+        path["id"] = f"path{position}"
+    return paths
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +600,38 @@ def split_font_name(raw: str) -> dict[str, Any]:
     }
 
 
+def has_tounicode(doc: fitz.Document, xref: int) -> bool:
+    """Whether this font object carries a ToUnicode CMap."""
+    got = doc.xref_get_key(xref, "ToUnicode")
+    return bool(got) and got[0] != "null"
+
+
+def unmapped_glyph_origins(page: fitz.Page) -> dict[tuple[float, float], int]:
+    """Glyph origins where MuPDF could not map the drawn glyph to a codepoint.
+
+    This exists because the two text views disagree, and the one extract_text_runs
+    reads is the one that guesses. On 2550M page 4 and 2553 page 2, seven glyphs
+    are drawn from a symbolic Wingdings face with no ToUnicode CMap:
+    get_texttrace() reports them honestly as U+FFFD with glyph id 131, while
+    get_text("rawdict") reports 'SECTION SIGN' -- the WinAnsi meaning of the byte
+    0xA7, which this font does not use. A section sign looks like content, so the
+    lie is not detectable downstream; the same glyph on 1601C, whose font carries
+    a usable encoding, reads U+F0A7.
+
+    The glyph id is the invariant across all three readings, so it is what gets
+    carried. Ambiguous origins -- more than one glyph drawn at the same point --
+    are dropped rather than resolved by a tiebreak, since the point of this map
+    is to be certain about the glyph it names.
+    """
+    seen: dict[tuple[float, float], set[int]] = collections.defaultdict(set)
+    for span in page.get_texttrace():
+        for char in span["chars"]:
+            codepoint, glyph_id, origin = char[0], char[1], char[2]
+            if codepoint in (0, 0xFFFD):
+                seen[(q(origin[0]), q(origin[1]))].add(glyph_id)
+    return {key: next(iter(ids)) for key, ids in seen.items() if len(ids) == 1}
+
+
 def font_table(page: fitz.Page, doc: fitz.Document) -> dict[str, dict[str, Any]]:
     """Every font resource on the page, keyed by BaseFont name.
 
@@ -430,6 +649,12 @@ def font_table(page: fitz.Page, doc: fitz.Document) -> dict[str, dict[str, Any]]
             "encoding": encoding,
             "embedded": ext not in ("n/a", "", None),
             "embedded_format": ext if ext not in ("n/a", "", None) else None,
+            # Whether the file states what its codepoints mean. Without a
+            # ToUnicode CMap the text reported below is MuPDF's derivation from
+            # the font's own encoding, and for a symbolic face -- Wingdings,
+            # Symbol -- that derivation can fail outright; see
+            # unmapped_glyph_origins.
+            "has_tounicode": has_tounicode(doc, xref),
             **parts,
         }
         try:
@@ -472,9 +697,17 @@ def extract_text_runs(page: fitz.Page) -> list[dict[str, Any]]:
     verify.py has to locate an *interior* glyph exactly whenever the rasteriser
     merges two runs into one span, and each offset here is a single subtraction
     rounded once, so it carries no accumulation at all.
+
+    `unmapped_glyphs` is the one place this function overrules its source. Where
+    MuPDF drew a glyph it could not map to a codepoint, `text` carries U+FFFD and
+    the entry names the glyph id, rather than the plausible-looking character
+    rawdict substitutes. Anything downstream then prints a visible replacement
+    mark it can be told to fix, instead of a section sign nobody can tell is
+    wrong. See unmapped_glyph_origins.
     """
     runs: list[dict[str, Any]] = []
     raw = page.get_text("rawdict")
+    unmapped = unmapped_glyph_origins(page)
 
     for block in raw["blocks"]:
         if block["type"] != 0:
@@ -483,7 +716,20 @@ def extract_text_runs(page: fitz.Page) -> list[dict[str, Any]]:
             direction = line.get("dir", (1.0, 0.0))
             for span in line["spans"]:
                 chars = span.get("chars") or []
-                text = "".join(c["c"] for c in chars)
+                unmapped_glyphs = []
+                letters = []
+                for position, char in enumerate(chars):
+                    glyph_id = unmapped.get((q(char["origin"][0]), q(char["origin"][1])))
+                    if glyph_id is None:
+                        letters.append(char["c"])
+                        continue
+                    letters.append(UNMAPPED_CODEPOINT)
+                    unmapped_glyphs.append({
+                        "index": position,
+                        "glyph_id": glyph_id,
+                        "rawdict_codepoint": ord(char["c"]),
+                    })
+                text = "".join(letters)
                 if not text.strip():
                     continue
 
@@ -527,6 +773,7 @@ def extract_text_runs(page: fitz.Page) -> list[dict[str, Any]]:
                     "char_widths_pt": widths,
                     "direction": [round(float(direction[0]), 4), round(float(direction[1]), 4)],
                     "rotated": abs(float(direction[1])) > 1e-6,
+                    "unmapped_glyphs": unmapped_glyphs,
                 })
     runs.sort(key=lambda r: (r["y0"], r["x0"]))
     return runs
@@ -537,18 +784,64 @@ def extract_text_runs(page: fitz.Page) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+def smask_xref(doc: fitz.Document, xref: int) -> int:
+    """The soft-mask XObject shaping this image, or 0 when it has none."""
+    got = doc.xref_get_key(xref, "SMask")
+    if got and got[0] == "xref":
+        return int(got[1].split()[0])
+    return 0
+
+
+def painted_pixmap(doc: fitz.Document, xref: int) -> fitz.Pixmap:
+    """The image as the page actually paints it: soft mask composited in.
+
+    fitz.Pixmap(doc, xref) and doc.extract_image(xref) both return the *base*
+    image and discard the /SMask, and for this corpus the base image is not the
+    picture. 1604E xref 39's base stream is 39 compressed bytes of flat black
+    over 120x48 samples and its soft mask is entirely transparent, so the mark is
+    invisible in the official and painting the base puts a black block across the
+    pre-printed "Item:" label. Its neighbour xref 37 is grey 0xD9 (the 0.8509
+    decorative tone) wherever the mask is opaque and black elsewhere, so painting
+    the base frames the "For BIR Use Only" band in black.
+
+    That black is /Matte padding: these masks declare Matte [0 0 0], meaning the
+    samples are premultiplied against black, which is exactly the value the mask
+    then removes. Compositing is therefore not a cosmetic improvement -- it is
+    the only reading of the file that is correct.
+
+    Any alpha channel MuPDF hands back on an *unmasked* image is dropped, because
+    there it is an artefact of the decode rather than a statement of the file.
+    """
+    base = fitz.Pixmap(doc, xref)
+    if base.alpha:
+        base = fitz.Pixmap(base, 0)
+    mask_xref = smask_xref(doc, xref)
+    if not mask_xref:
+        return base
+    mask = fitz.Pixmap(doc, mask_xref)
+    if (mask.width, mask.height) != (base.width, base.height):
+        # fz_new_pixmap_from_color_and_mask needs matching extents. Every mask in
+        # this corpus matches; refusing to guess keeps a future mismatch loud.
+        raise SystemExit(
+            f"soft mask {mask_xref} is {mask.width}x{mask.height}, "
+            f"image {xref} is {base.width}x{base.height}")
+    return fitz.Pixmap(base, mask)
+
+
 def decoded_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
-    """Hash an image's decoded samples, normalised to RGB.
+    """Hash an image's painted samples, normalised to RGB.
 
     Colourspace is normalised because a re-encode can legitimately change it
     (a greyscale seal round-tripping as RGB) while every visible sample is the
-    same. Alpha is dropped for the same reason. Returns None when the XObject
-    cannot be decoded, which the caller must treat as "unknown", never "equal".
+    same. Alpha survives only when the source declares a soft mask, because there
+    it carries the shape: without it, 1604E's two masked images hash as
+    indistinguishable flat black rectangles, so this digest -- the equality test
+    -- would report a black block and the label it hides as the same picture.
+    Returns None when the XObject cannot be decoded, which the caller must treat
+    as "unknown", never "equal".
     """
     try:
-        pix = fitz.Pixmap(doc, xref)
-        if pix.alpha:
-            pix = fitz.Pixmap(pix, 0)
+        pix = painted_pixmap(doc, xref)
         if pix.colorspace is None:
             return None
         if pix.colorspace.n != 3:
@@ -556,6 +849,75 @@ def decoded_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
         return hashlib.sha256(
             f"{pix.width}x{pix.height}:".encode() + pix.samples).hexdigest()
     except Exception:  # noqa: BLE001 - undecodable is a real answer, not a failure
+        return None
+
+
+def asset_file_name(doc: fitz.Document, xref: int, payload: dict[str, Any]) -> str:
+    """The filename an offline bundle stores this XObject under.
+
+    Keyed to the *provenance* hash -- sha256 over the compressed base stream --
+    because that is what pins an asset to exact reviewed bytes. Only the file's
+    contents change when the source declares a soft mask, never its name, so
+    emit.py's existing lookup keeps resolving. Base stream to soft mask is 1:1
+    across all 51 forms, so two masked images cannot claim one name with
+    different pixels.
+    """
+    extension = "png" if smask_xref(doc, xref) else payload.get("ext", "png")
+    return f"{sha256_bytes(payload['image'])}.{extension}"
+
+
+def asset_for_xref(doc: fitz.Document, xref: int) -> tuple[str, bytes] | None:
+    """The filename and bytes an offline bundle must store for this XObject.
+
+    This is the entry point for whatever writes the assets to disk. It exists
+    because doc.extract_image(xref) -- the obvious call, and the one in use --
+    returns the base image and silently discards the soft mask, which for nine
+    forms means writing a black rectangle where the official prints a label.
+
+    Returns None when the XObject cannot be read, which the caller must treat as
+    "no asset", never as an empty one.
+    """
+    try:
+        payload = doc.extract_image(xref)
+    except Exception:  # noqa: BLE001 - a broken XObject must not stop the form
+        return None
+    name = asset_file_name(doc, xref, payload)
+    if not smask_xref(doc, xref):
+        return name, payload["image"]
+    return name, painted_pixmap(doc, xref).tobytes("png")
+
+
+class Placements:
+    """The placement matrices on a page, consumable one per drawn instance.
+
+    get_images() is keyed by xref and get_image_rects() reports only boxes, so the
+    matrix has to come from get_image_info() and be matched back by box. Matches
+    are consumed, so a form that places the same XObject twice gets each
+    instance's own matrix rather than the first one twice.
+    """
+
+    __slots__ = ("_by_xref",)
+
+    def __init__(self, page: fitz.Page) -> None:
+        self._by_xref: dict[int, list[tuple[fitz.Rect, list[float]]]] = (
+            collections.defaultdict(list))
+        for info in page.get_image_info(xrefs=True):
+            matrix = [round(float(v), 4) for v in info["transform"]]
+            self._by_xref[int(info.get("xref") or 0)].append(
+                (fitz.Rect(info["bbox"]), matrix))
+
+    def take(self, xref: int, rect: fitz.Rect) -> list[float] | None:
+        """The matrix that placed this box, or None when the views disagree.
+
+        None is the honest answer; an invented identity matrix would claim the
+        image is unflipped, which is the very error this field exists to fix.
+        """
+        candidates = self._by_xref.get(xref) or []
+        for index, (box, matrix) in enumerate(candidates):
+            if max(abs(box.x0 - rect.x0), abs(box.y0 - rect.y0),
+                   abs(box.x1 - rect.x1), abs(box.y1 - rect.y1)) <= 0.05:
+                del candidates[index]
+                return matrix
         return None
 
 
@@ -574,8 +936,17 @@ def extract_images(page: fitz.Page, doc: fitz.Document,
     reported nine forms with missing artwork that was demonstrably present.
     Compare pixels to ask "is this the same picture"; compare streams to ask
     "is this the same file".
+
+    `transform` is the full 6-element placement matrix, not the bounding box the
+    other four fields give. Four forms place an image with a negative `d` --
+    1600-PT's masthead, 2550M's, 2551M's and 2553's seal -- which is a vertical
+    flip, and a box cannot express one, so the seal rendered upside down with its
+    rim lettering reading bottom-to-top. The matrix is carried rather than a
+    "flipped" flag so rotation and skew are covered too; 0605 already places its
+    seal with a small non-zero `b`.
     """
     taken = [False] * len(order.images)
+    placements = Placements(page)
 
     def sequence_of(rect: fitz.Rect) -> int:
         """The ordinal of the op that placed this rect, or one past the page.
@@ -601,6 +972,8 @@ def extract_images(page: fitz.Page, doc: fitz.Document,
         except Exception:  # noqa: BLE001
             continue
         pixel_digest = decoded_pixel_sha256(doc, xref)
+        mask_xref = smask_xref(doc, xref)
+        asset_file = asset_file_name(doc, xref, payload)
         for rect in page.get_image_rects(xref):
             seq = sequence_of(rect)
             images.append({
@@ -608,6 +981,7 @@ def extract_images(page: fitz.Page, doc: fitz.Document,
                 "name": info[7],
                 "x0": q(rect.x0), "y0": q(rect.y0),
                 "x1": q(rect.x1), "y1": q(rect.y1),
+                "transform": placements.take(xref, rect),
                 # An image is one op, so it spans no range of them.
                 "paint_seq": seq, "paint_seq_max": seq,
                 "width_px": info[2],
@@ -617,6 +991,11 @@ def extract_images(page: fitz.Page, doc: fitz.Document,
                 "ext": payload.get("ext"),
                 "sha256": sha256_bytes(payload["image"]),
                 "pixel_sha256": pixel_digest,
+                # The mask is part of the picture, so the file a bundle stores is
+                # not the stream `sha256` identifies; see asset_for_xref.
+                "smask_xref": mask_xref or None,
+                "masked": bool(mask_xref),
+                "asset_file": asset_file,
                 "bytes": len(payload["image"]),
             })
     images.sort(key=lambda i: (i["y0"], i["x0"]))
@@ -633,6 +1012,7 @@ def extract_page(page: fitz.Page, doc: fitz.Document, index: int) -> dict[str, A
     order = paint_order(page, drawings)
     segments = extract_segments(drawings, order)
     rules = [s.to_ir(i) for i, s in enumerate(segments)]
+    paths = extract_paths(drawings, order)
 
     thicknesses = collections.Counter(r["thickness_pt"] for r in rules if r["role"] == "structural")
     box = page.mediabox
@@ -643,10 +1023,13 @@ def extract_page(page: fitz.Page, doc: fitz.Document, index: int) -> dict[str, A
         "rotation": page.rotation,
         "rules": rules,
         "area_fills": extract_area_fills(drawings, order),
+        "paths": paths,
         "text_runs": extract_text_runs(page),
         "images": extract_images(page, doc, order),
         "stats": {
             "rules_total": len(rules),
+            "paths_total": len(paths),
+            "paths_filled": sum(1 for p in paths if p["fill"] is not None),
             "rules_horizontal": sum(1 for r in rules if r["axis"] == "h"),
             "rules_vertical": sum(1 for r in rules if r["axis"] == "v"),
             "rules_structural": sum(1 for r in rules if r["role"] == "structural"),
@@ -737,6 +1120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  page {page['index']}: {s['rules_structural']} structural rules "
                   f"({s['rules_horizontal']}h/{s['rules_vertical']}v, "
                   f"{s['rules_decorative']} decorative), "
+                  f"{s['paths_total']} paths ({s['paths_filled']} filled), "
                   f"{len(page['text_runs'])} text runs, {len(page['images'])} images",
                   file=sys.stderr)
             print(f"           thicknesses {s['structural_thickness_histogram']}", file=sys.stderr)

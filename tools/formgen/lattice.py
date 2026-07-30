@@ -37,6 +37,15 @@ containers. Slot boundaries are carried through as measured x values because
 the 14.16pt slot pitch is not uniform -- the content stream carries 14.04,
 14.18, 14.28 among the 14.16s, and index*pitch would drift off the paper.
 
+Finding 2 answers a different question from "where does a slot end", and
+conflating the two cost 1886 slots. A comb *divider* is discovered by hanging
+from nothing; a slot *boundary* is any black column crossing the band, whatever
+the IR filed it as -- see `comb_boundary_candidates` and `band_ink`. 471 combs
+reported fewer slots than the source prints, among them every TIN on the corpus
+(1707 p2c5 read 11 slots for 14 boxes, three of them double width), because
+their digit-group separators are drawn heavier than a character tick and land in
+some other bucket. A typed character then centres on the black bar.
+
 A fourth finding comes from the corpus rather than from 2551Q: a boundary is
 not always one bar, and the inside of a boundary is never a cell. 119 places
 draw a boundary as a *stack* -- a 0.14pt hairline on a 0.96pt bar (0605
@@ -101,6 +110,10 @@ def q(value: float) -> float:
 
 Interval = tuple[float, float]
 
+# One bar reduced to what the paper-versus-ink test needs: near edge, far edge,
+# and the weight it is drawn at.
+InkSpan = tuple[float, float, float]
+
 
 def union_intervals(intervals: Iterable[Interval]) -> list[Interval]:
     """Union 1-D intervals, joining anything within JOIN_EPSILON_PT."""
@@ -157,6 +170,43 @@ def split_verticals(verticals: Sequence[dict[str, Any]],
         bottom = supported_at(rule["y1"], x, horizontals)
         (combs if bottom and not top else borders).append(rule)
     return combs, borders
+
+
+def comb_boundary_candidates(verticals: Sequence[dict[str, Any]],
+                             area_fills: Sequence[dict[str, Any]]
+                             ) -> list[dict[str, Any]]:
+    """Every black column on the page, as a candidate comb slot boundary.
+
+    Three sources, because the IR has already split this ink three ways on
+    distinctions a comb knows nothing about. Measured over the corpus, the
+    boundaries recovered break down as:
+
+      * 6051 verticals `split_verticals` called comb dividers, but which a
+        *different* band claimed. 2551Q page 2 draws its TIN group separators
+        1.44pt lower than its character ticks (y1 126.86 against 125.42), so
+        grouping dividers on their exact y extent files the three separators as a
+        band of their own and the TIN reports 11 slots for 14 printed boxes;
+      * 256 verticals it called borders, correctly: 48 of them are supported at
+        both ends because they run the full row height (2200C x=59.76, a 0.48pt
+        bar spanning y 115.22-132.14 across a comb band of 126.50-132.14), and
+        208 are supported at neither, which is what 1701MS's traced geometry
+        does to a 1.5pt separator (x=370.43, y 160.72-165.82);
+      * 274 `area_fills`, the filled rects extract.py judged too thick to be a
+        rule at all -- its cut is 1.5pt and 1707's TIN separators are 2.16pt
+        wide, so they never reach the rule list.
+
+    Horizontals are not candidates: a band is bounded top and bottom by
+    horizontal rules, and no horizontal in the corpus is thick enough to reach
+    from one to the other.
+
+    Sorted so that de-duplication inside a band is order-independent.
+    """
+    candidates = list(verticals)
+    candidates += [{"axis": "v", "x0": f["x0"], "y0": f["y0"], "x1": f["x1"], "y1": f["y1"],
+                    "thickness_pt": q(f["x1"] - f["x0"]), "gray": f["gray"]}
+                   for f in area_fills if f["role"] == "structural"]
+    candidates.sort(key=lambda r: (centre(r), r["y0"], r["y1"]))
+    return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -416,12 +466,84 @@ def merge_grid(xl: Lattice, yl: Lattice) -> tuple[DisjointSet, list[list[bool]],
     return dsu, v_at, h_at
 
 
-def comb_bands(members: Sequence[dict[str, Any]], x0: float,
-               x1: float) -> list[dict[str, Any]]:
+def band_ink(extra: Sequence[dict[str, Any]], x0: float, x1: float,
+             band_y0: float, band_y1: float,
+             claimed: Sequence[InkSpan]) -> list[dict[str, Any]]:
+    """Ink other than the comb's own dividers that nevertheless bounds its slots.
+
+    A slot boundary is black ink drawn from the band's top edge to its bottom
+    edge, inside the field. Nothing else about it matters, and in particular
+    neither thickness nor end support does:
+
+      * a digit-group separator that runs the whole row height is supported at
+        both ends, so `split_verticals` correctly calls it a border -- 2200C
+        x=59.76 is a 0.48pt bar spanning y 115.22-132.14 across the item-1 comb
+        band at y 126.50-132.14, and it is one of that comb's slot boundaries;
+      * above 1.5pt a bar is not a rule at all. 1707's TIN separators are
+        2.16 x 6.96pt black rects, so extract.py files them as area fills and
+        they never reach the vertical list. Fourteen printed TIN boxes became
+        eleven slots and a typed character centred on top of the black bar.
+
+    Thickness *ranks* a boundary -- 0.24 is a character tick, 0.96/1.44/2.16 a
+    group separator -- and both ranks stay visible in
+    `divider_thicknesses_pt`. It never decides whether the boundary exists.
+
+    Containment, not the centre, is the x test here: an extra may be as wide as
+    a slot, and a fill spanning the whole cell has its centre inside the cell
+    while bounding nothing.
+
+    Two pieces of ink are the same boundary when the paper between them is
+    thinner than the ink drawing them -- `is_one_boundary`'s test, applied for
+    the same reason one lattice line away. It settles both ends of the problem
+    with no new constant:
+
+      * 0605 x=226.0 draws one bar as a 0.14pt hairline overlapping a 0.96pt bar.
+        Their centres are 0.42pt apart, further than any clustering tolerance,
+        and they are still one line.
+      * 1701A x=599.04 is the inner bar of the right page frame, 1.86pt of paper
+        inside the 1.44pt bar the cell ends on. Counting it would add a 1.86pt
+        slot no character fits in. A composite boundary is not a slot boundary
+        twice.
+
+    The narrowest genuine slot in the corpus survives this: the 4.08pt TIN dash
+    gap at 2550M x=99.84 holds 4.08pt of paper inside two 0.72pt edges.
+    """
+    def distinct(here: InkSpan, there: InkSpan) -> bool:
+        """True when paper survives between two bars, so they are two boundaries."""
+        paper = max(here[0], there[0]) - min(here[1], there[1])
+        return paper > here[2] + there[2] + JOIN_EPSILON_PT
+
+    taken = list(claimed)
+    found: list[dict[str, Any]] = []
+    for ink in extra:
+        if ink["x0"] <= x0 + CLUSTER_TOL_PT or ink["x1"] >= x1 - CLUSTER_TOL_PT:
+            continue
+        if ink["y0"] > band_y0 + CLUSTER_TOL_PT or ink["y1"] < band_y1 - CLUSTER_TOL_PT:
+            continue
+        here = (ink["x0"], ink["x1"], ink["thickness_pt"])
+        if not all(distinct(here, other) for other in taken):
+            continue
+        taken.append(here)
+        found.append(ink)
+    return found
+
+
+def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]],
+               x0: float, x1: float,
+               edge_thickness: tuple[float, float]) -> list[dict[str, Any]]:
     """Group a cell's comb dividers into bands, one band per field.
 
     Dividers of one comb share a y extent exactly (they are drawn by the same
     loop), so grouping on the band extent is safe and needs no pitch assumption.
+    The band a comb divider discovers is then filled in from `extra`, the black
+    ink that spans the same band without being a comb divider -- see `band_ink`.
+    Where a field's ticks are not all drawn to the same length the field arrives
+    as two overlapping bands, and the one carrying the complete set of
+    boundaries is the shorter one -- the only band every boundary spans. The
+    reported band is therefore the writing box the *shortest* tick measures,
+    which on 449 cells is 0.48pt less than before. That is the price of the slot
+    count being right, and it keeps `y0`/`y1` honest: every boundary listed in
+    `slot_x` really does run the full height reported here.
 
     A divider landing on this cell's own left or right edge is not a slot
     divider: it is the thinned middle fragment of the column border crossing
@@ -439,8 +561,17 @@ def comb_bands(members: Sequence[dict[str, Any]], x0: float,
     for d in inside:
         by_band[(d["y0"], d["y1"])].append(d)
 
+    # The cell's own edges are the outermost boundaries, so an extra has to be a
+    # separate boundary from those too -- see `band_ink`.
+    left, right = edge_thickness
+    frame = [(x0 - left / 2.0, x0 + left / 2.0, left),
+             (x1 - right / 2.0, x1 + right / 2.0, right)]
+
     bands: list[dict[str, Any]] = []
     for (band_y0, band_y1), band in sorted(by_band.items()):
+        band = [*band, *band_ink(extra, x0, x1, band_y0, band_y1,
+                                 [*frame, *((d["x0"], d["x1"], d["thickness_pt"])
+                                            for d in band)])]
         xs = sorted(q(centre(d)) for d in band)
         boundaries = [q(x0), *xs, q(x1)]
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
@@ -500,6 +631,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 dsu: DisjointSet, v_at: list[list[bool]], h_at: list[list[bool]],
                 v_ink: Sequence[dict[str, Any]], h_ink: Sequence[dict[str, Any]],
                 dividers: Sequence[dict[str, Any]],
+                extra_ink: Sequence[dict[str, Any]],
                 text_runs: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
     nx, ny = len(xl) - 1, len(yl) - 1
     components: dict[int, list[tuple[int, int]]] = collections.defaultdict(list)
@@ -561,7 +693,10 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
 
     for cell, members in zip(cells, assign_points(
             cells, [(centre(d), (d["y0"] + d["y1"]) / 2.0, d) for d in dividers])[0]):
-        bands = comb_bands(members, cell["x0"], cell["x1"])
+        edges = tuple(0.0 if cell["border"][side] is None
+                      else cell["border"][side]["thickness_pt"]
+                      for side in ("left", "right"))
+        bands = comb_bands(members, extra_ink, cell["x0"], cell["x1"], edges)
         if bands:
             cell["comb"] = max(bands, key=lambda b: (b["divider_count"], -b["y0"]))
             if len(bands) > 1:
@@ -805,6 +940,7 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
     verticals = sorted((r for r in structural if r["axis"] == "v"),
                        key=lambda r: (r["x0"], r["y0"]))
     dividers, borders = split_verticals(verticals, horizontals)
+    extra_ink = comb_boundary_candidates(verticals, page["area_fills"])
 
     xl = build_lattice(borders, verticals, "v")
     yl = build_lattice(horizontals, horizontals, "h")
@@ -818,7 +954,8 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
     else:
         dsu, v_at, h_at = merge_grid(xl, yl)
         cells, unassigned = build_cells(index, xl, yl, dsu, v_at, h_at, verticals,
-                                        horizontals, dividers, page["text_runs"])
+                                        horizontals, dividers, extra_ink,
+                                        page["text_runs"])
         growables = detect_growables(index, xl, yl, v_at, h_at, cells, page["text_runs"])
         regions = detect_regions(index, xl, yl, v_at, cells, growables)
 
