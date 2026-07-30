@@ -45,6 +45,7 @@ import math
 import pathlib
 import re
 import sys
+import tempfile
 import time
 import traceback
 from typing import Any, Iterable, Sequence
@@ -122,6 +123,9 @@ ASSERTION_KEYS = (
     "image_transform_applied",
     "no_invented_codepoints",
 )
+
+INPUT_MANIFEST_SCHEMA = "formgen-audit-input-manifest-v1"
+REQUIRED_INPUT_ROLES = ("ir", "layout", "html", "guide")
 
 Rect = tuple[float, float, float, float]
 
@@ -510,6 +514,79 @@ def svg_signature(transform: str | None) -> tuple[int, int, bool]:
 # --------------------------------------------------------------------------
 # the bundle every assertion reads
 # --------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class InputSnapshot:
+    manifest: dict[str, Any]
+    contents: dict[str, bytes | None]
+    missing_required: tuple[str, ...]
+
+
+def snapshot_inputs(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
+                    layout_dir: pathlib.Path,
+                    guide_dir: pathlib.Path | None) -> InputSnapshot:
+    """Read and hash the exact bytes one form's audit will consume.
+
+    Paths in the manifest are logical filenames rather than absolute paths, so
+    the same inputs publish byte-identical evidence in another checkout.
+    `guide_html` is optional because only forms with relocated guide content
+    emit one; the guide plan itself is required for every form.
+    """
+    specs = (
+        ("ir", ir_dir / f"{slug}.ir.json", True),
+        ("layout", layout_dir / f"{slug}.layout.json", True),
+        ("html", html_dir / f"{slug}.html", True),
+        ("guide", guide_dir / f"{slug}.guide.json" if guide_dir else None, True),
+        ("guide_html", html_dir / f"{slug}.guide.html", False),
+    )
+    entries: dict[str, dict[str, Any]] = {}
+    contents: dict[str, bytes | None] = {}
+    missing: list[str] = []
+    for role, path, required in specs:
+        filename = path.name if path is not None else (
+            f"{slug}.guide.json" if role == "guide" else role)
+        if path is None or not path.is_file():
+            entries[role] = {
+                "file": filename,
+                "required": required,
+                "present": False,
+                "bytes": None,
+                "sha256": None,
+            }
+            contents[role] = None
+            if required:
+                missing.append(role)
+            continue
+        payload = path.read_bytes()
+        entries[role] = {
+            "file": filename,
+            "required": required,
+            "present": True,
+            "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+        }
+        contents[role] = payload
+    manifest = {
+        "schema": INPUT_MANIFEST_SCHEMA,
+        "algorithm": "sha256",
+        "complete": not missing,
+        "missing_required": missing,
+        "inputs": entries,
+    }
+    return InputSnapshot(manifest=manifest, contents=contents,
+                         missing_required=tuple(missing))
+
+
+def empty_input_manifest() -> dict[str, Any]:
+    """Fail-closed placeholder retained even if input snapshotting raises."""
+    return {
+        "schema": INPUT_MANIFEST_SCHEMA,
+        "algorithm": "sha256",
+        "complete": False,
+        "missing_required": list(REQUIRED_INPUT_ROLES),
+        "inputs": {},
+    }
 
 
 @dataclasses.dataclass
@@ -1097,21 +1174,30 @@ def evaluate_assertions(bundle: Bundle) -> dict[str, Any]:
 
 def load_bundle(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
                 layout_dir: pathlib.Path, guide_dir: pathlib.Path | None,
-                source_root: str) -> Bundle:
-    def maybe_json(path: pathlib.Path) -> dict | None:
-        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+                source_root: str,
+                input_snapshot: InputSnapshot | None = None) -> Bundle:
+    snapshot = input_snapshot or snapshot_inputs(
+        slug, ir_dir, html_dir, layout_dir, guide_dir)
+    if snapshot.missing_required:
+        raise FileNotFoundError(
+            "required audit input(s) missing: "
+            + ", ".join(snapshot.missing_required))
 
-    def maybe_text(path: pathlib.Path) -> str | None:
-        return path.read_text(encoding="utf-8") if path.is_file() else None
+    def text(role: str) -> str:
+        payload = snapshot.contents[role]
+        if payload is None:
+            raise FileNotFoundError(f"required audit input missing: {role}")
+        return payload.decode("utf-8")
 
-    ir = json.loads((ir_dir / f"{slug}.ir.json").read_text(encoding="utf-8"))
+    ir = json.loads(text("ir"))
+    guide_html = snapshot.contents["guide_html"]
     return Bundle(
         slug=slug,
         ir=ir,
-        layout=maybe_json(layout_dir / f"{slug}.layout.json"),
-        plan=maybe_json(guide_dir / f"{slug}.guide.json") if guide_dir else None,
-        form_html=maybe_text(html_dir / f"{slug}.html"),
-        guide_html=maybe_text(html_dir / f"{slug}.guide.html"),
+        layout=json.loads(text("layout")),
+        plan=json.loads(text("guide")),
+        form_html=text("html"),
+        guide_html=guide_html.decode("utf-8") if guide_html is not None else None,
         pdf=resolve_source(ir, source_root),
     )
 
@@ -1252,10 +1338,18 @@ def score(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
     losing them is how the record would come to say nothing while looking
     complete.
     """
-    record: dict = {"slug": slug, "status": "error", "error": None}
+    record: dict = {
+        "slug": slug,
+        "status": "error",
+        "error": None,
+        "input_manifest": empty_input_manifest(),
+    }
     bundle = None
     try:
-        bundle = load_bundle(slug, ir_dir, html_dir, layout_dir, guide_dir, source_root)
+        snapshot = snapshot_inputs(slug, ir_dir, html_dir, layout_dir, guide_dir)
+        record["input_manifest"] = snapshot.manifest
+        bundle = load_bundle(slug, ir_dir, html_dir, layout_dir, guide_dir,
+                             source_root, input_snapshot=snapshot)
         record.update(evaluate_assertions(bundle))
     except Exception as exc:  # noqa: BLE001 - one bad form must not stop the sweep
         reason = f"{type(exc).__name__}: {exc}"
@@ -1378,6 +1472,67 @@ def self_test() -> int:
     check("every assertion must name offenders or a reason",
           all(results["assertions"][k]["reason"] or results["assertions"][k]["offenders"]
               for k in ASSERTION_KEYS if not results[k]))
+
+    # Every record binds the exact bytes it evaluated. Hashes are content-based
+    # (not path- or timestamp-based), and a missing required guide plan prevents
+    # the form from becoming an `ok` record.
+    with tempfile.TemporaryDirectory(prefix="formgen-audit-inputs-") as tmp:
+        root = pathlib.Path(tmp)
+        ir_dir = root / "ir"
+        html_dir = root / "html"
+        layout_dir = root / "layout"
+        guide_dir = root / "guides"
+        for directory in (ir_dir, html_dir, layout_dir, guide_dir):
+            directory.mkdir()
+
+        slug = "test-bound"
+        (ir_dir / f"{slug}.ir.json").write_text(
+            json.dumps(ir), encoding="utf-8")
+        (layout_dir / f"{slug}.layout.json").write_text(
+            json.dumps(layout), encoding="utf-8")
+        html_path = html_dir / f"{slug}.html"
+        html_path.write_text(html, encoding="utf-8")
+        guide_path = guide_dir / f"{slug}.guide.json"
+        guide_path.write_text(json.dumps(plan), encoding="utf-8")
+        (html_dir / f"{slug}.guide.html").write_text(
+            guide_html, encoding="utf-8")
+
+        first = snapshot_inputs(slug, ir_dir, html_dir, layout_dir, guide_dir)
+        check("input manifest binds every required byte source",
+              first.manifest["complete"] is True
+              and first.manifest["missing_required"] == []
+              and set(first.manifest["inputs"]) == {
+                  "ir", "layout", "html", "guide", "guide_html"}
+              and all(first.manifest["inputs"][role]["present"]
+                      and first.manifest["inputs"][role]["sha256"]
+                      for role in REQUIRED_INPUT_ROLES))
+
+        changed_html = html.replace("Rate?", "Rote?", 1)
+        html_path.write_text(changed_html, encoding="utf-8")
+        second = snapshot_inputs(slug, ir_dir, html_dir, layout_dir, guide_dir)
+        check("input hash changes when exact bytes change",
+              first.manifest["inputs"]["html"]["sha256"]
+              != second.manifest["inputs"]["html"]["sha256"]
+              and second.manifest["inputs"]["html"]["sha256"]
+              == hashlib.sha256(changed_html.encode("utf-8")).hexdigest()
+              and all(first.manifest["inputs"][role]["sha256"]
+                      == second.manifest["inputs"][role]["sha256"]
+                      for role in ("ir", "layout", "guide")))
+
+        bound = score(slug, ir_dir, html_dir, layout_dir, guide_dir,
+                      root / "work", str(root / "sources"), roundtrip=False)
+        check("successful record publishes the exact input manifest",
+              bound["status"] == "ok"
+              and bound["input_manifest"] == second.manifest)
+
+        guide_path.unlink()
+        missing = score(slug, ir_dir, html_dir, layout_dir, guide_dir,
+                        root / "work", str(root / "sources"), roundtrip=False)
+        check("missing required guide input fails closed",
+              missing["status"] == "error"
+              and missing["input_manifest"]["complete"] is False
+              and missing["input_manifest"]["missing_required"] == ["guide"]
+              and all(missing.get(key) is False for key in ASSERTION_KEYS))
 
     # The clean side: the same page with the input moved off the ink, the comb
     # filled, the cut below everything, the colour right and the row complete.
