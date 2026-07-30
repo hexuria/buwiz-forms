@@ -6,6 +6,7 @@ use bir_core::forms::{
 };
 use bir_core::profile::TaxpayerProfile;
 use chrono::{Datelike, Local, NaiveDate};
+use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::*;
 use gpui_rsx::rsx;
@@ -16,6 +17,7 @@ use crate::components::smart_date_filter::{
     SmartDateFilter, SmartDateFilterEvent, SmartDateFilterState,
 };
 
+#[derive(Clone)]
 pub enum DashboardEvent {
     FileForm {
         form_code: String,
@@ -29,6 +31,13 @@ pub enum DashboardEvent {
     /// The sidebar row no longer expands into an Edit button, so this header
     /// control is the route to a profile's own settings.
     EditProfile(String),
+    /// Write this profile's deadlines as an `.ics` and hand it to the platform's
+    /// default calendar application. Every OS can open one, so this is the
+    /// always-available path; the Google sync is the optional extra.
+    AddToNativeCalendar(String),
+    /// Push this profile's deadlines to its linked Google Calendar. Offered only
+    /// when that profile actually has a link.
+    SyncGoogleCalendar(String),
 }
 
 impl EventEmitter<DashboardEvent> for DashboardView {}
@@ -84,6 +93,10 @@ pub struct DashboardView {
         Entity<crate::components::upcoming_deadlines_list::UpcomingDeadlinesList>,
     /// Consistency issues from the last resolve_profile_obligations_for_year call
     consistency_issues: Vec<bir_core::integration::ProfileConsistencyIssue>,
+    /// Whether the header's cog dropdown is open. The header actions sit behind
+    /// one control at every width, so the layout never shifts with how many of
+    /// them happen to apply to the current profile.
+    header_menu_open: bool,
 }
 
 impl DashboardView {
@@ -172,6 +185,7 @@ impl DashboardView {
             actionable_forms: Vec::new(),
             upcoming_deadlines_list,
             consistency_issues: Vec::new(),
+            header_menu_open: false,
         }
     }
 
@@ -1843,15 +1857,7 @@ impl Render for DashboardView {
                                 )}
                             </div>
                         </div>
-                        {gpui_component::button::Button::new("open_profile_settings")
-                            .outline()
-                            .label("Profile Settings")
-                            .on_click(cx.listener({
-                                let tin = profile.tin.full();
-                                move |_this, _ev, _window, cx| {
-                                    cx.emit(DashboardEvent::EditProfile(tin.clone()));
-                                }
-                            }))}
+                        {self.render_header_actions(profile, cx)}
                     </div>
                     <div flex items_center justify_between gap_4>
                         <div flex_grow>
@@ -1918,6 +1924,114 @@ impl Render for DashboardView {
 }
 
 impl DashboardView {
+    /// The header's action control: one overflow button that opens a dropdown.
+    ///
+    /// These used to be one visible button per action, which meant the header
+    /// grew or shrank depending on whether the profile had a Google Calendar
+    /// link. A single control at every width keeps the layout fixed and leaves
+    /// room for further per-profile actions without redesigning the header.
+    fn render_header_actions(
+        &self,
+        profile: &TaxpayerProfile,
+        cx: &Context<Self>,
+    ) -> gpui::AnyElement {
+        let tin = profile.tin.full();
+        // Google Calendar is the optional path, so the sync only appears when
+        // this profile actually has a calendar linked.
+        let has_google_calendar = self
+            .db
+            .lock()
+            .ok()
+            .and_then(|db| db.get_profile_calendar_link(&tin).ok().flatten())
+            .is_some();
+
+        div()
+            .relative()
+            .flex_shrink_0()
+            .child(
+                gpui_component::button::Button::new("header_actions_menu")
+                    .outline()
+                    .icon(IconName::Ellipsis)
+                    .tooltip("Profile actions")
+                    .on_click(cx.listener(|this, _ev, _window, cx| {
+                        this.header_menu_open = !this.header_menu_open;
+                        cx.notify();
+                    })),
+            )
+            .when(self.header_menu_open, |this| {
+                // Deferred + anchored so the dropdown paints above the filter
+                // row below it; a plain absolute child is painted over by later
+                // siblings. Same pattern the smart date filter already uses.
+                this.child(deferred(
+                    anchored().snap_to_window_with_margin(px(8.)).child(
+                        div()
+                            .occlude()
+                            .on_mouse_down_out(cx.listener(|this, _ev, _window, cx| {
+                                this.header_menu_open = false;
+                                cx.notify();
+                            }))
+                            .mt_1p5()
+                            .w(px(240.))
+                            .border_1()
+                            .border_color(cx.theme().border)
+                            .shadow_lg()
+                            .rounded_xl()
+                            .bg(cx.theme().popover)
+                            .text_color(cx.theme().popover_foreground)
+                            .flex()
+                            .flex_col()
+                            .p_1()
+                            .child(self.header_menu_item(
+                                "hdr_profile_settings",
+                                "Profile Settings",
+                                DashboardEvent::EditProfile(tin.clone()),
+                                cx,
+                            ))
+                            .child(self.header_menu_item(
+                                "hdr_add_to_calendar",
+                                "Add to Calendar",
+                                DashboardEvent::AddToNativeCalendar(tin.clone()),
+                                cx,
+                            ))
+                            .when(has_google_calendar, |this| {
+                                this.child(self.header_menu_item(
+                                    "hdr_sync_google",
+                                    "Sync Google Calendar",
+                                    DashboardEvent::SyncGoogleCalendar(tin.clone()),
+                                    cx,
+                                ))
+                            }),
+                    ),
+                ))
+            })
+            .into_any_element()
+    }
+
+    /// One row of the header dropdown. Selecting a row always closes the menu,
+    /// so it never stays open over the view the action navigated away to.
+    fn header_menu_item(
+        &self,
+        id: &'static str,
+        label: &'static str,
+        event: DashboardEvent,
+        cx: &Context<Self>,
+    ) -> Stateful<Div> {
+        div()
+            .id(id)
+            .w_full()
+            .px_3()
+            .py_2()
+            .rounded_md()
+            .cursor_pointer()
+            .hover(|s| s.bg(cx.theme().muted))
+            .child(label)
+            .on_click(cx.listener(move |this, _ev, _window, cx| {
+                this.header_menu_open = false;
+                cx.emit(event.clone());
+                cx.notify();
+            }))
+    }
+
     /// Build the common card shell (header + title). Caller appends progress + action sections.
     fn build_card(
         form_def: &bir_core::forms::FormCardData,
