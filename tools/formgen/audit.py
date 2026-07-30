@@ -523,6 +523,17 @@ class InputSnapshot:
     missing_required: tuple[str, ...]
 
 
+@functools.lru_cache(maxsize=1)
+def producer_fingerprint() -> dict[str, Any]:
+    """The exact audit.py bytes executing this evidence run."""
+    payload = (HERE / "audit.py").read_bytes()
+    return {
+        "file": "tools/formgen/audit.py",
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
 def snapshot_inputs(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
                     layout_dir: pathlib.Path,
                     guide_dir: pathlib.Path | None) -> InputSnapshot:
@@ -570,6 +581,7 @@ def snapshot_inputs(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
     manifest = {
         "schema": INPUT_MANIFEST_SCHEMA,
         "algorithm": "sha256",
+        "producer": producer_fingerprint(),
         "complete": not missing,
         "missing_required": missing,
         "inputs": entries,
@@ -583,6 +595,7 @@ def empty_input_manifest() -> dict[str, Any]:
     return {
         "schema": INPUT_MANIFEST_SCHEMA,
         "algorithm": "sha256",
+        "producer": producer_fingerprint(),
         "complete": False,
         "missing_required": list(REQUIRED_INPUT_ROLES),
         "inputs": {},
@@ -1498,6 +1511,7 @@ def self_test() -> int:
             guide_html, encoding="utf-8")
 
         first = snapshot_inputs(slug, ir_dir, html_dir, layout_dir, guide_dir)
+        producer_bytes = (HERE / "audit.py").read_bytes()
         check("input manifest binds every required byte source",
               first.manifest["complete"] is True
               and first.manifest["missing_required"] == []
@@ -1506,6 +1520,12 @@ def self_test() -> int:
               and all(first.manifest["inputs"][role]["present"]
                       and first.manifest["inputs"][role]["sha256"]
                       for role in REQUIRED_INPUT_ROLES))
+        check("input manifest binds the exact audit producer bytes",
+              first.manifest["producer"] == {
+                  "file": "tools/formgen/audit.py",
+                  "bytes": len(producer_bytes),
+                  "sha256": hashlib.sha256(producer_bytes).hexdigest(),
+              })
 
         changed_html = html.replace("Rate?", "Rote?", 1)
         html_path.write_text(changed_html, encoding="utf-8")
@@ -1517,7 +1537,8 @@ def self_test() -> int:
               == hashlib.sha256(changed_html.encode("utf-8")).hexdigest()
               and all(first.manifest["inputs"][role]["sha256"]
                       == second.manifest["inputs"][role]["sha256"]
-                      for role in ("ir", "layout", "guide")))
+                      for role in ("ir", "layout", "guide"))
+              and first.manifest["producer"] == second.manifest["producer"])
 
         bound = score(slug, ir_dir, html_dir, layout_dir, guide_dir,
                       root / "work", str(root / "sources"), roundtrip=False)
