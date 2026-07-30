@@ -50,7 +50,10 @@ pub fn profile_calendar_ics(
         };
 
         push_line(&mut out, "BEGIN:VEVENT");
-        push_line(&mut out, &format!("UID:{}", escape_text(&event_uid(event))));
+        push_line(
+            &mut out,
+            &format!("UID:{}", escape_text(&event_uid(profile, event))),
+        );
         push_line(&mut out, &format!("DTSTAMP:{stamp}"));
         // All-day events use VALUE=DATE, and DTEND is exclusive. The event
         // bodies already carry an end one day after the deadline, which is
@@ -100,11 +103,20 @@ fn calendar_name(profile: &TaxpayerProfile) -> String {
     format!("BIR Deadlines - {}", profile.full_name)
 }
 
-/// A UID must be stable across exports so a re-import updates the existing
-/// entry instead of duplicating it. `obligation_key` is already unique per
-/// profile obligation and is what the Google sync keys on.
-fn event_uid(event: &DesiredCalendarEvent) -> String {
-    format!("{}@ebirforms.goldcoders.dev", event.obligation_key)
+/// A UID must be stable across exports so a re-import updates the existing entry
+/// instead of duplicating it - and it must be unique across *profiles*.
+///
+/// `obligation_key` is only `{year}:{form}:{period}`; it carries no taxpayer
+/// identity, so two profiles filing the same form for the same period would
+/// otherwise emit byte-identical UIDs and the second import would overwrite the
+/// first taxpayer's deadlines inside the calendar. The profile's TIN hash scopes
+/// it without writing a raw TIN into a file that may be shared.
+fn event_uid(profile: &TaxpayerProfile, event: &DesiredCalendarEvent) -> String {
+    format!(
+        "{}-{}@ebirforms.goldcoders.dev",
+        crate::google_calendar::profile_key(&profile.tin.full()),
+        event.obligation_key
+    )
 }
 
 fn event_text(event: &DesiredCalendarEvent, key: &str) -> String {
@@ -321,16 +333,61 @@ mod tests {
 
     /// A re-import must update the existing entry, not add a second one.
     #[test]
-    fn the_uid_is_stable_and_derived_from_the_obligation() {
+    fn the_uid_is_stable_across_exports_of_the_same_profile() {
+        let events = [event("x", "", "2026-07-27", "2026-07-28")];
+        let first = profile_calendar_ics(&profile(), &events, "20260729T000000Z");
+        // A later export, different DTSTAMP: the UID must not move.
+        let second = profile_calendar_ics(&profile(), &events, "20270101T120000Z");
+        let uid_of = |ics: &str| {
+            unfold(ics)
+                .lines()
+                .find(|l| l.starts_with("UID:"))
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(uid_of(&first), uid_of(&second));
+        assert!(uid_of(&first).ends_with("2026:2551Q:Q2@ebirforms.goldcoders.dev"));
+    }
+
+    /// Two taxpayers filing the same form for the same period share an
+    /// `obligation_key`. Without profile scoping their UIDs collide, and
+    /// importing the second calendar overwrites the first taxpayer's deadlines.
+    #[test]
+    fn two_profiles_never_emit_the_same_uid_for_the_same_obligation() {
+        let events = [event("x", "", "2026-07-27", "2026-07-28")];
+        let mut other = profile();
+        other.full_name = "Other Taxpayer".to_string();
+        other.tin = serde_json::from_value(serde_json::json!({
+            "segment1": "111", "segment2": "222", "segment3": "333", "branch": "00000"
+        }))
+        .unwrap();
+
+        let uid_of = |p: &TaxpayerProfile| {
+            unfold(&profile_calendar_ics(p, &events, "20260729T000000Z"))
+                .lines()
+                .find(|l| l.starts_with("UID:"))
+                .unwrap()
+                .to_string()
+        };
+        assert_ne!(uid_of(&profile()), uid_of(&other));
+    }
+
+    /// The UID travels into a calendar the user may share, so it must not carry
+    /// the raw TIN.
+    #[test]
+    fn the_uid_does_not_leak_the_raw_tin() {
+        let p = profile();
         let ics = profile_calendar_ics(
-            &profile(),
+            &p,
             &[event("x", "", "2026-07-27", "2026-07-28")],
             "20260729T000000Z",
         );
-        assert!(
-            unfold(&ics).contains("UID:2026:2551Q:Q2@ebirforms.goldcoders.dev"),
-            "{ics}"
-        );
+        let uid = unfold(&ics)
+            .lines()
+            .find(|l| l.starts_with("UID:"))
+            .unwrap()
+            .to_string();
+        assert!(!uid.contains(&p.tin.full()), "{uid}");
     }
 
     #[test]
