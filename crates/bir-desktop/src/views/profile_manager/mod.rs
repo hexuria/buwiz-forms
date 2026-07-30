@@ -1307,6 +1307,29 @@ impl ProfileManagerView {
         }
     }
 
+    /// Whether this editor is currently open on `tin`.
+    ///
+    /// Lifecycle writes happen in `AppState`, which owns the database, while the
+    /// editor holds its own cached copy of the profile. `AppState` uses this to
+    /// find out whether the editor it is about to correct is even showing the
+    /// profile that changed.
+    pub fn is_editing_tin(&self, tin: &str, cx: &App) -> bool {
+        self.editing_id.is_some() && self.tin_input.read(cx).value(cx) == tin
+    }
+
+    /// Adopts an archived flag written elsewhere.
+    ///
+    /// `stored_is_archived` is otherwise only set when a profile is loaded, and
+    /// `current_profile` serialises it back into every save. Without this, using
+    /// the editor's own Archive button left the cached flag stale, so the Save
+    /// button a few pixels below it would write the pre-archive value straight
+    /// back and silently un-archive the profile. Narrow on purpose: it touches
+    /// only this flag, so unsaved edits elsewhere in the form survive.
+    pub fn adopt_archived_state(&mut self, archived: bool, cx: &mut Context<Self>) {
+        self.stored_is_archived = archived;
+        cx.notify();
+    }
+
     pub fn reset_for_new(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.editing_id = None;
         self.persisted_profile_tin = None;

@@ -209,6 +209,14 @@ pub struct AppState {
     /// `Window` to hand, so the authorised action is parked here and applied
     /// at the top of the next `render`, which does have one.
     pub(crate) admin_lifecycle_authorized: Option<(String, ProfileLifecycleAction)>,
+    /// Set when a profile is deleted while its editor is open. The editor must
+    /// be cleared, but the delete completes inside an async task with no
+    /// `Window`, and `reset_for_new` needs one - so the reset is applied at the
+    /// top of the next `render`, the same way `admin_lifecycle_authorized` is.
+    pub(crate) profile_editor_needs_reset: bool,
+    /// Result of a background Google Calendar sync, waiting for a `render` that
+    /// holds a `Window` to turn it into a notification.
+    pub(crate) pending_calendar_notice: Option<(bool, String)>,
     pub(crate) admin_otp_state: Entity<OtpState>,
     pub(crate) admin_totp_state: Entity<OtpState>,
     pub(crate) admin_rate_limiter: RateLimiter,
@@ -894,6 +902,8 @@ impl AppState {
             pending_admin_view: None,
             pending_admin_lifecycle: None,
             admin_lifecycle_authorized: None,
+            profile_editor_needs_reset: false,
+            pending_calendar_notice: None,
             admin_otp_state,
             admin_totp_state,
             admin_rate_limiter: RateLimiter::new(),
@@ -1091,48 +1101,68 @@ impl AppState {
         push_notification("success", "Added to Calendar", &detail, window, cx);
     }
 
-    /// Pushes this profile's deadlines to its linked Google Calendar. Only
-    /// offered when a link exists, but re-checked here rather than trusted.
+    /// Pushes this profile's deadlines to its linked Google Calendar.
+    ///
+    /// `sync_profile_calendar` is blocking - an OAuth refresh plus one HTTP round
+    /// trip per event - so running it inline froze the whole window for its
+    /// duration. It goes to a worker thread instead, the same shape the editor's
+    /// own Calendar tab uses in `run_calendar_action`, and the result is parked
+    /// for `render` to surface because this completes without a `Window`.
     fn sync_profile_google_calendar(
         &mut self,
         tin: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        push_notification(
+            "info",
+            "Syncing Google Calendar",
+            "Working in the background...",
+            window,
+            cx,
+        );
+
         let db = self.db.clone();
-        let result = bir_core::google_calendar::sync_profile_calendar(db, &tin);
-        match result {
-            Ok(report) => {
-                let mut parts = Vec::new();
-                if report.inserted > 0 {
-                    parts.push(format!("{} added", report.inserted));
-                }
-                if report.updated > 0 {
-                    parts.push(format!("{} updated", report.updated));
-                }
-                if report.deleted > 0 {
-                    parts.push(format!("{} removed", report.deleted));
-                }
-                if report.excluded_undated > 0 {
-                    parts.push(format!("{} undated skipped", report.excluded_undated));
-                }
-                // Everything already matching is the steady state, so say that
-                // plainly rather than reporting a row of zeroes.
-                let detail = if parts.is_empty() {
-                    format!("Already up to date - {} deadlines match.", report.unchanged)
-                } else {
-                    parts.join(", ")
-                };
-                push_notification("success", "Google Calendar synced", &detail, window, cx)
-            }
-            Err(error) => push_notification(
-                "error",
-                "Google Calendar not synced",
-                &error.to_string(),
-                window,
-                cx,
-            ),
-        }
+        cx.spawn(async move |this, cx| {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(bir_core::google_calendar::sync_profile_calendar(db, &tin));
+            });
+            let result = rx
+                .await
+                .unwrap_or_else(|_| Err(anyhow::anyhow!("Calendar worker stopped")));
+
+            let _ = this.update(cx, |this, cx| {
+                this.pending_calendar_notice = Some(match result {
+                    Ok(report) => {
+                        let mut parts = Vec::new();
+                        if report.inserted > 0 {
+                            parts.push(format!("{} added", report.inserted));
+                        }
+                        if report.updated > 0 {
+                            parts.push(format!("{} updated", report.updated));
+                        }
+                        if report.deleted > 0 {
+                            parts.push(format!("{} removed", report.deleted));
+                        }
+                        if report.excluded_undated > 0 {
+                            parts.push(format!("{} undated skipped", report.excluded_undated));
+                        }
+                        // Everything already matching is the steady state, so say
+                        // that rather than reporting a row of zeroes.
+                        let detail = if parts.is_empty() {
+                            format!("Already up to date - {} deadlines match.", report.unchanged)
+                        } else {
+                            parts.join(", ")
+                        };
+                        (true, detail)
+                    }
+                    Err(error) => (false, error.to_string()),
+                });
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Whether an administrator credential is configured at all. With neither
@@ -1230,12 +1260,35 @@ impl AppState {
 
         match action {
             ProfileLifecycleAction::Archive => {
-                self.persist_profile_archived(profile, true, window, cx)
+                self.persist_profile_archived(profile, true, window, cx);
+                self.adopt_archived_state_in_editor(&tin, true, cx);
             }
             ProfileLifecycleAction::Restore => {
-                self.persist_profile_archived(profile, false, window, cx)
+                self.persist_profile_archived(profile, false, window, cx);
+                self.adopt_archived_state_in_editor(&tin, false, cx);
             }
             ProfileLifecycleAction::Delete => self.export_and_delete_profile(tin, cx),
+        }
+    }
+
+    /// Tells the open editor about an archived flag this method just wrote.
+    ///
+    /// The editor caches `stored_is_archived` at load time and writes it back on
+    /// every save. Archive and Restore are now reachable from inside that editor,
+    /// directly above its Save button, so without this the next save would revert
+    /// the change the user just made.
+    fn adopt_archived_state_in_editor(
+        &mut self,
+        tin: &str,
+        archived: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let editing_this_profile = self
+            .profile_manager
+            .read_with(cx, |view, cx| view.is_editing_tin(tin, cx));
+        if editing_this_profile {
+            self.profile_manager
+                .update(cx, |view, cx| view.adopt_archived_state(archived, cx));
         }
     }
 
@@ -1274,6 +1327,16 @@ impl AppState {
                 this.profiles.retain(|p| p.tin.full() != tin);
                 if !this.profiles.iter().any(|p| p.is_archived) {
                     this.show_archived = false;
+                }
+                // Delete is only reachable from this profile's own editor, so
+                // that editor is still open on a row that no longer exists. Its
+                // `editing_id` would make the next save fall through to the
+                // INSERT branch and resurrect the profile just deleted.
+                if this
+                    .profile_manager
+                    .read_with(cx, |view, cx| view.is_editing_tin(&tin, cx))
+                {
+                    this.profile_editor_needs_reset = true;
                 }
                 if this.active_profile_tin.as_ref() == Some(&tin) {
                     this.active_profile_tin = None;
@@ -1906,6 +1969,26 @@ impl Render for AppState {
         // resolves that is guaranteed to hold a `Window`.
         if let Some((tin, action)) = self.admin_lifecycle_authorized.take() {
             self.perform_profile_lifecycle(tin, action, window, cx);
+        }
+
+        // Clear an editor left bound to a profile that has since been deleted.
+        if std::mem::take(&mut self.profile_editor_needs_reset) {
+            self.profile_manager
+                .update(cx, |view, cx| view.reset_for_new(window, cx));
+        }
+
+        if let Some((ok, detail)) = self.pending_calendar_notice.take() {
+            push_notification(
+                if ok { "success" } else { "error" },
+                if ok {
+                    "Google Calendar synced"
+                } else {
+                    "Google Calendar not synced"
+                },
+                &detail,
+                window,
+                cx,
+            );
         }
 
         // Set up window-aware subscription for global dashboard notifications (once)
