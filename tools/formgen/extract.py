@@ -832,19 +832,38 @@ def painted_pixmap(doc: fitz.Document, xref: int) -> fitz.Pixmap:
 
 
 def pixmap_sha256(pix: fitz.Pixmap) -> str | None:
-    """Digest a pixmap's samples, normalised to RGB, or None if undecodable.
+    """Digest a pixmap as it appears on paper: composited over white.
 
     Factored out so the self-test can hash the *base* image with the same
     formula the IR uses for the painted one. Two spellings of one digest would
     drift, and then a compositing regression would read as a hash difference
     rather than as the missing mask it is.
+
+    The white composite is what lets the digest survive a round trip. Under a
+    transparent pixel the source keeps whatever RGB its base stream happened to
+    carry -- usually black -- while Chromium flattens against the page when it
+    re-embeds. Hashing raw samples therefore reported one barcode as two
+    different pictures: on 1601-FQ, 1709 and 2200T a placement landed at exactly
+    the right bbox, from exactly the right staged file, and still counted as
+    missing. Compositing first asks the question that actually matters -- would
+    a reader see the same thing -- and both sides then agree exactly.
     """
     if pix.colorspace is None:
         return None
     if pix.colorspace.n != 3:
         pix = fitz.Pixmap(fitz.csRGB, pix)
+    samples = pix.samples
+    if pix.alpha:
+        stride = pix.n
+        flat = bytearray(pix.width * pix.height * 3)
+        for index in range(pix.width * pix.height):
+            alpha = samples[index * stride + 3]
+            for channel in range(3):
+                value = samples[index * stride + channel]
+                flat[index * 3 + channel] = (value * alpha + 255 * (255 - alpha)) // 255
+        samples = bytes(flat)
     return hashlib.sha256(
-        f"{pix.width}x{pix.height}:".encode() + pix.samples).hexdigest()
+        f"{pix.width}x{pix.height}:".encode() + samples).hexdigest()
 
 
 def decoded_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
@@ -1196,6 +1215,19 @@ def texttrace_codepoints(page: fitz.Page) -> dict[tuple[float, float], set[int]]
     return dict(by_origin)
 
 
+def mask_is_opaque(doc: fitz.Document, smask_xref: int | None) -> bool:
+    """True when a soft mask hides nothing, so compositing it changes no pixel."""
+    if not smask_xref:
+        return False
+    try:
+        mask = fitz.Pixmap(doc, smask_xref)
+    except Exception:  # noqa: BLE001 - undecodable is not "opaque"
+        return False
+    stride = mask.n
+    samples = mask.samples
+    return all(samples[i] == 255 for i in range(0, len(samples), stride))
+
+
 def base_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
     """The digest of an image with its soft mask deliberately discarded.
 
@@ -1275,6 +1307,7 @@ def gather_evidence(source_root: pathlib.Path) -> dict[str, Any]:
     """
     evidence: dict[str, Any] = {
         "ir": {}, "serialisations": [], "base_pixel_sha256": {},
+        "mask_is_opaque": {},
         "codepoints": {}, "leaning_bars": {}, "desync": {},
     }
     for code, (relative, revision, digest) in SELF_TEST_FIXTURES.items():
@@ -1291,6 +1324,13 @@ def gather_evidence(source_root: pathlib.Path) -> dict[str, Any]:
             first, list(first.get_drawings()))
         evidence["base_pixel_sha256"][code] = {
             image["xref"]: base_pixel_sha256(doc, image["xref"])
+            for page in evidence["ir"][code]["pages"] for image in page["images"]}
+        # A soft mask may be declared and still be entirely opaque -- 2316's is,
+        # all 12,960 of its alpha samples being 255 -- and then compositing it is
+        # a no-op and the painted digest legitimately equals the base image's.
+        # Without this the self-test demanded a difference that cannot exist.
+        evidence["mask_is_opaque"][code] = {
+            image["xref"]: mask_is_opaque(doc, image.get("smask_xref"))
             for page in evidence["ir"][code]["pages"] for image in page["images"]}
         doc.close()
 
@@ -1400,11 +1440,18 @@ def check_soft_masks(evidence: dict[str, Any]) -> list[str]:
                     failures.append(f"{label} pixel digest equals the compressed "
                                     f"stream digest")
                 base = evidence["base_pixel_sha256"][code].get(image["xref"])
+                opaque = evidence["mask_is_opaque"][code].get(image["xref"])
                 if base is None:
                     failures.append(f"{label} base image could not be decoded")
-                elif image["pixel_sha256"] == base:
+                elif image["pixel_sha256"] == base and not opaque:
                     failures.append(f"{label} pixel digest equals the unmasked "
                                     f"base image's -- the soft mask was dropped")
+                elif image["pixel_sha256"] != base and opaque:
+                    # The converse is worth asserting too, or the exemption
+                    # below could hide a compositing bug on the very images it
+                    # excuses.
+                    failures.append(f"{label} has a fully opaque mask yet its "
+                                    f"digest differs from the base image's")
                 if not image["asset_file"].endswith(".png"):
                     failures.append(f"{label} asset {image['asset_file']} cannot "
                                     f"carry alpha")
