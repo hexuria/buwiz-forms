@@ -88,6 +88,29 @@ pub enum ProfileLifecycleAction {
     Delete,
 }
 
+/// Why a lifecycle request was refused before touching the database.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LifecycleRefusal {
+    /// Deleting is irreversible, so it is reachable only from the archived
+    /// state. An active profile must be archived first.
+    DeleteNeedsArchivedProfile,
+    /// The profile is already in the state the action would move it to.
+    AlreadyInTargetState,
+}
+
+impl LifecycleRefusal {
+    pub(crate) fn message(self, action: ProfileLifecycleAction) -> String {
+        match self {
+            Self::DeleteNeedsArchivedProfile => {
+                "Archive this profile before deleting it. Deleting cannot be undone.".to_string()
+            }
+            Self::AlreadyInTargetState => {
+                format!("This profile is already {}.", action.past_tense())
+            }
+        }
+    }
+}
+
 impl ProfileLifecycleAction {
     /// Past-tense verb used in the notifications these actions push.
     pub(crate) fn past_tense(self) -> &'static str {
@@ -95,6 +118,24 @@ impl ProfileLifecycleAction {
             Self::Archive => "archived",
             Self::Restore => "restored",
             Self::Delete => "deleted",
+        }
+    }
+
+    /// Whether this action is legal for a profile that is currently archived
+    /// (or not), independent of any UI that offered it.
+    ///
+    /// The editor only renders Delete for an archived profile, but a markup
+    /// condition is not an invariant: any other caller reaching
+    /// `perform_profile_lifecycle` would otherwise export-and-delete a live
+    /// profile in one step. The transition is checked here so the rule holds
+    /// wherever the request comes from.
+    pub(crate) fn refusal_for(self, is_archived: bool) -> Option<LifecycleRefusal> {
+        match (self, is_archived) {
+            (Self::Delete, false) => Some(LifecycleRefusal::DeleteNeedsArchivedProfile),
+            (Self::Archive, true) | (Self::Restore, false) => {
+                Some(LifecycleRefusal::AlreadyInTargetState)
+            }
+            _ => None,
         }
     }
 }
@@ -1024,6 +1065,19 @@ impl AppState {
             );
             return;
         };
+
+        // The transition is validated against the profile's real stored state,
+        // not against whichever control happened to be on screen.
+        if let Some(refusal) = action.refusal_for(profile.is_archived) {
+            push_notification(
+                "error",
+                "Profile unchanged",
+                &refusal.message(action),
+                window,
+                cx,
+            );
+            return;
+        }
 
         match action {
             ProfileLifecycleAction::Archive => {
@@ -2056,5 +2110,66 @@ impl Drop for AppState {
         {
             eprintln!("Warning: WAL checkpoint on shutdown failed: {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod profile_lifecycle_transition_tests {
+    use super::{LifecycleRefusal, ProfileLifecycleAction};
+
+    const ARCHIVED: bool = true;
+    const ACTIVE: bool = false;
+
+    /// The editor only renders Delete for an archived profile. That is a
+    /// markup condition, not an invariant - this is the invariant.
+    #[test]
+    fn deleting_an_active_profile_is_refused() {
+        assert_eq!(
+            ProfileLifecycleAction::Delete.refusal_for(ACTIVE),
+            Some(LifecycleRefusal::DeleteNeedsArchivedProfile),
+        );
+    }
+
+    #[test]
+    fn deleting_an_archived_profile_is_allowed() {
+        assert_eq!(ProfileLifecycleAction::Delete.refusal_for(ARCHIVED), None);
+    }
+
+    #[test]
+    fn archive_and_restore_are_allowed_only_from_the_opposite_state() {
+        assert_eq!(ProfileLifecycleAction::Archive.refusal_for(ACTIVE), None);
+        assert_eq!(ProfileLifecycleAction::Restore.refusal_for(ARCHIVED), None);
+    }
+
+    /// A double-submit must not re-write the same state.
+    #[test]
+    fn repeating_an_action_that_already_happened_is_refused() {
+        assert_eq!(
+            ProfileLifecycleAction::Archive.refusal_for(ARCHIVED),
+            Some(LifecycleRefusal::AlreadyInTargetState),
+        );
+        assert_eq!(
+            ProfileLifecycleAction::Restore.refusal_for(ACTIVE),
+            Some(LifecycleRefusal::AlreadyInTargetState),
+        );
+    }
+
+    /// The archive-first rule is the one the user has to act on, so it must
+    /// say what to do rather than only that something was refused.
+    #[test]
+    fn the_delete_refusal_names_the_required_step() {
+        let msg =
+            LifecycleRefusal::DeleteNeedsArchivedProfile.message(ProfileLifecycleAction::Delete);
+        assert!(msg.contains("Archive"), "{msg}");
+        assert!(msg.contains("cannot be undone"), "{msg}");
+    }
+
+    #[test]
+    fn the_already_in_state_refusal_names_the_state() {
+        assert!(
+            LifecycleRefusal::AlreadyInTargetState
+                .message(ProfileLifecycleAction::Archive)
+                .contains("already archived"),
+        );
     }
 }
