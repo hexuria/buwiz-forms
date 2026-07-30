@@ -3,6 +3,65 @@
 Written 2026-07-30. Everything below was measured, not recalled. Where something
 is unverified, it says so.
 
+## How to use this handoff
+
+**Start the session in the worktree, not the main checkout.** Everything below
+assumes that; `main` is a different objective and must stay clean.
+
+```sh
+cd /Volumes/goldcoders/reverse-engineer-ebir-forms/bir/.claude/worktrees/pdf-native-extraction
+claude
+```
+
+Then give the agent this, verbatim:
+
+> Read `tools/formgen/HANDOFF.md`, then `tools/formgen/GOAL.md`. Run
+> `python3 tools/formgen/gate.py --skip-regenerate` to see where things stand.
+> Do the next increment from the handoff's `## Next increment`. Obey
+> `## Constraints` in GOAL.md — they outrank finishing. Report what you measured,
+> including anything that got worse.
+
+Or, to have it drive itself without prompting: `/goal`. That reads
+`.claude/GOAL.md`, checks the done-condition, does one increment, and re-arms.
+It only asks a question when the gate passes.
+
+### The three rules to state up front, every time
+
+An agent that does not know these will reproduce mistakes already paid for:
+
+1. **One agent per file.** If you fan out, assign ownership explicitly and tell
+   each agent to stop and report rather than edit a file it does not own.
+2. **A change to `extract.py` must name its caller in the same increment.**
+3. **A check that cannot be evaluated is a failure, never a pass.**
+
+### Reading order, and why
+
+`HANDOFF.md` (state) → `GOAL.md` (objective + constraints + judgement calls) →
+`BLOCKER-PLAN.md` (mechanisms) → `review-findings.json` (scope of record).
+
+Read GOAL.md's `## Judgement calls already made` **before changing anything**.
+Several of those decisions look wrong to someone reading only the symptom —
+`crispEdges` is the clearest: it reads like the right choice for a page of thin
+rules, and it *deletes* them.
+
+### Verifying, not trusting
+
+- `python3 tools/formgen/gate.py` is the only thing that decides whether the work
+  is done. Never answer that from memory or from what an agent reported.
+- `--skip-regenerate` scores the tree as it stands; it is fast and it is **not**
+  the done-condition. It has already reported green off a stale audit.
+- Every module has `--self-test`. `lattice.py` and `fonts.py` need
+  `--ir build/ir/2551q-2018.ir.json`.
+- A full gate takes ~45 minutes. Run it in the background and do read-only
+  diagnosis meanwhile — but never run `batch.py` or `audit.py` concurrently with
+  it, and never kill it without recording why.
+
+### If you change the pipeline mid-run
+
+A running `gate.py` imported its modules at process start. Editing `extract.py`
+under it produces numbers from the *old* code. Kill it and restart rather than
+reading a stale result as fact.
+
 ## Where the work is
 
 | | |
