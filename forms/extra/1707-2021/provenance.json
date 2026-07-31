@@ -21,8 +21,8 @@
   "rules": 1084,
   "text_runs": 264,
   "images": 3,
-  "cells": 281,
-  "comb_cells": 113,
+  "cells": 324,
+  "comb_cells": 112,
   "growables": [],
   "sources": [
     {
@@ -62,7 +62,7 @@
       "1707 April 2021 ENCS Guidelines and Instructions.pdf"
     ]
   },
-  "html_bytes": 598998,
+  "html_bytes": 625051,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

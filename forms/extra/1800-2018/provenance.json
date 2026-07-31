@@ -21,8 +21,8 @@
   "rules": 1113,
   "text_runs": 313,
   "images": 3,
-  "cells": 400,
-  "comb_cells": 108,
+  "cells": 420,
+  "comb_cells": 107,
   "growables": [
     {
       "page": 2,
@@ -69,7 +69,7 @@
       "1800 Guidelines.pdf"
     ]
   },
-  "html_bytes": 915862,
+  "html_bytes": 920393,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

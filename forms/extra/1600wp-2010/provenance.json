@@ -18,8 +18,8 @@
   "rules": 349,
   "text_runs": 182,
   "images": 1,
-  "cells": 161,
-  "comb_cells": 17,
+  "cells": 230,
+  "comb_cells": 15,
   "growables": [],
   "sources": [
     {
@@ -59,7 +59,7 @@
       "1600WP Guide.pdf"
     ]
   },
-  "html_bytes": 205544,
+  "html_bytes": 215349,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

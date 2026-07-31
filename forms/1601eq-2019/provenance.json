@@ -22,7 +22,7 @@
   "rules": 906,
   "text_runs": 533,
   "images": 3,
-  "cells": 443,
+  "cells": 470,
   "comb_cells": 99,
   "growables": [
     {
@@ -70,7 +70,7 @@
       "1601-EQ Guide January 2019 ENCS rev.pdf"
     ]
   },
-  "html_bytes": 757976,
+  "html_bytes": 764229,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

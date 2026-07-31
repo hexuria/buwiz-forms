@@ -24,7 +24,7 @@
   "rules": 1486,
   "text_runs": 407,
   "images": 3,
-  "cells": 367,
+  "cells": 474,
   "comb_cells": 136,
   "growables": [],
   "sources": [
@@ -86,7 +86,7 @@
       "1701-MS Guide August 2024 ENCS_Final.pdf"
     ]
   },
-  "html_bytes": 733983,
+  "html_bytes": 756783,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
