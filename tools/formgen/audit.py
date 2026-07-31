@@ -2652,6 +2652,31 @@ def _baseline_segments(
     return ((baseline.left, baseline.right, baseline.y0, baseline.y1),)
 
 
+def _baseline_contact_segments(
+        baseline: _SourceBaselineSpan,
+        contact_x: float,
+        ) -> tuple[_SourceBaselineSpan, ...]:
+    """Retain the actual baseline segment levels touching one endpoint."""
+    return tuple(
+        _SourceBaselineSpan(
+            y=(segment_y0 + segment_y1) / 2.0,
+            y0=segment_y0,
+            y1=segment_y1,
+            left=segment_left,
+            right=segment_right,
+            operations=baseline.operations,
+            segments=(
+                (segment_left, segment_right, segment_y0, segment_y1),
+            ),
+        )
+        for (
+            segment_left, segment_right, segment_y0, segment_y1,
+        ) in _baseline_segments(baseline)
+        if contact_x >= segment_left - SOURCE_COORD_EPS_PT
+        and contact_x <= segment_right + SOURCE_COORD_EPS_PT
+    )
+
+
 def _vertical_baseline_contact_intervals(
         page: VectorPage,
         tone: float,
@@ -2734,6 +2759,177 @@ def _baseline_coordinate_contacts_vertical(
         and contact_x <= right + SOURCE_COORD_EPS_PT
         for left, right in _vertical_baseline_contact_intervals(
             page, tone, rail, baseline)
+    )
+
+
+def _connected_vertical_baseline_contact(
+        page: VectorPage,
+        tone: float,
+        rail: dict[str, Any] | None,
+        band_y0: float,
+        span_y1: float,
+        contact_x: float,
+        baseline: _SourceBaselineSpan,
+        ) -> bool:
+    """Bind exact baseline contact to one uninterrupted visible rail path.
+
+    ``_stable_source_verticals`` deliberately tolerates up to
+    ``COMB_YSLACK_PT`` of missing span.  That tolerance cannot prove a U-frame
+    side rail: a long stroke and a separate same-x contact fragment could
+    otherwise straddle paper and jointly satisfy the stable/contact checks.
+    Track final-tone ink backed by the effective compound paint operation of an
+    actual vertical member slab by slab.  One run may start within the existing
+    leading ``COMB_YSLACK_PT`` allowance; after it starts, only x-overlapping
+    continuation can reach the exact baseline coordinate.  A later same-tone
+    fill may own the final pixel while preserving a genuinely painted vertical
+    operation; it cannot replace a canceled member or missing ink with an
+    unrelated broad repaint.
+    """
+    if (rail is None
+            or span_y1 <= band_y0 + SOURCE_COORD_EPS_PT):
+        return False
+    members = tuple(rail.get("members", ()))
+    if not members:
+        return False
+    operation_regions: dict[
+        tuple[int, int], list[VectorPaint]
+    ] = collections.defaultdict(list)
+    for paint in page.paints:
+        operation_regions[(paint.order, paint.operation)].append(paint)
+
+    span_left = min(paint.x0 for paint in members)
+    span_right = max(paint.x1 for paint in members)
+    relevant = [
+        paint for paint in page.paints
+        if paint.x1 >= span_left - SOURCE_COORD_EPS_PT
+        and paint.x0 <= span_right + SOURCE_COORD_EPS_PT
+        and paint.y1 > band_y0
+        and paint.y0 < span_y1
+    ]
+    endpoints = {band_y0, span_y1}
+    for paint in relevant:
+        endpoints.update((
+            max(band_y0, paint.y0),
+            min(span_y1, paint.y1),
+        ))
+    slabs = [
+        (a, b)
+        for a, b in zip(sorted(endpoints), sorted(endpoints)[1:])
+        if b - a > SOURCE_COORD_EPS_PT
+    ]
+    if not slabs:
+        return False
+
+    wanted_tone = round(tone, 4)
+    start_deadline = band_y0 + COMB_YSLACK_PT
+    reachable: list[tuple[float, float]] | None = None
+    prior_y = band_y0
+    for a, b in slabs:
+        if a > prior_y + SOURCE_COORD_EPS_PT:
+            if a > start_deadline + SOURCE_COORD_EPS_PT:
+                return False
+            reachable = None
+        sample_y = (a + b) / 2.0
+        active = [
+            paint for paint in relevant
+            if paint.y0 <= sample_y <= paint.y1
+        ]
+        active_members = [
+            paint for paint in members
+            if paint.y0 <= sample_y <= paint.y1
+        ]
+
+        x_edges = {span_left, span_right}
+        for paint in active:
+            clipped_left = max(span_left, paint.x0)
+            clipped_right = min(span_right, paint.x1)
+            if clipped_right >= clipped_left:
+                x_edges.update((clipped_left, clipped_right))
+        visible: list[tuple[float, float]] = []
+        ordered_x = sorted(x_edges)
+        if len(ordered_x) == 1:
+            ordered_x.append(ordered_x[0])
+        for left, right in zip(ordered_x, ordered_x[1:]):
+            sample_x = (left + right) / 2.0
+            final_tone = _final_tone(active, sample_x, sample_y)
+            if (round(final_tone, 4) == wanted_tone
+                    and any(
+                        member.covers(sample_x, sample_y)
+                        and _operation_covers(
+                            operation_regions[
+                                (member.order, member.operation)
+                            ],
+                            sample_x,
+                            sample_y,
+                        )
+                        for member in active_members
+                    )):
+                visible.append((left, right))
+        visible = _merge_intervals(visible, SOURCE_COORD_EPS_PT)
+        if reachable is not None:
+            connected = [
+                interval for interval in visible
+                if any(
+                    interval[0] <= prior[1] + SOURCE_COORD_EPS_PT
+                    and interval[1] >= prior[0] - SOURCE_COORD_EPS_PT
+                    for prior in reachable
+                )
+            ]
+            if connected:
+                reachable = connected
+            elif visible and a <= start_deadline + SOURCE_COORD_EPS_PT:
+                reachable = visible
+            elif b <= start_deadline + SOURCE_COORD_EPS_PT:
+                reachable = None
+            else:
+                return False
+        elif visible:
+            if a > start_deadline + SOURCE_COORD_EPS_PT:
+                return False
+            reachable = visible
+        elif b > start_deadline + SOURCE_COORD_EPS_PT:
+            return False
+        prior_y = b
+
+    if (prior_y < span_y1 - SOURCE_COORD_EPS_PT
+            or reachable is None
+            or not any(
+                contact_x >= left - SOURCE_COORD_EPS_PT
+                and contact_x <= right + SOURCE_COORD_EPS_PT
+                for left, right in reachable
+            )):
+        return False
+    return _baseline_coordinate_contacts_vertical(
+        page, tone, contact_x, rail, baseline)
+
+
+def _vertical_has_connected_baseline_contact(
+        page: VectorPage,
+        tone: float,
+        rail: dict[str, Any] | None,
+        band_y0: float,
+        contact_x: float,
+        baseline: _SourceBaselineSpan,
+        ) -> bool:
+    """Require one actual segment-level contact on the connected rail path.
+
+    A segmented junction may legitimately span more than one touching
+    baseline segment or level.  Each is evaluated independently; an aggregate
+    rail envelope or aggregate baseline component is never itself a witness.
+    No spanning segment or no independently connected segment fails closed.
+    """
+    contacts = _baseline_contact_segments(baseline, contact_x)
+    return bool(contacts) and any(
+        _connected_vertical_baseline_contact(
+            page,
+            tone,
+            rail,
+            band_y0,
+            contact.y0,
+            contact_x,
+            contact,
+        )
+        for contact in contacts
     )
 
 
@@ -2944,12 +3140,14 @@ def _segmented_u_frame_candidates(
 
     candidates = []
     for component in components:
+        if component.y0 <= band_y0 + SOURCE_COORD_EPS_PT:
+            continue
         verticals = _stable_source_verticals(
             page,
             component.left - COMB_MAX_WIDTH_PT,
             component.right + COMB_MAX_WIDTH_PT,
             band_y0,
-            band_y1,
+            component.y0,
             tone,
         )
         verticals = sorted(
@@ -3016,25 +3214,27 @@ def _segmented_u_frame_candidates(
         if len(run) < 3:
             continue
         left, right = run[0], run[-1]
-        left_rail = _source_vertical_ink_geometry(
-            page, left, band_y0, band_y1, tone)
-        right_rail = _source_vertical_ink_geometry(
-            page, right, band_y0, band_y1, tone)
         run_geometry = {
             source_x: _source_vertical_ink_geometry(
                 page, source_x, band_y0, band_y1, tone)
             for source_x in run
         }
-        if (not _baseline_coordinate_contacts_vertical(
-                page, tone, component.left, left_rail, component)
-                or not _baseline_coordinate_contacts_vertical(
-                    page, tone, component.right, right_rail, component)
-                or any(
-                    not _baseline_coordinate_contacts_vertical(
-                        page, tone, source_x,
-                        run_geometry[source_x], component)
-                    for source_x in run[1:-1]
-                )):
+        contact_coordinates = (
+            [(left, component.left)]
+            + [(source_x, source_x) for source_x in run[1:-1]]
+            + [(right, component.right)]
+        )
+        if any(
+                not _vertical_has_connected_baseline_contact(
+                    page,
+                    tone,
+                    run_geometry[source_x],
+                    band_y0,
+                    contact_x,
+                    component,
+                )
+                for source_x, contact_x in contact_coordinates
+                ):
             continue
         interior = tuple(
             divider for divider in topology
@@ -3133,64 +3333,6 @@ def _local_baseline_spans(
     return spans
 
 
-def _local_source_u_frame(
-        page: VectorPage, x0: float, x1: float,
-        band_y0: float, band_y1: float, tone: float,
-        topology: Sequence[float],
-        ) -> tuple[tuple[float, ...], tuple[float, float, float, float]] | None:
-    """Disambiguate segmented table baselines after global frame checks."""
-    verticals = _stable_source_verticals(
-        page, x0, x1, band_y0, band_y1, tone)
-    baselines = _local_baseline_spans(page, x0, x1, band_y1, tone)
-    candidates: list[
-        tuple[float, float, tuple[float, ...], float]
-    ] = []
-    for left_index, left in enumerate(verticals):
-        for right in verticals[left_index + 1:]:
-            interior = tuple(
-                divider for divider in topology
-                if divider > left + COMB_MERGE_PT
-                and divider < right - COMB_MERGE_PT
-            )
-            if not interior:
-                continue
-            if any(
-                    divider < left - COMB_MERGE_PT
-                    or divider > right + COMB_MERGE_PT
-                    for divider in topology):
-                continue
-            for baseline_y, baseline_left, baseline_right in baselines:
-                if (abs(left - baseline_left) <= COMB_MAX_WIDTH_PT
-                        and abs(right - baseline_right)
-                        <= COMB_MAX_WIDTH_PT):
-                    candidates.append(
-                        (left, right, interior, baseline_y))
-    if not candidates:
-        return None
-    widest = max(right - left for left, right, _interior, _y in candidates)
-    maximal = [
-        candidate for candidate in candidates
-        if abs((candidate[1] - candidate[0]) - widest)
-        <= verify.DEFAULT_POSITION_TOL_PT
-    ]
-    interiors: list[tuple[float, ...]] = []
-    for _left, _right, interior, _baseline_y in maximal:
-        if not any(_same_topology(interior, seen) for seen in interiors):
-            interiors.append(interior)
-    if len(interiors) != 1:
-        return None
-    closest = min(
-        maximal,
-        key=lambda item: (
-            abs(item[3] - band_y1), item[3], item[0], item[1]),
-    )
-    left, right, _interior, baseline_y = closest
-    return interiors[0], (
-        round(left, 6), round(right, 6),
-        round(band_y0, 6), round(baseline_y, 6),
-    )
-
-
 def _source_u_frame(
         page: VectorPage, x0: float, x1: float,
         band_y0: float, band_y1: float, tone: float,
@@ -3209,12 +3351,14 @@ def _source_u_frame(
     for baseline in baselines:
         if baseline.right <= x0 or baseline.left >= x1:
             continue
+        if baseline.y0 <= band_y0 + SOURCE_COORD_EPS_PT:
+            continue
         verticals = _stable_source_verticals(
             page,
             baseline.left - COMB_MAX_WIDTH_PT,
             baseline.right + COMB_MAX_WIDTH_PT,
             band_y0,
-            band_y1,
+            baseline.y0,
             tone,
         )
         vertical_geometry = {
@@ -3224,16 +3368,16 @@ def _source_u_frame(
         }
         left_matches = sorted(
             (value for value in verticals
-             if _baseline_coordinate_contacts_vertical(
-                 page, tone, baseline.left,
-                 vertical_geometry[value], baseline)),
+             if _vertical_has_connected_baseline_contact(
+                 page, tone, vertical_geometry[value],
+                 band_y0, baseline.left, baseline)),
             key=lambda value: (abs(value - baseline.left), value),
         )
         right_matches = sorted(
             (value for value in verticals
-             if _baseline_coordinate_contacts_vertical(
-                 page, tone, baseline.right,
-                 vertical_geometry[value], baseline)),
+             if _vertical_has_connected_baseline_contact(
+                 page, tone, vertical_geometry[value],
+                 band_y0, baseline.right, baseline)),
             key=lambda value: (abs(value - baseline.right), value),
         )
         if not left_matches or not right_matches:
@@ -3247,9 +3391,9 @@ def _source_u_frame(
             and divider < right - COMB_MERGE_PT
             and any(
                 abs(divider - source_x) <= COMB_MERGE_PT
-                and _baseline_coordinate_contacts_vertical(
-                    page, tone, source_x,
-                    vertical_geometry[source_x], baseline)
+                and _vertical_has_connected_baseline_contact(
+                    page, tone, vertical_geometry[source_x],
+                    band_y0, source_x, baseline)
                 for source_x in verticals
             )
         )
@@ -3264,15 +3408,14 @@ def _source_u_frame(
             left, right, interior, baseline,
             external, baseline.operations,
         ))
-    if not candidates:
-        candidates.extend(_segmented_u_frame_candidates(
-            page,
-            baselines,
-            band_y0,
-            band_y1,
-            tone,
-            topology,
-        ))
+    candidates.extend(_segmented_u_frame_candidates(
+        page,
+        baselines,
+        band_y0,
+        band_y1,
+        tone,
+        topology,
+    ))
     if not candidates:
         return None
 
@@ -8393,6 +8536,295 @@ def self_test() -> int:
         == [[34.88, 35.0]],
     )
 
+    mixed_height_frame_page = source_page(
+        source_paint(5, a=2.0, b=8.0, order=0),
+        source_paint(20, a=2.0, b=8.75, order=1),
+        source_paint(35, a=2.0, b=8.0, order=2),
+        VectorPaint(
+            5.0, 8.0, 35.0, 8.75,
+            0.0, 1.0, 20, "mixed-height-frame-baseline"),
+        framed=False,
+    )
+    mixed_height_frame = printed_compartments(
+        mixed_height_frame_page,
+        comb_subject(x0=5.0, x1=35.0),
+        include_frame=True,
+    )
+    check(
+        "rails ending at baseline start survive an interior divider "
+        "crossing baseline thickness",
+        mixed_height_frame[:2] == (2, [20.0])
+        and mixed_height_frame[2]["left_rail"]["ink_y1"] == 8.0
+        and mixed_height_frame[2]["right_rail"]["ink_y1"] == 8.0,
+    )
+    check(
+        "equivalent ordinary and segmented discovery stays deterministic",
+        printed_compartments(
+            mixed_height_frame_page,
+            comb_subject(x0=5.0, x1=35.0),
+            include_frame=True,
+        ) == mixed_height_frame,
+    )
+
+    late_start_frame_page = source_page(
+        source_paint(5, a=2.3, b=8.0, order=0),
+        source_paint(20, a=2.0, b=8.75, order=1),
+        source_paint(35, a=2.3, b=8.0, order=2),
+        VectorPaint(
+            5.0, 8.0, 35.0, 8.75,
+            0.0, 1.0, 20, "late-start-frame-baseline"),
+        framed=False,
+    )
+    late_start_baseline = next(
+        baseline for baseline in _baseline_spans(
+            late_start_frame_page, 8.0, 0.0)
+        if baseline.left == 5.0 and baseline.right == 35.0
+    )
+    late_start_left_rail = _source_vertical_ink_geometry(
+        late_start_frame_page, 5.0, 2.0, 8.75, 0.0)
+    check(
+        "a connected ordinary rail may begin inside existing leading slack",
+        5.0 in _stable_source_verticals(
+            late_start_frame_page, 2.5, 37.5, 2.0, 8.0, 0.0)
+        and _baseline_coordinate_contacts_vertical(
+            late_start_frame_page, 0.0, 5.0,
+            late_start_left_rail, late_start_baseline)
+        and _connected_vertical_baseline_contact(
+            late_start_frame_page, 0.0, late_start_left_rail,
+            2.0, 8.0, 5.0, late_start_baseline),
+    )
+    late_start_frame = printed_compartments(
+        late_start_frame_page,
+        comb_subject(x0=5.0, x1=35.0),
+    )
+    check(
+        "leading slack does not erase a continuous source U-frame",
+        late_start_frame == (2, [20.0]),
+    )
+
+    mixed_height_gap_page = source_page(
+        source_paint(5, a=2.0, b=7.7, order=0),
+        source_paint(20, a=2.0, b=8.75, order=1),
+        source_paint(35, a=2.0, b=7.7, order=2),
+        VectorPaint(
+            5.0, 8.0, 35.0, 8.75,
+            0.0, 1.0, 20, "mixed-height-gap-baseline"),
+        framed=False,
+    )
+    try:
+        printed_compartments(
+            mixed_height_gap_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        mixed_height_gap_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        mixed_height_gap_failed = False
+    check(
+        "an interior divider crossing baseline thickness cannot bridge "
+        "paper gaps under the side rails",
+        mixed_height_gap_failed,
+    )
+
+    disconnected_contact_page = source_page(
+        source_paint(5, a=2.0, b=7.5, order=0),
+        source_paint(20, a=2.0, b=8.85, order=1),
+        source_paint(35, a=2.0, b=7.5, order=2),
+        source_paint(5, a=7.8, b=8.85, order=3),
+        source_paint(35, a=7.8, b=8.85, order=4),
+        VectorPaint(
+            5.0, 8.0, 35.0, 8.75,
+            0.0, 1.0, 20, "disconnected-contact-baseline"),
+        framed=False,
+    )
+    disconnected_baseline = next(
+        baseline for baseline in _baseline_spans(
+            disconnected_contact_page, 8.0, 0.0)
+        if baseline.left == 5.0 and baseline.right == 35.0
+    )
+    disconnected_left_rail = _source_vertical_ink_geometry(
+        disconnected_contact_page, 5.0, 2.0, 8.75, 0.0)
+    check(
+        "disconnected ordinary fixture reaches the formerly independent "
+        "stable-span and exact-contact predicates",
+        5.0 in _stable_source_verticals(
+            disconnected_contact_page, 2.5, 37.5, 2.0, 8.0, 0.0)
+        and _baseline_coordinate_contacts_vertical(
+            disconnected_contact_page, 0.0, 5.0,
+            disconnected_left_rail, disconnected_baseline)
+        and not _connected_vertical_baseline_contact(
+            disconnected_contact_page, 0.0, disconnected_left_rail,
+            2.0, 8.0, 5.0, disconnected_baseline),
+    )
+    try:
+        printed_compartments(
+            disconnected_contact_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        disconnected_contact_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        disconnected_contact_failed = False
+    check(
+        "a separate same-x baseline-contact fragment cannot bridge "
+        "0.3pt of paper in an ordinary frame",
+        disconnected_contact_failed,
+    )
+
+    disconnected_interior_page = source_page(
+        source_paint(5, a=2.0, b=8.0, order=0),
+        source_paint(20, a=2.0, b=7.5, order=1),
+        source_paint(35, a=2.0, b=8.0, order=2),
+        source_paint(20, a=7.8, b=8.85, order=3),
+        VectorPaint(
+            5.0, 8.0, 35.0, 8.75,
+            0.0, 1.0, 20, "disconnected-interior-baseline"),
+        framed=False,
+    )
+    disconnected_interior_baseline = next(
+        baseline for baseline in _baseline_spans(
+            disconnected_interior_page, 8.0, 0.0)
+        if baseline.left == 5.0 and baseline.right == 35.0
+    )
+    disconnected_interior_geometry = _source_vertical_ink_geometry(
+        disconnected_interior_page, 20.0, 2.0, 8.75, 0.0)
+    check(
+        "disconnected ordinary interior reaches aggregate stable/contact "
+        "evidence but not one segment-bound path",
+        20.0 in _stable_source_verticals(
+            disconnected_interior_page, 2.5, 37.5, 2.0, 8.0, 0.0)
+        and _baseline_coordinate_contacts_vertical(
+            disconnected_interior_page, 0.0, 20.0,
+            disconnected_interior_geometry, disconnected_interior_baseline)
+        and not _vertical_has_connected_baseline_contact(
+            disconnected_interior_page, 0.0,
+            disconnected_interior_geometry, 2.0, 20.0,
+            disconnected_interior_baseline),
+    )
+    try:
+        printed_compartments(
+            disconnected_interior_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        disconnected_interior_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        disconnected_interior_failed = False
+    check(
+        "an ordinary interior cannot borrow detached baseline-contact ink "
+        "across 0.3pt of paper",
+        disconnected_interior_failed,
+    )
+
+    canceled_interior_page = source_page(
+        source_paint(5, a=2.0, b=8.0, order=0),
+        VectorPaint(
+            19.88, 2.0, 20.12, 8.0,
+            0.0, 1.0, 2, "evenodd-full-vertical",
+            operation=500, fill_rule="evenodd"),
+        VectorPaint(
+            19.88, 7.6, 20.12, 7.9,
+            0.0, 1.0, 2, "evenodd-canceling-strip",
+            operation=500, fill_rule="evenodd"),
+        source_paint(35, a=2.0, b=8.0, order=3),
+        VectorPaint(
+            0.0, 7.6, 40.0, 7.9,
+            0.0, 1.0, 10, "unrelated-broad-black-repaint"),
+        VectorPaint(
+            5.0, 8.0, 35.0, 8.75,
+            0.0, 1.0, 20, "canceled-interior-baseline"),
+        framed=False,
+    )
+    canceled_interior_baseline = next(
+        baseline for baseline in _baseline_spans(
+            canceled_interior_page, 8.0, 0.0)
+        if baseline.left == 5.0 and baseline.right == 35.0
+    )
+    canceled_interior_geometry = _source_vertical_ink_geometry(
+        canceled_interior_page, 20.0, 2.0, 8.75, 0.0)
+    canceled_operation = [
+        paint for paint in canceled_interior_page.paints
+        if (paint.order, paint.operation) == (2, 500)
+    ]
+    check(
+        "broad final black cannot back an even-odd-canceled vertical operation",
+        20.0 in _stable_source_verticals(
+            canceled_interior_page, 2.5, 37.5, 2.0, 8.0, 0.0)
+        and _final_tone(
+            [
+                paint for paint in canceled_interior_page.paints
+                if paint.y0 <= 7.75 <= paint.y1
+            ],
+            20.0,
+            7.75,
+        ) == 0.0
+        and not _operation_covers(
+            canceled_operation, 20.0, 7.75)
+        and not _vertical_has_connected_baseline_contact(
+            canceled_interior_page, 0.0,
+            canceled_interior_geometry, 2.0, 20.0,
+            canceled_interior_baseline),
+    )
+    try:
+        printed_compartments(
+            canceled_interior_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        canceled_interior_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        canceled_interior_failed = False
+    check(
+        "ordinary U-frame rejects canceled interior ink hidden by broad repaint",
+        canceled_interior_failed,
+    )
+
+    genuine_repaint_page = source_page(
+        source_paint(5, a=2.0, b=8.0, order=0),
+        VectorPaint(
+            19.88, 2.0, 20.12, 8.0,
+            0.0, 1.0, 2, "evenodd-genuine-vertical",
+            operation=501, fill_rule="evenodd"),
+        source_paint(35, a=2.0, b=8.0, order=3),
+        VectorPaint(
+            0.0, 7.6, 40.0, 7.9,
+            0.0, 1.0, 10, "same-tone-broad-repaint"),
+        VectorPaint(
+            5.0, 8.0, 35.0, 8.75,
+            0.0, 1.0, 20, "genuine-repaint-baseline"),
+        framed=False,
+    )
+    genuine_repaint_baseline = next(
+        baseline for baseline in _baseline_spans(
+            genuine_repaint_page, 8.0, 0.0)
+        if baseline.left == 5.0 and baseline.right == 35.0
+    )
+    genuine_repaint_geometry = _source_vertical_ink_geometry(
+        genuine_repaint_page, 20.0, 2.0, 8.75, 0.0)
+    check(
+        "same-tone repaint preserves a genuinely painted vertical operation",
+        _vertical_has_connected_baseline_contact(
+            genuine_repaint_page, 0.0,
+            genuine_repaint_geometry, 2.0, 20.0,
+            genuine_repaint_baseline)
+        and printed_compartments(
+            genuine_repaint_page,
+            comb_subject(x0=5.0, x1=35.0),
+        ) == (2, [20.0]),
+    )
+
     split_rail_frame_page = source_page(
         source_paint(4.7, order=0),
         source_paint(5.3, order=1),
@@ -8440,6 +8872,518 @@ def self_test() -> int:
         "six explicit baseline operations form one maximal source frame",
         segmented_full == (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
     )
+
+    mixed_segmentation_page = source_page(
+        *(
+            source_paint(x, a=2.0, b=8.0, order=index)
+            for index, x in enumerate((5, 10, 15, 20, 25, 30, 35))
+        ),
+        VectorPaint(
+            5.0, 8.0, 20.0, 8.75,
+            0.0, 1.0, 20, "mixed-segmentation-wide-baseline"),
+        *(
+            VectorPaint(
+                left, 8.0, left + 5.0, 8.75,
+                0.0, 1.0, 21 + index,
+                "mixed-segmentation-short-baseline",
+            )
+            for index, left in enumerate((20, 25, 30))
+        ),
+        framed=False,
+    )
+    mixed_segmentation_baselines = _baseline_spans(
+        mixed_segmentation_page, 8.0, 0.0)
+    mixed_segmentation_short = next(
+        baseline for baseline in mixed_segmentation_baselines
+        if baseline.left == 5.0 and baseline.right == 20.0
+    )
+    mixed_segmentation_short_verticals = _stable_source_verticals(
+        mixed_segmentation_page, 2.5, 22.5, 2.0, 8.0, 0.0)
+    check(
+        "mixed segmentation contains a valid short ordinary U-frame",
+        all(
+            source_x in mixed_segmentation_short_verticals
+            and _vertical_has_connected_baseline_contact(
+                mixed_segmentation_page,
+                0.0,
+                _source_vertical_ink_geometry(
+                    mixed_segmentation_page,
+                    source_x,
+                    2.0,
+                    8.0,
+                    0.0,
+                ),
+                2.0,
+                contact_x,
+                mixed_segmentation_short,
+            )
+            for source_x, contact_x in (
+                (5.0, 5.0),
+                (10.0, 10.0),
+                (15.0, 15.0),
+                (20.0, 20.0),
+            )
+        ),
+    )
+    mixed_segmentation_wide_candidates = _segmented_u_frame_candidates(
+        mixed_segmentation_page,
+        mixed_segmentation_baselines,
+        2.0,
+        8.0,
+        0.0,
+        (10.0, 15.0),
+    )
+    check(
+        "wider segmented discovery participates beside the short ordinary "
+        "candidate",
+        any(
+            candidate[0] == 5.0
+            and candidate[1] == 35.0
+            and candidate[2] == (10.0, 15.0)
+            for candidate in mixed_segmentation_wide_candidates
+        ),
+    )
+    try:
+        printed_compartments(
+            mixed_segmentation_page,
+            comb_subject(x0=5.0, x1=20.0),
+        )
+    except CombTopologyError as exc:
+        mixed_segmentation_crop_failed = (
+            exc.evidence.get("criterion")
+            == "maximal-source-u-frame-owner"
+            and exc.evidence["frame"]["left_rail"] == 5.0
+            and exc.evidence["frame"]["right_rail"] == 35.0
+            and exc.evidence["cropped_sides"] == ["right"]
+        )
+    else:
+        mixed_segmentation_crop_failed = False
+    check(
+        "short ordinary owner is rejected as a crop of the wider frame",
+        mixed_segmentation_crop_failed,
+    )
+    mixed_segmentation_full_a = printed_compartments(
+        mixed_segmentation_page,
+        comb_subject(x0=5.0, x1=35.0),
+        include_frame=True,
+    )
+    mixed_segmentation_full_b = printed_compartments(
+        mixed_segmentation_page,
+        comb_subject(x0=5.0, x1=35.0),
+        include_frame=True,
+    )
+    check(
+        "full mixed-segmentation frame accepts six stable compartments",
+        mixed_segmentation_full_a[:2]
+        == (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
+    )
+    check(
+        "mixed ordinary/segmented discovery has no duplicate instability",
+        mixed_segmentation_full_b == mixed_segmentation_full_a
+        and len(
+            mixed_segmentation_full_a[2]["baseline_operations"]
+        ) == 4,
+    )
+
+    mixed_height_segmented_page = source_page(
+        source_paint(5, a=2.0, b=8.0, order=0),
+        *(
+            source_paint(x, a=2.0, b=8.75, order=index + 1)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(35, a=2.0, b=8.0, order=10),
+        *(
+            VectorPaint(
+                left, 8.0, left + 5.0, 8.75,
+                0.0, 1.0, 20 + index,
+                "mixed-height-segmented-baseline",
+            )
+            for index, left in enumerate((5, 10, 15, 20, 25, 30))
+        ),
+        framed=False,
+    )
+    mixed_height_segmented = printed_compartments(
+        mixed_height_segmented_page,
+        comb_subject(x0=5.0, x1=35.0),
+        include_frame=True,
+    )
+    check(
+        "segmented baseline accepts side rails ending at its start while "
+        "interior dividers cross its thickness",
+        mixed_height_segmented[:2]
+        == (6, [10.0, 15.0, 20.0, 25.0, 30.0])
+        and len(
+            mixed_height_segmented[2]["baseline_operations"]
+        ) == 6,
+    )
+
+    mixed_height_segmented_gap_page = source_page(
+        source_paint(5, a=2.0, b=7.7, order=0),
+        *(
+            source_paint(x, a=2.0, b=8.75, order=index + 1)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(35, a=2.0, b=7.7, order=10),
+        *(
+            VectorPaint(
+                left, 8.0, left + 5.0, 8.75,
+                0.0, 1.0, 20 + index,
+                "mixed-height-segmented-gap-baseline",
+            )
+            for index, left in enumerate((5, 10, 15, 20, 25, 30))
+        ),
+        framed=False,
+    )
+    try:
+        printed_compartments(
+            mixed_height_segmented_gap_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        mixed_height_segmented_gap_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        mixed_height_segmented_gap_failed = False
+    check(
+        "segmented baselines cannot bridge paper gaps under their side rails",
+        mixed_height_segmented_gap_failed,
+    )
+
+    disconnected_segmented_page = source_page(
+        source_paint(5, a=2.0, b=7.5, order=0),
+        *(
+            source_paint(x, a=2.0, b=8.85, order=index + 1)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(35, a=2.0, b=7.5, order=10),
+        source_paint(5, a=7.8, b=8.85, order=11),
+        source_paint(35, a=7.8, b=8.85, order=12),
+        *(
+            VectorPaint(
+                left, 8.0, left + 5.0, 8.75,
+                0.0, 1.0, 20 + index,
+                "disconnected-segmented-baseline",
+            )
+            for index, left in enumerate((5, 10, 15, 20, 25, 30))
+        ),
+        framed=False,
+    )
+    disconnected_segmented_baselines = _baseline_spans(
+        disconnected_segmented_page, 8.0, 0.0)
+    disconnected_segmented_verticals = _stable_source_verticals(
+        disconnected_segmented_page, 2.5, 37.5, 2.0, 8.0, 0.0)
+    check(
+        "disconnected segmented fixture reaches the former stable six-segment "
+        "candidate path before connected-rail qualification",
+        len(disconnected_segmented_baselines) == 6
+        and all(
+            source_x in disconnected_segmented_verticals
+            for source_x in (5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0)
+        )
+        and not _segmented_u_frame_candidates(
+            disconnected_segmented_page,
+            disconnected_segmented_baselines,
+            2.0,
+            8.0,
+            0.0,
+            (10.0, 15.0, 20.0, 25.0, 30.0),
+        ),
+    )
+    try:
+        printed_compartments(
+            disconnected_segmented_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        disconnected_segmented_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        disconnected_segmented_failed = False
+    check(
+        "separate same-x contact fragments cannot bridge 0.3pt of paper "
+        "into a segmented source frame",
+        disconnected_segmented_failed,
+    )
+
+    disconnected_segmented_interior_page = source_page(
+        *(
+            source_paint(x, a=2.0, b=8.75, order=index)
+            for index, x in enumerate((5, 10, 15))
+        ),
+        source_paint(20, a=2.0, b=7.5, order=4),
+        *(
+            source_paint(x, a=2.0, b=8.75, order=index + 5)
+            for index, x in enumerate((25, 30, 35))
+        ),
+        source_paint(20, a=7.8, b=8.85, order=10),
+        *(
+            VectorPaint(
+                left, 8.0, left + 5.0, 8.75,
+                0.0, 1.0, 20 + index,
+                "disconnected-segmented-interior-baseline",
+            )
+            for index, left in enumerate((5, 10, 15, 20, 25, 30))
+        ),
+        framed=False,
+    )
+    disconnected_segmented_interior_baselines = _baseline_spans(
+        disconnected_segmented_interior_page, 8.0, 0.0)
+    disconnected_segmented_interior_contacts = tuple(
+        baseline
+        for baseline in disconnected_segmented_interior_baselines
+        if 20.0 >= baseline.left - SOURCE_COORD_EPS_PT
+        and 20.0 <= baseline.right + SOURCE_COORD_EPS_PT
+    )
+    disconnected_segmented_interior_geometry = (
+        _source_vertical_ink_geometry(
+            disconnected_segmented_interior_page,
+            20.0,
+            2.0,
+            8.75,
+            0.0,
+        )
+    )
+    check(
+        "disconnected segmented interior reaches junction aggregate contact "
+        "but no connected segment-level witness",
+        20.0 in _stable_source_verticals(
+            disconnected_segmented_interior_page,
+            2.5,
+            37.5,
+            2.0,
+            8.0,
+            0.0,
+        )
+        and disconnected_segmented_interior_contacts
+        and any(
+            _baseline_coordinate_contacts_vertical(
+                disconnected_segmented_interior_page,
+                0.0,
+                20.0,
+                disconnected_segmented_interior_geometry,
+                contact,
+            )
+            for contact in disconnected_segmented_interior_contacts
+        )
+        and all(
+            not _vertical_has_connected_baseline_contact(
+                disconnected_segmented_interior_page,
+                0.0,
+                disconnected_segmented_interior_geometry,
+                2.0,
+                20.0,
+                contact,
+            )
+            for contact in disconnected_segmented_interior_contacts
+        ),
+    )
+    check(
+        "segmented candidate rejects a detached interior contact fragment",
+        not _segmented_u_frame_candidates(
+            disconnected_segmented_interior_page,
+            disconnected_segmented_interior_baselines,
+            2.0,
+            8.0,
+            0.0,
+            (10.0, 15.0, 20.0, 25.0, 30.0),
+        ),
+    )
+    try:
+        printed_compartments(
+            disconnected_segmented_interior_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        disconnected_segmented_interior_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        disconnected_segmented_interior_failed = False
+    check(
+        "a segmented interior cannot borrow detached baseline-contact ink "
+        "across 0.3pt of paper",
+        disconnected_segmented_interior_failed,
+    )
+
+    canceled_segmented_interior_page = source_page(
+        *(
+            source_paint(x, a=2.0, b=8.75, order=index)
+            for index, x in enumerate((5, 10, 15))
+        ),
+        VectorPaint(
+            19.88, 2.0, 20.12, 8.75,
+            0.0, 1.0, 4, "segmented-evenodd-full-vertical",
+            operation=600, fill_rule="evenodd"),
+        VectorPaint(
+            19.88, 7.6, 20.12, 7.9,
+            0.0, 1.0, 4, "segmented-evenodd-canceling-strip",
+            operation=600, fill_rule="evenodd"),
+        *(
+            source_paint(x, a=2.0, b=8.75, order=index + 5)
+            for index, x in enumerate((25, 30, 35))
+        ),
+        VectorPaint(
+            0.0, 7.6, 40.0, 7.9,
+            0.0, 1.0, 10, "segmented-unrelated-broad-repaint"),
+        *(
+            VectorPaint(
+                left, 8.0, left + 5.0, 8.75,
+                0.0, 1.0, 20 + index,
+                "canceled-segmented-interior-baseline",
+            )
+            for index, left in enumerate((5, 10, 15, 20, 25, 30))
+        ),
+        framed=False,
+    )
+    canceled_segmented_baselines = _baseline_spans(
+        canceled_segmented_interior_page, 8.0, 0.0)
+    canceled_segmented_geometry = _source_vertical_ink_geometry(
+        canceled_segmented_interior_page, 20.0, 2.0, 8.75, 0.0)
+    canceled_segmented_contacts = tuple(
+        contact for contact in canceled_segmented_baselines
+        if abs(contact.y0 - 8.0) <= SOURCE_COORD_EPS_PT
+        and contact.left >= 5.0 - SOURCE_COORD_EPS_PT
+        and contact.right <= 35.0 + SOURCE_COORD_EPS_PT
+        and 20.0 >= contact.left - SOURCE_COORD_EPS_PT
+        and 20.0 <= contact.right + SOURCE_COORD_EPS_PT
+    )
+    check(
+        "canceled segmented interior remains inside stable-span slack",
+        20.0 in _stable_source_verticals(
+            canceled_segmented_interior_page,
+            2.5,
+            37.5,
+            2.0,
+            8.0,
+            0.0,
+        ),
+    )
+    check(
+        "segmented junction contacts exist but lack operation-backed paths",
+        bool(canceled_segmented_contacts)
+        and all(
+            not _vertical_has_connected_baseline_contact(
+                canceled_segmented_interior_page,
+                0.0,
+                canceled_segmented_geometry,
+                2.0,
+                20.0,
+                contact,
+            )
+            for contact in canceled_segmented_contacts
+        ),
+    )
+    check(
+        "segmented candidate rejects the operation-canceled interior",
+        not _segmented_u_frame_candidates(
+            canceled_segmented_interior_page,
+            canceled_segmented_baselines,
+            2.0,
+            8.0,
+            0.0,
+            (10.0, 15.0, 20.0, 25.0, 30.0),
+        ),
+    )
+    try:
+        printed_compartments(
+            canceled_segmented_interior_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        canceled_segmented_interior_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        canceled_segmented_interior_failed = False
+    check(
+        "segmented U-frame rejects canceled interior ink hidden by broad repaint",
+        canceled_segmented_interior_failed,
+    )
+
+    mixed_level_disconnected_page = source_page(
+        source_paint(5, a=2.0, b=8.0, order=0),
+        *(
+            source_paint(x, a=2.0, b=9.45, order=index + 1)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(35, a=2.0, b=8.0, order=10),
+        source_paint(35, a=8.4, b=9.45, order=11),
+        *(
+            VectorPaint(
+                left,
+                8.0 if index % 2 == 0 else 8.4,
+                left + 5.0,
+                8.4 if index % 2 == 0 else 8.8,
+                0.0, 1.0, 20 + index,
+                "mixed-level-disconnected-baseline",
+            )
+            for index, left in enumerate((5, 10, 15, 20, 25, 30))
+        ),
+        framed=False,
+    )
+    mixed_level_baselines = _baseline_spans(
+        mixed_level_disconnected_page, 8.8, 0.0)
+    mixed_level_right_baseline = next(
+        baseline for baseline in mixed_level_baselines
+        if baseline.right == 35.0
+    )
+    mixed_level_right_rail = _source_vertical_ink_geometry(
+        mixed_level_disconnected_page, 35.0, 2.0, 8.8, 0.0)
+    check(
+        "mixed-level fixture isolates component-minimum over-admission from "
+        "the actual right endpoint segment level",
+        35.0 in _stable_source_verticals(
+            mixed_level_disconnected_page,
+            2.5,
+            37.5,
+            2.0,
+            8.0,
+            0.0,
+        )
+        and _connected_vertical_baseline_contact(
+            mixed_level_disconnected_page, 0.0, mixed_level_right_rail,
+            2.0, 8.0, 35.0, mixed_level_right_baseline)
+        and not _connected_vertical_baseline_contact(
+            mixed_level_disconnected_page, 0.0, mixed_level_right_rail,
+            2.0, mixed_level_right_baseline.y0,
+            35.0, mixed_level_right_baseline),
+    )
+    check(
+        "segmented endpoint qualification rejects a detached rail at the "
+        "later right baseline level",
+        not _segmented_u_frame_candidates(
+            mixed_level_disconnected_page,
+            mixed_level_baselines,
+            2.0,
+            8.8,
+            0.0,
+            (10.0, 15.0, 20.0, 25.0, 30.0),
+        ),
+    )
+    try:
+        printed_compartments(
+            mixed_level_disconnected_page,
+            comb_subject(x0=5.0, x1=35.0),
+        )
+    except CombTopologyError as exc:
+        mixed_level_disconnected_failed = (
+            exc.evidence.get("criterion")
+            == "independent-complete-source-u-frame-required"
+        )
+    else:
+        mixed_level_disconnected_failed = False
+    check(
+        "a later segmented endpoint cannot borrow detached contact ink "
+        "above an internal paper gap",
+        mixed_level_disconnected_failed,
+    )
+
     for left, right in ((10.0, 30.0), (15.0, 25.0)):
         try:
             printed_compartments(
