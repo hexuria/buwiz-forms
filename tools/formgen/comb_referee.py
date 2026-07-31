@@ -48,12 +48,18 @@ import hashlib
 import html.parser
 import json
 import math
+import mimetypes
+import os
 import pathlib
+import platform
+import posixpath
 import re
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
 from typing import Any
@@ -62,9 +68,102 @@ from typing import Any
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 
-REPORT_VERSION = 1
+REPORT_VERSION = 2
 EXPECTED_FORMS = 51
 EXPECTED_COMBS = 4442
+LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
+LATTICE_PRODUCER_SHA256 = (
+    "49fd4c41ce4238d05208648b715222216ab96e754fa19323b3c8a08f6b6f223f"
+)
+AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
+AUDIT_PRODUCER_SHA256 = (
+    "744569ff2526caa3c4a6aac5a5186614dd060beceb33115835768eddfae87684"
+)
+AUDIT_DEPENDENCY_SHA256 = {
+    "tools/formgen/extract.py": (
+        "651f69229134ceae7e737f2fc5a7bc0632440eb761ae5de3d07290a802934a7e"
+    ),
+    "tools/formgen/verify.py": (
+        "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
+    ),
+}
+AUDIT_INPUT_ROLES = frozenset({
+    "ir", "layout", "html", "guide", "guide_html", "source_pdf",
+})
+AUDIT_ROUNDTRIP_LAUNCH_ARGS = [
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--metrics-recording-only",
+    "--no-first-run",
+]
+AUDIT_ROUNDTRIP_SCOPE = (
+    "playwright-package-tree-and-explicit-chromium-executable"
+)
+AUDIT_CANDIDATE_MATERIALIZATION = (
+    "private-0700-o_excl-o_nofollow-fsynced-unlinked-read-fd"
+)
+AUDIT_PDF_NORMALIZATION_REPLACEMENT = "D:19700101000000+00'00'"
+POPPLER_IDENTITY_TIMEOUT_SECONDS = 10.0
+POPPLER_PAGE_TIMEOUT_SECONDS = 60.0
+SUBPROCESS_CLEANUP_POLICY = "kill-isolated-process-group"
+AUDIT_POSITION_FIELDS = {
+    "emission_layout_position": (
+        "emission-layout-position-mismatch", False),
+    "emission_layout_outer_position": (
+        "emission-layout-outer-position-mismatch", True),
+    "emission_source_position": (
+        "emission-source-position-mismatch", False),
+    "emission_source_outer_position": (
+        "emission-source-outer-position-mismatch", True),
+    "layout_source_outer_position": (
+        "layout-source-outer-position-mismatch", True),
+}
+AUDIT_FAILURE_KINDS = frozenset({
+    "source-topology-unevaluable",
+    "layout-printed-mismatch",
+    "duplicate-layout-subject",
+    "emission-container-page-mismatch",
+    "emission-container-geometry-mismatch",
+    "emission-layout-position-mismatch",
+    "emission-layout-outer-position-mismatch",
+    "emission-source-position-mismatch",
+    "emission-source-outer-position-mismatch",
+    "layout-source-outer-position-mismatch",
+    "invalid-emission",
+    "emission-layout-mismatch",
+    "emission-printed-mismatch",
+    "unexpected-emitted-comb",
+    "emitted-cell-binding-invalid",
+    "duplicate-emitted-cell-id",
+    "missing-layout-cell-owner",
+    "duplicate-layout-cell-owner",
+    "emitted-cell-page-mismatch",
+    "emitted-cell-geometry-mismatch",
+    "unowned-live-comb-markup",
+    "comb-inventory-mismatch",
+})
+LATTICE_GENERATOR_KEYS = frozenset({
+    "producer",
+    "schema_version",
+    "consumes_ir_schema_version",
+    "cluster_tolerance_pt",
+    "pitch_tolerance_pt",
+})
+LATTICE_GENERATOR_CONTRACT = {
+    "producer": LATTICE_PRODUCER_FILE,
+    "schema_version": 1,
+    "consumes_ir_schema_version": 2,
+    "cluster_tolerance_pt": 0.3,
+    "pitch_tolerance_pt": 0.3,
+}
+COMB_SUBJECT_STATES = frozenset({
+    "active_resolved",
+    "active_unresolved",
+    "retained_unresolved",
+})
+COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
 # Corpus identity pins, not geometry exceptions: every slug follows the same
 # parser and decision rules. A substituted/missing form must not pass merely
 # because the replacement keeps the two aggregate counts unchanged.
@@ -137,6 +236,8 @@ _CELL_RE = re.compile(r"^p\d+c\d+$")
 _CELL_PAGE_RE = re.compile(r"^p(\d+)c\d+$")
 _CELL_SLOT_RE = re.compile(r"^(p\d+c\d+)-s(\d+)$")
 _PAGE_RE = re.compile(r"^page-(\d+)$")
+_SUBJECT_KEY_RE = re.compile(
+    rf"^p(\d+)@({_NUMBER}),({_NUMBER}),({_NUMBER}),({_NUMBER})$")
 # emit.py serialises point geometry to four decimal places.  Two independently
 # rounded endpoints can differ by at most two ten-thousandths of a point.
 HTML_GEOMETRY_EPSILON_PT = 0.0002
@@ -612,6 +713,35 @@ def canonical_digest(value: Any) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"),
                          ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def attach_report_digest(report: dict[str, Any]) -> None:
+    if "payload_sha256" in report:
+        raise RefereeError("report already carries a payload digest")
+    report["self_digest"] = {
+        "algorithm": "sha256",
+        "canonicalization": "json-sort-keys-compact-utf8",
+        "excluded_field": "payload_sha256",
+    }
+    report["payload_sha256"] = canonical_digest(report)
+
+
+def report_digest_valid(report: dict[str, Any]) -> bool:
+    payload_sha256 = report.get("payload_sha256")
+    if not isinstance(payload_sha256, str):
+        return False
+    without_digest = {
+        key: value for key, value in report.items()
+        if key != "payload_sha256"
+    }
+    return payload_sha256 == canonical_digest(without_digest)
+
+
+def report_bytes(report: dict[str, Any]) -> bytes:
+    if not report_digest_valid(report):
+        raise RefereeError("report self-digest is missing or stale")
+    return (json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False)
+            + "\n").encode("utf-8")
 
 
 def parse_transform(text: str | None) -> Matrix:
@@ -1750,11 +1880,64 @@ def source_pdf(layout: dict[str, Any], source_root: pathlib.Path) -> pathlib.Pat
     return matches[0]
 
 
-def poppler_identity() -> dict[str, str]:
+def run_bounded_subprocess(
+        command: Sequence[str],
+        *,
+        timeout_seconds: float,
+        label: str,
+        ) -> subprocess.CompletedProcess[str]:
+    """Run one oracle process in an isolated group with a fixed hard limit."""
+    if (not math.isfinite(timeout_seconds) or timeout_seconds <= 0
+            or not command or not all(
+                isinstance(item, str) and item for item in command)):
+        raise RefereeError(f"{label} has an invalid subprocess contract")
+    process = subprocess.Popen(
+        list(command),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=(os.name == "posix"),
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        if os.name == "posix":
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        else:
+            process.kill()
+        try:
+            process.communicate(timeout=5.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            try:
+                process.communicate(timeout=5.0)
+            except subprocess.TimeoutExpired as error:
+                raise RefereeError(
+                    f"{label} could not be reaped after "
+                    f"{SUBPROCESS_CLEANUP_POLICY}") from error
+        raise RefereeError(
+            f"{label} exceeded its fixed {timeout_seconds:g}-second "
+            f"deadline; cleanup={SUBPROCESS_CLEANUP_POLICY}")
+    return subprocess.CompletedProcess(
+        args=list(command),
+        returncode=process.returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def poppler_identity() -> dict[str, Any]:
     binary = shutil.which("pdftocairo")
     if binary is None:
         raise RefereeError("pdftocairo is not installed")
-    proc = subprocess.run([binary, "-v"], capture_output=True, text=True)
+    proc = run_bounded_subprocess(
+        [binary, "-v"],
+        timeout_seconds=POPPLER_IDENTITY_TIMEOUT_SECONDS,
+        label="pdftocairo identity",
+    )
     version = (proc.stdout + proc.stderr).strip().splitlines()
     if proc.returncode != 0 or not version:
         raise RefereeError("pdftocairo -v failed")
@@ -1762,16 +1945,20 @@ def poppler_identity() -> dict[str, str]:
         "version": version[0],
         "binary_path": str(pathlib.Path(binary).resolve()),
         "binary_sha256": sha256_file(pathlib.Path(binary)),
+        "identity_timeout_seconds": POPPLER_IDENTITY_TIMEOUT_SECONDS,
+        "page_timeout_seconds": POPPLER_PAGE_TIMEOUT_SECONDS,
+        "subprocess_cleanup_policy": SUBPROCESS_CLEANUP_POLICY,
     }
 
 
 def render_svg_page(binary: str, pdf: pathlib.Path, page_number: int,
                     directory: pathlib.Path) -> pathlib.Path:
     output = directory / f"page-{page_number}.svg"
-    proc = subprocess.run(
+    proc = run_bounded_subprocess(
         [binary, "-svg", "-f", str(page_number), "-l", str(page_number),
          str(pdf), str(output)],
-        capture_output=True, text=True,
+        timeout_seconds=POPPLER_PAGE_TIMEOUT_SECONDS,
+        label=f"pdftocairo page {page_number}",
     )
     if proc.returncode != 0 or not output.is_file():
         detail = (proc.stdout + proc.stderr).strip()
@@ -2746,6 +2933,628 @@ def emitted_geometry_contract(
                 ],
             }
     return result
+
+
+def exact_nonnegative_int(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise RefereeError(f"{label} is not a non-negative integer")
+    return value
+
+
+def finite_number(value: Any, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RefereeError(f"{label} is not numeric")
+    result = float(value)
+    if not math.isfinite(result):
+        raise RefereeError(f"{label} is not finite")
+    return result
+
+
+def string_list(value: Any, label: str, *, nonempty: bool = False
+                ) -> list[str]:
+    if (not isinstance(value, list)
+            or any(not isinstance(item, str) or not item for item in value)
+            or len(value) != len(set(value))
+            or (nonempty and not value)):
+        raise RefereeError(f"{label} is not a unique string list")
+    return value
+
+
+def same_numbers(left: Sequence[Any], right: Sequence[Any]) -> bool:
+    """Exact serialized-number equality, allowing only float representation."""
+    return (
+        len(left) == len(right)
+        and all(abs(float(a) - float(b)) <= 1e-9
+                for a, b in zip(left, right))
+    )
+
+
+def validate_subject_identity(
+        subject_key: Any,
+        legacy_cell_id: Any,
+        page_index: int,
+        bbox_value: Any,
+        label: str,
+        ) -> tuple[str, str, list[float]]:
+    if not isinstance(subject_key, str):
+        raise RefereeError(f"{label} has no string subject_key")
+    match = _SUBJECT_KEY_RE.fullmatch(subject_key)
+    if match is None or int(match.group(1)) != page_index:
+        raise RefereeError(f"{label} has an invalid subject_key")
+    if not isinstance(legacy_cell_id, str):
+        raise RefereeError(f"{label} has no string legacy_cell_id")
+    cell_match = _CELL_PAGE_RE.fullmatch(legacy_cell_id)
+    if cell_match is None or int(cell_match.group(1)) != page_index:
+        raise RefereeError(f"{label} has an invalid legacy_cell_id")
+    if not isinstance(bbox_value, list) or len(bbox_value) != 4:
+        raise RefereeError(f"{label} has no four-number legacy_bbox")
+    bbox_values = [
+        finite_number(value, f"{label} legacy_bbox")
+        for value in bbox_value
+    ]
+    if (bbox_values[2] <= bbox_values[0]
+            or bbox_values[3] <= bbox_values[1]):
+        raise RefereeError(f"{label} has a non-positive legacy_bbox")
+    encoded_bbox = [float(match.group(index)) for index in range(2, 6)]
+    if not same_numbers(encoded_bbox, bbox_values):
+        raise RefereeError(
+            f"{label} subject_key disagrees with legacy_bbox")
+    return subject_key, legacy_cell_id, bbox_values
+
+
+def validate_comb_topology(
+        comb: Any,
+        bbox_value: Sequence[Any],
+        label: str,
+        ) -> dict[str, Any]:
+    if not isinstance(comb, dict):
+        raise RefereeError(f"{label} has no comb topology")
+    cells = exact_nonnegative_int(comb.get("cells"), f"{label} cells")
+    divider_count = exact_nonnegative_int(
+        comb.get("divider_count"), f"{label} divider_count")
+    if cells < 1 or divider_count != cells - 1:
+        raise RefereeError(f"{label} cells/divider_count topology disagrees")
+    raw_dividers = comb.get("divider_x")
+    raw_slots = comb.get("slot_x")
+    if not isinstance(raw_dividers, list) or not isinstance(raw_slots, list):
+        raise RefereeError(f"{label} has no divider_x/slot_x topology")
+    dividers = [
+        finite_number(value, f"{label} divider_x")
+        for value in raw_dividers
+    ]
+    slots = [
+        finite_number(value, f"{label} slot_x")
+        for value in raw_slots
+    ]
+    if len(dividers) != divider_count or len(slots) != cells + 1:
+        raise RefereeError(f"{label} divider_x/slot_x inventory disagrees")
+    if any(right <= left for left, right in zip(slots, slots[1:])):
+        raise RefereeError(f"{label} slot_x is not strictly increasing")
+    if not same_numbers(slots[1:-1], dividers):
+        raise RefereeError(f"{label} divider_x disagrees with slot_x")
+    bbox_numbers = [
+        finite_number(value, f"{label} bbox") for value in bbox_value
+    ]
+    if (len(bbox_numbers) != 4
+            or not same_numbers((slots[0], slots[-1]),
+                                (bbox_numbers[0], bbox_numbers[2]))):
+        raise RefereeError(f"{label} slot_x disagrees with subject bbox")
+    y0 = finite_number(comb.get("y0"), f"{label} y0")
+    y1 = finite_number(comb.get("y1"), f"{label} y1")
+    if y1 <= y0:
+        raise RefereeError(f"{label} has a non-positive comb band")
+    pitch = finite_number(comb.get("pitch_pt"), f"{label} pitch_pt")
+    if pitch <= 0:
+        raise RefereeError(f"{label} has no positive pitch")
+    resolution = comb.get("resolution")
+    if not isinstance(resolution, dict):
+        raise RefereeError(f"{label} has no resolution record")
+    resolution_status = resolution.get("status")
+    if resolution_status not in ("resolved", "unresolved"):
+        raise RefereeError(f"{label} has an unknown resolution status")
+    reason_codes = string_list(
+        resolution.get("reason_codes"), f"{label} resolution reason_codes")
+    if bool(reason_codes) != (resolution_status == "unresolved"):
+        raise RefereeError(f"{label} resolution reasons/status disagree")
+    topology = {
+        "cells": cells,
+        "divider_x": dividers,
+        "slot_x": slots,
+        "y0": y0,
+        "y1": y1,
+        "resolution_status": resolution_status,
+        "reason_codes": reason_codes,
+    }
+    topology["sha256"] = canonical_digest(topology)
+    return topology
+
+
+def bind_lattice_generator(
+        layout: dict[str, Any],
+        lattice_producer_bytes: bytes,
+        ) -> dict[str, Any]:
+    actual_sha = sha256_bytes(lattice_producer_bytes)
+    if actual_sha != LATTICE_PRODUCER_SHA256:
+        raise RefereeError(
+            "lattice producer bytes disagree with the committed pin")
+    generator = layout.get("generator")
+    if (not isinstance(generator, dict)
+            or set(generator) != LATTICE_GENERATOR_KEYS
+            or generator != LATTICE_GENERATOR_CONTRACT):
+        raise RefereeError(
+            "layout lattice generator contract is missing or stale")
+    return {
+        "file": LATTICE_PRODUCER_FILE,
+        "bytes": len(lattice_producer_bytes),
+        "sha256": actual_sha,
+        "expected_sha256": LATTICE_PRODUCER_SHA256,
+        "layout_generator": dict(generator),
+    }
+
+
+def validate_comb_ledger(
+        slug: str,
+        layout: dict[str, Any],
+        lattice_producer_bytes: bytes,
+        ) -> dict[str, Any]:
+    """Bind the immutable 4,442-subject denominator to active layout cells.
+
+    The legacy ledger is identity and continuity evidence.  It never promotes
+    an unresolved current comb, and a retained subject remains published even
+    though no active cell is allowed to emit it.
+    """
+    expected_total = EXPECTED_COMBS_BY_SLUG.get(slug)
+    if expected_total is None:
+        raise RefereeError(f"{slug}: form is not in the pinned referee corpus")
+    lattice = bind_lattice_generator(layout, lattice_producer_bytes)
+    pages = layout.get("pages")
+    if not isinstance(pages, list) or not pages:
+        raise RefereeError(f"{slug}: layout has no page inventory")
+
+    published_subjects: list[dict[str, Any]] = []
+    published_inferences: list[dict[str, Any]] = []
+    active_cell_ids: set[str] = set()
+    retained_legacy_ids: set[str] = set()
+    inference_cell_ids: set[str] = set()
+    global_subject_keys: set[str] = set()
+    global_legacy_ids: set[str] = set()
+
+    for expected_page, page in enumerate(pages, 1):
+        if not isinstance(page, dict) or page.get("index") != expected_page:
+            raise RefereeError(
+                f"{slug}: ledger pages are not exhaustive and ordered")
+        page_index = expected_page
+        raw_cells = page.get("cells")
+        if not isinstance(raw_cells, list):
+            raise RefereeError(f"{slug} page {page_index}: cells is not a list")
+        cells_by_id: dict[str, dict[str, Any]] = {}
+        cells_by_subject: dict[str, dict[str, Any]] = {}
+        for raw_cell in raw_cells:
+            if not isinstance(raw_cell, dict):
+                raise RefereeError(
+                    f"{slug} page {page_index}: malformed layout cell")
+            cell_id = raw_cell.get("id")
+            subject_key = raw_cell.get("subject_key")
+            if not isinstance(cell_id, str) or not _CELL_RE.fullmatch(cell_id):
+                raise RefereeError(
+                    f"{slug} page {page_index}: layout cell has invalid id")
+            cell_match = _CELL_PAGE_RE.fullmatch(cell_id)
+            if cell_match is None or int(cell_match.group(1)) != page_index:
+                raise RefereeError(
+                    f"{slug} page {page_index}: layout cell id is on another page")
+            bbox_value = [
+                raw_cell.get(name) for name in ("x0", "y0", "x1", "y1")
+            ]
+            validate_subject_identity(
+                subject_key, cell_id, page_index, bbox_value,
+                f"{slug} page {page_index} layout cell {cell_id}")
+            if cell_id in cells_by_id or subject_key in cells_by_subject:
+                raise RefereeError(
+                    f"{slug} page {page_index}: duplicate layout cell identity")
+            cells_by_id[cell_id] = raw_cell
+            cells_by_subject[str(subject_key)] = raw_cell
+
+        if "comb_subjects" not in page:
+            raise RefereeError(
+                f"{slug} page {page_index}: comb subject ledger is missing")
+        subjects = page["comb_subjects"]
+        if not isinstance(subjects, list):
+            raise RefereeError(
+                f"{slug} page {page_index}: comb subject ledger is not a list")
+        if "comb_inferences" not in page:
+            raise RefereeError(
+                f"{slug} page {page_index}: comb inference ledger is missing")
+        inferences = page["comb_inferences"]
+        if not isinstance(inferences, list):
+            raise RefereeError(
+                f"{slug} page {page_index}: comb inference ledger is not a list")
+
+        page_subject_keys: set[str] = set()
+        page_legacy_ids: set[str] = set()
+        page_active_ids: set[str] = set()
+        for index, subject in enumerate(subjects):
+            label = f"{slug} page {page_index} subject {index}"
+            if not isinstance(subject, dict):
+                raise RefereeError(f"{label} is not an object")
+            subject_key, legacy_cell_id, legacy_bbox = (
+                validate_subject_identity(
+                    subject.get("subject_key"),
+                    subject.get("legacy_cell_id"),
+                    page_index,
+                    subject.get("legacy_bbox"),
+                    label,
+                )
+            )
+            if (subject_key in page_subject_keys
+                    or legacy_cell_id in page_legacy_ids
+                    or subject_key in global_subject_keys
+                    or legacy_cell_id in global_legacy_ids):
+                raise RefereeError(
+                    f"{label} duplicates a subject_key or legacy_cell_id")
+            page_subject_keys.add(subject_key)
+            page_legacy_ids.add(legacy_cell_id)
+            global_subject_keys.add(subject_key)
+            global_legacy_ids.add(legacy_cell_id)
+            state = subject.get("state")
+            if state not in COMB_SUBJECT_STATES:
+                raise RefereeError(
+                    f"{label} has unknown or retired state: {state}")
+            reason_codes = string_list(
+                subject.get("reason_codes"), f"{label} reason_codes",
+                nonempty=state != "active_resolved")
+            blocks_gate = subject.get("blocks_gate")
+            if (not isinstance(blocks_gate, bool)
+                    or blocks_gate != (state != "active_resolved")):
+                raise RefereeError(
+                    f"{label} state/blocks_gate contract disagrees")
+
+            if state.startswith("active_"):
+                cell_id = subject.get("cell_id")
+                mapped_ids = subject.get("mapped_partition_cell_ids")
+                if (not isinstance(cell_id, str)
+                        or mapped_ids != [cell_id]
+                        or cell_id in page_active_ids):
+                    raise RefereeError(
+                        f"{label} has no unique one-to-one active cell mapping")
+                cell = cells_by_id.get(cell_id)
+                if cell is None or cell.get("subject_key") != subject_key:
+                    raise RefereeError(
+                        f"{label} active cell subject_key/cell_id disagrees")
+                cell_bbox = [
+                    cell.get(name) for name in ("x0", "y0", "x1", "y1")
+                ]
+                if not same_numbers(legacy_bbox, cell_bbox):
+                    raise RefereeError(
+                        f"{label} active cell geometry changed subject identity")
+                topology = validate_comb_topology(
+                    cell.get("comb"), cell_bbox, f"{label} active cell")
+                subject_cells = exact_nonnegative_int(
+                    subject.get("cells"), f"{label} cells")
+                if subject_cells != topology["cells"]:
+                    raise RefereeError(
+                        f"{label} ledger/cell comb counts disagree")
+                expected_resolution = (
+                    "resolved" if state == "active_resolved" else "unresolved")
+                if (topology["resolution_status"] != expected_resolution
+                        or reason_codes != topology["reason_codes"]):
+                    raise RefereeError(
+                        f"{label} ledger/cell resolution evidence disagrees")
+                transition = subject.get("boundary_topology_transition")
+                transition_fields_present = any(
+                    key in subject for key in (
+                        "old_divider_x", "new_divider_x",
+                        "boundary_topology_transition",
+                    )
+                )
+                cell_transition = (
+                    (cell.get("comb") or {}).get("resolution") or {}
+                ).get("boundary_topology_transition")
+                if transition_fields_present or cell_transition is not None:
+                    if (not isinstance(transition, dict)
+                            or set(transition) != {
+                                "old_divider_x", "new_divider_x",
+                                "comparison_tolerance_pt",
+                                "independently_certified",
+                            }
+                            or transition != cell_transition
+                            or subject.get("old_divider_x")
+                            != transition.get("old_divider_x")
+                            or subject.get("new_divider_x")
+                            != transition.get("new_divider_x")
+                            or transition.get("independently_certified") is not False
+                            or transition.get("comparison_tolerance_pt")
+                            != LATTICE_GENERATOR_CONTRACT[
+                                "cluster_tolerance_pt"]
+                            or not same_numbers(
+                                transition.get("new_divider_x") or (),
+                                topology["divider_x"])
+                            or len(transition.get("old_divider_x") or ())
+                            != topology["cells"] - 1
+                            or state != "active_unresolved"
+                            or "same-count-boundary-topology-change"
+                            not in reason_codes):
+                        raise RefereeError(
+                            f"{label} boundary topology transition is invalid")
+                page_active_ids.add(cell_id)
+                active_cell_ids.add(cell_id)
+                published_subjects.append({
+                    "page": page_index,
+                    "subject_key": subject_key,
+                    "legacy_cell_id": legacy_cell_id,
+                    "cell_id": cell_id,
+                    "state": state,
+                    "blocks_gate": blocks_gate,
+                    "reason_codes": reason_codes,
+                    "legacy_bbox": legacy_bbox,
+                    "source_cell": cell,
+                    "topology": topology,
+                    "ledger": subject,
+                })
+                continue
+
+            if (subject.get("cell_id") is not None
+                    or subject.get("emission") != "suppressed"
+                    or subject.get("requires_independent_evidence") is not True
+                    or subject.get("permitted_transitions") != [
+                        "active_composite", "retired_proven_false",
+                    ]):
+                raise RefereeError(
+                    f"{label} retained suppression evidence is incomplete")
+            legacy_topology = validate_comb_topology(
+                subject.get("legacy_comb"), legacy_bbox,
+                f"{label} retained legacy_comb")
+            if legacy_topology["resolution_status"] != "unresolved":
+                raise RefereeError(
+                    f"{label} retained legacy_comb is not unresolved")
+            mapped_ids = string_list(
+                subject.get("mapped_partition_cell_ids"),
+                f"{label} mapped_partition_cell_ids")
+            mapped_keys = string_list(
+                subject.get("mapped_partition_subject_keys"),
+                f"{label} mapped_partition_subject_keys")
+            if len(mapped_ids) != len(mapped_keys):
+                raise RefereeError(
+                    f"{label} retained partition mappings disagree")
+            for mapped_id, mapped_key in zip(mapped_ids, mapped_keys):
+                mapped_cell = cells_by_id.get(mapped_id)
+                if (mapped_cell is None
+                        or mapped_cell.get("subject_key") != mapped_key):
+                    raise RefereeError(
+                        f"{label} retained partition mapping is stale")
+            if (subject_key in cells_by_subject
+                    and "comb" in cells_by_subject[subject_key]):
+                raise RefereeError(
+                    f"{label} retained subject still has an active comb")
+            retained_legacy_ids.add(legacy_cell_id)
+            published_subjects.append({
+                "page": page_index,
+                "subject_key": subject_key,
+                "legacy_cell_id": legacy_cell_id,
+                "cell_id": None,
+                "state": state,
+                "blocks_gate": True,
+                "reason_codes": reason_codes,
+                "legacy_bbox": legacy_bbox,
+                "source_cell": {
+                    "id": legacy_cell_id,
+                    "subject_key": subject_key,
+                    "x0": legacy_bbox[0],
+                    "y0": legacy_bbox[1],
+                    "x1": legacy_bbox[2],
+                    "y1": legacy_bbox[3],
+                    "comb": subject["legacy_comb"],
+                },
+                "topology": legacy_topology,
+                "ledger": subject,
+            })
+
+        comb_cells = [
+            cell for cell in raw_cells if isinstance(cell.get("comb"), dict)
+        ]
+        comb_cell_ids = {str(cell["id"]) for cell in comb_cells}
+        if page_active_ids != comb_cell_ids:
+            missing = sorted(comb_cell_ids - page_active_ids)
+            extra = sorted(page_active_ids - comb_cell_ids)
+            raise RefereeError(
+                f"{slug} page {page_index}: active ledger/cell reverse mapping "
+                "disagrees"
+                + (f"; missing ledger: {', '.join(missing[:8])}"
+                   if missing else "")
+                + (f"; unknown active: {', '.join(extra[:8])}"
+                   if extra else ""))
+
+        page_inference_keys: set[str] = set()
+        page_inference_ids: set[str] = set()
+        for index, inference in enumerate(inferences):
+            label = f"{slug} page {page_index} inference {index}"
+            if not isinstance(inference, dict):
+                raise RefereeError(f"{label} is not an object")
+            state = inference.get("state")
+            if state != COMB_INFERENCE_STATE:
+                raise RefereeError(
+                    f"{label} has unknown or unsuppressed state: {state}")
+            subject_key = inference.get("subject_key")
+            cell_id = inference.get("cell_id")
+            bbox_value = inference.get("bbox")
+            if not isinstance(subject_key, str) or not isinstance(cell_id, str):
+                raise RefereeError(f"{label} has no subject_key/cell_id")
+            match = _SUBJECT_KEY_RE.fullmatch(subject_key)
+            cell_match = _CELL_PAGE_RE.fullmatch(cell_id)
+            if (match is None or int(match.group(1)) != page_index
+                    or cell_match is None
+                    or int(cell_match.group(1)) != page_index
+                    or not isinstance(bbox_value, list)
+                    or len(bbox_value) != 4):
+                raise RefereeError(f"{label} identity is invalid")
+            bbox_numbers = [
+                finite_number(value, f"{label} bbox") for value in bbox_value
+            ]
+            if not same_numbers(
+                    [float(match.group(item)) for item in range(2, 6)],
+                    bbox_numbers):
+                raise RefereeError(
+                    f"{label} subject_key disagrees with bbox")
+            if (subject_key in page_inference_keys
+                    or cell_id in page_inference_ids
+                    or subject_key in global_subject_keys
+                    or cell_id in page_active_ids):
+                raise RefereeError(
+                    f"{label} duplicates a ledger subject or inference")
+            cell = cells_by_id.get(cell_id)
+            if (cell is None or cell.get("subject_key") != subject_key
+                    or "comb" in cell
+                    or not same_numbers(
+                        bbox_numbers,
+                        [cell.get(name)
+                         for name in ("x0", "y0", "x1", "y1")])):
+                raise RefereeError(
+                    f"{label} does not map to one suppressed layout cell")
+            if (inference.get("blocks_gate") is not True
+                    or inference.get("requires_independent_evidence") is not True
+                    or inference.get("permitted_transitions")
+                    != ["active_reviewed"]):
+                raise RefereeError(
+                    f"{label} is not explicit and blocking")
+            reason_codes = string_list(
+                inference.get("reason_codes"), f"{label} reason_codes",
+                nonempty=True)
+            topology = validate_comb_topology(
+                inference.get("inferred_comb"), bbox_numbers,
+                f"{label} inferred_comb")
+            page_inference_keys.add(subject_key)
+            page_inference_ids.add(cell_id)
+            inference_cell_ids.add(cell_id)
+            published_inferences.append({
+                "page": page_index,
+                "subject_key": subject_key,
+                "cell_id": cell_id,
+                "state": state,
+                "blocks_gate": True,
+                "reason_codes": reason_codes,
+                "bbox": bbox_numbers,
+                "topology": topology,
+                "ledger": inference,
+            })
+
+        stats = page.get("stats")
+        if not isinstance(stats, dict):
+            raise RefereeError(
+                f"{slug} page {page_index}: layout stats are missing")
+        active_resolved = sum(
+            subject.get("state") == "active_resolved" for subject in subjects)
+        active_unresolved = sum(
+            subject.get("state") == "active_unresolved" for subject in subjects)
+        retained = sum(
+            subject.get("state") == "retained_unresolved"
+            for subject in subjects)
+        subject_blockers = sum(
+            subject.get("blocks_gate") is True for subject in subjects)
+        inference_blockers = sum(
+            inference.get("blocks_gate") is True for inference in inferences)
+        expected_stats = {
+            "comb_cells": len(comb_cells),
+            "comb_subjects": len(subjects),
+            "comb_subjects_active": active_resolved + active_unresolved,
+            "comb_subjects_active_resolved": active_resolved,
+            "comb_subjects_active_unresolved": active_unresolved,
+            "comb_subjects_retained_unresolved": retained,
+            "comb_subjects_retired": 0,
+            "comb_subjects_blocking": subject_blockers,
+            "comb_inferences_suppressed": len(inferences),
+            "comb_inferences_blocking": inference_blockers,
+            "comb_evidence_blocking": (
+                subject_blockers + inference_blockers),
+            "comb_slots": sum(
+                exact_nonnegative_int(
+                    cell["comb"].get("cells"),
+                    f"{slug} page {page_index} comb cells")
+                for cell in comb_cells
+            ),
+        }
+        for key, expected_value in expected_stats.items():
+            if stats.get(key) != expected_value:
+                raise RefereeError(
+                    f"{slug} page {page_index}: ledger stat {key} "
+                    f"is {stats.get(key)!r}, expected {expected_value}")
+
+    if len(published_subjects) != expected_total:
+        raise RefereeError(
+            f"{slug}: subject ledger has {len(published_subjects)} subjects, "
+            f"expected pinned {expected_total}")
+    if len(global_subject_keys) != expected_total:
+        raise RefereeError(f"{slug}: subject ledger identities are not unique")
+    active_resolved = sum(
+        subject["state"] == "active_resolved"
+        for subject in published_subjects)
+    active_unresolved = sum(
+        subject["state"] == "active_unresolved"
+        for subject in published_subjects)
+    retained = sum(
+        subject["state"] == "retained_unresolved"
+        for subject in published_subjects)
+    blockers = sum(
+        subject["blocks_gate"] for subject in published_subjects
+    ) + len(published_inferences)
+    return {
+        "lattice": lattice,
+        "subjects": published_subjects,
+        "inferences": published_inferences,
+        "active_cell_ids": active_cell_ids,
+        "retained_legacy_ids": retained_legacy_ids,
+        "inference_cell_ids": inference_cell_ids,
+        "counts": {
+            "subjects": len(published_subjects),
+            "active": active_resolved + active_unresolved,
+            "active_resolved": active_resolved,
+            "active_unresolved": active_unresolved,
+            "retained_unresolved": retained,
+            "inferences_suppressed": len(published_inferences),
+            "blocking": blockers,
+        },
+    }
+
+
+def validate_emission_inventory(
+        ledger: dict[str, Any],
+        slots: dict[str, dict[str, Any]],
+        ) -> dict[str, Any]:
+    """Bind every emitted comb to exactly one active ledger subject."""
+    active_ids = set(ledger["active_cell_ids"])
+    retained_ids = set(ledger["retained_legacy_ids"])
+    inference_ids = set(ledger["inference_cell_ids"])
+    emitted_ids = set(slots)
+    missing = sorted(active_ids - emitted_ids)
+    unexpected = sorted(emitted_ids - active_ids)
+    retained_emitted = sorted(emitted_ids & retained_ids)
+    inference_emitted = sorted(emitted_ids & inference_ids)
+    invalid = sorted(
+        cell_id for cell_id in active_ids & emitted_ids
+        if not bool(slots[cell_id].get("valid"))
+    )
+    errors: list[str] = []
+    if missing:
+        errors.append(f"{len(missing)} active ledger subjects are not emitted")
+    if unexpected:
+        errors.append(f"{len(unexpected)} emitted combs have no active subject")
+    if retained_emitted:
+        errors.append(
+            f"{len(retained_emitted)} retained subjects are still emitted")
+    if inference_emitted:
+        errors.append(
+            f"{len(inference_emitted)} suppressed inferences are still emitted")
+    if invalid:
+        errors.append(f"{len(invalid)} active emissions are invalid")
+    return {
+        "complete": not errors,
+        "reason": "complete" if not errors else "; ".join(errors),
+        "expected_active_cell_ids": sorted(active_ids),
+        "emitted_cell_ids": sorted(emitted_ids),
+        "missing_active_cell_ids": missing,
+        "unexpected_emitted_cell_ids": unexpected,
+        "retained_emitted_cell_ids": retained_emitted,
+        "inference_emitted_cell_ids": inference_emitted,
+        "invalid_active_cell_ids": invalid,
+    }
 
 
 def composited_segments(y: float,
@@ -3758,113 +4567,1682 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
     }
 
 
-def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
-    if not audit_record:
-        return {"complete": False, "reason": "no audit record", "offenders": {}}
-    assertion = ((audit_record.get("assertions") or {})
-                 .get("comb_slots_match_printed") or {})
-    raw_offenders = assertion.get("offenders") or []
-    if not isinstance(raw_offenders, list):
-        return {"complete": False, "reason": "audit offenders is not a list",
-                "offenders": {}}
-    valid_items = [
-        item for item in raw_offenders
-        if isinstance(item, dict) and isinstance(item.get("cell"), str)
+def _audit_optional_int(value: Any, label: str) -> int | None:
+    if value is None:
+        return None
+    return exact_nonnegative_int(value, label)
+
+
+def _audit_number_list(value: Any, label: str) -> list[float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise RefereeError(f"{label} is not a numeric list")
+    return [
+        finite_number(item, f"{label}[{index}]")
+        for index, item in enumerate(value)
     ]
-    offenders = {item["cell"]: item for item in valid_items}
-    holds = assertion.get("holds")
-    count_value = assertion.get("offender_count")
-    if count_value is None and holds is True and not raw_offenders:
-        count_value = 0
-    try:
-        count = int(count_value)
-        checked = int(assertion["combs_checked"])
-        published = int(assertion.get("offenders_published",
-                                      len(raw_offenders)))
-        omitted = int(assertion.get("offenders_omitted",
-                                    count - published))
-        layout_mismatches = int(assertion["layout_mismatches"])
-        emission_behind = int(assertion["emission_behind_layout"])
-    except (KeyError, TypeError, ValueError):
-        return {"complete": False,
-                "reason": "audit comb summary is incomplete or non-numeric",
-                "offenders": offenders}
-    complete_flag = assertion.get("offenders_complete",
-                                  published == count and omitted == 0)
-    errors: list[str] = []
-    if len(valid_items) != len(raw_offenders):
-        errors.append("malformed offender entries")
-    if len(offenders) != len(raw_offenders):
-        errors.append("duplicate offender cells")
-    if count < 0 or checked < 0 or published < 0 or omitted < 0:
-        errors.append("negative audit counts")
-    if published != len(raw_offenders):
-        errors.append("published count disagrees with offender list")
-    if count != published + omitted:
-        errors.append("published and omitted counts do not sum to total")
-    if omitted != 0 or not bool(complete_flag):
-        errors.append("audit offender publication is incomplete")
-    if layout_mismatches != count:
-        errors.append("layout mismatch count disagrees with offenders")
-    if bool(holds) != (count == 0):
-        errors.append("audit holds flag disagrees with offender count")
-    complete = not errors
+
+
+def validate_audit_position_evidence(
+        name: str,
+        value: Any,
+        *,
+        outer: bool,
+        ) -> bool:
+    """Validate one independently published fixed-tolerance relation."""
+    if not isinstance(value, dict):
+        raise RefereeError(f"audit offender {name} is not an object")
+    axis = "outer" if outer else "internal"
+    actual_key = f"actual_{axis}_edges_x"
+    expected_key = f"expected_{axis}_edges_x"
+    required = {
+        "comparable", "tolerance_pt", actual_key, expected_key,
+        "count_matches", "deltas_pt", "matches",
+    }
+    allowed = required | {"unavailable_reason"}
+    if not required <= set(value) or set(value) - allowed:
+        raise RefereeError(
+            f"audit offender {name} has an unsupported evidence schema")
+    comparable = value["comparable"]
+    if not isinstance(comparable, bool):
+        raise RefereeError(f"audit offender {name}.comparable is not boolean")
+    tolerance = finite_number(
+        value["tolerance_pt"], f"audit offender {name}.tolerance_pt")
+    if abs(tolerance - HTML_GEOMETRY_EPSILON_PT) > 1e-12:
+        raise RefereeError(
+            f"audit offender {name} changes the fixed position tolerance")
+    actual = _audit_number_list(
+        value[actual_key], f"audit offender {name}.{actual_key}")
+    expected = _audit_number_list(
+        value[expected_key], f"audit offender {name}.{expected_key}")
+    if not comparable:
+        if (value["count_matches"] is not None
+                or value["deltas_pt"] is not None
+                or value["matches"] is not None
+                or not isinstance(value.get("unavailable_reason"), str)
+                or not value["unavailable_reason"]):
+            raise RefereeError(
+                f"audit offender {name} has malformed unavailable evidence")
+        return False
+    if not isinstance(value["count_matches"], bool):
+        raise RefereeError(
+            f"audit offender {name}.count_matches is not boolean")
+    count_matches = actual is not None and expected is not None and (
+        len(actual) == len(expected))
+    if value["count_matches"] is not count_matches:
+        raise RefereeError(
+            f"audit offender {name} has a false edge-count relation")
+    deltas = _audit_number_list(
+        value["deltas_pt"], f"audit offender {name}.deltas_pt")
+    expected_deltas = (
+        [round(left - right, 6) for left, right in zip(actual, expected)]
+        if count_matches and actual is not None and expected is not None
+        else None
+    )
+    if ((deltas is None) != (expected_deltas is None)
+            or (deltas is not None and expected_deltas is not None
+                and not same_numbers(deltas, expected_deltas))):
+        raise RefereeError(
+            f"audit offender {name} has false edge deltas")
+    matches = bool(
+        count_matches
+        and all(abs(delta) <= tolerance for delta in expected_deltas or ())
+    )
+    if not isinstance(value["matches"], bool) or value["matches"] is not matches:
+        raise RefereeError(
+            f"audit offender {name} has a false position verdict")
+    return not matches
+
+
+def validate_audit_container_binding(value: Any) -> dict[str, bool]:
+    if not isinstance(value, dict) or set(value) != {
+        "expected_page", "emitted_id_page", "emitted_dom_page",
+        "page_matches", "expected_rect", "actual_rect", "rect_deltas_pt",
+        "rect_matches", "tolerance_pt",
+    }:
+        raise RefereeError(
+            "audit offender has malformed emission container evidence")
+    expected_page = exact_nonnegative_int(
+        value["expected_page"], "audit offender expected page")
+    if expected_page == 0:
+        raise RefereeError("audit offender expected page is not one-based")
+    emitted_id_page = _audit_optional_int(
+        value["emitted_id_page"], "audit offender emitted id page")
+    emitted_dom_page = _audit_optional_int(
+        value["emitted_dom_page"], "audit offender emitted DOM page")
+    expected_rect = _audit_number_list(
+        value["expected_rect"], "audit offender expected rect")
+    actual_rect = _audit_number_list(
+        value["actual_rect"], "audit offender actual rect")
+    if expected_rect is None or len(expected_rect) != 4:
+        raise RefereeError("audit offender expected rect is not four numbers")
+    if actual_rect is not None and len(actual_rect) != 4:
+        raise RefereeError("audit offender actual rect is not four numbers")
+    page_matches = (
+        emitted_id_page == expected_page
+        and emitted_dom_page == expected_page
+    )
+    if (not isinstance(value["page_matches"], bool)
+            or value["page_matches"] is not page_matches):
+        raise RefereeError("audit offender has a false container-page relation")
+    deltas = _audit_number_list(
+        value["rect_deltas_pt"], "audit offender rect deltas")
+    expected_deltas = (
+        [left - right for left, right in zip(actual_rect, expected_rect)]
+        if actual_rect is not None else None
+    )
+    if ((deltas is None) != (expected_deltas is None)
+            or (deltas is not None and expected_deltas is not None
+                and not same_numbers(deltas, expected_deltas))):
+        raise RefereeError("audit offender has false container deltas")
+    tolerance = finite_number(
+        value["tolerance_pt"], "audit offender container tolerance")
+    if abs(tolerance - HTML_GEOMETRY_EPSILON_PT) > 1e-12:
+        raise RefereeError(
+            "audit offender changes the fixed container tolerance")
+    rect_matches = bool(
+        expected_deltas is not None
+        and all(abs(delta) <= tolerance for delta in expected_deltas)
+    )
+    if (not isinstance(value["rect_matches"], bool)
+            or value["rect_matches"] is not rect_matches):
+        raise RefereeError("audit offender has a false container-rect relation")
     return {
-        "complete": complete,
-        "reason": "complete" if complete else "; ".join(errors),
-        "offender_count": count,
-        "offenders_published": published,
-        "offenders_omitted": omitted,
-        "combs_checked": checked,
-        "layout_mismatches": layout_mismatches,
-        "emission_behind_layout": emission_behind,
-        "offenders": offenders,
-        "holds": bool(holds),
+        "page_mismatch": not page_matches,
+        "rect_mismatch": not rect_matches,
     }
 
 
-def bind_audit_manifest(audit_record: dict[str, Any] | None,
-                        expected: dict[
-                            str, tuple[pathlib.Path, bool, bytes | None]],
-                        audit_producer_bytes: bytes,
-                        ) -> tuple[bool, str]:
+def audit_offender_dimensions(item: Any) -> dict[str, Any]:
+    """Re-derive every published offender relation from its raw evidence."""
+    if not isinstance(item, dict):
+        raise RefereeError("audit offender is not an object")
+    required = {
+        "cell", "page", "slots", "latticed", "printed",
+        "printed_divider_x", "emission_state", "physical_slots",
+        "declared_slots", "emitted_occurrences", "layout_relation",
+        "emission_relation", "failure_kinds", "why",
+    }
+    allowed = required | {
+        "slot_indexes", "input_slot_indexes", "slot_geometry",
+        "emission_container_binding",
+        "emission_layout_position", "emission_layout_outer_position",
+        "emission_source_position", "source_frame_geometry",
+        "emission_source_outer_position", "layout_source_outer_position",
+        "source_topology_evidence", "effective_emission_state",
+        "emitted_cell_binding_evidence", "raw_dom_evidence",
+    }
+    if not required <= set(item) or set(item) - allowed:
+        raise RefereeError("audit offender has an unsupported schema")
+    cell_id = item["cell"]
+    if not isinstance(cell_id, str) or not cell_id:
+        raise RefereeError("audit offender cell identity is missing")
+    if (not _CELL_RE.fullmatch(cell_id)
+            and not (cell_id.startswith("<") and cell_id.endswith(">"))):
+        # A malformed live marker may carry its literal noncanonical id, but
+        # only the raw-DOM relation is allowed to publish it.
+        if item.get("failure_kinds") != ["unowned-live-comb-markup"]:
+            raise RefereeError("audit offender cell identity is not canonical")
+    page = _audit_optional_int(item["page"], f"audit offender {cell_id} page")
+    if page == 0:
+        raise RefereeError(f"audit offender {cell_id} page is not one-based")
+    slots = _audit_optional_int(
+        item["slots"], f"audit offender {cell_id} slots")
+    latticed = _audit_optional_int(
+        item["latticed"], f"audit offender {cell_id} latticed")
+    printed = _audit_optional_int(
+        item["printed"], f"audit offender {cell_id} printed")
+    physical = _audit_optional_int(
+        item["physical_slots"], f"audit offender {cell_id} physical slots")
+    _audit_optional_int(
+        item["declared_slots"], f"audit offender {cell_id} declared slots")
+    occurrences = exact_nonnegative_int(
+        item["emitted_occurrences"],
+        f"audit offender {cell_id} emitted occurrences")
+    if slots is not None and physical is not None and slots != physical:
+        raise RefereeError(
+            f"audit offender {cell_id} slots disagree with physical slots")
+    divider_x = _audit_number_list(
+        item["printed_divider_x"],
+        f"audit offender {cell_id} printed dividers")
+    if divider_x is None:
+        raise RefereeError(
+            f"audit offender {cell_id} printed dividers are missing")
+    if printed is None:
+        if divider_x:
+            raise RefereeError(
+                f"audit offender {cell_id} has dividers without a result")
+    elif len(divider_x) != max(0, printed - 1):
+        raise RefereeError(
+            f"audit offender {cell_id} printed topology is inconsistent")
+    failure_kinds = string_list(
+        item["failure_kinds"],
+        f"audit offender {cell_id} failure kinds",
+        nonempty=True,
+    )
+    unknown_kinds = set(failure_kinds) - AUDIT_FAILURE_KINDS
+    if unknown_kinds:
+        raise RefereeError(
+            f"audit offender {cell_id} has unsupported failure kinds: "
+            + ", ".join(sorted(unknown_kinds)))
+    if not isinstance(item["why"], str) or not item["why"]:
+        raise RefereeError(f"audit offender {cell_id} has no explanation")
+    if not isinstance(item["emission_state"], str) or not item["emission_state"]:
+        raise RefereeError(f"audit offender {cell_id} has no emission state")
+
+    layout_relation = item["layout_relation"]
+    if layout_relation == "match":
+        if printed is None or latticed is None or printed != latticed:
+            raise RefereeError(
+                f"audit offender {cell_id} has a false layout match")
+        expected_layout_kind = None
+    elif layout_relation == "mismatch":
+        if printed is None or latticed is None or printed == latticed:
+            raise RefereeError(
+                f"audit offender {cell_id} has a false layout mismatch")
+        expected_layout_kind = "layout-printed-mismatch"
+    elif layout_relation == "unevaluable":
+        if printed is not None:
+            raise RefereeError(
+                f"audit offender {cell_id} hides a measured source topology")
+        expected_layout_kind = "source-topology-unevaluable"
+    elif layout_relation == "duplicate-subject":
+        expected_layout_kind = "duplicate-layout-subject"
+    elif layout_relation in {
+            "not-owned", "cell-binding-invalid", "inventory-invalid"}:
+        expected_layout_kind = None
+    else:
+        raise RefereeError(
+            f"audit offender {cell_id} has unsupported layout relation")
+    for kind in {
+            "layout-printed-mismatch", "source-topology-unevaluable",
+            "duplicate-layout-subject"}:
+        if ((kind in failure_kinds)
+                != (kind == expected_layout_kind)):
+            raise RefereeError(
+                f"audit offender {cell_id} has a false {kind} relation")
+
+    normal_subject = layout_relation in {"match", "mismatch", "unevaluable"}
+    position_mismatch = False
+    for field, (kind, outer) in AUDIT_POSITION_FIELDS.items():
+        present = field in item
+        if normal_subject and not present:
+            raise RefereeError(
+                f"audit offender {cell_id} omits {field}")
+        mismatch = (
+            validate_audit_position_evidence(
+                field, item[field], outer=outer)
+            if present else False
+        )
+        if (kind in failure_kinds) != mismatch:
+            raise RefereeError(
+                f"audit offender {cell_id} has a false {kind} relation")
+        position_mismatch = position_mismatch or mismatch
+    if normal_subject:
+        layout_internal = item["emission_layout_position"]
+        source_internal = item["emission_source_position"]
+        layout_outer = item["emission_layout_outer_position"]
+        source_outer = item["emission_source_outer_position"]
+        layout_source_outer = item["layout_source_outer_position"]
+        internal_actual = _audit_number_list(
+            layout_internal["actual_internal_edges_x"],
+            f"audit offender {cell_id} layout actual edges")
+        source_actual = _audit_number_list(
+            source_internal["actual_internal_edges_x"],
+            f"audit offender {cell_id} source actual edges")
+        if (internal_actual is not None and source_actual is not None
+                and not same_numbers(internal_actual, source_actual)):
+            raise RefereeError(
+                f"audit offender {cell_id} publishes two emitted edge vectors")
+        source_expected = _audit_number_list(
+            source_internal["expected_internal_edges_x"],
+            f"audit offender {cell_id} source expected edges")
+        if (printed is None) != (source_expected is None):
+            raise RefereeError(
+                f"audit offender {cell_id} source divider availability is false")
+        if (printed is not None and source_expected is not None
+                and not same_numbers(source_expected, divider_x)):
+            raise RefereeError(
+                f"audit offender {cell_id} source divider evidence disagrees")
+        emitted_outer_a = _audit_number_list(
+            layout_outer["actual_outer_edges_x"],
+            f"audit offender {cell_id} layout actual outer edges")
+        emitted_outer_b = _audit_number_list(
+            source_outer["actual_outer_edges_x"],
+            f"audit offender {cell_id} source actual outer edges")
+        if (emitted_outer_a is not None and emitted_outer_b is not None
+                and not same_numbers(emitted_outer_a, emitted_outer_b)):
+            raise RefereeError(
+                f"audit offender {cell_id} publishes two emitted outer vectors")
+        layout_expected_outer = _audit_number_list(
+            layout_outer["expected_outer_edges_x"],
+            f"audit offender {cell_id} layout expected outer edges")
+        layout_source_actual = _audit_number_list(
+            layout_source_outer["actual_outer_edges_x"],
+            f"audit offender {cell_id} layout/source actual outer edges")
+        if (layout_expected_outer is not None
+                and layout_source_actual is not None
+                and not same_numbers(
+                    layout_expected_outer, layout_source_actual)):
+            raise RefereeError(
+                f"audit offender {cell_id} publishes two layout outer vectors")
+        source_expected_outer = _audit_number_list(
+            source_outer["expected_outer_edges_x"],
+            f"audit offender {cell_id} source expected outer edges")
+        layout_source_expected = _audit_number_list(
+            layout_source_outer["expected_outer_edges_x"],
+            f"audit offender {cell_id} layout/source expected outer edges")
+        if (source_expected_outer is not None
+                and layout_source_expected is not None
+                and not same_numbers(
+                    source_expected_outer, layout_source_expected)):
+            raise RefereeError(
+                f"audit offender {cell_id} publishes two source outer vectors")
+        frame = item.get("source_frame_geometry")
+        if printed is None:
+            if frame is not None:
+                raise RefereeError(
+                    f"audit offender {cell_id} has a frame without topology")
+        else:
+            if not isinstance(frame, dict):
+                raise RefereeError(
+                    f"audit offender {cell_id} omits measured source frame")
+            try:
+                frame_edges = [
+                    finite_number(
+                        frame["left_rail"]["center_x"],
+                        f"audit offender {cell_id} left source rail"),
+                    finite_number(
+                        frame["right_rail"]["center_x"],
+                        f"audit offender {cell_id} right source rail"),
+                ]
+            except (KeyError, TypeError):
+                raise RefereeError(
+                    f"audit offender {cell_id} source frame is malformed")
+            if (source_expected_outer is None
+                    or layout_source_expected is None
+                    or not same_numbers(frame_edges, source_expected_outer)
+                    or not same_numbers(frame_edges, layout_source_expected)):
+                raise RefereeError(
+                    f"audit offender {cell_id} source rails disagree")
+
+    container_mismatch = False
+    if normal_subject:
+        if "emission_container_binding" not in item:
+            raise RefereeError(
+                f"audit offender {cell_id} omits container binding evidence")
+        container = validate_audit_container_binding(
+            item["emission_container_binding"])
+        expected_page_kind = bool(
+            occurrences == 1 and container["page_mismatch"])
+        expected_rect_kind = bool(
+            occurrences == 1 and container["rect_mismatch"])
+        if (("emission-container-page-mismatch" in failure_kinds)
+                != expected_page_kind):
+            raise RefereeError(
+                f"audit offender {cell_id} has a false container-page failure")
+        if (("emission-container-geometry-mismatch" in failure_kinds)
+                != expected_rect_kind):
+            raise RefereeError(
+                f"audit offender {cell_id} has a false container-rect failure")
+        container_mismatch = expected_page_kind or expected_rect_kind
+    elif any(
+            kind in failure_kinds for kind in {
+                "emission-container-page-mismatch",
+                "emission-container-geometry-mismatch",
+            }):
+        raise RefereeError(
+            f"audit offender {cell_id} has unbound container failures")
+
+    binding_invalid = container_mismatch or position_mismatch
+    physical_emission_valid = item["emission_state"] == "physical-slots"
+    if normal_subject:
+        if (("invalid-emission" in failure_kinds)
+                != (not physical_emission_valid)):
+            raise RefereeError(
+                f"audit offender {cell_id} has a false invalid-emission flag")
+        layout_slot_mismatch = (
+            slots is not None and latticed is not None and slots != latticed)
+        printed_slot_mismatch = (
+            slots is not None and printed is not None and slots != printed)
+        if (("emission-layout-mismatch" in failure_kinds)
+                != layout_slot_mismatch):
+            raise RefereeError(
+                f"audit offender {cell_id} has a false layout-slot relation")
+        if (("emission-printed-mismatch" in failure_kinds)
+                != printed_slot_mismatch):
+            raise RefereeError(
+                f"audit offender {cell_id} has a false printed-slot relation")
+        if not physical_emission_valid or binding_invalid:
+            expected_emission_relation = "invalid"
+        else:
+            mismatched = [
+                name for name, mismatch in (
+                    ("layout", layout_slot_mismatch),
+                    ("printed", printed_slot_mismatch),
+                ) if mismatch
+            ]
+            expected_emission_relation = (
+                "mismatch-" + "-and-".join(mismatched)
+                if mismatched else "match"
+            )
+        if item["emission_relation"] != expected_emission_relation:
+            raise RefereeError(
+                f"audit offender {cell_id} has a false emission relation")
+        if "effective_emission_state" in item:
+            expected_state = (
+                "container-binding-invalid"
+                if container_mismatch else
+                "slot-position-invalid"
+                if position_mismatch else
+                item["emission_state"]
+            )
+            if item["effective_emission_state"] != expected_state:
+                raise RefereeError(
+                    f"audit offender {cell_id} has a false effective state")
+    elif layout_relation == "duplicate-subject":
+        if item["emission_relation"] not in {"invalid", "unbound"}:
+            raise RefereeError(
+                f"audit offender {cell_id} has false duplicate binding")
+    elif layout_relation == "not-owned":
+        expected_kind = (
+            "unowned-live-comb-markup"
+            if "unowned-live-comb-markup" in failure_kinds
+            else "unexpected-emitted-comb"
+        )
+        expected_relation = (
+            "invalid" if expected_kind == "unowned-live-comb-markup"
+            else "unexpected"
+        )
+        if (item["emission_relation"] != expected_relation
+                or expected_kind not in failure_kinds):
+            raise RefereeError(
+                f"audit offender {cell_id} has false unowned-emission evidence")
+    elif layout_relation == "cell-binding-invalid":
+        if (item["emission_relation"] != "invalid"
+                or "emitted-cell-binding-invalid" not in failure_kinds):
+            raise RefereeError(
+                f"audit offender {cell_id} has false cell-binding evidence")
+    elif (item["emission_relation"] != "inventory-invalid"
+          or "comb-inventory-mismatch" not in failure_kinds):
+        raise RefereeError(
+            f"audit offender {cell_id} has false inventory evidence")
+
+    inventory_binding = bool(set(failure_kinds) & {
+        "duplicate-layout-subject", "unexpected-emitted-comb",
+        "emitted-cell-binding-invalid", "duplicate-emitted-cell-id",
+        "missing-layout-cell-owner", "duplicate-layout-cell-owner",
+        "emitted-cell-page-mismatch", "emitted-cell-geometry-mismatch",
+        "unowned-live-comb-markup", "comb-inventory-mismatch",
+        "emission-container-page-mismatch",
+        "emission-container-geometry-mismatch",
+    })
+    dimensions = {
+        "layout_mismatch": layout_relation == "mismatch",
+        "source_unevaluable": layout_relation in {
+            "unevaluable", "duplicate-subject", "inventory-invalid"},
+        "emission_invalid": bool(
+            not physical_emission_valid or binding_invalid),
+        "emission_behind": bool(
+            layout_relation == "duplicate-subject"
+            or not physical_emission_valid
+            or binding_invalid
+            or (slots is not None and latticed is not None
+                and slots != latticed)
+            or "unexpected-emitted-comb" in failure_kinds
+            or "unowned-live-comb-markup" in failure_kinds),
+        "position_mismatch": position_mismatch,
+        "inventory_binding": inventory_binding,
+    }
+    # Pseudo binding/inventory records do not contribute to audit.py's
+    # emission-invalid summary unless they are raw live comb markup.
+    if not normal_subject:
+        dimensions["emission_invalid"] = bool(
+            ("unowned-live-comb-markup" in failure_kinds)
+            or ("unexpected-emitted-comb" in failure_kinds
+                and not physical_emission_valid)
+            or (layout_relation == "duplicate-subject"
+                and not physical_emission_valid)
+        )
+        dimensions["emission_behind"] = bool(
+            "unexpected-emitted-comb" in failure_kinds
+            or "unowned-live-comb-markup" in failure_kinds
+            or layout_relation == "duplicate-subject"
+        )
+    if not any(dimensions.values()):
+        raise RefereeError(
+            f"audit offender {cell_id} is unsupported by any failure relation")
+    return {
+        "cell": cell_id,
+        "page": page,
+        "slots": slots,
+        "latticed": latticed,
+        "printed": printed,
+        "emitted_occurrences": occurrences,
+        "layout_relation": layout_relation,
+        "emission_state": item["emission_state"],
+        "failure_kinds": failure_kinds,
+        "dimensions": dimensions,
+    }
+
+
+def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
+    """Validate exhaustive audit publication without conflating dimensions."""
     if not audit_record:
-        return False, "no audit record"
-    manifest = audit_record.get("input_manifest")
-    if not isinstance(manifest, dict):
-        return False, "audit input manifest is missing"
-    if (manifest.get("schema") != "formgen-audit-input-manifest-v1"
-            or manifest.get("algorithm") != "sha256"):
-        return False, "audit input manifest schema/algorithm is unsupported"
-    producer = manifest.get("producer")
-    if (not isinstance(producer, dict)
-            or producer.get("file") != "tools/formgen/audit.py"
-            or producer.get("bytes") != len(audit_producer_bytes)
-            or producer.get("sha256") != sha256_bytes(audit_producer_bytes)):
-        return False, "audit producer hash is stale"
-    if manifest.get("complete") is not True or manifest.get("missing_required") != []:
-        return False, "audit input manifest is incomplete"
-    inputs = manifest.get("inputs")
-    if not isinstance(inputs, dict) or set(inputs) != set(expected):
-        return False, "audit input manifest roles disagree"
-    for role, (path, required, payload) in expected.items():
-        entry = inputs.get(role)
-        if not isinstance(entry, dict):
-            return False, f"audit input entry is missing: {role}"
-        present = payload is not None
-        if entry.get("file") != path.name or entry.get("required") is not required:
-            return False, f"audit input metadata disagrees: {role}"
-        if entry.get("present") is not present:
-            return False, f"audit input presence is stale: {role}"
-        if not present:
-            if required or entry.get("bytes") is not None or entry.get("sha256") is not None:
-                return False, f"audit input absence is invalid: {role}"
+        return {
+            "assertion_valid": False,
+            "complete": False,
+            "reason": "no audit record",
+            "errors": ["no audit record"],
+            "offenders": {},
+        }
+    assertions = audit_record.get("assertions")
+    assertion = (
+        assertions.get("comb_slots_match_printed")
+        if isinstance(assertions, dict) else None
+    )
+    if not isinstance(assertion, dict):
+        return {
+            "assertion_valid": False,
+            "complete": False,
+            "reason": "comb audit assertion is missing",
+            "errors": ["comb audit assertion is missing"],
+            "offenders": {},
+        }
+    raw_offenders = assertion.get("offenders")
+    if not isinstance(raw_offenders, list):
+        return {
+            "assertion_valid": False,
+            "complete": False,
+            "reason": "audit offenders is not a list",
+            "errors": ["audit offenders is not a list"],
+            "offenders": {},
+        }
+    errors: list[str] = []
+    dimensions_by_cell: dict[str, dict[str, Any]] = {}
+    valid_items: list[dict[str, Any]] = []
+    for index, item in enumerate(raw_offenders):
+        try:
+            dimensions = audit_offender_dimensions(item)
+        except RefereeError as error:
+            errors.append(f"offender[{index}]: {error}")
             continue
-        assert payload is not None
-        if (entry.get("bytes") != len(payload)
-                or entry.get("sha256") != sha256_bytes(payload)):
-            return False, f"audit input hash is stale: {role}"
-    return True, "exact input bytes verified"
+        cell_id = dimensions["cell"]
+        if cell_id in dimensions_by_cell:
+            errors.append(f"duplicate offender cell: {cell_id}")
+            continue
+        dimensions_by_cell[cell_id] = dimensions
+        valid_items.append(item)
+    offenders = {
+        item["cell"]: item for item in valid_items
+    }
+
+    try:
+        expected_ids = string_list(
+            assertion["expected_comb_ids"], "audit expected comb ids")
+        checked_ids = string_list(
+            assertion["checked_comb_ids"], "audit checked comb ids")
+        emitted_ids = string_list(
+            assertion["emitted_comb_ids"], "audit emitted comb ids")
+        unexpected_ids = string_list(
+            assertion["unexpected_emitted_comb_ids"],
+            "audit unexpected emitted comb ids")
+        duplicate_layout_ids = string_list(
+            assertion["duplicate_layout_comb_ids"],
+            "audit duplicate layout comb ids")
+        duplicate_emitted_ids = string_list(
+            assertion["duplicate_emitted_cell_ids"],
+            "audit duplicate emitted cell ids")
+        counts = {
+            key: exact_nonnegative_int(
+                assertion[key], f"audit {key.replace('_', ' ')}")
+            for key in (
+                "combs_expected", "combs_checked", "raw_live_comb_issues",
+                "emitted_cell_binding_issues", "layout_mismatches",
+                "layout_unevaluable", "emission_behind_layout",
+                "emission_invalid",
+            )
+        }
+    except (KeyError, RefereeError) as error:
+        errors.append(str(error))
+        expected_ids = []
+        checked_ids = []
+        emitted_ids = []
+        unexpected_ids = []
+        duplicate_layout_ids = []
+        duplicate_emitted_ids = []
+        counts = {
+            key: -1 for key in (
+                "combs_expected", "combs_checked", "raw_live_comb_issues",
+                "emitted_cell_binding_issues", "layout_mismatches",
+                "layout_unevaluable", "emission_behind_layout",
+                "emission_invalid",
+            )
+        }
+    if checked_ids != expected_ids:
+        errors.append("audit checked IDs are not the exhaustive expected order")
+    if counts["combs_expected"] != len(expected_ids):
+        errors.append("audit expected count disagrees with expected IDs")
+    if counts["combs_checked"] != len(checked_ids):
+        errors.append("audit checked count disagrees with checked IDs")
+    if emitted_ids != sorted(emitted_ids):
+        errors.append("audit emitted IDs are not canonical sorted inventory")
+    if unexpected_ids != sorted(set(emitted_ids) - set(expected_ids)):
+        errors.append("audit unexpected emitted inventory is false")
+    if duplicate_layout_ids != sorted(duplicate_layout_ids):
+        errors.append("audit duplicate-layout IDs are not sorted")
+    if duplicate_emitted_ids != sorted(duplicate_emitted_ids):
+        errors.append("audit duplicate-emitted IDs are not sorted")
+
+    holds = assertion.get("holds")
+    inventory_complete = assertion.get("inventory_complete")
+    if not isinstance(holds, bool):
+        errors.append("audit holds flag is not boolean")
+        holds = False
+    if not isinstance(inventory_complete, bool):
+        errors.append("audit inventory_complete flag is not boolean")
+        inventory_complete = False
+    count = assertion.get("offender_count", 0 if holds else None)
+    published = assertion.get("offenders_published", 0 if holds else None)
+    omitted = assertion.get("offenders_omitted", 0 if holds else None)
+    complete_flag = assertion.get("offenders_complete", True if holds else None)
+    try:
+        count = exact_nonnegative_int(count, "audit offender count")
+        published = exact_nonnegative_int(
+            published, "audit published offender count")
+        omitted = exact_nonnegative_int(
+            omitted, "audit omitted offender count")
+    except RefereeError as error:
+        errors.append(str(error))
+        count = published = omitted = -1
+    if not isinstance(complete_flag, bool):
+        errors.append("audit offenders_complete flag is not boolean")
+        complete_flag = False
+    if published != len(raw_offenders):
+        errors.append("audit published count disagrees with offender list")
+    if count != published + omitted:
+        errors.append("audit published and omitted counts do not sum")
+    if omitted != 0 or not complete_flag:
+        errors.append("audit offender publication is not exhaustive")
+
+    expected_set = set(expected_ids)
+    offender_ids = set(offenders)
+    for cell_id in expected_ids:
+        if cell_id not in emitted_ids:
+            item = offenders.get(cell_id)
+            if (item is None
+                    or item.get("emission_state") != "missing-emitted-cell"
+                    or not set(item.get("failure_kinds") or ()) & {
+                        "invalid-emission", "duplicate-layout-subject"}):
+                errors.append(
+                    f"audit omits missing-emission offender: {cell_id}")
+    for cell_id in unexpected_ids:
+        item = offenders.get(cell_id)
+        if item is None or "unexpected-emitted-comb" not in (
+                item.get("failure_kinds") or ()):
+            errors.append(
+                f"audit omits unexpected-emission offender: {cell_id}")
+    derived_duplicate_layout = sorted(
+        cell_id for cell_id, detail in dimensions_by_cell.items()
+        if detail["layout_relation"] == "duplicate-subject")
+    if duplicate_layout_ids != derived_duplicate_layout:
+        errors.append("audit duplicate-layout inventory lacks exact offenders")
+    raw_issue_ids = {
+        cell_id for cell_id, detail in dimensions_by_cell.items()
+        if "unowned-live-comb-markup" in detail["failure_kinds"]
+    }
+    if counts["raw_live_comb_issues"] != len(raw_issue_ids):
+        errors.append("audit raw-live-comb count disagrees with offenders")
+    inventory_offenders = {
+        cell_id for cell_id, detail in dimensions_by_cell.items()
+        if "comb-inventory-mismatch" in detail["failure_kinds"]
+    }
+    binding_issue_ids = set(duplicate_emitted_ids) | set(unexpected_ids)
+    for cell_id, detail in dimensions_by_cell.items():
+        if set(detail["failure_kinds"]) & {
+                "emission-container-page-mismatch",
+                "emission-container-geometry-mismatch",
+                "emitted-cell-binding-invalid",
+                "duplicate-emitted-cell-id",
+                "missing-layout-cell-owner",
+                "duplicate-layout-cell-owner",
+                "emitted-cell-page-mismatch",
+                "emitted-cell-geometry-mismatch",
+            }:
+            binding_issue_ids.add(cell_id)
+    if counts["emitted_cell_binding_issues"] != len(binding_issue_ids):
+        errors.append("audit cell-binding count disagrees with offenders")
+    relevant_duplicate_emitted = (
+        set(duplicate_emitted_ids) & (set(expected_ids) | set(emitted_ids)))
+    derived_inventory_complete = not (
+        unexpected_ids
+        or duplicate_layout_ids
+        or relevant_duplicate_emitted
+        or raw_issue_ids
+        or binding_issue_ids
+        or inventory_offenders
+    )
+    if inventory_complete is not derived_inventory_complete:
+        errors.append("audit inventory_complete relation is false")
+
+    derived_counts = {
+        "layout_mismatches": sum(
+            detail["dimensions"]["layout_mismatch"]
+            for detail in dimensions_by_cell.values()),
+        "layout_unevaluable": sum(
+            detail["dimensions"]["source_unevaluable"]
+            for detail in dimensions_by_cell.values()),
+        "emission_behind_layout": sum(
+            detail["dimensions"]["emission_behind"]
+            for detail in dimensions_by_cell.values()),
+        "emission_invalid": sum(
+            detail["dimensions"]["emission_invalid"]
+            for detail in dimensions_by_cell.values()),
+    }
+    for key, derived in derived_counts.items():
+        if counts[key] != derived:
+            errors.append(
+                f"audit {key} count {counts[key]} disagrees with "
+                f"{derived} independent offender relations")
+    unsupported_canonical = sorted(
+        cell_id for cell_id in offender_ids - expected_set - set(unexpected_ids)
+        if _CELL_RE.fullmatch(cell_id)
+        and "emitted-cell-binding-invalid"
+        not in (offenders[cell_id].get("failure_kinds") or ())
+        and "unowned-live-comb-markup"
+        not in (offenders[cell_id].get("failure_kinds") or ())
+    )
+    if unsupported_canonical:
+        errors.append(
+            "audit publishes canonical offenders outside its inventories: "
+            + ", ".join(unsupported_canonical[:8]))
+    expected_holds = bool(
+        count == 0
+        and inventory_complete
+        and all(value == 0 for value in derived_counts.values())
+    )
+    if holds is not expected_holds:
+        errors.append("audit holds flag disagrees with independent relations")
+    if audit_record.get("comb_slots_match_printed") is not holds:
+        errors.append("audit top-level comb verdict disagrees with assertion")
+    reason_value = assertion.get("reason")
+    if not isinstance(reason_value, str) or (not holds and not reason_value):
+        errors.append("audit assertion reason is malformed")
+
+    assertion_valid = not errors
+    return {
+        "assertion_valid": assertion_valid,
+        # Manifest/attestation binding is applied later; this field is kept
+        # fail-closed until then.
+        "complete": False,
+        "reason": (
+            "assertion publication verified; attestation not yet bound"
+            if assertion_valid else "; ".join(errors)
+        ),
+        "errors": errors,
+        "offender_count": count,
+        "offenders_published": published,
+        "offenders_omitted": omitted,
+        "combs_expected": counts["combs_expected"],
+        "combs_checked": counts["combs_checked"],
+        "expected_comb_ids": expected_ids,
+        "checked_comb_ids": checked_ids,
+        "emitted_comb_ids": emitted_ids,
+        "unexpected_emitted_comb_ids": unexpected_ids,
+        "duplicate_layout_comb_ids": duplicate_layout_ids,
+        "duplicate_emitted_cell_ids": duplicate_emitted_ids,
+        "raw_live_comb_issues": counts["raw_live_comb_issues"],
+        "emitted_cell_binding_issues": (
+            counts["emitted_cell_binding_issues"]),
+        "inventory_complete": inventory_complete,
+        "layout_mismatches": counts["layout_mismatches"],
+        "layout_unevaluable": counts["layout_unevaluable"],
+        "emission_behind_layout": counts["emission_behind_layout"],
+        "emission_invalid": counts["emission_invalid"],
+        "offender_dimensions": dimensions_by_cell,
+        "offenders": offenders,
+        "holds": holds,
+    }
+
+
+class AuditRenderDependencyScanner(html.parser.HTMLParser):
+    """Independent local-resource inventory for the frozen audit manifest."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.references: list[tuple[str, str]] = []
+        self.errors: list[str] = []
+        self.style_depth = 0
+
+    def _add(self, value: str | None, kind: str) -> None:
+        if value is not None and value.strip():
+            self.references.append((value.strip(), kind))
+
+    def _srcset(self, value: str | None, kind: str) -> None:
+        if value:
+            for candidate in value.split(","):
+                self._add(candidate.strip().split()[0], kind)
+
+    def handle_starttag(
+            self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = {key.lower(): value for key, value in attrs}
+        lowered = tag.lower()
+        if lowered == "style":
+            self.style_depth += 1
+        self.references.extend(
+            (url, "inline-style")
+            for url in _audit_css_urls(values.get("style") or "")
+        )
+        if lowered == "link":
+            rel = {
+                item.lower() for item in (values.get("rel") or "").split()}
+            if rel & {
+                    "stylesheet", "preload", "modulepreload",
+                    "icon", "manifest"}:
+                self._add(values.get("href"), "link")
+        elif lowered in {"img", "source"}:
+            self._add(values.get("src"), lowered)
+            self._srcset(values.get("srcset"), f"{lowered}-srcset")
+        elif lowered in {
+                "video", "audio", "track", "embed", "iframe"}:
+            self._add(values.get("src"), lowered)
+            if lowered == "video":
+                self._add(values.get("poster"), "video-poster")
+        elif lowered == "object":
+            self._add(values.get("data"), "object")
+        elif lowered == "input" and (
+                values.get("type") or "").lower() == "image":
+            self._add(values.get("src"), "input-image")
+        elif lowered == "image":
+            self._add(
+                values.get("href") or values.get("xlink:href"), "svg-image")
+
+    def handle_startendtag(
+            self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag.lower() == "style" and self.style_depth:
+            self.style_depth -= 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "style" and self.style_depth:
+            self.style_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self.style_depth:
+            self.references.extend(
+                (url, "style-block") for url in _audit_css_urls(data))
+
+
+_AUDIT_CSS_URL_RE = re.compile(
+    r"""url\(\s*(?P<quote>["']?)(?P<url>.*?)(?P=quote)\s*\)""",
+    re.IGNORECASE,
+)
+_AUDIT_CSS_IMPORT_RE = re.compile(
+    r"""@import\s+(?:url\(\s*)?(?P<quote>["'])(?P<url>.*?)(?P=quote)""",
+    re.IGNORECASE,
+)
+
+
+def _audit_css_urls(css: str) -> list[str]:
+    return [
+        *(match.group("url") for match in _AUDIT_CSS_IMPORT_RE.finditer(css)),
+        *(match.group("url") for match in _AUDIT_CSS_URL_RE.finditer(css)),
+    ]
+
+
+def _audit_logical_resource(reference: str, base: str) -> str | None:
+    parsed = urllib.parse.urlsplit(reference.strip())
+    if parsed.scheme.lower() == "data":
+        return None
+    if (parsed.scheme or parsed.netloc or reference.startswith("//")
+            or parsed.path.startswith("/") or parsed.query):
+        raise RefereeError(
+            f"external, absolute, or query-bearing render resource: {reference}")
+    if not parsed.path:
+        return None
+    decoded = urllib.parse.unquote(parsed.path)
+    if ("\\" in decoded
+            or any(ord(character) < 32 or ord(character) == 127
+                   for character in decoded)):
+        raise RefereeError(f"invalid render resource path: {reference}")
+    logical = posixpath.normpath(
+        posixpath.join(posixpath.dirname(base), decoded))
+    if (logical in {"", ".", ".."} or logical.startswith("../")
+            or pathlib.PurePosixPath(logical).is_absolute()):
+        raise RefereeError(f"render resource escapes snapshot: {reference}")
+    return logical
+
+
+def audit_render_dependencies(
+        html_payload: bytes,
+        entrypoint: str,
+        html_dir: pathlib.Path,
+        ) -> tuple[list[dict[str, Any]], list[str]]:
+    try:
+        text = html_payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        return [], [f"HTML is not UTF-8: {error}"]
+    scanner = AuditRenderDependencyScanner()
+    scanner.feed(text)
+    scanner.close()
+    errors = list(scanner.errors)
+    pending = [
+        (reference, entrypoint, kind)
+        for reference, kind in scanner.references
+    ]
+    root = html_dir.resolve()
+    metadata: dict[str, dict[str, Any]] = {}
+    payloads: dict[str, bytes] = {}
+    visited_css: set[str] = set()
+    while pending:
+        reference, referrer, kind = pending.pop(0)
+        try:
+            logical = _audit_logical_resource(reference, referrer)
+        except RefereeError as error:
+            errors.append(f"{referrer}: {error}")
+            continue
+        if logical is None:
+            continue
+        item = metadata.setdefault(logical, {
+            "path": logical,
+            "mime_type": None,
+            "present": False,
+            "bytes": None,
+            "sha256": None,
+            "kinds": set(),
+            "referrers": set(),
+        })
+        item["kinds"].add(kind)
+        item["referrers"].add(referrer)
+        if logical in payloads:
+            continue
+        candidate = root.joinpath(*pathlib.PurePosixPath(logical).parts)
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(root)
+            if resolved != candidate or not resolved.is_file():
+                raise RefereeError("symlinked or non-file dependency")
+            payload = resolved.read_bytes()
+        except (OSError, ValueError, RefereeError) as error:
+            errors.append(
+                f"{referrer}: unresolved render dependency "
+                f"{reference!r} ({error})")
+            continue
+        payloads[logical] = payload
+        mime_type = mimetypes.guess_type(logical)[0]
+        if mime_type is None:
+            errors.append(f"{logical}: unknown render dependency MIME type")
+            continue
+        item.update({
+            "mime_type": mime_type,
+            "present": True,
+            "bytes": len(payload),
+            "sha256": sha256_bytes(payload),
+        })
+        if logical.lower().endswith(".css") and logical not in visited_css:
+            visited_css.add(logical)
+            try:
+                css = payload.decode("utf-8")
+            except UnicodeDecodeError as error:
+                errors.append(f"{logical}: CSS is not UTF-8 ({error})")
+                continue
+            pending.extend(
+                (nested, logical, "css")
+                for nested in _audit_css_urls(css)
+            )
+    entries = [
+        {
+            **{
+                key: value for key, value in item.items()
+                if key not in {"kinds", "referrers"}
+            },
+            "kinds": sorted(item["kinds"]),
+            "referrers": sorted(item["referrers"]),
+        }
+        for _logical, item in sorted(metadata.items())
+    ]
+    return entries, sorted(set(errors))
+
+
+def validate_audit_runtime(runtime: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(runtime, dict) or set(runtime) != {
+        "python", "pymupdf", "loaded_application_files",
+        "stdlib_and_system_shared_libraries_bound",
+        "scope_complete", "incomplete_reason",
+    }:
+        return ["audit base runtime manifest schema is unsupported"]
+    python = runtime["python"]
+    if not isinstance(python, dict) or set(python) != {
+            "implementation", "version", "cache_tag"}:
+        errors.append("audit Python runtime identity is malformed")
+    elif (python["implementation"] != platform.python_implementation()
+          or python["version"] != platform.python_version()
+          or python["cache_tag"] != sys.implementation.cache_tag):
+        errors.append("audit Python runtime differs from referee runtime")
+    pymupdf = runtime["pymupdf"]
+    if (not isinstance(pymupdf, dict)
+            or set(pymupdf) != {"package_version", "version_bind"}
+            or not all(isinstance(value, str) and value
+                       for value in pymupdf.values())
+            or pymupdf["package_version"] != pymupdf["version_bind"]):
+        errors.append("audit PyMuPDF identity is malformed")
+    loaded = runtime["loaded_application_files"]
+    if not isinstance(loaded, dict) or set(loaded) != {
+            "algorithm", "files", "bytes", "tree_sha256", "members",
+            "validated_before_after"}:
+        errors.append("audit loaded-application manifest schema is malformed")
+    else:
+        members = loaded["members"]
+        parsed: list[tuple[str, int, str]] = []
+        if not isinstance(members, list):
+            errors.append("audit loaded-application members are not a list")
+        else:
+            for index, member in enumerate(members):
+                if (not isinstance(member, dict)
+                        or set(member) != {"file", "bytes", "sha256"}
+                        or not isinstance(member.get("file"), str)
+                        or not member["file"]):
+                    errors.append(
+                        f"audit runtime member[{index}] is malformed")
+                    continue
+                try:
+                    size = exact_nonnegative_int(
+                        member["bytes"], f"audit runtime member[{index}] bytes")
+                except RefereeError as error:
+                    errors.append(str(error))
+                    continue
+                digest = member["sha256"]
+                if (not isinstance(digest, str)
+                        or re.fullmatch(r"[0-9a-f]{64}", digest) is None):
+                    errors.append(
+                        f"audit runtime member[{index}] hash is malformed")
+                    continue
+                parsed.append((member["file"], size, digest))
+        if len({item[0] for item in parsed}) != len(parsed):
+            errors.append("audit runtime members contain duplicate identities")
+        if parsed != sorted(parsed, key=lambda item: item[0]):
+            errors.append("audit runtime members are not canonical ordered")
+        canonical = json.dumps(parsed, separators=(",", ":"))
+        if loaded.get("algorithm") != (
+                "sha256(canonical-json(logical-file,bytes,sha256))"):
+            errors.append("audit runtime digest algorithm is unsupported")
+        if loaded.get("files") != len(parsed):
+            errors.append("audit runtime member count is false")
+        if loaded.get("bytes") != sum(item[1] for item in parsed):
+            errors.append("audit runtime byte total is false")
+        if loaded.get("tree_sha256") != sha256_bytes(
+                canonical.encode("ascii")):
+            errors.append("audit runtime tree digest is false")
+        if loaded.get("validated_before_after") is not True:
+            errors.append("audit runtime was not validated before and after")
+        executable = [
+            item for item in parsed if item[0] == "python/executable"]
+        python_path = pathlib.Path(sys.executable).resolve()
+        if len(executable) != 1 or executable[0][1:] != (
+                python_path.stat().st_size, sha256_file(python_path)):
+            errors.append("audit runtime Python executable bytes are stale")
+    if runtime["stdlib_and_system_shared_libraries_bound"] is not False:
+        errors.append("audit base runtime overclaims system-library binding")
+    if runtime["scope_complete"] is not False:
+        errors.append("audit base runtime overclaims complete scope")
+    if (not isinstance(runtime["incomplete_reason"], str)
+            or not runtime["incomplete_reason"]):
+        errors.append("audit base runtime lacks its incomplete-scope reason")
+    return errors
+
+
+def validate_audit_roundtrip(
+        audit_record: dict[str, Any],
+        entrypoint: str,
+        dependency_paths: Sequence[str],
+        ) -> tuple[bool | None, list[str]]:
+    errors: list[str] = []
+    if audit_record.get("roundtrip") == "skipped":
+        if any(key in audit_record for key in (
+                "roundtrip_runtime", "render_requests", "candidate_pdf")):
+            errors.append("skipped audit carries partial roundtrip evidence")
+        return None, errors
+    runtime = audit_record.get("roundtrip_runtime")
+    requests = audit_record.get("render_requests")
+    candidate = audit_record.get("candidate_pdf")
+    if not all(isinstance(value, dict)
+               for value in (runtime, requests, candidate)):
+        return None, ["audit roundtrip evidence is missing or partial"]
+    required_runtime = {
+        "mode", "playwright_package_version", "dependency_closure",
+        "chromium", "same_resolution_session_used_for_render",
+        "dependency_closure_validated_before_after",
+        "system_shared_libraries_bound", "native_host_environment_bound",
+        "scope", "scope_complete", "incomplete_reason",
+        "live_browser_version", "explicit_executable_path_used",
+        "launch_args", "service_workers", "browser_context_offline",
+        "websocket_policy", "request_policy",
+        "playwright_operation_timeout_ms", "hard_deadline_seconds",
+        "hard_deadline_enforced_by", "deadline_cleanup_policy",
+    }
+    if set(runtime) != required_runtime:
+        errors.append("audit roundtrip runtime schema is unsupported")
+    else:
+        deadline_value = runtime["hard_deadline_seconds"]
+        deadline = (
+            float(deadline_value)
+            if (not isinstance(deadline_value, bool)
+                and isinstance(deadline_value, (int, float))
+                and math.isfinite(float(deadline_value)))
+            else None
+        )
+        live_browser_version = runtime["live_browser_version"]
+        if (not isinstance(runtime["playwright_package_version"], str)
+                or not runtime["playwright_package_version"]
+                or not isinstance(live_browser_version, str)
+                or not live_browser_version
+                or runtime["mode"] != "playwright-exact-executable"
+                or runtime["same_resolution_session_used_for_render"] is not True
+                or runtime[
+                    "dependency_closure_validated_before_after"] is not True
+                or runtime["explicit_executable_path_used"] is not True
+                or runtime["browser_context_offline"] is not True
+                or runtime["service_workers"] != "block"
+                or runtime["websocket_policy"]
+                != "record-and-leave-unconnected"
+                or runtime["request_policy"] != "formgen-snapshot-only-v1"
+                or deadline != 60.0
+                or not isinstance(
+                    runtime["playwright_operation_timeout_ms"], int)
+                or isinstance(
+                    runtime["playwright_operation_timeout_ms"], bool)
+                or runtime["playwright_operation_timeout_ms"] != 120000
+                or runtime["hard_deadline_enforced_by"]
+                != "isolated-render-worker-process-v1"
+                or runtime["deadline_cleanup_policy"]
+                != "kill-worker-and-chromium-process-group"):
+            errors.append("audit roundtrip execution binding is malformed")
+        if (runtime["system_shared_libraries_bound"] is not False
+                or runtime["native_host_environment_bound"] is not False
+                or runtime["scope"] != AUDIT_ROUNDTRIP_SCOPE
+                or runtime["scope_complete"] is not False
+                or not isinstance(runtime["incomplete_reason"], str)
+                or not runtime["incomplete_reason"]):
+            errors.append("audit roundtrip runtime overclaims its scope")
+        if runtime["launch_args"] != AUDIT_ROUNDTRIP_LAUNCH_ARGS:
+            errors.append("audit roundtrip launch arguments are not exact")
+        closure = runtime["dependency_closure"]
+        if (not isinstance(closure, dict)
+                or set(closure) != {
+                    "logical_root", "algorithm", "files", "symlinks",
+                    "bytes", "tree_sha256"}
+                or closure.get("logical_root") != "playwright"
+                or closure.get("algorithm") != (
+                    "sha256(canonical-json(path,type,bytes,digest))")
+                or not all(
+                    isinstance(closure.get(key), int)
+                    and not isinstance(closure.get(key), bool)
+                    and closure[key] >= 0
+                    for key in ("files", "symlinks", "bytes"))
+                or not isinstance(closure.get("tree_sha256"), str)
+                or re.fullmatch(
+                    r"[0-9a-f]{64}", closure["tree_sha256"]) is None):
+            errors.append("audit roundtrip dependency closure is malformed")
+        chromium = runtime["chromium"]
+        chromium_file = (
+            chromium.get("file") if isinstance(chromium, dict) else None)
+        chromium_file_canonical = bool(
+            isinstance(chromium_file, str)
+            and chromium_file.startswith("playwright/")
+            and posixpath.normpath(chromium_file) == chromium_file
+            and ".." not in pathlib.PurePosixPath(chromium_file).parts
+        )
+        if (not isinstance(chromium, dict)
+                or set(chromium) != {
+                    "file", "bytes", "sha256", "version_output"}
+                or not chromium_file_canonical
+                or not isinstance(chromium.get("bytes"), int)
+                or isinstance(chromium.get("bytes"), bool)
+                or chromium["bytes"] <= 0
+                or not isinstance(chromium.get("sha256"), str)
+                or re.fullmatch(
+                    r"[0-9a-f]{64}", chromium["sha256"]) is None
+                or not isinstance(chromium.get("version_output"), str)
+                or not chromium["version_output"]
+                or not isinstance(live_browser_version, str)
+                or live_browser_version
+                not in chromium["version_output"]):
+            errors.append("audit roundtrip Chromium identity is malformed")
+    if set(requests) != {
+            "policy", "synthetic_origin", "fulfilled", "fulfilled_requests",
+            "blocked", "blocked_requests", "blocked_websockets",
+            "all_requests_from_retained_closure"}:
+        errors.append("audit roundtrip request manifest is unsupported")
+    else:
+        fulfilled = requests["fulfilled"]
+        blocked = requests["blocked"]
+        websockets = requests["blocked_websockets"]
+        retained_paths_valid = bool(
+            isinstance(entrypoint, str)
+            and entrypoint
+            and isinstance(dependency_paths, Sequence)
+            and all(isinstance(item, str) and item
+                    for item in dependency_paths)
+            and list(dependency_paths) == sorted(dependency_paths)
+            and len(dependency_paths) == len(set(dependency_paths))
+            and entrypoint not in dependency_paths
+        )
+        retained_paths = (
+            {entrypoint, *dependency_paths} if retained_paths_valid else set())
+        fulfilled_valid = bool(
+            isinstance(fulfilled, list)
+            and fulfilled
+            and all(isinstance(item, str) and item for item in fulfilled)
+        )
+        fulfilled_exact = bool(
+            fulfilled_valid
+            and entrypoint in fulfilled
+            and fulfilled == sorted(fulfilled)
+            and len(fulfilled) == len(set(fulfilled))
+            and set(fulfilled) <= retained_paths
+        )
+        fulfilled_count_exact = bool(
+            isinstance(requests["fulfilled_requests"], int)
+            and not isinstance(requests["fulfilled_requests"], bool)
+            and requests["fulfilled_requests"] == (
+                len(fulfilled) if fulfilled_valid else -1)
+        )
+        blocked_http_empty = bool(
+            isinstance(blocked, list)
+            and blocked == []
+            and isinstance(requests["blocked_requests"], int)
+            and not isinstance(requests["blocked_requests"], bool)
+            and requests["blocked_requests"] == 0
+        )
+        blocked_websockets_empty = bool(
+            isinstance(websockets, list) and websockets == [])
+        derived_retained_closure = bool(
+            fulfilled_exact
+            and fulfilled_count_exact
+            and blocked_http_empty
+            and blocked_websockets_empty
+        )
+        if (requests["policy"] != "formgen-snapshot-only-v1"
+                or requests["synthetic_origin"] != "https://formgen.invalid"
+                or not retained_paths_valid
+                or not derived_retained_closure
+                or requests["all_requests_from_retained_closure"]
+                is not derived_retained_closure):
+            errors.append("audit roundtrip request closure is false")
+    required_candidate = {
+        "bytes", "sha256", "retained_exact_bytes",
+        "chromium_returned_in_memory", "normalization", "materialization",
+        "expected_sha256_passed_to_extractor",
+        "validated_before_after_extraction", "candidate_ir_sha256",
+        "candidate_ir_digest_scope",
+    }
+    if set(candidate) != required_candidate:
+        errors.append("audit candidate PDF manifest is unsupported")
+    else:
+        if (not isinstance(candidate["bytes"], int)
+                or isinstance(candidate["bytes"], bool)
+                or candidate["bytes"] <= 0
+                or not isinstance(candidate["sha256"], str)
+                or re.fullmatch(r"[0-9a-f]{64}", candidate["sha256"]) is None
+                or not isinstance(candidate["candidate_ir_sha256"], str)
+                or re.fullmatch(
+                    r"[0-9a-f]{64}", candidate["candidate_ir_sha256"]) is None
+                or candidate["retained_exact_bytes"] is not True
+                or candidate["chromium_returned_in_memory"] is not True
+                or candidate[
+                    "expected_sha256_passed_to_extractor"] is not True
+                or candidate[
+                    "validated_before_after_extraction"] is not True
+                or candidate["materialization"]
+                != AUDIT_CANDIDATE_MATERIALIZATION
+                or candidate["candidate_ir_digest_scope"]
+                != "source-and-generator-removed"):
+            errors.append("audit candidate PDF provenance is malformed")
+        normalization = candidate["normalization"]
+        if (not isinstance(normalization, dict)
+                or set(normalization) != {
+                    "algorithm", "fields_normalized", "replacement",
+                    "xref_offsets_preserved"}
+                or normalization["algorithm"]
+                != "fixed-width-creation-modification-date-v1"
+                or not isinstance(normalization["fields_normalized"], int)
+                or isinstance(normalization["fields_normalized"], bool)
+                or normalization["fields_normalized"] != 2
+                or normalization["replacement"]
+                != AUDIT_PDF_NORMALIZATION_REPLACEMENT
+                or normalization["xref_offsets_preserved"] is not True):
+            errors.append("audit candidate PDF normalization is malformed")
+    if (audit_record.get("measured") is not True
+            or audit_record.get("hard_failure") is not None
+            or audit_record.get("error") is not None
+            or audit_record.get("status") != "ok"
+            or "roundtrip_liveness" in audit_record):
+        errors.append("audit roundtrip success state is malformed")
+    return False, errors
+
+
+def bind_audit_manifest(
+        audit_record: dict[str, Any] | None,
+        expected: dict[str, tuple[pathlib.Path, bool, bytes | None]],
+        *,
+        source_path: pathlib.Path,
+        source_identity: str,
+        source_root: pathlib.Path,
+        source_payload: bytes,
+        expected_source_sha256: str,
+        html_dir: pathlib.Path,
+        producer_sources: dict[str, bytes],
+        ) -> dict[str, Any]:
+    """Verify exact bytes while preserving intentional attestation blockers."""
+    errors: list[str] = []
+    blockers: list[str] = []
+    if not audit_record:
+        return {
+            "binding_valid": False,
+            "complete": False,
+            "reason": "no audit record",
+            "errors": ["no audit record"],
+            "blockers": [],
+        }
+    manifest = audit_record.get("input_manifest")
+    if not isinstance(manifest, dict) or set(manifest) != {
+            "schema", "algorithm", "producer", "runtime",
+            "inputs_complete", "attestation_complete", "enforceable",
+            "complete", "missing_required", "inputs", "render"}:
+        return {
+            "binding_valid": False,
+            "complete": False,
+            "reason": "audit input manifest schema is missing or unsupported",
+            "errors": [
+                "audit input manifest schema is missing or unsupported"],
+            "blockers": [],
+        }
+    if (manifest["schema"] != "formgen-audit-input-manifest-v1"
+            or manifest["algorithm"] != "sha256"):
+        errors.append("audit input manifest schema/algorithm is unsupported")
+
+    expected_producer_keys = {
+        "file", "bytes", "sha256", "dependencies",
+        "dependency_execution_bound", "audit_execution_bound",
+        "assertion_producer_bound", "roundtrip_runtime_bound_in_record",
+        "standalone_attestation_complete", "incomplete_reason",
+    }
+    producer = manifest["producer"]
+    if not isinstance(producer, dict) or set(producer) != expected_producer_keys:
+        errors.append("audit producer manifest schema is unsupported")
+    else:
+        audit_payload = producer_sources.get(AUDIT_PRODUCER_FILE)
+        if (audit_payload is None
+                or sha256_bytes(audit_payload) != AUDIT_PRODUCER_SHA256
+                or producer["file"] != AUDIT_PRODUCER_FILE
+                or producer["bytes"] != len(audit_payload)
+                or producer["sha256"] != AUDIT_PRODUCER_SHA256):
+            errors.append("audit producer bytes differ from the frozen pin")
+        dependencies = producer["dependencies"]
+        if not isinstance(dependencies, list):
+            errors.append("audit dependency manifest is not a list")
+        else:
+            expected_dependency_files = list(AUDIT_DEPENDENCY_SHA256)
+            if [
+                    item.get("file") if isinstance(item, dict) else None
+                    for item in dependencies
+            ] != expected_dependency_files:
+                errors.append("audit dependency order or identity is false")
+            for index, logical in enumerate(expected_dependency_files):
+                if index >= len(dependencies):
+                    break
+                item = dependencies[index]
+                payload = producer_sources.get(logical)
+                if (not isinstance(item, dict)
+                        or set(item) != {
+                            "file", "bytes", "sha256", "loaded_origin",
+                            "executed_from_snapshotted_source"}
+                        or payload is None
+                        or sha256_bytes(payload)
+                        != AUDIT_DEPENDENCY_SHA256[logical]
+                        or item.get("file") != logical
+                        or item.get("loaded_origin") != logical
+                        or item.get("bytes") != len(payload)
+                        or item.get("sha256")
+                        != AUDIT_DEPENDENCY_SHA256[logical]
+                        or item.get(
+                            "executed_from_snapshotted_source") is not True):
+                    errors.append(
+                        f"audit dependency bytes/binding are false: {logical}")
+        expected_flags = {
+            "dependency_execution_bound": True,
+            "audit_execution_bound": False,
+            "assertion_producer_bound": False,
+            "roundtrip_runtime_bound_in_record": False,
+            "standalone_attestation_complete": False,
+        }
+        for key, expected_value in expected_flags.items():
+            if producer.get(key) is not expected_value:
+                errors.append(f"audit producer flag is false: {key}")
+        if (not isinstance(producer.get("incomplete_reason"), str)
+                or not producer["incomplete_reason"]):
+            errors.append("audit producer lacks its incomplete-scope reason")
+
+    runtime_errors = validate_audit_runtime(manifest["runtime"])
+    errors.extend(runtime_errors)
+    inputs = manifest["inputs"]
+    if not isinstance(inputs, dict) or set(inputs) != AUDIT_INPUT_ROLES:
+        errors.append("audit input manifest roles disagree")
+        inputs = {}
+    if set(expected) != AUDIT_INPUT_ROLES - {"source_pdf"}:
+        errors.append("referee audit input specification is incomplete")
+    missing: list[str] = []
+    for role in sorted(AUDIT_INPUT_ROLES - {"source_pdf"}):
+        spec = expected.get(role)
+        entry = inputs.get(role)
+        if spec is None or not isinstance(entry, dict):
+            errors.append(f"audit input entry is missing: {role}")
+            continue
+        path, required, payload = spec
+        present = payload is not None
+        expected_entry = {
+            "file": path.name,
+            "required": required,
+            "present": present,
+            "bytes": len(payload) if payload is not None else None,
+            "sha256": (
+                sha256_bytes(payload) if payload is not None else None),
+        }
+        if entry != expected_entry:
+            errors.append(f"audit input bytes/metadata disagree: {role}")
+        if required and not present:
+            missing.append(role)
+    source_entry = inputs.get("source_pdf")
+    try:
+        logical_source_path = source_path.relative_to(
+            source_root.expanduser()).as_posix()
+    except ValueError:
+        logical_source_path = source_path.name
+    expected_source_entry = {
+        "file": source_identity.split(":", 1)[-1],
+        "logical_identity": source_identity,
+        "path": logical_source_path,
+        "required": True,
+        "present": True,
+        "bytes": len(source_payload),
+        "sha256": sha256_bytes(source_payload),
+        "expected_sha256": expected_source_sha256,
+    }
+    if source_entry != expected_source_entry:
+        errors.append("audit source PDF bytes/identity disagree")
+    if manifest["missing_required"] != missing:
+        errors.append("audit missing-required inventory is false")
+    inputs_complete = not missing
+    if manifest["inputs_complete"] is not inputs_complete:
+        errors.append("audit inputs_complete relation is false")
+
+    render = manifest["render"]
+    html_spec = expected.get("html")
+    html_payload = html_spec[2] if html_spec is not None else None
+    expected_entrypoint = html_spec[0].name if html_spec is not None else None
+    independent_dependencies: list[dict[str, Any]] = []
+    render_errors: list[str] = []
+    if isinstance(html_payload, bytes) and expected_entrypoint is not None:
+        independent_dependencies, render_errors = audit_render_dependencies(
+            html_payload, expected_entrypoint, html_dir)
+    else:
+        render_errors.append("HTML snapshot is absent")
+    if not isinstance(render, dict) or set(render) != {
+            "entrypoint", "dependencies", "errors", "complete",
+            "network_policy"}:
+        errors.append("audit render manifest schema is unsupported")
+        dependency_paths: list[str] = []
+    else:
+        dependencies = render["dependencies"]
+        dependency_paths = (
+            [item.get("path") for item in dependencies]
+            if isinstance(dependencies, list)
+            and all(isinstance(item, dict) for item in dependencies)
+            else []
+        )
+        if render["entrypoint"] != expected_entrypoint:
+            errors.append("audit render entrypoint is false")
+        if dependencies != independent_dependencies:
+            errors.append("audit render dependency closure/bytes disagree")
+        if render["errors"] != render_errors:
+            errors.append("audit render error inventory disagrees")
+        if render["complete"] is not (not render_errors):
+            errors.append("audit render complete relation is false")
+        if render["network_policy"] != (
+                "deny-except-retained-relative-resources-and-inline-data"):
+            errors.append("audit render network policy is unsupported")
+
+    provenance = audit_record.get("provenance_validation")
+    if provenance != {
+            "validated_before": True,
+            "validated_after": True,
+            "error": None}:
+        errors.append("audit provenance was not validated before and after")
+    roundtrip_scope, roundtrip_errors = validate_audit_roundtrip(
+        audit_record, expected_entrypoint or "", dependency_paths)
+    errors.extend(roundtrip_errors)
+    attestation = audit_record.get("attestation")
+    if not isinstance(attestation, dict) or set(attestation) != {
+            "inputs_complete", "producer_execution_bound",
+            "base_runtime_scope_complete", "roundtrip_runtime_scope_complete",
+            "validated_before_after", "complete", "enforceable",
+            "incomplete_reasons", "future_gate_required"}:
+        errors.append("audit top-level attestation schema is unsupported")
+        attestation = {}
+    else:
+        expected_attestation = {
+            "inputs_complete": inputs_complete,
+            "producer_execution_bound": False,
+            "base_runtime_scope_complete": False,
+            "roundtrip_runtime_scope_complete": roundtrip_scope,
+            "validated_before_after": True,
+            "complete": False,
+            "enforceable": False,
+        }
+        for key, expected_value in expected_attestation.items():
+            if attestation.get(key) is not expected_value:
+                errors.append(f"audit attestation relation is false: {key}")
+        if (not isinstance(attestation["incomplete_reasons"], list)
+                or not attestation["incomplete_reasons"]
+                or not all(isinstance(item, str) and item
+                           for item in attestation["incomplete_reasons"])
+                or not isinstance(attestation["future_gate_required"], str)
+                or not attestation["future_gate_required"]):
+            errors.append("audit attestation blocker explanation is malformed")
+    if manifest["attestation_complete"] is not False:
+        errors.append("audit manifest overclaims producer attestation")
+    if manifest["enforceable"] is not False:
+        errors.append("audit manifest overclaims enforceability")
+    if manifest["complete"] is not False:
+        errors.append("audit manifest overclaims completeness")
+    if manifest["attestation_complete"] is False:
+        blockers.append("audit producer/runtime attestation is incomplete")
+    if manifest["enforceable"] is False:
+        blockers.append("audit evidence is not yet enforceable")
+    if manifest["complete"] is False:
+        blockers.append("audit input manifest is intentionally non-gating")
+    if attestation.get("base_runtime_scope_complete") is False:
+        blockers.append("audit base runtime scope is incomplete")
+    blockers.append(
+        "audit PyMuPDF/application runtime closure is manifest-"
+        "self-consistent only; the referee independently rehashes the "
+        "Python executable but not every named module or native dependency"
+    )
+    if roundtrip_scope is False:
+        blockers.append("audit roundtrip native runtime scope is incomplete")
+        blockers.append(
+            "audit Playwright/Chromium closure is manifest-schema checked "
+            "but not independently rehashed by the standalone referee"
+        )
+    binding_valid = not errors
+    complete = bool(
+        binding_valid
+        and manifest["complete"] is True
+        and manifest["enforceable"] is True
+        and attestation.get("complete") is True
+        and attestation.get("enforceable") is True
+    )
+    reason_parts = [
+        *(f"invalid: {error}" for error in errors),
+        *(f"blocked: {blocker}" for blocker in blockers),
+    ]
+    return {
+        "binding_valid": binding_valid,
+        "manifest_inputs_complete": inputs_complete,
+        "attestation_complete": bool(
+            manifest["attestation_complete"]
+            and attestation.get("complete")),
+        "enforceable": bool(
+            manifest["enforceable"] and attestation.get("enforceable")),
+        "complete": complete,
+        "reason": "; ".join(reason_parts) if reason_parts else "complete",
+        "errors": errors,
+        "blockers": blockers,
+        "producer_sha256": producer.get("sha256") if isinstance(
+            producer, dict) else None,
+        "runtime_tree_sha256": (
+            ((manifest.get("runtime") or {}).get(
+                "loaded_application_files") or {}).get("tree_sha256")
+        ),
+        "runtime_manifest_self_consistent": not runtime_errors,
+        "base_runtime_closure_independently_attested": False,
+        "roundtrip_runtime_closure_independently_attested": False,
+        "render_dependency_count": len(independent_dependencies),
+        "render_dependencies": independent_dependencies,
+        "roundtrip_present": roundtrip_scope is not None,
+    }
+
+
+def bind_audit_assertion(
+        audit: dict[str, Any],
+        ledger: dict[str, Any],
+        slots: dict[str, dict[str, Any]],
+        emission_inventory: dict[str, Any],
+        ) -> dict[str, Any]:
+    """Bind legacy-cell audit identities to the canonical subject ledger."""
+    errors: list[str] = []
+    active_order = [
+        subject["cell_id"] for subject in ledger["subjects"]
+        if subject["state"] in {"active_resolved", "active_unresolved"}
+    ]
+    if audit.get("expected_comb_ids") != active_order:
+        errors.append(
+            "audit expected IDs do not equal active ledger order")
+    if audit.get("checked_comb_ids") != active_order:
+        errors.append(
+            "audit checked IDs do not equal active ledger order")
+    emitted_ids = sorted(slots)
+    if audit.get("emitted_comb_ids") != emitted_ids:
+        errors.append("audit emitted inventory differs from parsed HTML")
+    if audit.get("unexpected_emitted_comb_ids") != (
+            emission_inventory["unexpected_emitted_cell_ids"]):
+        errors.append(
+            "audit unexpected-emission inventory differs from ledger binding")
+
+    ledger_aliases = {
+        subject["legacy_cell_id"]: subject for subject in ledger["subjects"]
+    }
+    inference_aliases = {
+        inference["cell_id"]: inference for inference in ledger["inferences"]
+    }
+    unknown = sorted(
+        cell_id for cell_id in audit.get("offenders", {})
+        if _CELL_RE.fullmatch(cell_id)
+        and cell_id not in ledger_aliases
+        and cell_id not in inference_aliases
+    )
+    if unknown:
+        errors.append(
+            "audit offenders do not map to ledger legacy identities: "
+            + ", ".join(unknown[:8]))
+    for missing_id in emission_inventory["missing_active_cell_ids"]:
+        subject = next(
+            item for item in ledger["subjects"]
+            if item["cell_id"] == missing_id)
+        offender = audit.get("offenders", {}).get(
+            subject["legacy_cell_id"])
+        if (offender is None
+                or offender.get("emission_state") != "missing-emitted-cell"):
+            errors.append(
+                "audit omits current missing active emission: "
+                + subject["subject_key"])
+    for unexpected_id in emission_inventory["unexpected_emitted_cell_ids"]:
+        offender = audit.get("offenders", {}).get(unexpected_id)
+        if (offender is None
+                or "unexpected-emitted-comb"
+                not in (offender.get("failure_kinds") or ())):
+            errors.append(
+                f"audit omits current unexpected emission: {unexpected_id}")
+    return {
+        "binding_valid": not errors,
+        "reason": "complete" if not errors else "; ".join(errors),
+        "errors": errors,
+        "active_subject_ids": active_order,
+        "emitted_ids": emitted_ids,
+        "legacy_alias_count": len(ledger_aliases),
+    }
 
 
 def page_signature(value: dict[str, Any]) -> list[tuple[int, float, float]]:
@@ -3981,6 +6359,12 @@ def bind_tracked_provenance(slug: str, layout: dict[str, Any]
 
 
 def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
+    ledger_state = cell.get("ledger_state")
+    if ledger_state != "active_resolved" or cell.get("ledger_blocks_gate"):
+        return (
+            "unevaluable",
+            "ledger subject is retained, unresolved, inferred, or blocking",
+        )
     lattice = cell["latticed"]
     emitted = cell["emitted"]
     referee = cell["referee"]
@@ -4043,12 +6427,34 @@ def changed_snapshot_inputs(form: dict[str, Any],
             continue
         if actual != expected:
             changed.append(role)
+    manifest_binding = (
+        form.get("audit_evidence", {}).get("manifest_binding", {}))
+    render_dependencies = manifest_binding.get("render_dependencies", [])
+    if isinstance(render_dependencies, list):
+        for entry in render_dependencies:
+            if not isinstance(entry, dict):
+                changed.append("audit_render_dependency_manifest")
+                continue
+            logical = entry.get("path")
+            expected_sha = entry.get("sha256")
+            if not isinstance(logical, str) or not isinstance(expected_sha, str):
+                changed.append("audit_render_dependency_manifest")
+                continue
+            path = args.html_dir.joinpath(
+                *pathlib.PurePosixPath(logical).parts)
+            try:
+                actual = sha256_file(path)
+            except OSError:
+                changed.append(f"audit_render_dependency:{logical}")
+                continue
+            if actual != expected_sha:
+                changed.append(f"audit_render_dependency:{logical}")
     return changed
 
 
 def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 audit_by_slug: dict[str, dict[str, Any]],
-                poppler: dict[str, str]) -> dict[str, Any]:
+                poppler: dict[str, Any]) -> dict[str, Any]:
     slug = layout_path.name.removesuffix(".layout.json")
     html_path = args.html_dir / f"{slug}.html"
     ir_path = args.ir_dir / f"{slug}.ir.json"
@@ -4078,22 +6484,15 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     layout = json.loads(layout_bytes)
     ir = json.loads(ir_bytes)
     guide = json.loads(guide_bytes)
-    layout_comb_count = sum(
-        bool(cell.get("comb"))
-        for page in layout.get("pages") or ()
-        for cell in page.get("cells") or ()
-    )
     expected_combs = EXPECTED_COMBS_BY_SLUG.get(slug)
     if expected_combs is None:
         raise RefereeError(f"{slug}: form is not in the pinned referee corpus")
+    ledger = validate_comb_ledger(
+        slug, layout, args.lattice_producer_bytes)
     html_structure_sha256 = emitted_structure_sha256(html_bytes)
     if html_structure_sha256 != EXPECTED_HTML_STRUCTURE_SHA256.get(slug):
         raise RefereeError(
             f"{slug}: emitted HTML bytes changed from the reviewed pin")
-    if layout_comb_count != expected_combs:
-        raise RefereeError(
-            f"{slug}: layout has {layout_comb_count} combs, "
-            f"expected pinned {expected_combs}")
     html_parser = SlotParser()
     html_parser.feed(html_bytes.decode("utf-8"))
     html_parser.close()
@@ -4110,27 +6509,84 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     actual_sha = sha256_bytes(pdf_bytes)
     if actual_sha != expected_sha:
         raise RefereeError(f"{slug}: source hash changed")
+    source_contract = layout.get("source")
+    if (not isinstance(source_contract, dict)
+            or set(source_contract) != {
+                "file", "sha256", "bytes", "page_count",
+            }
+            or source_contract.get("bytes") != len(pdf_bytes)
+            or source_contract.get("page_count") != len(layout["pages"])):
+        raise RefereeError(
+            f"{slug}: source PDF provenance contract is incomplete")
 
     emission_contract = emitted_geometry_contract(layout, guide)
+    if set(emission_contract) != set(ledger["active_cell_ids"]):
+        raise RefereeError(
+            f"{slug}: guide/layout emission contract does not exactly bind "
+            "the active subject ledger")
     slots = slot_records(html_parser, emission_contract)
-    relocated = relocated_cells(guide)
+    emission_inventory = validate_emission_inventory(ledger, slots)
     audit_record = audit_by_slug.get(slug)
     audit = audit_evidence(audit_record)
-    manifest_ok, manifest_reason = bind_audit_manifest(audit_record, {
+    manifest_binding = bind_audit_manifest(audit_record, {
         "ir": (ir_path, True, ir_bytes),
         "layout": (layout_path, True, layout_bytes),
         "html": (html_path, True, html_bytes),
         "guide": (guide_path, True, guide_bytes),
         "guide_html": (
             guide_html_path, False, snapshots["guide_html"]),
-    }, args.audit_producer_bytes)
-    audit["input_manifest_verified"] = manifest_ok
-    audit["input_manifest_reason"] = manifest_reason
-    if not manifest_ok:
-        audit["complete"] = False
-        audit["reason"] = manifest_reason
+    },
+        source_path=pdf,
+        source_identity=str(source_contract["file"]),
+        source_root=args.source_root,
+        source_payload=pdf_bytes,
+        expected_source_sha256=actual_sha,
+        html_dir=args.html_dir,
+        producer_sources={
+            AUDIT_PRODUCER_FILE: args.audit_producer_bytes,
+            **args.audit_dependency_bytes,
+        },
+    )
+    assertion_binding = bind_audit_assertion(
+        audit, ledger, slots, emission_inventory)
+    audit["input_manifest_verified"] = manifest_binding["binding_valid"]
+    audit["input_manifest_reason"] = manifest_binding["reason"]
+    audit["manifest_binding"] = manifest_binding
+    audit["ledger_binding"] = assertion_binding
+    audit["evidence_published"] = bool(audit.get("assertion_valid"))
+    audit["byte_and_relation_binding_valid"] = bool(
+        audit.get("assertion_valid")
+        and manifest_binding["binding_valid"]
+        and assertion_binding["binding_valid"]
+    )
+    audit["runtime_closure_independently_attested"] = False
+    audit["integrity_valid"] = bool(
+        audit["byte_and_relation_binding_valid"]
+        and manifest_binding[
+            "base_runtime_closure_independently_attested"]
+        and manifest_binding[
+            "roundtrip_runtime_closure_independently_attested"]
+    )
+    audit["complete"] = bool(
+        audit["integrity_valid"]
+        and audit["byte_and_relation_binding_valid"]
+        and manifest_binding["complete"])
+    audit_reasons = [
+        value for value in (
+            None if audit.get("assertion_valid") else audit.get("reason"),
+            None if assertion_binding["binding_valid"]
+            else assertion_binding["reason"],
+            None if manifest_binding["complete"]
+            else manifest_binding["reason"],
+        ) if value
+    ]
+    audit["reason"] = (
+        "complete" if audit["complete"] else "; ".join(audit_reasons))
     cells: list[dict[str, Any]] = []
     page_meta: list[dict[str, Any]] = []
+    subjects_by_page: dict[int, list[dict[str, Any]]] = {}
+    for subject in ledger["subjects"]:
+        subjects_by_page.setdefault(int(subject["page"]), []).append(subject)
 
     with tempfile.TemporaryDirectory(prefix=f"comb-referee-{slug}-") as temp:
         directory = pathlib.Path(temp)
@@ -4151,27 +6607,40 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 "vector_paints": len(svg.paints),
                 "unsupported_regions": len(svg.unsupported),
             })
-            for cell in page["cells"]:
-                if not cell.get("comb") or cell["id"] in relocated:
-                    continue
-                result = classify_band(cell, svg)
-                emitted = slots.get(cell["id"])
-                audit_offender = audit["offenders"].get(cell["id"])
+            for subject in subjects_by_page.get(page_index, ()):
+                source_cell = subject["source_cell"]
+                result = classify_band(source_cell, svg)
+                report_cell_id = (
+                    subject["cell_id"] or subject["legacy_cell_id"])
+                emitted = slots.get(report_cell_id)
+                audit_offender = audit["offenders"].get(
+                    subject["legacy_cell_id"])
                 if audit_offender is not None:
                     audit_printed = audit_offender.get("printed")
                     audit_relation = "published-offender"
-                elif audit["complete"]:
-                    audit_printed = int(cell["comb"]["cells"])
+                elif audit["complete"] and subject["state"] == "active_resolved":
+                    audit_printed = int(subject["topology"]["cells"])
                     audit_relation = "complete-non-offender"
+                elif audit["complete"]:
+                    audit_printed = None
+                    audit_relation = "complete-blocked-subject"
                 else:
                     audit_printed = None
                     audit_relation = "unknown-truncated"
                 cells.append({
-                    "cell": cell["id"],
+                    "cell": report_cell_id,
+                    "subject_key": subject["subject_key"],
+                    "legacy_cell_id": subject["legacy_cell_id"],
+                    "cell_id": subject["cell_id"],
+                    "ledger_state": subject["state"],
+                    "ledger_blocks_gate": subject["blocks_gate"],
+                    "ledger_reason_codes": subject["reason_codes"],
+                    "ledger_topology_sha256": subject["topology"]["sha256"],
+                    "ledger_evidence": subject["ledger"],
                     "page": page_index,
-                    "bbox": [cell["x0"], cell["y0"], cell["x1"], cell["y1"]],
-                    "latticed": int(cell["comb"]["cells"]),
-                    "lattice_divider_x": cell["comb"].get("divider_x") or [],
+                    "bbox": list(subject["legacy_bbox"]),
+                    "latticed": int(subject["topology"]["cells"]),
+                    "lattice_divider_x": subject["topology"]["divider_x"],
                     "emitted": emitted["count"] if emitted else None,
                     "emitted_indexes_valid": bool(emitted and emitted["valid"]),
                     "emitted_evidence": emitted,
@@ -4181,23 +6650,9 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 })
 
     cell_ids = {cell["cell"] for cell in cells}
-    unexpected_slots = sorted(set(slots) - cell_ids)
-    if unexpected_slots:
+    if len(cell_ids) != len(cells) or len(cells) != expected_combs:
         raise RefereeError(
-            f"{slug}: HTML contains non-layout combs: "
-            + ", ".join(unexpected_slots[:8]))
-    audit_errors: list[str] = []
-    if audit.get("complete"):
-        if int(audit["combs_checked"]) != len(cells):
-            audit_errors.append(
-                f"audit checked {audit['combs_checked']}/{len(cells)} combs")
-        unknown = sorted(set(audit["offenders"]) - cell_ids)
-        if unknown:
-            audit_errors.append(
-                f"audit published unknown cells: {', '.join(unknown[:8])}")
-    if audit_errors:
-        audit["complete"] = False
-        audit["reason"] = "; ".join(audit_errors)
+            f"{slug}: published subject identities are not exhaustive")
     for cell in cells:
         status, reason = comparison(cell, bool(audit.get("complete")))
         cell["comparison_status"] = status
@@ -4212,16 +6667,19 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
             "emitted": cell["emitted"],
         }
 
-    measured = [cell for cell in cells
-                if cell["referee"]["status"] == "measured"]
-    unevaluable = [cell for cell in cells
-                   if cell["referee"]["status"] != "measured"]
+    source_measured = [
+        cell for cell in cells if cell["referee"]["status"] == "measured"]
+    source_unevaluable = [
+        cell for cell in cells if cell["referee"]["status"] != "measured"]
+    unevaluable = [
+        cell for cell in cells
+        if cell["comparison_status"] == "unevaluable"]
     layout_mismatches = [
-        cell for cell in measured
+        cell for cell in source_measured
         if int(cell["referee"]["compartments"]) != int(cell["latticed"])
     ]
     position_mismatches = [
-        cell for cell in measured
+        cell for cell in source_measured
         if not bool(cell["referee"].get("positions_match"))
     ]
     emission_mismatches = [
@@ -4238,6 +6696,14 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     }
     status = "ok"
     reasons: list[str] = []
+    if ledger["counts"]["blocking"]:
+        status = "unevaluable"
+        reasons.append(
+            f"{ledger['counts']['blocking']} lattice-ledger blockers")
+    if not emission_inventory["complete"]:
+        status = "unevaluable"
+        reasons.append(
+            f"emission inventory incomplete: {emission_inventory['reason']}")
     if not audit.get("complete"):
         status = "unevaluable"
         reasons.append(f"audit evidence incomplete: {audit.get('reason')}")
@@ -4257,6 +6723,9 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         "source": {
             "file": str(pdf.relative_to(args.source_root)),
             "sha256": actual_sha,
+            "bytes": len(pdf_bytes),
+            "page_count": len(layout["pages"]),
+            "layout_pin": dict(source_contract),
         },
         "artifacts": {
             "ir_sha256": sha256_bytes(ir_bytes),
@@ -4271,21 +6740,48 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
             "tracked_provenance_file": str(provenance_path.relative_to(REPO)),
             "tracked_provenance_sha256": sha256_bytes(provenance_bytes),
         },
+        "lattice_evidence": ledger["lattice"],
         "poppler": poppler,
         "pages": page_meta,
         "audit_evidence": {
             key: value for key, value in audit.items() if key != "offenders"
         },
+        "emission_inventory": emission_inventory,
         "emission_binding_errors": html_parser.invalid_bindings,
         "counts": {
             "combs": len(cells),
-            "measured": len(measured),
+            "subjects": ledger["counts"]["subjects"],
+            "subjects_active": ledger["counts"]["active"],
+            "subjects_active_resolved": ledger["counts"]["active_resolved"],
+            "subjects_active_unresolved": ledger["counts"]["active_unresolved"],
+            "subjects_retained_unresolved": (
+                ledger["counts"]["retained_unresolved"]),
+            "inferences_suppressed": (
+                ledger["counts"]["inferences_suppressed"]),
+            "ledger_blocking": ledger["counts"]["blocking"],
+            "measured": len(source_measured),
+            "source_unevaluable": len(source_unevaluable),
             "unevaluable": len(unevaluable),
             "referee_layout_mismatches": len(layout_mismatches),
             "referee_layout_position_mismatches": len(position_mismatches),
             "emission_layout_mismatches": len(emission_mismatches),
             "comparisons": comparison_counts,
         },
+        "inferences": [
+            {
+                "page": inference["page"],
+                "subject_key": inference["subject_key"],
+                "cell_id": inference["cell_id"],
+                "state": inference["state"],
+                "blocks_gate": inference["blocks_gate"],
+                "reason_codes": inference["reason_codes"],
+                "bbox": inference["bbox"],
+                "topology_sha256": inference["topology"]["sha256"],
+                "ledger_evidence": inference["ledger"],
+                "emitted_evidence": slots.get(inference["cell_id"]),
+            }
+            for inference in ledger["inferences"]
+        ],
         "cells": sorted(cells, key=cell_sort_key),
     }
 
@@ -4301,6 +6797,34 @@ def self_test() -> int:
         pass
     else:
         raise AssertionError("CSS angle units were interpreted as SVG degrees")
+
+    bounded = run_bounded_subprocess(
+        [sys.executable, "-c", "print('bounded-self-test')"],
+        timeout_seconds=2.0,
+        label="bounded self-test",
+    )
+    assert bounded.returncode == 0
+    assert bounded.stdout.strip() == "bounded-self-test"
+    try:
+        run_bounded_subprocess(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import subprocess,sys,time;"
+                    "subprocess.Popen([sys.executable,'-c',"
+                    "\"import time;time.sleep(10)\"]);"
+                    "time.sleep(10)"
+                ),
+            ],
+            timeout_seconds=0.1,
+            label="bounded timeout self-test",
+        )
+    except RefereeError as error:
+        assert "fixed 0.1-second deadline" in str(error)
+        assert SUBPROCESS_CLEANUP_POLICY in str(error)
+    else:
+        raise AssertionError("bounded subprocess timeout was not enforced")
 
     subpaths, unsupported, malformed = path_subpaths(
         "M 1 2 L 3 2 L 3 9 L 1 9 Z")
@@ -4986,6 +7510,49 @@ def self_test() -> int:
     )
     assert not slot_records(invalid_slots)["p1c1"]["valid"]
 
+    def emitted_slot_fixture(slot_markup: str) -> SlotParser:
+        fixture_parser = SlotParser(require_runtime_contract=False)
+        fixture_parser.feed(
+            '<html>' + minimal_style + '<body>'
+            '<div class="page page-1" id="page-1" '
+            'style="width:100pt;height:100pt">'
+            '<div class="layer-cells">'
+            '<div id="p1c1" data-field-kind="comb" '
+            'data-field-name="p1c1" class="c f" '
+            'data-cell-kind="field" data-row="0" data-col="0" '
+            'data-comb-pitch="10" data-comb-capacity="2" '
+            'data-comb-slots="2" '
+            'style="left:0pt;top:0pt;width:20pt;height:10pt">'
+            + slot_markup
+            + '</div></div></div></body></html>'
+        )
+        fixture_parser.close()
+        return fixture_parser
+
+    missing_emitted_slot = emitted_slot_fixture(
+        '<div class="s" data-slot="0" '
+        'style="left:0pt;top:0pt;width:10pt;height:10pt">'
+        '<input type="text" class="fi fh0 fc" id="p1c1-s0" '
+        'name="p1c1" data-slot-index="0" maxlength="1" '
+        'autocomplete="off" spellcheck="false"></div>'
+    )
+    assert not slot_records(
+        missing_emitted_slot, parser_expected)["p1c1"]["valid"]
+    duplicate_emitted_slot = emitted_slot_fixture(
+        '<div class="s" data-slot="0" '
+        'style="left:0pt;top:0pt;width:10pt;height:10pt">'
+        '<input type="text" class="fi fh0 fc" id="p1c1-s0" '
+        'name="p1c1" data-slot-index="0" maxlength="1" '
+        'autocomplete="off" spellcheck="false"></div>'
+        '<div class="s" data-slot="0" '
+        'style="left:10pt;top:0pt;width:10pt;height:10pt">'
+        '<input type="text" class="fi fh0 fc" id="p1c1-s0" '
+        'name="p1c1" data-slot-index="0" maxlength="1" '
+        'autocomplete="off" spellcheck="false"></div>'
+    )
+    assert not slot_records(
+        duplicate_emitted_slot, parser_expected)["p1c1"]["valid"]
+
     invalid_page_binding = SlotParser(require_runtime_contract=False)
     invalid_page_binding.feed(
         '<html>' + minimal_style + '<body>'
@@ -5166,65 +7733,976 @@ def self_test() -> int:
     assert any("runtime scripts disagree" in error
                for error in bogus_runtime.invalid_bindings)
 
+    def synthetic_ledger_comb(
+            x0: float, x1: float, status: str = "resolved",
+            reason_codes: list[str] | None = None,
+            ) -> dict[str, Any]:
+        midpoint = (x0 + x1) / 2
+        reasons = list(reason_codes or ())
+        return {
+            "cells": 2,
+            "divider_count": 1,
+            "pitch_pt": midpoint - x0,
+            "pitch_min_pt": midpoint - x0,
+            "pitch_max_pt": x1 - midpoint,
+            "slot_x": [x0, midpoint, x1],
+            "divider_x": [midpoint],
+            "divider_thickness_pt": 0.2,
+            "divider_thicknesses_pt": [0.2],
+            "divider_gray": 0.0,
+            "divider_paint_seq": [1],
+            "divider_paint_ranges": [[1, 1]],
+            "y0": 1.0,
+            "y1": 9.0,
+            "height_pt": 8.0,
+            "resolution": {
+                "status": status,
+                "method": "self-test",
+                "reason_codes": reasons,
+            },
+        }
+
+    def refresh_ledger_stats(layout_value: dict[str, Any]) -> None:
+        page_value = layout_value["pages"][0]
+        subjects_value = page_value["comb_subjects"]
+        inferences_value = page_value["comb_inferences"]
+        active_resolved_value = sum(
+            item["state"] == "active_resolved" for item in subjects_value)
+        active_unresolved_value = sum(
+            item["state"] == "active_unresolved" for item in subjects_value)
+        retained_value = sum(
+            item["state"] == "retained_unresolved" for item in subjects_value)
+        subject_blockers_value = sum(
+            item.get("blocks_gate") is True for item in subjects_value)
+        inference_blockers_value = sum(
+            item.get("blocks_gate") is True for item in inferences_value)
+        comb_cells_value = [
+            item for item in page_value["cells"] if "comb" in item
+        ]
+        page_value["stats"] = {
+            "comb_cells": len(comb_cells_value),
+            "comb_subjects": len(subjects_value),
+            "comb_subjects_active": (
+                active_resolved_value + active_unresolved_value),
+            "comb_subjects_active_resolved": active_resolved_value,
+            "comb_subjects_active_unresolved": active_unresolved_value,
+            "comb_subjects_retained_unresolved": retained_value,
+            "comb_subjects_retired": 0,
+            "comb_subjects_blocking": subject_blockers_value,
+            "comb_inferences_suppressed": len(inferences_value),
+            "comb_inferences_blocking": inference_blockers_value,
+            "comb_evidence_blocking": (
+                subject_blockers_value + inference_blockers_value),
+            "comb_slots": sum(
+                int(item["comb"]["cells"]) for item in comb_cells_value),
+        }
+
+    def synthetic_ledger_layout() -> dict[str, Any]:
+        cells_value: list[dict[str, Any]] = []
+        subjects_value: list[dict[str, Any]] = []
+        for index in range(EXPECTED_COMBS_BY_SLUG["0605-1999"]):
+            x0 = float(index * 3)
+            x1 = x0 + 2.0
+            bbox_value = [x0, 0.0, x1, 10.0]
+            subject_key = (
+                f"p1@{x0:.2f},0.00,{x1:.2f},10.00")
+            cell_id = f"p1c{index}"
+            comb_value = synthetic_ledger_comb(x0, x1)
+            cells_value.append({
+                "id": cell_id,
+                "subject_key": subject_key,
+                "x0": x0,
+                "y0": 0.0,
+                "x1": x1,
+                "y1": 10.0,
+                "comb": comb_value,
+            })
+            subjects_value.append({
+                "subject_key": subject_key,
+                "legacy_cell_id": cell_id,
+                "legacy_bbox": bbox_value,
+                "cell_id": cell_id,
+                "mapped_partition_cell_ids": [cell_id],
+                "state": "active_resolved",
+                "reason_codes": [],
+                "cells": 2,
+                "blocks_gate": False,
+            })
+        value = {
+            "generator": dict(LATTICE_GENERATOR_CONTRACT),
+            "pages": [{
+                "index": 1,
+                "cells": cells_value,
+                "comb_subjects": subjects_value,
+                "comb_inferences": [],
+            }],
+        }
+        refresh_ledger_stats(value)
+        return value
+
+    def clone(value: Any) -> Any:
+        return json.loads(json.dumps(value))
+
+    lattice_producer_bytes = (HERE / "lattice.py").read_bytes()
+    ledger_fixture = synthetic_ledger_layout()
+    ledger_result = validate_comb_ledger(
+        "0605-1999", ledger_fixture, lattice_producer_bytes)
+    assert ledger_result["counts"] == {
+        "subjects": 21,
+        "active": 21,
+        "active_resolved": 21,
+        "active_unresolved": 0,
+        "retained_unresolved": 0,
+        "inferences_suppressed": 0,
+        "blocking": 0,
+    }
+
+    for name, mutate in (
+        (
+            "missing-ledger",
+            lambda value: value["pages"][0].pop("comb_subjects"),
+        ),
+        (
+            "missing-inference-ledger",
+            lambda value: value["pages"][0].pop("comb_inferences"),
+        ),
+        (
+            "empty-ledger",
+            lambda value: value["pages"][0].__setitem__(
+                "comb_subjects", []),
+        ),
+        (
+            "duplicate-subject-key",
+            lambda value: value["pages"][0]["comb_subjects"][1].__setitem__(
+                "subject_key",
+                value["pages"][0]["comb_subjects"][0]["subject_key"]),
+        ),
+        (
+            "duplicate-legacy-id",
+            lambda value: value["pages"][0]["comb_subjects"][1].__setitem__(
+                "legacy_cell_id",
+                value["pages"][0]["comb_subjects"][0]["legacy_cell_id"]),
+        ),
+        (
+            "active-cell-mismatch",
+            lambda value: (
+                value["pages"][0]["comb_subjects"][0].__setitem__(
+                    "cell_id", "p1c999"),
+                value["pages"][0]["comb_subjects"][0].__setitem__(
+                    "mapped_partition_cell_ids", ["p1c999"]),
+            ),
+        ),
+        (
+            "retired-state",
+            lambda value: value["pages"][0]["comb_subjects"][0].__setitem__(
+                "state", "retired_proven_false"),
+        ),
+        (
+            "unknown-state",
+            lambda value: value["pages"][0]["comb_subjects"][0].__setitem__(
+                "state", "mystery"),
+        ),
+    ):
+        broken_ledger = clone(ledger_fixture)
+        mutate(broken_ledger)
+        try:
+            validate_comb_ledger(
+                "0605-1999", broken_ledger, lattice_producer_bytes)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(f"invalid comb ledger passed: {name}")
+    try:
+        validate_comb_ledger("0605-1999", ledger_fixture, b"stale lattice")
+    except RefereeError:
+        pass
+    else:
+        raise AssertionError("stale lattice producer bytes were accepted")
+
+    reverse_mismatch = clone(ledger_fixture)
+    reverse_mismatch["pages"][0]["cells"].append({
+        "id": "p1c999",
+        "subject_key": "p1@90.00,0.00,92.00,10.00",
+        "x0": 90.0, "y0": 0.0, "x1": 92.0, "y1": 10.0,
+        "comb": synthetic_ledger_comb(90.0, 92.0),
+    })
+    refresh_ledger_stats(reverse_mismatch)
+    try:
+        validate_comb_ledger(
+            "0605-1999", reverse_mismatch, lattice_producer_bytes)
+    except RefereeError:
+        pass
+    else:
+        raise AssertionError("unledgered active comb passed reverse mapping")
+
+    unresolved_ledger = clone(ledger_fixture)
+    unresolved_subject = unresolved_ledger["pages"][0]["comb_subjects"][0]
+    unresolved_cell = unresolved_ledger["pages"][0]["cells"][0]
+    unresolved_subject.update({
+        "state": "active_unresolved",
+        "reason_codes": ["self-test-unresolved"],
+        "blocks_gate": True,
+    })
+    unresolved_cell["comb"]["resolution"].update({
+        "status": "unresolved",
+        "reason_codes": ["self-test-unresolved"],
+    })
+    refresh_ledger_stats(unresolved_ledger)
+    unresolved_result = validate_comb_ledger(
+        "0605-1999", unresolved_ledger, lattice_producer_bytes)
+    assert unresolved_result["counts"]["active_unresolved"] == 1
+    assert unresolved_result["counts"]["blocking"] == 1
+
+    inference_ledger = clone(ledger_fixture)
+    inferred_cell = {
+        "id": "p1c21",
+        "subject_key": "p1@63.00,0.00,65.00,10.00",
+        "x0": 63.0, "y0": 0.0, "x1": 65.0, "y1": 10.0,
+    }
+    inference_ledger["pages"][0]["cells"].append(inferred_cell)
+    inference_ledger["pages"][0]["comb_inferences"].append({
+        "subject_key": inferred_cell["subject_key"],
+        "cell_id": inferred_cell["id"],
+        "bbox": [63.0, 0.0, 65.0, 10.0],
+        "state": COMB_INFERENCE_STATE,
+        "reason_codes": ["no-legacy-subject"],
+        "inferred_comb": synthetic_ledger_comb(
+            63.0, 65.0, "unresolved", ["no-legacy-subject"]),
+        "requires_independent_evidence": True,
+        "permitted_transitions": ["active_reviewed"],
+        "blocks_gate": True,
+    })
+    refresh_ledger_stats(inference_ledger)
+    inference_result = validate_comb_ledger(
+        "0605-1999", inference_ledger, lattice_producer_bytes)
+    assert inference_result["counts"]["inferences_suppressed"] == 1
+    assert inference_result["counts"]["blocking"] == 1
+
+    retained_ledger = clone(ledger_fixture)
+    retained_subject = retained_ledger["pages"][0]["comb_subjects"][0]
+    retained_cell = retained_ledger["pages"][0]["cells"][0]
+    retained_comb = retained_cell.pop("comb")
+    retained_comb["resolution"].update({
+        "status": "unresolved",
+        "reason_codes": ["legacy-continuity-only"],
+    })
+    retained_subject.clear()
+    retained_subject.update({
+        "subject_key": retained_cell["subject_key"],
+        "legacy_cell_id": retained_cell["id"],
+        "legacy_bbox": [
+            retained_cell["x0"], retained_cell["y0"],
+            retained_cell["x1"], retained_cell["y1"],
+        ],
+        "cell_id": None,
+        "mapped_partition_cell_ids": [retained_cell["id"]],
+        "mapped_partition_subject_keys": [retained_cell["subject_key"]],
+        "state": "retained_unresolved",
+        "emission": "suppressed",
+        "reason_codes": ["emission-suppressed-no-final-visible-band"],
+        "legacy_comb": retained_comb,
+        "requires_independent_evidence": True,
+        "permitted_transitions": [
+            "active_composite", "retired_proven_false",
+        ],
+        "blocks_gate": True,
+    })
+    refresh_ledger_stats(retained_ledger)
+    retained_result = validate_comb_ledger(
+        "0605-1999", retained_ledger, lattice_producer_bytes)
+    assert retained_result["counts"]["retained_unresolved"] == 1
+    retained_emission = {
+        subject["cell_id"]: {"valid": True}
+        for subject in retained_result["subjects"]
+        if subject["cell_id"] is not None
+    }
+    retained_emission[retained_cell["id"]] = {"valid": True}
+    retained_inventory = validate_emission_inventory(
+        retained_result, retained_emission)
+    assert not retained_inventory["complete"]
+    assert retained_inventory["retained_emitted_cell_ids"] == [
+        retained_cell["id"]]
+
+    def unavailable_position(*, outer: bool) -> dict[str, Any]:
+        axis = "outer" if outer else "internal"
+        return {
+            "comparable": False,
+            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            f"actual_{axis}_edges_x": [1.0, 2.0],
+            f"expected_{axis}_edges_x": None,
+            "count_matches": None,
+            "deltas_pt": None,
+            "matches": None,
+            "unavailable_reason": "self-test source topology is unavailable",
+        }
+
+    def source_unevaluable_offender(cell_id: str) -> dict[str, Any]:
+        item: dict[str, Any] = {
+            "cell": cell_id,
+            "page": 1,
+            "slots": 2,
+            "latticed": 2,
+            "printed": None,
+            "printed_divider_x": [],
+            "emission_state": "physical-slots",
+            "physical_slots": 2,
+            "declared_slots": 2,
+            "emitted_occurrences": 1,
+            "slot_indexes": [0, 1],
+            "input_slot_indexes": [[0], [1]],
+            "slot_geometry": [],
+            "emission_container_binding": {
+                "expected_page": 1,
+                "emitted_id_page": 1,
+                "emitted_dom_page": 1,
+                "page_matches": True,
+                "expected_rect": [0.0, 0.0, 2.0, 1.0],
+                "actual_rect": [0.0, 0.0, 2.0, 1.0],
+                "rect_deltas_pt": [0.0, 0.0, 0.0, 0.0],
+                "rect_matches": True,
+                "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            },
+            "layout_relation": "unevaluable",
+            "emission_relation": "match",
+            "failure_kinds": ["source-topology-unevaluable"],
+            "why": "self-test source topology is unavailable",
+        }
+        for field, (_kind, outer) in AUDIT_POSITION_FIELDS.items():
+            item[field] = unavailable_position(outer=outer)
+        item["effective_emission_state"] = "physical-slots"
+        return item
+
+    def layout_mismatch_offender(cell_id: str) -> dict[str, Any]:
+        item = source_unevaluable_offender(cell_id)
+        item.update({
+            "printed": 1,
+            "layout_relation": "mismatch",
+            "emission_relation": "mismatch-printed",
+            "failure_kinds": [
+                "layout-printed-mismatch", "emission-printed-mismatch"],
+            "why": (
+                "self-test layout has two slots but source prints one "
+                "compartment"),
+            "source_frame_geometry": {
+                "left_rail": {"center_x": 0.0},
+                "right_rail": {"center_x": 2.0},
+            },
+        })
+        item["emission_layout_position"] = {
+            "comparable": True,
+            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "actual_internal_edges_x": [1.0],
+            "expected_internal_edges_x": [1.0],
+            "count_matches": True,
+            "deltas_pt": [0.0],
+            "matches": True,
+        }
+        item["emission_layout_outer_position"] = {
+            "comparable": True,
+            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "actual_outer_edges_x": [0.0, 2.0],
+            "expected_outer_edges_x": [0.0, 2.0],
+            "count_matches": True,
+            "deltas_pt": [0.0, 0.0],
+            "matches": True,
+        }
+        item["emission_source_position"] = {
+            "comparable": False,
+            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "actual_internal_edges_x": [1.0],
+            "expected_internal_edges_x": [],
+            "count_matches": None,
+            "deltas_pt": None,
+            "matches": None,
+            "unavailable_reason": "emitted/source slot counts differ",
+        }
+        item["emission_source_outer_position"] = {
+            "comparable": False,
+            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "actual_outer_edges_x": [0.0, 2.0],
+            "expected_outer_edges_x": [0.0, 2.0],
+            "count_matches": None,
+            "deltas_pt": None,
+            "matches": None,
+            "unavailable_reason": "emitted/source slot counts differ",
+        }
+        item["layout_source_outer_position"] = {
+            "comparable": False,
+            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "actual_outer_edges_x": [0.0, 2.0],
+            "expected_outer_edges_x": [0.0, 2.0],
+            "count_matches": None,
+            "deltas_pt": None,
+            "matches": None,
+            "unavailable_reason": "layout/source slot counts differ",
+        }
+        return item
+
+    def comb_assertion(
+            offenders: list[dict[str, Any]],
+            *,
+            expected_ids: list[str],
+            emitted_ids: list[str] | None = None,
+            ) -> dict[str, Any]:
+        emitted = list(expected_ids if emitted_ids is None else emitted_ids)
+        mismatch_count = sum(
+            item.get("layout_relation") == "mismatch"
+            for item in offenders)
+        unevaluable_count = sum(
+            item.get("layout_relation") in {
+                "unevaluable", "duplicate-subject", "inventory-invalid"}
+            for item in offenders)
+        behind_count = sum(
+            audit_offender_dimensions(item)[
+                "dimensions"]["emission_behind"]
+            for item in offenders)
+        invalid_count = sum(
+            audit_offender_dimensions(item)[
+                "dimensions"]["emission_invalid"]
+            for item in offenders)
+        unexpected = sorted(set(emitted) - set(expected_ids))
+        assertion = {
+            "holds": not offenders,
+            "reason": (
+                "" if not offenders
+                else f"{len(offenders)} self-test offender(s)"),
+            "offenders": offenders,
+            "combs_expected": len(expected_ids),
+            "combs_checked": len(expected_ids),
+            "expected_comb_ids": expected_ids,
+            "checked_comb_ids": list(expected_ids),
+            "emitted_comb_ids": sorted(emitted),
+            "unexpected_emitted_comb_ids": unexpected,
+            "duplicate_layout_comb_ids": [],
+            "duplicate_emitted_cell_ids": [],
+            "raw_live_comb_issues": 0,
+            "emitted_cell_binding_issues": len(unexpected),
+            "inventory_complete": not unexpected,
+            "layout_mismatches": mismatch_count,
+            "layout_unevaluable": unevaluable_count,
+            "emission_behind_layout": behind_count,
+            "emission_invalid": invalid_count,
+        }
+        if offenders:
+            assertion.update({
+                "offender_count": len(offenders),
+                "offenders_published": len(offenders),
+                "offenders_omitted": 0,
+                "offenders_complete": True,
+            })
+        return assertion
+
+    held_assertion = comb_assertion([], expected_ids=["p1c1"])
     audit_pass = audit_evidence({
-        "assertions": {"comb_slots_match_printed": {
-            "holds": True, "offenders": [], "combs_checked": 1,
-            "layout_mismatches": 0, "emission_behind_layout": 0,
-        }}
+        "comb_slots_match_printed": True,
+        "assertions": {"comb_slots_match_printed": held_assertion},
     })
-    assert audit_pass["complete"] and audit_pass["offender_count"] == 0
-    audit_truncated = audit_evidence({
-        "assertions": {"comb_slots_match_printed": {
-            "holds": False, "offender_count": 2,
-            "offenders_published": 1, "offenders_omitted": 1,
-            "offenders_complete": False,
-            "offenders": [{"cell": "p1c1"}], "combs_checked": 2,
-            "layout_mismatches": 2, "emission_behind_layout": 0,
-        }}
+    assert audit_pass["assertion_valid"]
+    assert not audit_pass["complete"] and audit_pass["offender_count"] == 0
+    one_offender = source_unevaluable_offender("p1c1")
+    broken_assertion = comb_assertion(
+        [one_offender], expected_ids=["p1c1"])
+    audit_broken = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": broken_assertion},
     })
-    assert not audit_truncated["complete"]
+    assert audit_broken["assertion_valid"]
+    assert audit_broken["layout_unevaluable"] == 1
+    independent_relations = comb_assertion(
+        [one_offender, layout_mismatch_offender("p1c2")],
+        expected_ids=["p1c1", "p1c2"],
+    )
+    independent_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": independent_relations},
+    })
+    assert independent_audit["assertion_valid"]
+    assert independent_audit["offender_count"] == 2
+    assert independent_audit["layout_mismatches"] == 1
+    assert independent_audit["layout_unevaluable"] == 1
+
+    audit_truncated_record = {
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": clone(broken_assertion)},
+    }
+    audit_truncated_record["assertions"][
+        "comb_slots_match_printed"]["offender_count"] = 2
+    audit_truncated_record["assertions"][
+        "comb_slots_match_printed"]["offenders_omitted"] = 1
+    audit_truncated_record["assertions"][
+        "comb_slots_match_printed"]["offenders_complete"] = False
+    assert not audit_evidence(audit_truncated_record)["assertion_valid"]
+
+    duplicate_offender_record = {
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": comb_assertion(
+            [one_offender, clone(one_offender)],
+            expected_ids=["p1c1"],
+        )},
+    }
+    assert not audit_evidence(
+        duplicate_offender_record)["assertion_valid"]
+
+    malformed_relation = clone(one_offender)
+    malformed_relation["failure_kinds"] = ["layout-printed-mismatch"]
+    malformed_relation["layout_relation"] = "mismatch"
+    malformed_assertion = clone(broken_assertion)
+    malformed_assertion["offenders"] = [malformed_relation]
+    assert not audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": malformed_assertion},
+    })["assertion_valid"]
+
+    bogus_failure = clone(one_offender)
+    bogus_failure["failure_kinds"].append("invented-self-test-failure")
+    bogus_assertion = clone(broken_assertion)
+    bogus_assertion["offenders"] = [bogus_failure]
+    assert not audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": bogus_assertion},
+    })["assertion_valid"]
+
+    false_position = clone(one_offender)
+    false_position["emission_layout_position"] = {
+        "comparable": True,
+        "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+        "actual_internal_edges_x": [1.0],
+        "expected_internal_edges_x": [2.0],
+        "count_matches": True,
+        "deltas_pt": [-1.0],
+        "matches": False,
+    }
+    false_position_assertion = clone(broken_assertion)
+    false_position_assertion["offenders"] = [false_position]
+    assert not audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": false_position_assertion},
+    })["assertion_valid"]
+
+    missing_without_offender = comb_assertion(
+        [], expected_ids=["p1c1"], emitted_ids=[])
+    assert not audit_evidence({
+        "comb_slots_match_printed": True,
+        "assertions": {
+            "comb_slots_match_printed": missing_without_offender},
+    })["assertion_valid"]
+
+    active_order = [
+        subject["cell_id"] for subject in ledger_result["subjects"]]
+    active_slots = {
+        cell_id: {"valid": True} for cell_id in active_order}
+    active_inventory = validate_emission_inventory(
+        ledger_result, active_slots)
+    bound_assertion = {
+        "expected_comb_ids": active_order,
+        "checked_comb_ids": active_order,
+        "emitted_comb_ids": sorted(active_slots),
+        "unexpected_emitted_comb_ids": [],
+        "offenders": {},
+    }
+    assert bind_audit_assertion(
+        bound_assertion, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+    stale_assertion = clone(bound_assertion)
+    stale_assertion["expected_comb_ids"] = active_order[:-1]
+    assert not bind_audit_assertion(
+        stale_assertion, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+
+    roundtrip_fixture = {
+        "status": "ok",
+        "measured": True,
+        "hard_failure": None,
+        "error": None,
+        "roundtrip_runtime": {
+            "mode": "playwright-exact-executable",
+            "playwright_package_version": "self-test",
+            "dependency_closure": {
+                "logical_root": "playwright",
+                "algorithm": (
+                    "sha256(canonical-json(path,type,bytes,digest))"),
+                "files": 1,
+                "symlinks": 0,
+                "bytes": 1,
+                "tree_sha256": "1" * 64,
+            },
+            "chromium": {
+                "file": "playwright/chromium",
+                "bytes": 1,
+                "sha256": "2" * 64,
+                "version_output": "Chrome self-test",
+            },
+            "same_resolution_session_used_for_render": True,
+            "dependency_closure_validated_before_after": True,
+            "system_shared_libraries_bound": False,
+            "native_host_environment_bound": False,
+            "scope": AUDIT_ROUNDTRIP_SCOPE,
+            "scope_complete": False,
+            "incomplete_reason": "self-test native scope is incomplete",
+            "live_browser_version": "self-test",
+            "explicit_executable_path_used": True,
+            "launch_args": list(AUDIT_ROUNDTRIP_LAUNCH_ARGS),
+            "service_workers": "block",
+            "browser_context_offline": True,
+            "websocket_policy": "record-and-leave-unconnected",
+            "request_policy": "formgen-snapshot-only-v1",
+            "playwright_operation_timeout_ms": 120000,
+            "hard_deadline_seconds": 60.0,
+            "hard_deadline_enforced_by": (
+                "isolated-render-worker-process-v1"),
+            "deadline_cleanup_policy": (
+                "kill-worker-and-chromium-process-group"),
+        },
+        "render_requests": {
+            "policy": "formgen-snapshot-only-v1",
+            "synthetic_origin": "https://formgen.invalid",
+            "fulfilled": ["asset.png", "x.html"],
+            "fulfilled_requests": 2,
+            "blocked": [],
+            "blocked_requests": 0,
+            "blocked_websockets": [],
+            "all_requests_from_retained_closure": True,
+        },
+        "candidate_pdf": {
+            "bytes": 1,
+            "sha256": "3" * 64,
+            "retained_exact_bytes": True,
+            "chromium_returned_in_memory": True,
+            "normalization": {
+                "algorithm": "fixed-width-creation-modification-date-v1",
+                "fields_normalized": 2,
+                "replacement": AUDIT_PDF_NORMALIZATION_REPLACEMENT,
+                "xref_offsets_preserved": True,
+            },
+            "materialization": AUDIT_CANDIDATE_MATERIALIZATION,
+            "expected_sha256_passed_to_extractor": True,
+            "validated_before_after_extraction": True,
+            "candidate_ir_sha256": "4" * 64,
+            "candidate_ir_digest_scope": "source-and-generator-removed",
+        },
+    }
+    roundtrip_scope, roundtrip_errors = validate_audit_roundtrip(
+        roundtrip_fixture, "x.html", ["asset.png"])
+    assert roundtrip_scope is False and not roundtrip_errors
+
+    blocked_http_roundtrip = clone(roundtrip_fixture)
+    blocked_http_roundtrip["render_requests"].update({
+        "blocked": [{
+            "url": "https://outside.invalid/data",
+            "reason": "absent from retained closure",
+        }],
+        "blocked_requests": 1,
+        # The producer aggregate is deliberately left forged true.
+        "all_requests_from_retained_closure": True,
+    })
+    assert validate_audit_roundtrip(
+        blocked_http_roundtrip, "x.html", ["asset.png"])[1]
+
+    bad_request_count_roundtrip = clone(roundtrip_fixture)
+    bad_request_count_roundtrip[
+        "render_requests"]["fulfilled_requests"] = 3
+    assert validate_audit_roundtrip(
+        bad_request_count_roundtrip, "x.html", ["asset.png"])[1]
+
+    bad_blocked_count_roundtrip = clone(roundtrip_fixture)
+    bad_blocked_count_roundtrip[
+        "render_requests"]["blocked_requests"] = 1
+    assert validate_audit_roundtrip(
+        bad_blocked_count_roundtrip, "x.html", ["asset.png"])[1]
+
+    blocked_websocket_roundtrip = clone(roundtrip_fixture)
+    blocked_websocket_roundtrip["render_requests"].update({
+        "blocked_websockets": ["wss://outside.invalid/socket"],
+        "all_requests_from_retained_closure": True,
+    })
+    assert validate_audit_roundtrip(
+        blocked_websocket_roundtrip, "x.html", ["asset.png"])[1]
+
+    unknown_request_roundtrip = clone(roundtrip_fixture)
+    unknown_request_roundtrip["render_requests"].update({
+        "fulfilled": ["asset.png", "unknown.png", "x.html"],
+        "fulfilled_requests": 3,
+        "all_requests_from_retained_closure": True,
+    })
+    assert validate_audit_roundtrip(
+        unknown_request_roundtrip, "x.html", ["asset.png"])[1]
+
+    boolean_count_roundtrip = clone(roundtrip_fixture)
+    boolean_count_roundtrip[
+        "render_requests"]["fulfilled_requests"] = True
+    assert validate_audit_roundtrip(
+        boolean_count_roundtrip, "x.html", ["asset.png"])[1]
+
+    malformed_request_list_roundtrip = clone(roundtrip_fixture)
+    malformed_request_list_roundtrip[
+        "render_requests"]["fulfilled"] = ["asset.png", 7, "x.html"]
+    assert validate_audit_roundtrip(
+        malformed_request_list_roundtrip, "x.html", ["asset.png"])[1]
+
+    reordered_launch_args_roundtrip = clone(roundtrip_fixture)
+    reordered_launch_args_roundtrip[
+        "roundtrip_runtime"]["launch_args"].reverse()
+    assert validate_audit_roundtrip(
+        reordered_launch_args_roundtrip, "x.html", ["asset.png"])[1]
+
+    wrong_scope_roundtrip = clone(roundtrip_fixture)
+    wrong_scope_roundtrip[
+        "roundtrip_runtime"]["scope"] = "playwright-only"
+    assert validate_audit_roundtrip(
+        wrong_scope_roundtrip, "x.html", ["asset.png"])[1]
+
+    wrong_materialization_roundtrip = clone(roundtrip_fixture)
+    wrong_materialization_roundtrip[
+        "candidate_pdf"]["materialization"] = "ordinary-temp-file"
+    assert validate_audit_roundtrip(
+        wrong_materialization_roundtrip, "x.html", ["asset.png"])[1]
+
+    wrong_normalization_roundtrip = clone(roundtrip_fixture)
+    wrong_normalization_roundtrip["candidate_pdf"][
+        "normalization"]["replacement"] = "D:20000101000000+00'00'"
+    assert validate_audit_roundtrip(
+        wrong_normalization_roundtrip, "x.html", ["asset.png"])[1]
 
     with tempfile.TemporaryDirectory(prefix="comb-referee-audit-bind-") as temp:
         root = pathlib.Path(temp)
-        required_path = root / "one.json"
-        required_path.write_bytes(b"one")
-        optional_path = root / "optional.html"
+        html_dir = root / "html"
+        source_root = root / "source"
+        html_dir.mkdir()
+        source_root.mkdir()
+        payloads = {
+            "ir": b'{"self_test":"ir"}',
+            "layout": b'{"self_test":"layout"}',
+            "html": b"<!doctype html><html></html>",
+            "guide": b'{"self_test":"guide"}',
+            "guide_html": None,
+        }
+        paths = {
+            "ir": root / "x.ir.json",
+            "layout": root / "x.layout.json",
+            "html": html_dir / "x.html",
+            "guide": root / "x.guide.json",
+            "guide_html": html_dir / "x.guide.html",
+        }
+        for role, payload in payloads.items():
+            if payload is not None:
+                paths[role].write_bytes(payload)
+        source_payload = b"%PDF-self-test"
+        source_path = source_root / "test.pdf"
+        source_path.write_bytes(source_payload)
         expected = {
-            "ir": (required_path, True, b"one"),
-            "guide_html": (optional_path, False, None),
+            role: (paths[role], role != "guide_html", payload)
+            for role, payload in payloads.items()
         }
         audit_producer_bytes = (HERE / "audit.py").read_bytes()
-        audit_record = {"input_manifest": {
-            "schema": "formgen-audit-input-manifest-v1",
-            "algorithm": "sha256",
-            "producer": {
-                "file": "tools/formgen/audit.py",
-                "bytes": len(audit_producer_bytes),
-                "sha256": sha256_bytes(audit_producer_bytes),
+        self_test_audit_sha = sha256_bytes(audit_producer_bytes)
+        dependency_sources = {
+            logical: (REPO / logical).read_bytes()
+            for logical in AUDIT_DEPENDENCY_SHA256
+        }
+        producer_sources = {
+            AUDIT_PRODUCER_FILE: audit_producer_bytes,
+            **dependency_sources,
+        }
+        python_path = pathlib.Path(sys.executable).resolve()
+        runtime_members = [(
+            "python/executable",
+            python_path.stat().st_size,
+            sha256_file(python_path),
+        )]
+        runtime_canonical = json.dumps(
+            runtime_members, separators=(",", ":"))
+        runtime = {
+            "python": {
+                "implementation": platform.python_implementation(),
+                "version": platform.python_version(),
+                "cache_tag": sys.implementation.cache_tag,
             },
-            "complete": True,
-            "missing_required": [],
-            "inputs": {
-                "ir": {
-                    "file": "one.json", "required": True, "present": True,
-                    "bytes": 3, "sha256": hashlib.sha256(b"one").hexdigest(),
-                },
-                "guide_html": {
-                    "file": "optional.html", "required": False,
-                    "present": False, "bytes": None, "sha256": None,
+            "pymupdf": {
+                "package_version": "self-test",
+                "version_bind": "self-test",
+            },
+            "loaded_application_files": {
+                "algorithm": (
+                    "sha256(canonical-json(logical-file,bytes,sha256))"),
+                "files": 1,
+                "bytes": runtime_members[0][1],
+                "tree_sha256": sha256_bytes(
+                    runtime_canonical.encode("ascii")),
+                "members": [{
+                    "file": runtime_members[0][0],
+                    "bytes": runtime_members[0][1],
+                    "sha256": runtime_members[0][2],
+                }],
+                "validated_before_after": True,
+            },
+            "stdlib_and_system_shared_libraries_bound": False,
+            "scope_complete": False,
+            "incomplete_reason": "self-test intentionally incomplete scope",
+        }
+        producer = {
+            "file": AUDIT_PRODUCER_FILE,
+            "bytes": len(audit_producer_bytes),
+            "sha256": self_test_audit_sha,
+            "dependencies": [
+                {
+                    "file": logical,
+                    "bytes": len(dependency_sources[logical]),
+                    "sha256": expected_sha,
+                    "loaded_origin": logical,
+                    "executed_from_snapshotted_source": True,
+                }
+                for logical, expected_sha
+                in AUDIT_DEPENDENCY_SHA256.items()
+            ],
+            "dependency_execution_bound": True,
+            "audit_execution_bound": False,
+            "assertion_producer_bound": False,
+            "roundtrip_runtime_bound_in_record": False,
+            "standalone_attestation_complete": False,
+            "incomplete_reason": "self-test bootstrap is intentionally open",
+        }
+        input_entries = {
+            role: {
+                "file": paths[role].name,
+                "required": role != "guide_html",
+                "present": payload is not None,
+                "bytes": len(payload) if payload is not None else None,
+                "sha256": (
+                    sha256_bytes(payload) if payload is not None else None),
+            }
+            for role, payload in payloads.items()
+        }
+        input_entries["source_pdf"] = {
+            "file": "test.pdf",
+            "logical_identity": "external:test.pdf",
+            "path": "test.pdf",
+            "required": True,
+            "present": True,
+            "bytes": len(source_payload),
+            "sha256": sha256_bytes(source_payload),
+            "expected_sha256": sha256_bytes(source_payload),
+        }
+        audit_record = {
+            "roundtrip": "skipped",
+            "provenance_validation": {
+                "validated_before": True,
+                "validated_after": True,
+                "error": None,
+            },
+            "attestation": {
+                "inputs_complete": True,
+                "producer_execution_bound": False,
+                "base_runtime_scope_complete": False,
+                "roundtrip_runtime_scope_complete": None,
+                "validated_before_after": True,
+                "complete": False,
+                "enforceable": False,
+                "incomplete_reasons": [
+                    "self-test producer/runtime scope is intentionally open"],
+                "future_gate_required": "self-test trusted gate",
+            },
+            "input_manifest": {
+                "schema": "formgen-audit-input-manifest-v1",
+                "algorithm": "sha256",
+                "producer": producer,
+                "runtime": runtime,
+                "inputs_complete": True,
+                "attestation_complete": False,
+                "enforceable": False,
+                "complete": False,
+                "missing_required": [],
+                "inputs": input_entries,
+                "render": {
+                    "entrypoint": "x.html",
+                    "dependencies": [],
+                    "errors": [],
+                    "complete": True,
+                    "network_policy": (
+                        "deny-except-retained-relative-resources-and-inline-data"),
                 },
             },
-        }}
-        assert bind_audit_manifest(
-            audit_record, expected, audit_producer_bytes)[0]
-        required_path.write_bytes(b"changed")
-        assert bind_audit_manifest(
-            audit_record, expected, audit_producer_bytes)[0]
-        stale_expected = {**expected, "ir": (required_path, True, b"changed")}
+        }
+        assert self_test_audit_sha == AUDIT_PRODUCER_SHA256
+        binding = bind_audit_manifest(
+            audit_record,
+            expected,
+            source_path=source_path,
+            source_identity="external:test.pdf",
+            source_root=source_root,
+            source_payload=source_payload,
+            expected_source_sha256=sha256_bytes(source_payload),
+            html_dir=html_dir,
+            producer_sources=producer_sources,
+        )
+        assert binding["binding_valid"] and not binding["complete"], binding
+        assert binding["blockers"]
+        stale_expected = {
+            **expected,
+            "ir": (paths["ir"], True, b"changed"),
+        }
         assert not bind_audit_manifest(
-            audit_record, stale_expected, audit_producer_bytes)[0]
+            audit_record,
+            stale_expected,
+            source_path=source_path,
+            source_identity="external:test.pdf",
+            source_root=source_root,
+            source_payload=source_payload,
+            expected_source_sha256=sha256_bytes(source_payload),
+            html_dir=html_dir,
+            producer_sources=producer_sources,
+        )["binding_valid"]
+        stale_manifest = clone(audit_record)
+        stale_manifest["input_manifest"]["producer"]["sha256"] = "0" * 64
+        assert not bind_audit_manifest(
+            stale_manifest,
+            expected,
+            source_path=source_path,
+            source_identity="external:test.pdf",
+            source_root=source_root,
+            source_payload=source_payload,
+            expected_source_sha256=sha256_bytes(source_payload),
+            html_dir=html_dir,
+            producer_sources=producer_sources,
+        )["binding_valid"]
+        stale_render = clone(audit_record)
+        stale_render["input_manifest"]["render"]["dependencies"] = [{
+            "path": "invented-self-test.bin",
+            "mime_type": "application/octet-stream",
+            "present": True,
+            "bytes": 1,
+            "sha256": "0" * 64,
+            "kinds": ["img"],
+            "referrers": ["x.html"],
+        }]
+        assert not bind_audit_manifest(
+            stale_render,
+            expected,
+            source_path=source_path,
+            source_identity="external:test.pdf",
+            source_root=source_root,
+            source_payload=source_payload,
+            expected_source_sha256=sha256_bytes(source_payload),
+            html_dir=html_dir,
+            producer_sources=producer_sources,
+        )["binding_valid"]
+        overclaimed = clone(audit_record)
+        overclaimed["input_manifest"]["complete"] = True
+        assert not bind_audit_manifest(
+            overclaimed,
+            expected,
+            source_path=source_path,
+            source_identity="external:test.pdf",
+            source_root=source_root,
+            source_payload=source_payload,
+            expected_source_sha256=sha256_bytes(source_payload),
+            html_dir=html_dir,
+            producer_sources=producer_sources,
+        )["binding_valid"]
 
     compared = {
+        "ledger_state": "active_resolved",
+        "ledger_blocks_gate": False,
         "latticed": 3, "emitted": 3, "emitted_indexes_valid": True,
         "audit_printed": 4,
         "referee": {"status": "measured", "compartments": 4,
@@ -5263,6 +8741,13 @@ def self_test() -> int:
     first = canonical_digest({"b": 2, "a": [1, 2]})
     second = canonical_digest({"a": [1, 2], "b": 2})
     assert first == second
+    digest_report = {"schema_version": REPORT_VERSION, "forms": [], "status": "ok"}
+    attach_report_digest(digest_report)
+    assert report_digest_valid(digest_report)
+    assert report_bytes(digest_report) == report_bytes(clone(digest_report))
+    changed_digest_report = clone(digest_report)
+    changed_digest_report["status"] = "unevaluable"
+    assert not report_digest_valid(changed_digest_report)
     selected = select_layouts(
         [pathlib.Path("0605-1999.layout.json"),
          pathlib.Path("1701-2018.layout.json")],
@@ -5279,6 +8764,13 @@ def self_test() -> int:
         {"0605-1999"}, [{}], EXPECTED_COMBS_BY_SLUG["0605-1999"], [])
     assert not corpus_coverage_ok(
         {"0605-1999"}, [{}], EXPECTED_COMBS_BY_SLUG["0605-1999"] - 1, [])
+    standalone_attestation = referee_attestation()
+    assert standalone_attestation["scope_complete"] is False
+    assert standalone_attestation["complete"] is False
+    assert standalone_attestation["enforceable"] is False
+    assert standalone_attestation["incomplete_reasons"]
+    assert standalone_attestation[
+        "poppler_invocations_have_hard_deadlines"] is True
 
     print("comb_referee self-test: pass")
     return 0
@@ -5323,6 +8815,47 @@ def corpus_coverage_ok(selected_slugs: set[str],
     return len(forms) == len(selected_slugs) and combs == expected
 
 
+def referee_attestation() -> dict[str, Any]:
+    """State the exact boundary this standalone process does not attest."""
+    return {
+        "schema": "comb-referee-runtime-attestation-v1",
+        "producer_and_declared_dependency_bytes_bound": True,
+        "published_form_input_bytes_bound_before_after": True,
+        "python_executable_fingerprinted": True,
+        "python_executable_validated_before_after": False,
+        "poppler_executable_bound_before_after": True,
+        "poppler_invocations_have_hard_deadlines": True,
+        "poppler_timeout_cleanup_policy": SUBPROCESS_CLEANUP_POLICY,
+        "clean_source_revision_bound": False,
+        "python_stdlib_closure_bound": False,
+        "python_dynamic_libraries_bound": False,
+        "poppler_dynamic_libraries_bound": False,
+        "operating_system_and_host_services_bound": False,
+        "scope_complete": False,
+        "complete": False,
+        "enforceable": False,
+        "incomplete_reasons": [
+            (
+                "the standalone referee hashes its source and declared local "
+                "dependencies but is not bound to a reviewed clean source "
+                "revision"
+            ),
+            (
+                "the Python standard library, Python dynamic libraries, "
+                "Poppler dynamic libraries, and operating-system services "
+                "are outside the independently rehashed application closure"
+            ),
+            (
+                "the Python executable is fingerprinted for reporting but "
+                "is not independently snapshotted and revalidated before "
+                "and after the run"
+            ),
+        ],
+        "future_gate_required": (
+            "trusted clean-source and host/runtime closure binding"),
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=pathlib.Path,
@@ -5346,9 +8879,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         return self_test()
     try:
         producer_bytes = pathlib.Path(__file__).resolve().read_bytes()
+        lattice_producer_bytes = (HERE / "lattice.py").read_bytes()
+        if sha256_bytes(lattice_producer_bytes) != LATTICE_PRODUCER_SHA256:
+            raise RefereeError(
+                "lattice producer changed from committed SHA "
+                + LATTICE_PRODUCER_SHA256)
         audit_producer_bytes = (HERE / "audit.py").read_bytes()
+        if sha256_bytes(audit_producer_bytes) != AUDIT_PRODUCER_SHA256:
+            raise RefereeError(
+                "audit producer changed from committed SHA "
+                + AUDIT_PRODUCER_SHA256)
+        audit_dependency_bytes = {
+            logical: (REPO / logical).read_bytes()
+            for logical in AUDIT_DEPENDENCY_SHA256
+        }
+        for logical, expected_sha in AUDIT_DEPENDENCY_SHA256.items():
+            if sha256_bytes(audit_dependency_bytes[logical]) != expected_sha:
+                raise RefereeError(
+                    f"audit dependency changed from committed SHA: {logical}")
         audit_bytes = args.audit.read_bytes()
+        args.lattice_producer_bytes = lattice_producer_bytes
         args.audit_producer_bytes = audit_producer_bytes
+        args.audit_dependency_bytes = audit_dependency_bytes
         poppler = poppler_identity()
         audit_data = json.loads(audit_bytes)
         if not isinstance(audit_data, list):
@@ -5404,7 +8956,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "error": "RefereeError: audit report changed during referee run",
             })
         if (pathlib.Path(__file__).resolve().read_bytes() != producer_bytes
-                or (HERE / "audit.py").read_bytes() != audit_producer_bytes):
+                or (HERE / "audit.py").read_bytes() != audit_producer_bytes
+                or (HERE / "lattice.py").read_bytes()
+                != lattice_producer_bytes
+                or any(
+                    (REPO / logical).read_bytes() != payload
+                    for logical, payload in audit_dependency_bytes.items())):
             errors.append({
                 "slug": "<corpus>",
                 "error": "RefereeError: producer code changed during referee run",
@@ -5435,6 +8992,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         combs = sum(form["counts"]["combs"] for form in forms)
         measured = sum(form["counts"]["measured"] for form in forms)
         unevaluable = sum(form["counts"]["unevaluable"] for form in forms)
+        source_unevaluable = sum(
+            form["counts"]["source_unevaluable"] for form in forms)
+        active = sum(
+            form["counts"]["subjects_active"] for form in forms)
+        active_resolved = sum(
+            form["counts"]["subjects_active_resolved"] for form in forms)
+        active_unresolved = sum(
+            form["counts"]["subjects_active_unresolved"] for form in forms)
+        retained_unresolved = sum(
+            form["counts"]["subjects_retained_unresolved"] for form in forms)
+        inferences_suppressed = sum(
+            form["counts"]["inferences_suppressed"] for form in forms)
+        ledger_blocking = sum(
+            form["counts"]["ledger_blocking"] for form in forms)
         mismatches = sum(form["counts"]["referee_layout_mismatches"]
                          for form in forms)
         position_mismatches = sum(
@@ -5453,22 +9024,76 @@ def main(argv: Sequence[str] | None = None) -> int:
             EXPECTED_COMBS_BY_SLUG[slug] for slug in selected_slugs)
         coverage_ok = corpus_coverage_ok(
             selected_slugs, forms, combs, errors)
+        status_reasons: list[str] = []
         if (not coverage_ok
                 or any(form["status"] == "unevaluable" for form in forms)):
             corpus_status = "unevaluable"
+            status_reasons.append(
+                "corpus coverage or one or more forms are unevaluable")
         elif any(form["status"] == "disagreement" for form in forms):
             corpus_status = "disagreement"
+            status_reasons.append(
+                "one or more four-way form comparisons disagree")
         else:
             corpus_status = "ok"
+        runtime_attestation = referee_attestation()
+        if not runtime_attestation["complete"]:
+            corpus_status = "unevaluable"
+            status_reasons.append(
+                "standalone referee runtime/application attestation "
+                "is incomplete and non-enforceable")
+        python_binary = pathlib.Path(sys.executable).resolve()
         report: dict[str, Any] = {
             "schema_version": REPORT_VERSION,
             "producer": "tools/formgen/comb_referee.py",
             "producer_sha256": sha256_bytes(producer_bytes),
             "python_version": sys.version.split()[0],
+            "provenance": {
+                "producer": {
+                    "file": "tools/formgen/comb_referee.py",
+                    "bytes": len(producer_bytes),
+                    "sha256": sha256_bytes(producer_bytes),
+                },
+                "dependencies": {
+                    "audit": {
+                        "file": AUDIT_PRODUCER_FILE,
+                        "bytes": len(audit_producer_bytes),
+                        "sha256": sha256_bytes(audit_producer_bytes),
+                        "expected_sha256": AUDIT_PRODUCER_SHA256,
+                        "dependencies": [
+                            {
+                                "file": logical,
+                                "bytes": len(audit_dependency_bytes[logical]),
+                                "sha256": sha256_bytes(
+                                    audit_dependency_bytes[logical]),
+                                "expected_sha256": expected_sha,
+                            }
+                            for logical, expected_sha
+                            in AUDIT_DEPENDENCY_SHA256.items()
+                        ],
+                    },
+                    "lattice": {
+                        "file": LATTICE_PRODUCER_FILE,
+                        "bytes": len(lattice_producer_bytes),
+                        "sha256": sha256_bytes(lattice_producer_bytes),
+                        "expected_sha256": LATTICE_PRODUCER_SHA256,
+                    },
+                },
+                "runtime": {
+                    "python_implementation": sys.implementation.name,
+                    "python_version": sys.version.split()[0],
+                    "python_executable": str(python_binary),
+                    "python_executable_sha256": sha256_file(python_binary),
+                    "poppler": poppler,
+                },
+            },
             "status": corpus_status,
+            "status_reasons": status_reasons,
+            "attestation": runtime_attestation,
             "poppler": poppler,
             "inputs": {
                 "audit_sha256": sha256_bytes(audit_bytes),
+                "audit_bytes": len(audit_bytes),
                 "layout_count": len(layouts),
             },
             "totals": {
@@ -5479,6 +9104,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "combs_found": combs,
                 "combs_measured": measured,
                 "combs_unevaluable": unevaluable,
+                "combs_source_unevaluable": source_unevaluable,
+                "subjects_active": active,
+                "subjects_active_resolved": active_resolved,
+                "subjects_active_unresolved": active_unresolved,
+                "subjects_retained_unresolved": retained_unresolved,
+                "inferences_suppressed": inferences_suppressed,
+                "ledger_blocking": ledger_blocking,
                 "referee_layout_mismatches": mismatches,
                 "referee_layout_position_mismatches": position_mismatches,
                 "comparisons": comparison_totals,
@@ -5489,14 +9121,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     form["status"] == "unevaluable" for form in forms),
                 "audit_evidence_complete_forms": sum(
                     bool(form["audit_evidence"]["complete"]) for form in forms),
+                "referee_attestation_complete": (
+                    runtime_attestation["complete"]),
+                "referee_enforceable": runtime_attestation["enforceable"],
             },
             "errors": errors,
             "forms": sorted(forms, key=lambda item: item["slug"]),
         }
-        report["payload_sha256"] = canonical_digest(report)
+        attach_report_digest(report)
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(report, indent=2, sort_keys=True)
-                            + "\n", encoding="utf-8")
+        args.out.write_bytes(report_bytes(report))
         print(json.dumps({
             "status": report["status"],
             **report["totals"],
