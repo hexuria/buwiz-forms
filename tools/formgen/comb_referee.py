@@ -539,6 +539,19 @@ HTML_INPUT_ATTRIBUTES = frozenset({
     "spellcheck",
     "type",
 })
+HTML_LINK_ATTRIBUTES = frozenset({
+    "as",
+    "crossorigin",
+    "href",
+    "rel",
+    "type",
+})
+HTML_FONT_PRELOAD_HREFS = frozenset({
+    "fonts/arimo-latin-wght-italic.woff2",
+    "fonts/arimo-latin-wght-normal.woff2",
+    "fonts/tinos-latin-400-normal.woff2",
+    "fonts/tinos-latin-700-normal.woff2",
+})
 HTML_ALLOWED_TAGS = frozenset({
     "a",
     "body",
@@ -548,6 +561,7 @@ HTML_ALLOWED_TAGS = frozenset({
     "html",
     "image",
     "input",
+    "link",
     "meta",
     "path",
     "rect",
@@ -2091,8 +2105,14 @@ class SlotParser(html.parser.HTMLParser):
             self.invalid_bindings.append(
                 "HTML has unsupported meta directives")
         if tag in ("base", "embed", "iframe", "link", "noscript", "object"):
-            self.invalid_bindings.append(
-                f"HTML has unsupported rendering element: {tag}")
+            if tag == "link":
+                parent = self.element_stack[-1][0] if self.element_stack else None
+                if parent != "head":
+                    self.invalid_bindings.append(
+                        "HTML font preload is outside the document head")
+            elif tag in ("base", "embed", "iframe", "noscript", "object"):
+                self.invalid_bindings.append(
+                    f"HTML has unsupported rendering element: {tag}")
         if tag == "html":
             if self.root is not None:
                 raise RefereeError("HTML has more than one root element")
@@ -2274,6 +2294,15 @@ class SlotParser(html.parser.HTMLParser):
             valid = keys <= HTML_ROOT_ATTRIBUTES
         elif tag == "meta":
             valid = values == {"charset": "utf-8"}
+        elif tag == "link":
+            valid = (
+                set(values) == HTML_LINK_ATTRIBUTES
+                and values.get("rel") == "preload"
+                and values.get("as") == "font"
+                and values.get("type") == "font/woff2"
+                and values.get("crossorigin") is None
+                and values.get("href") in HTML_FONT_PRELOAD_HREFS
+            )
         elif tag == "a":
             valid = (
                 keys == {"class", "href"}
@@ -8231,6 +8260,48 @@ def self_test() -> int:
         ".c{position:absolute}"
         ".s{position:absolute}"
         "</style>"
+    )
+    valid_font_preload = (
+        '<link rel="preload" href="fonts/tinos-latin-400-normal.woff2" '
+        'as="font" type="font/woff2" crossorigin>'
+    )
+    valid_preload_parser = SlotParser(require_runtime_contract=False)
+    valid_preload_parser.feed(
+        "<html><head>" + valid_font_preload
+        + "</head><body></body></html>"
+    )
+    valid_preload_parser.close()
+    assert not valid_preload_parser.invalid_bindings
+    for hostile_preload in (
+            valid_font_preload.replace(
+                "fonts/tinos-latin-400-normal.woff2",
+                "https://example.test/font.woff2"),
+            valid_font_preload.replace(
+                'rel="preload"', 'rel="stylesheet"'),
+            valid_font_preload.replace(
+                'type="font/woff2"', 'type="text/css"'),
+            valid_font_preload.replace(
+                " crossorigin>", ' crossorigin="anonymous">'),
+            valid_font_preload.replace(
+                "fonts/tinos-latin-400-normal.woff2",
+                "fonts/../assets/foreign.woff2"),
+            ):
+        hostile_parser = SlotParser(require_runtime_contract=False)
+        hostile_parser.feed(
+            "<html><head>" + hostile_preload
+            + "</head><body></body></html>"
+        )
+        hostile_parser.close()
+        assert hostile_parser.invalid_bindings, hostile_preload
+    body_preload_parser = SlotParser(require_runtime_contract=False)
+    body_preload_parser.feed(
+        "<html><head></head><body>" + valid_font_preload
+        + "</body></html>"
+    )
+    body_preload_parser.close()
+    assert any(
+        "outside the document head" in error
+        for error in body_preload_parser.invalid_bindings
     )
     parser = SlotParser(require_runtime_contract=False)
     parser.feed(
