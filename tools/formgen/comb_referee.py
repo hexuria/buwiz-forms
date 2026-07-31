@@ -62,6 +62,7 @@ import tempfile
 import urllib.parse
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Sequence
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
@@ -77,7 +78,7 @@ LATTICE_PRODUCER_SHA256 = (
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
-    "9a94758287e289717fb2304182f8caa62baa7252352eb9aa00cccbc115a5b322"
+    "32f29cc6c623c4b38a7618b1d31fefaf37e7de92a8a9a255484d850d53f86bac"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     "tools/formgen/extract.py": (
@@ -143,6 +144,18 @@ AUDIT_FAILURE_KINDS = frozenset({
     "emitted-cell-geometry-mismatch",
     "unowned-live-comb-markup",
     "comb-inventory-mismatch",
+    "comb-owner-registry-invalid",
+})
+AUDIT_OWNER_CERTIFICATE_CRITERION = (
+    "exact-reviewed-layout-comb-subject-owner-v1"
+)
+AUDIT_OWNER_CERTIFICATE_VALID_KEYS = frozenset({
+    "criterion", "valid", "layout_sha256", "page", "cell_id",
+    "legacy_cell_id", "subject_key", "legacy_bbox",
+    "bbox_number_format", "state", "supplies_topology",
+})
+AUDIT_OWNER_CERTIFICATE_INVALID_KEYS = frozenset({
+    "criterion", "valid", "reason", "supplies_topology",
 })
 LATTICE_GENERATOR_KEYS = frozenset({
     "producer",
@@ -223,6 +236,18 @@ EXPECTED_COMBS_BY_SLUG = {
 if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
         or sum(EXPECTED_COMBS_BY_SLUG.values()) != EXPECTED_COMBS):
     raise RuntimeError("comb referee corpus pins are internally inconsistent")
+
+# Reviewed from report payload
+# 15b6454ef9c156435fc33d47b177ff4b2db379207fa694bbcdb87200bb341ca4.
+# The digest binds all 105 ordered tuples of cell identity, subject identity,
+# source verdict, compartment count, divider positions, and position verdict.
+REVIEWED_2551Q_REFEREE_TUPLES_SHA256 = (
+    "f6fa281a670156784c723911329669849cf433c3f082c3d108a89980f1290414"
+)
+REVIEWED_2551Q_EXPLICIT_COMPARTMENTS = {
+    "p2c5": 14,
+    "p2c80": 12,
+}
 
 # This is verify.py's fixed position tolerance.  It is copied as a bound, not
 # exposed as a CLI knob: changing it here would make the referee a third
@@ -713,6 +738,40 @@ def canonical_digest(value: Any) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":"),
                          ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def referee_tuple_digest(cells: Sequence[dict[str, Any]]) -> str:
+    tuples = [
+        [
+            cell["cell"],
+            cell["subject_key"],
+            cell["referee"]["status"],
+            cell["referee"].get("compartments"),
+            cell["referee"].get("source_divider_x"),
+            cell["referee"].get("positions_match"),
+        ]
+        for cell in sorted(cells, key=lambda item: item["subject_key"])
+    ]
+    return canonical_digest(tuples)
+
+
+def validate_2551q_referee_golden(cells: Sequence[dict[str, Any]]) -> None:
+    if len(cells) != EXPECTED_COMBS_BY_SLUG["2551q-2018"]:
+        raise RefereeError("2551Q reviewed referee tuple count changed")
+    by_cell = {cell["cell"]: cell for cell in cells}
+    if len(by_cell) != len(cells):
+        raise RefereeError("2551Q reviewed referee tuple identities changed")
+    for cell_id, expected in REVIEWED_2551Q_EXPLICIT_COMPARTMENTS.items():
+        cell = by_cell.get(cell_id)
+        if (cell is None
+                or cell["referee"].get("status") != "measured"
+                or cell["referee"].get("compartments") != expected):
+            raise RefereeError(
+                f"2551Q reviewed control changed: {cell_id} != {expected}")
+    actual = referee_tuple_digest(cells)
+    if actual != REVIEWED_2551Q_REFEREE_TUPLES_SHA256:
+        raise RefereeError(
+            "2551Q reviewed 105-tuple referee digest changed: " + actual)
 
 
 def attach_report_digest(report: dict[str, Any]) -> None:
@@ -2969,6 +3028,222 @@ def same_numbers(left: Sequence[Any], right: Sequence[Any]) -> bool:
     )
 
 
+def decimal_identity(value: Any, label: str) -> str:
+    """Return audit.py's exact, non-exponent Decimal identity."""
+    if isinstance(value, bool):
+        raise RefereeError(f"{label} is not a decimal number")
+    try:
+        if isinstance(value, Decimal):
+            number = value
+        elif isinstance(value, int):
+            number = Decimal(value)
+        elif isinstance(value, str):
+            number = Decimal(value)
+        else:
+            raise RefereeError(f"{label} is not an exact decimal value")
+    except InvalidOperation as error:
+        raise RefereeError(f"{label} is not a decimal number") from error
+    if not number.is_finite():
+        raise RefereeError(f"{label} is not a finite decimal number")
+    rendered = format(number, "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return "0" if rendered in {"", "-0"} else rendered
+
+
+def canonical_decimal_string(value: Any, label: str) -> Decimal:
+    if not isinstance(value, str) or not value:
+        raise RefereeError(f"{label} is not a decimal string")
+    try:
+        number = Decimal(value)
+    except InvalidOperation as error:
+        raise RefereeError(f"{label} is not a decimal string") from error
+    if not number.is_finite() or decimal_identity(number, label) != value:
+        raise RefereeError(f"{label} is not a canonical decimal string")
+    return number
+
+
+def audit_owner_binding(
+        layout_payload: bytes,
+        ledger: dict[str, Any],
+        ) -> dict[str, Any]:
+    """Build exact expected owner certificates from retained layout bytes."""
+    try:
+        retained = json.loads(
+            layout_payload.decode("utf-8"), parse_float=Decimal)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RefereeError(
+            "retained layout bytes are not exact UTF-8 JSON") from error
+    pages = retained.get("pages") if isinstance(retained, dict) else None
+    if not isinstance(pages, list) or not pages:
+        raise RefereeError("retained layout has no exact page inventory")
+    active_subjects: dict[str, dict[str, Any]] = {}
+    for subject in ledger.get("subjects") or ():
+        if subject.get("state") not in {
+                "active_resolved", "active_unresolved"}:
+            continue
+        cell_id = subject.get("cell_id")
+        if not isinstance(cell_id, str) or cell_id in active_subjects:
+            raise RefereeError(
+                "active ledger owner identities are not unique")
+        active_subjects[cell_id] = subject
+
+    layout_sha256 = sha256_bytes(layout_payload)
+    certificates: dict[str, dict[str, Any]] = {}
+    for expected_page, page in enumerate(pages, 1):
+        if (not isinstance(page, dict)
+                or page.get("index") != expected_page
+                or not isinstance(page.get("cells"), list)):
+            raise RefereeError(
+                "retained layout pages are not exhaustive and ordered")
+        for cell in page["cells"]:
+            if not isinstance(cell, dict):
+                raise RefereeError("retained layout contains a malformed cell")
+            cell_id = cell.get("id")
+            subject = active_subjects.get(cell_id)
+            if subject is None:
+                continue
+            page_match = (
+                _CELL_PAGE_RE.fullmatch(cell_id)
+                if isinstance(cell_id, str) else None
+            )
+            if page_match is None or int(page_match.group(1)) != expected_page:
+                raise RefereeError(
+                    "retained layout owner cell does not identify its page")
+            subject_key = cell.get("subject_key")
+            if (subject.get("page") != expected_page
+                    or subject.get("cell_id") != cell_id
+                    or subject.get("legacy_cell_id") != cell_id
+                    or subject.get("subject_key") != subject_key):
+                raise RefereeError(
+                    f"retained layout owner disagrees with ledger: {cell_id}")
+            bbox_values = [
+                cell.get(name) for name in ("x0", "y0", "x1", "y1")
+            ]
+            bbox = [
+                decimal_identity(
+                    value, f"retained layout owner {cell_id} bbox")
+                for value in bbox_values
+            ]
+            bbox_numbers = [Decimal(value) for value in bbox]
+            if (bbox_numbers[2] <= bbox_numbers[0]
+                    or bbox_numbers[3] <= bbox_numbers[1]):
+                raise RefereeError(
+                    f"retained layout owner has non-positive bbox: {cell_id}")
+            subject_match = (
+                _SUBJECT_KEY_RE.fullmatch(subject_key)
+                if isinstance(subject_key, str) else None
+            )
+            if subject_match is None or int(subject_match.group(1)) != expected_page:
+                raise RefereeError(
+                    f"retained layout owner has invalid subject_key: {cell_id}")
+            encoded_bbox = [
+                Decimal(subject_match.group(index)) for index in range(2, 6)
+            ]
+            if encoded_bbox != bbox_numbers:
+                raise RefereeError(
+                    f"retained layout owner subject_key/bbox differ: {cell_id}")
+            if cell_id in certificates:
+                raise RefereeError(
+                    f"retained layout duplicates active owner: {cell_id}")
+            certificates[cell_id] = {
+                "criterion": AUDIT_OWNER_CERTIFICATE_CRITERION,
+                "valid": True,
+                "layout_sha256": layout_sha256,
+                "page": expected_page,
+                "cell_id": cell_id,
+                "legacy_cell_id": cell_id,
+                "subject_key": subject_key,
+                "legacy_bbox": bbox,
+                "bbox_number_format": "canonical-decimal-string-v1",
+                "state": subject["state"],
+                "supplies_topology": False,
+            }
+    if set(certificates) != set(active_subjects):
+        raise RefereeError(
+            "retained layout and active ledger owner inventories differ")
+    return {
+        "layout_sha256": layout_sha256,
+        "cells": certificates,
+    }
+
+
+def validate_audit_owner_certificate(
+        value: Any,
+        expected: dict[str, Any] | None,
+        ) -> dict[str, Any]:
+    """Validate one identity-only audit certificate, never source topology."""
+    if not isinstance(value, dict):
+        raise RefereeError("audit offender owner certificate is missing")
+    if value.get("criterion") != AUDIT_OWNER_CERTIFICATE_CRITERION:
+        raise RefereeError("audit offender owner criterion is invalid")
+    if value.get("valid") is True:
+        if (set(value) != AUDIT_OWNER_CERTIFICATE_VALID_KEYS
+                or value.get("supplies_topology") is not False):
+            raise RefereeError(
+                "audit offender valid owner certificate schema is false")
+        layout_sha = value.get("layout_sha256")
+        if (not isinstance(layout_sha, str)
+                or re.fullmatch(r"[0-9a-f]{64}", layout_sha) is None):
+            raise RefereeError(
+                "audit offender owner layout SHA-256 is invalid")
+        page = exact_nonnegative_int(
+            value.get("page"), "audit offender owner page")
+        if page == 0:
+            raise RefereeError("audit offender owner page is not one-based")
+        cell_id = value.get("cell_id")
+        legacy_cell_id = value.get("legacy_cell_id")
+        cell_match = (
+            _CELL_PAGE_RE.fullmatch(cell_id)
+            if isinstance(cell_id, str) else None
+        )
+        if (cell_match is None or int(cell_match.group(1)) != page
+                or legacy_cell_id != cell_id):
+            raise RefereeError(
+                "audit offender owner cell identity is invalid")
+        subject_key = value.get("subject_key")
+        subject_match = (
+            _SUBJECT_KEY_RE.fullmatch(subject_key)
+            if isinstance(subject_key, str) else None
+        )
+        raw_bbox = value.get("legacy_bbox")
+        if (subject_match is None or int(subject_match.group(1)) != page
+                or not isinstance(raw_bbox, list) or len(raw_bbox) != 4):
+            raise RefereeError(
+                "audit offender owner subject/bbox identity is invalid")
+        bbox = [
+            canonical_decimal_string(
+                item, "audit offender owner legacy_bbox")
+            for item in raw_bbox
+        ]
+        encoded_bbox = [
+            Decimal(subject_match.group(index)) for index in range(2, 6)
+        ]
+        if (encoded_bbox != bbox or bbox[2] <= bbox[0]
+                or bbox[3] <= bbox[1]):
+            raise RefereeError(
+                "audit offender owner subject_key/bbox relation is false")
+        if (value.get("bbox_number_format")
+                != "canonical-decimal-string-v1"):
+            raise RefereeError(
+                "audit offender owner bbox number format is invalid")
+        if value.get("state") not in {
+                "active_resolved", "active_unresolved"}:
+            raise RefereeError("audit offender owner state is invalid")
+        if expected is not None and value != expected:
+            raise RefereeError(
+                "audit offender owner certificate is not layout-bound")
+        return value
+    if (set(value) != AUDIT_OWNER_CERTIFICATE_INVALID_KEYS
+            or value.get("valid") is not False
+            or value.get("supplies_topology") is not False
+            or not isinstance(value.get("reason"), str)
+            or not value["reason"]):
+        raise RefereeError(
+            "audit offender invalid owner certificate schema is false")
+    return value
+
+
 def validate_subject_identity(
         subject_key: Any,
         legacy_cell_id: Any,
@@ -3661,7 +3936,12 @@ def near(value: float, target: float) -> bool:
     return abs(value - target) <= POSITION_TOL_PT
 
 
-def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
+def classify_band(
+        cell: dict[str, Any],
+        page: SvgPage,
+        *,
+        _evaluation_window: tuple[float, float] | None = None,
+        ) -> dict[str, Any]:
     comb = cell["comb"]
     anchors = [float(value) for value in comb.get("divider_x") or ()]
     if not anchors:
@@ -3731,6 +4011,29 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
             "open_y0": round(seed_y0, 6),
             "open_y1": round(seed_y1, 6),
         }
+    cell_y0, cell_y1 = float(cell["y0"]), float(cell["y1"])
+    band_attached_above = (
+        seed_y0 < cell_y0
+        and seed_y1 <= cell_y1
+        and seed_y1 >= cell_y0 - POSITION_TOL_PT
+    )
+    band_attached_below = (
+        seed_y0 >= cell_y0
+        and seed_y1 > cell_y1
+        and seed_y0 <= cell_y1 + POSITION_TOL_PT
+    )
+    attached_external_band = band_attached_above or band_attached_below
+    evaluation_y0, evaluation_y1 = (
+        _evaluation_window
+        if _evaluation_window is not None
+        else (cell_y0, cell_y1)
+    )
+    # Frame ownership and unsupported-gap exclusion must be certified in the
+    # same vertical window that supplies the divider topology.  On the first
+    # pass this is exactly the original cell rectangle.  On an attached-band
+    # retry it prevents an unrelated frame inside the cell from proving an
+    # empty multi-pitch gap in the external source band.
+    proof_y0, proof_y1 = evaluation_y0, evaluation_y1
     max_width = pitch / 2
     candidates = [
         paint for paint in page.paints
@@ -3738,7 +4041,7 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
         and paint.width <= max_width
         and paint.height > paint.width
         and paint.x1 > x0 and paint.x0 < x1
-        and paint.y1 > float(cell["y0"]) and paint.y0 < float(cell["y1"])
+        and paint.y1 > evaluation_y0 and paint.y0 < evaluation_y1
     ]
     # Glyphs are never divider candidates, so they matter only when they can
     # occlude an eligible interior vertical.  A glyph whose conservative bound
@@ -3759,8 +4062,6 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
     # Poppler element must finally own all four complete target-tone edges.
     # This distinguishes a genuinely irregular enclosed comb from two comb runs
     # that lattice.py accidentally joined across a label or gutter.
-    cell_y0, cell_y1 = float(cell["y0"]), float(cell["y1"])
-
     def final_owner(x: float, y: float) -> Paint | None:
         active = [
             paint for paint in page.paints
@@ -3791,12 +4092,12 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
         return True
 
     def final_target_spans_vertical(x: float) -> bool:
-        endpoints = {cell_y0, cell_y1}
+        endpoints = {proof_y0, proof_y1}
         for paint in page.paints:
             if (paint.x0 <= x <= paint.x1
-                    and paint.y1 > cell_y0 and paint.y0 < cell_y1):
+                    and paint.y1 > proof_y0 and paint.y0 < proof_y1):
                 endpoints.update((
-                    max(cell_y0, paint.y0), min(cell_y1, paint.y1)))
+                    max(proof_y0, paint.y0), min(proof_y1, paint.y1)))
         ordered = sorted(endpoints)
         for top, bottom in zip(ordered, ordered[1:]):
             if bottom - top <= 1e-9:
@@ -3804,8 +4105,8 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
             owner = final_owner(x, (top + bottom) / 2)
             if (owner is None or owner.clipped
                     or abs(owner.tone - divider_tone) > 1e-8):
-                if ((top <= cell_y0 + 1e-9
-                     or bottom >= cell_y1 - 1e-9)
+                if ((top <= proof_y0 + 1e-9
+                     or bottom >= proof_y1 - 1e-9)
                         and bottom - top <= POSITION_TOL_PT):
                     continue
                 return False
@@ -3829,30 +4130,30 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
                 if paint.width > paint.height
                 and paint.x0 <= x0 + POSITION_TOL_PT
                 and paint.x1 >= x1 - POSITION_TOL_PT
-                and paint.y0 <= cell_y0 + POSITION_TOL_PT
-                and paint.y1 >= cell_y0 - POSITION_TOL_PT
+                and paint.y0 <= proof_y0 + POSITION_TOL_PT
+                and paint.y1 >= proof_y0 - POSITION_TOL_PT
             ]
             bottom_lines = [
                 paint for paint in element_paints
                 if paint.width > paint.height
                 and paint.x0 <= x0 + POSITION_TOL_PT
                 and paint.x1 >= x1 - POSITION_TOL_PT
-                and paint.y0 <= cell_y1 + POSITION_TOL_PT
-                and paint.y1 >= cell_y1 - POSITION_TOL_PT
+                and paint.y0 <= proof_y1 + POSITION_TOL_PT
+                and paint.y1 >= proof_y1 - POSITION_TOL_PT
             ]
             left_lines = [
                 paint for paint in element_paints
                 if paint.height > paint.width
-                and paint.y0 <= cell_y0 + POSITION_TOL_PT
-                and paint.y1 >= cell_y1 - POSITION_TOL_PT
+                and paint.y0 <= proof_y0 + POSITION_TOL_PT
+                and paint.y1 >= proof_y1 - POSITION_TOL_PT
                 and paint.x0 <= x0 + POSITION_TOL_PT
                 and paint.x1 >= x0 - POSITION_TOL_PT
             ]
             right_lines = [
                 paint for paint in element_paints
                 if paint.height > paint.width
-                and paint.y0 <= cell_y0 + POSITION_TOL_PT
-                and paint.y1 >= cell_y1 - POSITION_TOL_PT
+                and paint.y0 <= proof_y0 + POSITION_TOL_PT
+                and paint.y1 >= proof_y1 - POSITION_TOL_PT
                 and paint.x0 <= x1 + POSITION_TOL_PT
                 and paint.x1 >= x1 - POSITION_TOL_PT
             ]
@@ -3958,8 +4259,8 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
     for paint in page.paints:
         if not (paint.x1 > x0 and paint.x0 < x1):
             continue
-        a = max(float(cell["y0"]), paint.y0)
-        b = min(float(cell["y1"]), paint.y1)
+        a = max(evaluation_y0, paint.y0)
+        b = min(evaluation_y1, paint.y1)
         if b > a and b > seed_y0 and a < seed_y1:
             endpoints.update((a, b))
     ordered_y = sorted(endpoints)
@@ -4181,10 +4482,10 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
                 gap_unsupported = [
                     region for region in page.unsupported
                     if region.x1 > left and region.x0 < right
-                    and region.y1 > cell_y0 and region.y0 < cell_y1
+                    and region.y1 > proof_y0 and region.y0 < proof_y1
                     and min(region.x1, right) - max(region.x0, left)
                     > POSITION_TOL_PT
-                    and min(region.y1, cell_y1) - max(region.y0, cell_y0)
+                    and min(region.y1, proof_y1) - max(region.y0, proof_y0)
                     > POSITION_TOL_PT
                 ]
                 subject_frame_elements = single_source_frame_elements()
@@ -4449,10 +4750,23 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
     if not measured:
         reason = (bands[0]["reason"] if bands else
                   "no common Poppler band contains every recognised divider")
-        return {
+        result = {
             "status": "unevaluable", "reason": reason,
             **coverage_evidence, "bands": bands,
         }
+        # Preserve the original cell-clipped referee as the first and
+        # authoritative attempt.  Only its exact empty-band verdict may retry
+        # against a complete source band attached across/outside one cell edge.
+        # Detached and two-edge-enveloping bands never retry, and every other
+        # fail-closed verdict remains untouched.
+        if (_evaluation_window is None
+                and not bands
+                and reason == (
+                    "no common Poppler band contains every recognised divider")
+                and attached_external_band):
+            return classify_band(
+                cell, page, _evaluation_window=(seed_y0, seed_y1))
+        return result
     if seed_span <= 0 or measured_span <= seed_span / 2:
         return {
             "status": "unevaluable",
@@ -4714,7 +5028,10 @@ def validate_audit_container_binding(value: Any) -> dict[str, bool]:
     }
 
 
-def audit_offender_dimensions(item: Any) -> dict[str, Any]:
+def audit_offender_dimensions(
+        item: Any,
+        expected_owner: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
     """Re-derive every published offender relation from its raw evidence."""
     if not isinstance(item, dict):
         raise RefereeError("audit offender is not an object")
@@ -4731,6 +5048,7 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
         "emission_source_position", "source_frame_geometry",
         "emission_source_outer_position", "layout_source_outer_position",
         "source_topology_evidence", "effective_emission_state",
+        "source_owner_certificate",
         "emitted_cell_binding_evidence", "raw_dom_evidence",
     }
     if not required <= set(item) or set(item) - allowed:
@@ -4809,6 +5127,8 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
         expected_layout_kind = "source-topology-unevaluable"
     elif layout_relation == "duplicate-subject":
         expected_layout_kind = "duplicate-layout-subject"
+    elif layout_relation == "registry-invalid":
+        expected_layout_kind = None
     elif layout_relation in {
             "not-owned", "cell-binding-invalid", "inventory-invalid"}:
         expected_layout_kind = None
@@ -4824,6 +5144,72 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
                 f"audit offender {cell_id} has a false {kind} relation")
 
     normal_subject = layout_relation in {"match", "mismatch", "unevaluable"}
+    owner_certificate: dict[str, Any] | None = None
+    if normal_subject or layout_relation == "duplicate-subject":
+        owner_certificate = validate_audit_owner_certificate(
+            item.get("source_owner_certificate"), expected_owner)
+        if layout_relation == "duplicate-subject":
+            if owner_certificate.get("valid") is not False:
+                raise RefereeError(
+                    f"audit duplicate subject {cell_id} has a valid owner "
+                    "certificate")
+            if "source_topology_evidence" in item:
+                raise RefereeError(
+                    f"audit duplicate subject {cell_id} invents source "
+                    "topology evidence")
+        if owner_certificate.get("valid") is False:
+            if (printed is not None
+                    or layout_relation not in {
+                        "unevaluable", "duplicate-subject"}
+                    or item.get("source_frame_geometry") is not None):
+                raise RefereeError(
+                    f"audit offender {cell_id} lets an invalid owner "
+                    "certificate supply source topology")
+            if normal_subject:
+                topology = item.get("source_topology_evidence")
+                if (not isinstance(topology, dict)
+                        or set(topology) != {
+                            "criterion", "owner_certificate"}
+                        or topology.get("criterion")
+                        != AUDIT_OWNER_CERTIFICATE_CRITERION
+                        or topology.get("owner_certificate")
+                        != owner_certificate):
+                    raise RefereeError(
+                        f"audit offender {cell_id} has malformed invalid-owner "
+                        "topology evidence")
+    elif layout_relation == "registry-invalid":
+        owner_certificate = validate_audit_owner_certificate(
+            item.get("source_owner_certificate"), None)
+        if (owner_certificate.get("valid") is not False
+                or cell_id != "<comb-owner-registry>"
+                or page is not None
+                or any(value is not None for value in (
+                    slots, latticed, printed, physical,
+                    item["declared_slots"]))
+                or divider_x != []
+                or occurrences != 0
+                or item["emission_state"] != "not-evaluated"
+                or item.get("effective_emission_state") != "not-evaluated"
+                or item.get("emission_relation") != "not-evaluated"
+                or failure_kinds != ["comb-owner-registry-invalid"]
+                or "source_topology_evidence" in item
+                or "source_frame_geometry" in item):
+            raise RefereeError(
+                "audit comb owner-registry offender is malformed")
+    elif "source_owner_certificate" in item:
+        raise RefereeError(
+            f"non-owned audit offender invents owner certificate: {cell_id}")
+
+    topology_evidence = item.get("source_topology_evidence")
+    if topology_evidence is not None:
+        if not isinstance(topology_evidence, dict):
+            raise RefereeError(
+                f"audit offender {cell_id} source topology evidence is malformed")
+        nested_owner = topology_evidence.get("owner_certificate")
+        if nested_owner is not None and nested_owner != owner_certificate:
+            raise RefereeError(
+                f"audit offender {cell_id} topology owner certificate differs")
+
     position_mismatch = False
     for field, (kind, outer) in AUDIT_POSITION_FIELDS.items():
         present = field in item
@@ -4904,10 +5290,10 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
             if frame is not None:
                 raise RefereeError(
                     f"audit offender {cell_id} has a frame without topology")
-        else:
+        elif frame is not None:
             if not isinstance(frame, dict):
                 raise RefereeError(
-                    f"audit offender {cell_id} omits measured source frame")
+                    f"audit offender {cell_id} source frame is malformed")
             try:
                 frame_edges = [
                     finite_number(
@@ -4926,6 +5312,13 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
                     or not same_numbers(frame_edges, layout_source_expected)):
                 raise RefereeError(
                     f"audit offender {cell_id} source rails disagree")
+        elif (source_expected_outer is not None
+              or layout_source_expected is not None
+              or owner_certificate is None
+              or owner_certificate.get("valid") is not True):
+            raise RefereeError(
+                f"audit offender {cell_id} has an uncertified unframed "
+                "source topology")
 
     container_mismatch = False
     if normal_subject:
@@ -4967,11 +5360,11 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
         printed_slot_mismatch = (
             slots is not None and printed is not None and slots != printed)
         if (("emission-layout-mismatch" in failure_kinds)
-                != layout_slot_mismatch):
+                != (physical_emission_valid and layout_slot_mismatch)):
             raise RefereeError(
                 f"audit offender {cell_id} has a false layout-slot relation")
         if (("emission-printed-mismatch" in failure_kinds)
-                != printed_slot_mismatch):
+                != (physical_emission_valid and printed_slot_mismatch)):
             raise RefereeError(
                 f"audit offender {cell_id} has a false printed-slot relation")
         if not physical_emission_valid or binding_invalid:
@@ -5024,6 +5417,11 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
                 or "emitted-cell-binding-invalid" not in failure_kinds):
             raise RefereeError(
                 f"audit offender {cell_id} has false cell-binding evidence")
+    elif layout_relation == "registry-invalid":
+        if (item["emission_relation"] != "not-evaluated"
+                or failure_kinds != ["comb-owner-registry-invalid"]):
+            raise RefereeError(
+                "audit comb owner-registry relation is false")
     elif (item["emission_relation"] != "inventory-invalid"
           or "comb-inventory-mismatch" not in failure_kinds):
         raise RefereeError(
@@ -5035,6 +5433,7 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
         "missing-layout-cell-owner", "duplicate-layout-cell-owner",
         "emitted-cell-page-mismatch", "emitted-cell-geometry-mismatch",
         "unowned-live-comb-markup", "comb-inventory-mismatch",
+        "comb-owner-registry-invalid",
         "emission-container-page-mismatch",
         "emission-container-geometry-mismatch",
     })
@@ -5083,11 +5482,15 @@ def audit_offender_dimensions(item: Any) -> dict[str, Any]:
         "layout_relation": layout_relation,
         "emission_state": item["emission_state"],
         "failure_kinds": failure_kinds,
+        "source_owner_certificate": owner_certificate,
         "dimensions": dimensions,
     }
 
 
-def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
+def audit_evidence(
+        audit_record: dict[str, Any] | None,
+        owner_binding: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
     """Validate exhaustive audit publication without conflating dimensions."""
     if not audit_record:
         return {
@@ -5120,11 +5523,40 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
             "offenders": {},
         }
     errors: list[str] = []
+    owner_cells: dict[str, dict[str, Any]] | None = None
+    if owner_binding is not None:
+        if (not isinstance(owner_binding, dict)
+                or set(owner_binding) != {"layout_sha256", "cells"}
+                or not isinstance(owner_binding.get("layout_sha256"), str)
+                or not isinstance(owner_binding.get("cells"), dict)):
+            errors.append("audit owner binding context is malformed")
+            owner_cells = {}
+        else:
+            owner_cells = owner_binding["cells"]
+            for cell_id, certificate in owner_cells.items():
+                try:
+                    if (not isinstance(cell_id, str)
+                            or certificate.get("cell_id") != cell_id
+                            or certificate.get("layout_sha256")
+                            != owner_binding["layout_sha256"]):
+                        raise RefereeError(
+                            "owner binding identity/layout SHA is false")
+                    validate_audit_owner_certificate(
+                        certificate, certificate)
+                except (AttributeError, RefereeError) as error:
+                    errors.append(
+                        f"audit owner binding {cell_id!r}: {error}")
     dimensions_by_cell: dict[str, dict[str, Any]] = {}
     valid_items: list[dict[str, Any]] = []
     for index, item in enumerate(raw_offenders):
         try:
-            dimensions = audit_offender_dimensions(item)
+            raw_cell = item.get("cell") if isinstance(item, dict) else None
+            expected_owner = (
+                owner_cells.get(raw_cell)
+                if owner_cells is not None and isinstance(raw_cell, str)
+                else None
+            )
+            dimensions = audit_offender_dimensions(item, expected_owner)
         except RefereeError as error:
             errors.append(f"offender[{index}]: {error}")
             continue
@@ -5161,7 +5593,9 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
                 "combs_expected", "combs_checked", "raw_live_comb_issues",
                 "emitted_cell_binding_issues", "layout_mismatches",
                 "layout_unevaluable", "emission_behind_layout",
-                "emission_invalid",
+                "owner_certificates_valid", "owner_certificates_invalid",
+                "source_u_frame_evaluable",
+                "source_certified_unframed_evaluable", "emission_invalid",
             )
         }
     except (KeyError, RefereeError) as error:
@@ -5177,7 +5611,9 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
                 "combs_expected", "combs_checked", "raw_live_comb_issues",
                 "emitted_cell_binding_issues", "layout_mismatches",
                 "layout_unevaluable", "emission_behind_layout",
-                "emission_invalid",
+                "owner_certificates_valid", "owner_certificates_invalid",
+                "source_u_frame_evaluable",
+                "source_certified_unframed_evaluable", "emission_invalid",
             )
         }
     if checked_ids != expected_ids:
@@ -5186,6 +5622,9 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
         errors.append("audit expected count disagrees with expected IDs")
     if counts["combs_checked"] != len(checked_ids):
         errors.append("audit checked count disagrees with checked IDs")
+    if owner_cells is not None and expected_ids != list(owner_cells):
+        errors.append(
+            "audit expected IDs differ from exact retained owner order")
     if emitted_ids != sorted(emitted_ids):
         errors.append("audit emitted IDs are not canonical sorted inventory")
     if unexpected_ids != sorted(set(emitted_ids) - set(expected_ids)):
@@ -5258,6 +5697,10 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
         cell_id for cell_id, detail in dimensions_by_cell.items()
         if "comb-inventory-mismatch" in detail["failure_kinds"]
     }
+    owner_registry_offenders = {
+        cell_id for cell_id, detail in dimensions_by_cell.items()
+        if "comb-owner-registry-invalid" in detail["failure_kinds"]
+    }
     binding_issue_ids = set(duplicate_emitted_ids) | set(unexpected_ids)
     for cell_id, detail in dimensions_by_cell.items():
         if set(detail["failure_kinds"]) & {
@@ -5282,6 +5725,7 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
         or raw_issue_ids
         or binding_issue_ids
         or inventory_offenders
+        or owner_registry_offenders
     )
     if inventory_complete is not derived_inventory_complete:
         errors.append("audit inventory_complete relation is false")
@@ -5305,6 +5749,84 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
             errors.append(
                 f"audit {key} count {counts[key]} disagrees with "
                 f"{derived} independent offender relations")
+
+    if (counts["owner_certificates_valid"]
+            + counts["owner_certificates_invalid"]
+            != counts["combs_checked"]):
+        errors.append(
+            "audit owner certificate counts do not partition checked cells")
+    checked_certificates = {
+        cell_id: detail["source_owner_certificate"]
+        for cell_id, detail in dimensions_by_cell.items()
+        if cell_id in expected_set
+        and isinstance(detail.get("source_owner_certificate"), dict)
+    }
+    published_invalid_certificates = sum(
+        certificate.get("valid") is False
+        for certificate in checked_certificates.values()
+    )
+    published_valid_certificates = sum(
+        certificate.get("valid") is True
+        for certificate in checked_certificates.values()
+    )
+    if (counts["owner_certificates_invalid"]
+            != published_invalid_certificates):
+        errors.append(
+            "audit invalid owner certificate count disagrees with offenders")
+    if (published_valid_certificates
+            > counts["owner_certificates_valid"]):
+        errors.append(
+            "audit published valid owner certificates exceed their count")
+    if set(checked_certificates) == expected_set and (
+            counts["owner_certificates_valid"]
+            != published_valid_certificates):
+        errors.append(
+            "audit complete owner certificate publication disagrees with count")
+    if owner_registry_offenders and (
+            published_invalid_certificates != counts["combs_checked"]
+            or counts["owner_certificates_invalid"]
+            != counts["combs_checked"]
+            or counts["owner_certificates_valid"] != 0
+            or set(checked_certificates) != expected_set):
+        errors.append(
+            "audit global owner-registry failure does not invalidate every "
+            "checked certificate")
+
+    checked_source_unevaluable = {
+        cell_id for cell_id, detail in dimensions_by_cell.items()
+        if cell_id in expected_set
+        and detail["dimensions"]["source_unevaluable"]
+    }
+    source_evaluable = (
+        counts["combs_checked"] - len(checked_source_unevaluable))
+    if (counts["source_u_frame_evaluable"]
+            + counts["source_certified_unframed_evaluable"]
+            != source_evaluable):
+        errors.append(
+            "audit source frame/unframed counts do not partition evaluable "
+            "checked cells")
+    published_u_frame = 0
+    published_certified_unframed = 0
+    for cell_id, detail in dimensions_by_cell.items():
+        if cell_id not in expected_set or detail["printed"] is None:
+            continue
+        certificate = detail.get("source_owner_certificate")
+        if (not isinstance(certificate, dict)
+                or certificate.get("valid") is not True):
+            errors.append(
+                f"audit measured source lacks valid owner certificate: {cell_id}")
+            continue
+        if offenders[cell_id].get("source_frame_geometry") is None:
+            published_certified_unframed += 1
+        else:
+            published_u_frame += 1
+    if published_u_frame > counts["source_u_frame_evaluable"]:
+        errors.append(
+            "audit published U-frame source results exceed their count")
+    if (published_certified_unframed
+            > counts["source_certified_unframed_evaluable"]):
+        errors.append(
+            "audit published certified-unframed results exceed their count")
     unsupported_canonical = sorted(
         cell_id for cell_id in offender_ids - expected_set - set(unexpected_ids)
         if _CELL_RE.fullmatch(cell_id)
@@ -5358,6 +5880,11 @@ def audit_evidence(audit_record: dict[str, Any] | None) -> dict[str, Any]:
         "inventory_complete": inventory_complete,
         "layout_mismatches": counts["layout_mismatches"],
         "layout_unevaluable": counts["layout_unevaluable"],
+        "owner_certificates_valid": counts["owner_certificates_valid"],
+        "owner_certificates_invalid": counts["owner_certificates_invalid"],
+        "source_u_frame_evaluable": counts["source_u_frame_evaluable"],
+        "source_certified_unframed_evaluable": (
+            counts["source_certified_unframed_evaluable"]),
         "emission_behind_layout": counts["emission_behind_layout"],
         "emission_invalid": counts["emission_invalid"],
         "offender_dimensions": dimensions_by_cell,
@@ -6615,7 +7142,8 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     slots = slot_records(html_parser, emission_contract)
     emission_inventory = validate_emission_inventory(ledger, slots)
     audit_record = audit_by_slug.get(slug)
-    audit = audit_evidence(audit_record)
+    owner_binding = audit_owner_binding(layout_bytes, ledger)
+    audit = audit_evidence(audit_record, owner_binding)
     manifest_binding = bind_audit_manifest(audit_record, {
         "ir": (ir_path, True, ir_bytes),
         "layout": (layout_path, True, layout_bytes),
@@ -6731,6 +7259,8 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     if len(cell_ids) != len(cells) or len(cells) != expected_combs:
         raise RefereeError(
             f"{slug}: published subject identities are not exhaustive")
+    if slug == "2551q-2018":
+        validate_2551q_referee_golden(cells)
     for cell in cells:
         status, reason = comparison(cell, bool(audit.get("complete")))
         cell["comparison_status"] = status
@@ -7126,6 +7656,188 @@ def self_test() -> int:
     assert result["status"] == "measured", result
     assert result["compartments"] == 4, result
     assert result["extra_divider_x"] == [20.0], result
+
+    # A source guide band may live immediately outside one cell edge because
+    # the shared horizontal owns the partition.  The whole attached band is
+    # evidence; clipping it to the cell would discard it as <=0.25pt noise.
+    attached_above = {
+        **cell,
+        "y0": 20.0,
+        "y1": 30.0,
+        "comb": {**cell["comb"], "y0": 13.76, "y1": 19.76},
+    }
+    attached_above_paints = [
+        paint(10, 13.76, 19.76),
+        paint(20, 13.76, 19.76),
+        paint(30, 13.76, 19.76),
+    ]
+    result = classify_band(attached_above, SvgPage(
+        100, 100, attached_above_paints, [], "x"))
+    assert result["status"] == "measured", result
+    assert result["compartments"] == 4, result
+
+    # The attached-band retry must not borrow a different rectangle in the
+    # original cell to justify an empty multi-pitch gap in the external band.
+    # Only the two anchors are painted in that band; the missing midpoint is
+    # safe solely when the same evaluation window has its own single-frame
+    # subject proof.
+    unrelated_cell_frame = [
+        Paint(-0.1, 19.9, 40.1, 20.1, 0.0, 10,
+              "stroke", "unrelated-cell-frame"),
+        Paint(-0.1, 29.9, 40.1, 30.1, 0.0, 11,
+              "stroke", "unrelated-cell-frame"),
+        Paint(-0.1, 19.9, 0.1, 30.1, 0.0, 12,
+              "stroke", "unrelated-cell-frame"),
+        Paint(39.9, 19.9, 40.1, 30.1, 0.0, 13,
+              "stroke", "unrelated-cell-frame"),
+    ]
+    attached_gap_wrong_frame = classify_band(attached_above, SvgPage(
+        100, 100,
+        [paint(10, 13.76, 19.76), paint(30, 13.76, 19.76),
+         *unrelated_cell_frame],
+        [], "x"))
+    assert attached_gap_wrong_frame["status"] == "unevaluable", (
+        attached_gap_wrong_frame)
+    assert attached_gap_wrong_frame["reason"] == (
+        "chosen source topology lacks a clean single-frame subject proof"
+    ), attached_gap_wrong_frame
+    assert any(
+        band.get("unproven_subject_gaps")
+        for band in attached_gap_wrong_frame["bands"]
+    ), attached_gap_wrong_frame
+
+    attached_below = {
+        **cell,
+        "comb": {**cell["comb"], "y0": 10.24, "y1": 16.24},
+    }
+    result = classify_band(attached_below, SvgPage(
+        100, 100,
+        [paint(10, 10.24, 16.24),
+         paint(20, 10.24, 16.24),
+         paint(30, 10.24, 16.24)],
+        [], "x"))
+    assert result["status"] == "measured", result
+    assert result["compartments"] == 4, result
+
+    detached = {
+        **cell,
+        "comb": {**cell["comb"], "y0": 10.26, "y1": 16.26},
+    }
+    result = classify_band(detached, SvgPage(
+        100, 100,
+        [paint(10, 10.26, 16.26),
+         paint(20, 10.26, 16.26),
+         paint(30, 10.26, 16.26)],
+        [], "x"))
+    assert result["status"] == "unevaluable", result
+    assert result["reason"] == (
+        "no common Poppler band contains every recognised divider"), result
+    detached_no_retry = classify_band(
+        detached,
+        SvgPage(
+            100, 100,
+            [paint(10, 10.26, 16.26),
+             paint(20, 10.26, 16.26),
+             paint(30, 10.26, 16.26)],
+            [], "x"),
+        _evaluation_window=(0.0, 10.0),
+    )
+    assert result == detached_no_retry
+
+    enveloping = {
+        **cell,
+        "comb": {**cell["comb"], "y0": -1.0, "y1": 11.0},
+    }
+    result = classify_band(enveloping, SvgPage(
+        100, 100,
+        [paint(10, -1, 11), paint(20, -1, 11), paint(30, -1, 11)],
+        [], "x"))
+    assert result["status"] == "measured", result
+    assert result["compartments"] == 4, result
+
+    # An attached band whose original cell-clipped verdict is already
+    # ambiguous must not invoke the fallback.
+    crossing = {
+        **cell,
+        "y0": 20.0,
+        "y1": 30.0,
+        "comb": {**cell["comb"], "y0": 19.76, "y1": 25.76},
+    }
+    crossing_ambiguous_page = SvgPage(
+        100, 100,
+        [paint(10, 19.76, 25.76),
+         paint(20, 19.76, 22.0),
+         paint(30, 19.76, 25.76)],
+        [], "x")
+    crossing_ambiguous = classify_band(crossing, crossing_ambiguous_page)
+    crossing_ambiguous_no_retry = classify_band(
+        crossing, crossing_ambiguous_page,
+        _evaluation_window=(20.0, 30.0))
+    assert crossing_ambiguous["status"] == "unevaluable", crossing_ambiguous
+    assert crossing_ambiguous == crossing_ambiguous_no_retry
+
+    crossing_minority_page = SvgPage(
+        100, 100,
+        [paint(10, 20.0, 22.0), paint(30, 20.0, 22.0)], [], "x")
+    crossing_minority = classify_band(crossing, crossing_minority_page)
+    crossing_minority_no_retry = classify_band(
+        crossing, crossing_minority_page,
+        _evaluation_window=(20.0, 30.0))
+    assert crossing_minority["status"] == "unevaluable", crossing_minority
+    assert "strict majority" in crossing_minority["reason"], crossing_minority
+    assert crossing_minority == crossing_minority_no_retry
+
+    off_band_decoy = classify_band(attached_above, SvgPage(
+        100, 100,
+        [*attached_above_paints, paint(15, 22, 28)], [], "x"))
+    assert off_band_decoy["status"] == "measured", off_band_decoy
+    assert off_band_decoy["compartments"] == 4, off_band_decoy
+    assert 15.0 not in off_band_decoy["source_divider_x"], off_band_decoy
+
+    attached_partial = classify_band(attached_above, SvgPage(
+        100, 100,
+        [paint(10, 13.76, 19.76),
+         paint(20, 13.76, 16.66),
+         paint(30, 13.76, 19.76)],
+        [], "x"))
+    assert attached_partial["status"] == "unevaluable", attached_partial
+
+    attached_clipped = classify_band(attached_above, SvgPage(
+        100, 100,
+        [*attached_above_paints,
+         Paint(24.9, 13.76, 25.1, 19.76, 0.0, 5,
+               "test", "attached-clipped", True)],
+        [], "x"))
+    assert attached_clipped["status"] == "unevaluable", attached_clipped
+
+    attached_outward = {
+        **attached_above,
+        "comb": {
+            **attached_above["comb"],
+            "divider_x": [20.0, 30.0],
+        },
+    }
+    attached_off_pitch = classify_band(attached_outward, SvgPage(
+        100, 100,
+        [paint(5, 13.76, 19.76), paint(10, 13.76, 19.76),
+         paint(20, 13.76, 19.76), paint(30, 13.76, 19.76)],
+        [], "x"))
+    assert attached_off_pitch["status"] == "unevaluable", attached_off_pitch
+
+    attached_unsupported = classify_band(attached_above, SvgPage(
+        100, 100, attached_above_paints,
+        [UnsupportedRegion(
+            5, 13.76, 35, 19.76,
+            "unsupported attached overlay", "attached-overlay")],
+        "x"))
+    assert attached_unsupported["status"] == "unevaluable", attached_unsupported
+
+    attached_non_majority = classify_band(attached_above, SvgPage(
+        100, 100,
+        [paint(30, 13.76, 14.76), paint(20, 13.76, 14.36)],
+        [], "x"))
+    assert attached_non_majority["status"] == "unevaluable", (
+        attached_non_majority)
 
     def parsed_subject(anchor: float) -> dict[str, Any]:
         return {
@@ -8118,6 +8830,41 @@ def self_test() -> int:
             "unavailable_reason": "self-test source topology is unavailable",
         }
 
+    self_audit_layout_sha = "a" * 64
+
+    def self_owner_certificate(cell_id: str) -> dict[str, Any]:
+        return {
+            "criterion": AUDIT_OWNER_CERTIFICATE_CRITERION,
+            "valid": True,
+            "layout_sha256": self_audit_layout_sha,
+            "page": 1,
+            "cell_id": cell_id,
+            "legacy_cell_id": cell_id,
+            "subject_key": "p1@0,0,2,1",
+            "legacy_bbox": ["0", "0", "2", "1"],
+            "bbox_number_format": "canonical-decimal-string-v1",
+            "state": "active_resolved",
+            "supplies_topology": False,
+        }
+
+    def self_owner_binding(cell_ids: Sequence[str]) -> dict[str, Any]:
+        return {
+            "layout_sha256": self_audit_layout_sha,
+            "cells": {
+                cell_id: self_owner_certificate(cell_id)
+                for cell_id in cell_ids
+            },
+        }
+
+    def self_invalid_owner(reason: str = "self-test invalid owner"
+                           ) -> dict[str, Any]:
+        return {
+            "criterion": AUDIT_OWNER_CERTIFICATE_CRITERION,
+            "valid": False,
+            "reason": reason,
+            "supplies_topology": False,
+        }
+
     def source_unevaluable_offender(cell_id: str) -> dict[str, Any]:
         item: dict[str, Any] = {
             "cell": cell_id,
@@ -8144,6 +8891,7 @@ def self_test() -> int:
                 "rect_matches": True,
                 "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
             },
+            "source_owner_certificate": self_owner_certificate(cell_id),
             "layout_relation": "unevaluable",
             "emission_relation": "match",
             "failure_kinds": ["source-topology-unevaluable"],
@@ -8289,9 +9037,45 @@ def self_test() -> int:
             "inventory_complete": not unexpected,
             "layout_mismatches": mismatch_count,
             "layout_unevaluable": unevaluable_count,
+            "owner_certificates_valid": len(expected_ids),
+            "owner_certificates_invalid": 0,
+            "source_u_frame_evaluable": sum(
+                item.get("cell") in expected_ids
+                and item.get("printed") is not None
+                and item.get("source_frame_geometry") is not None
+                for item in offenders
+            ),
+            "source_certified_unframed_evaluable": 0,
             "emission_behind_layout": behind_count,
             "emission_invalid": invalid_count,
         }
+        invalid_owner_ids = {
+            item.get("cell") for item in offenders
+            if item.get("cell") in expected_ids
+            and isinstance(item.get("source_owner_certificate"), dict)
+            and item["source_owner_certificate"].get("valid") is False
+        }
+        assertion["owner_certificates_invalid"] = len(invalid_owner_ids)
+        assertion["owner_certificates_valid"] = (
+            len(expected_ids) - len(invalid_owner_ids))
+        checked_source_unevaluable = {
+            item.get("cell") for item in offenders
+            if item.get("cell") in expected_ids
+            and item.get("layout_relation") in {
+                "unevaluable", "duplicate-subject"}
+        }
+        assertion["source_certified_unframed_evaluable"] = (
+            len(expected_ids)
+            - len(checked_source_unevaluable)
+            - assertion["source_u_frame_evaluable"]
+        )
+        if any(
+                item.get("layout_relation") in {
+                    "duplicate-subject", "inventory-invalid",
+                    "registry-invalid",
+                }
+                for item in offenders):
+            assertion["inventory_complete"] = False
         if offenders:
             assertion.update({
                 "offender_count": len(offenders),
@@ -8305,7 +9089,7 @@ def self_test() -> int:
     audit_pass = audit_evidence({
         "comb_slots_match_printed": True,
         "assertions": {"comb_slots_match_printed": held_assertion},
-    })
+    }, self_owner_binding(["p1c1"]))
     assert audit_pass["assertion_valid"]
     assert not audit_pass["complete"] and audit_pass["offender_count"] == 0
     one_offender = source_unevaluable_offender("p1c1")
@@ -8314,7 +9098,7 @@ def self_test() -> int:
     audit_broken = audit_evidence({
         "comb_slots_match_printed": False,
         "assertions": {"comb_slots_match_printed": broken_assertion},
-    })
+    }, self_owner_binding(["p1c1"]))
     assert audit_broken["assertion_valid"]
     assert audit_broken["layout_unevaluable"] == 1
     independent_relations = comb_assertion(
@@ -8324,11 +9108,225 @@ def self_test() -> int:
     independent_audit = audit_evidence({
         "comb_slots_match_printed": False,
         "assertions": {"comb_slots_match_printed": independent_relations},
-    })
+    }, self_owner_binding(["p1c1", "p1c2"]))
     assert independent_audit["assertion_valid"]
     assert independent_audit["offender_count"] == 2
     assert independent_audit["layout_mismatches"] == 1
     assert independent_audit["layout_unevaluable"] == 1
+
+    invalid_geometry = layout_mismatch_offender("p1c1")
+    invalid_geometry.update({
+        "emission_state": "invalid-slot-geometry",
+        "effective_emission_state": "invalid-slot-geometry",
+        "emission_relation": "invalid",
+        "failure_kinds": [
+            "layout-printed-mismatch", "invalid-emission"],
+        "why": (
+            "self-test source disagrees while physical emission geometry "
+            "is independently invalid"),
+    })
+    invalid_geometry_assertion = comb_assertion(
+        [invalid_geometry], expected_ids=["p1c1"])
+    invalid_geometry_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": invalid_geometry_assertion},
+    }, self_owner_binding(["p1c1"]))
+    assert invalid_geometry_audit["assertion_valid"], invalid_geometry_audit
+    false_invalid_count_relation = clone(invalid_geometry_assertion)
+    false_invalid_count_relation["offenders"][0][
+        "failure_kinds"].append("emission-printed-mismatch")
+    assert not audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": false_invalid_count_relation},
+    }, self_owner_binding(["p1c1"]))["assertion_valid"]
+
+    # Valid owner certificates are exact identity-only records.  They bind to
+    # the retained layout SHA, page/cell/subject/state and canonical Decimal
+    # bbox.  No individual field may drift while the topology relation passes.
+    for label, mutate in (
+        ("layout-sha", lambda cert: cert.__setitem__(
+            "layout_sha256", "b" * 64)),
+        ("subject", lambda cert: cert.__setitem__(
+            "subject_key", "p1@0,0,3,1")),
+        ("noncanonical-bbox", lambda cert: cert.__setitem__(
+            "legacy_bbox", ["0", "0", "2.0", "1"])),
+        ("state", lambda cert: cert.__setitem__(
+            "state", "active_unresolved")),
+        ("topology-claim", lambda cert: cert.__setitem__(
+            "supplies_topology", True)),
+        ("extra-key", lambda cert: cert.__setitem__("extra", False)),
+    ):
+        mutated_assertion = clone(broken_assertion)
+        mutate(mutated_assertion["offenders"][0][
+            "source_owner_certificate"])
+        mutated_audit = audit_evidence({
+            "comb_slots_match_printed": False,
+            "assertions": {
+                "comb_slots_match_printed": mutated_assertion},
+        }, self_owner_binding(["p1c1"]))
+        assert not mutated_audit["assertion_valid"], (
+            label, mutated_audit)
+
+    nested_owner_assertion = clone(broken_assertion)
+    nested_owner_assertion["offenders"][0]["source_topology_evidence"] = {
+        "criterion": "unanimous-source-derived-topology-required",
+        "owner_certificate": clone(
+            nested_owner_assertion["offenders"][0][
+                "source_owner_certificate"]),
+    }
+    nested_owner_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": nested_owner_assertion},
+    }, self_owner_binding(["p1c1"]))
+    assert nested_owner_audit["assertion_valid"], nested_owner_audit
+    unequal_nested_assertion = clone(nested_owner_assertion)
+    unequal_nested_assertion["offenders"][0][
+        "source_topology_evidence"]["owner_certificate"][
+            "layout_sha256"] = "b" * 64
+    unequal_nested_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": unequal_nested_assertion},
+    }, self_owner_binding(["p1c1"]))
+    assert not unequal_nested_audit["assertion_valid"], unequal_nested_audit
+
+    invalid_owner_offender = source_unevaluable_offender("p1c1")
+    invalid_owner_offender["source_owner_certificate"] = self_invalid_owner()
+    invalid_owner_offender["source_topology_evidence"] = {
+        "criterion": AUDIT_OWNER_CERTIFICATE_CRITERION,
+        "owner_certificate": clone(
+            invalid_owner_offender["source_owner_certificate"]),
+    }
+    invalid_owner_assertion = comb_assertion(
+        [invalid_owner_offender], expected_ids=["p1c1"])
+    invalid_owner_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": invalid_owner_assertion},
+    }, self_owner_binding(["p1c1"]))
+    assert invalid_owner_audit["assertion_valid"], invalid_owner_audit
+    assert invalid_owner_audit["owner_certificates_valid"] == 0
+    assert invalid_owner_audit["owner_certificates_invalid"] == 1
+    assert invalid_owner_audit["source_u_frame_evaluable"] == 0
+    assert invalid_owner_audit[
+        "source_certified_unframed_evaluable"] == 0
+    invalid_owner_extra_topology = clone(invalid_owner_assertion)
+    invalid_owner_extra_topology["offenders"][0][
+        "source_topology_evidence"]["divider_x"] = [1.0]
+    assert not audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": invalid_owner_extra_topology},
+    }, self_owner_binding(["p1c1"]))["assertion_valid"]
+
+    invalid_owner_with_topology = layout_mismatch_offender("p1c1")
+    invalid_owner_with_topology["source_owner_certificate"] = (
+        self_invalid_owner())
+    invalid_owner_with_topology["source_topology_evidence"] = {
+        "criterion": AUDIT_OWNER_CERTIFICATE_CRITERION,
+        "owner_certificate": clone(
+            invalid_owner_with_topology["source_owner_certificate"]),
+    }
+    try:
+        audit_offender_dimensions(
+            invalid_owner_with_topology,
+            self_owner_certificate("p1c1"))
+    except RefereeError:
+        pass
+    else:
+        raise AssertionError(
+            "invalid owner certificate supplied a measured topology")
+
+    duplicate_subject_offender = {
+        "cell": "p1c1",
+        "page": 1,
+        "slots": 2,
+        "latticed": None,
+        "printed": None,
+        "printed_divider_x": [],
+        "emission_state": "physical-slots",
+        "physical_slots": 2,
+        "declared_slots": 2,
+        "emitted_occurrences": 1,
+        "source_owner_certificate": self_invalid_owner(
+            "self-test duplicate layout owner"),
+        "layout_relation": "duplicate-subject",
+        "emission_relation": "unbound",
+        "failure_kinds": ["duplicate-layout-subject"],
+        "why": "self-test layout has two subjects with this id",
+    }
+    duplicate_subject_assertion = comb_assertion(
+        [duplicate_subject_offender], expected_ids=["p1c1"])
+    duplicate_subject_assertion["duplicate_layout_comb_ids"] = ["p1c1"]
+    duplicate_subject_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {
+            "comb_slots_match_printed": duplicate_subject_assertion},
+    }, self_owner_binding(["p1c1"]))
+    assert duplicate_subject_audit["assertion_valid"], (
+        duplicate_subject_audit)
+    assert duplicate_subject_audit["owner_certificates_invalid"] == 1
+    assert duplicate_subject_audit["owner_certificates_valid"] == 0
+    for invented_topology in (
+        {
+            "criterion": "invented-duplicate-subject-topology",
+            "divider_x": [1.0],
+        },
+        {
+            "printed_compartments": 2,
+            "owner_certificate": clone(
+                duplicate_subject_offender[
+                    "source_owner_certificate"]),
+        },
+    ):
+        invented_duplicate = clone(duplicate_subject_assertion)
+        invented_duplicate["offenders"][0][
+            "source_topology_evidence"] = invented_topology
+        invented_duplicate_audit = audit_evidence({
+            "comb_slots_match_printed": False,
+            "assertions": {
+                "comb_slots_match_printed": invented_duplicate},
+        }, self_owner_binding(["p1c1"]))
+        assert not invented_duplicate_audit["assertion_valid"], (
+            invented_duplicate_audit)
+
+    registry_offender = {
+        "cell": "<comb-owner-registry>",
+        "page": None,
+        "slots": None,
+        "latticed": None,
+        "printed": None,
+        "printed_divider_x": [],
+        "emission_state": "not-evaluated",
+        "effective_emission_state": "not-evaluated",
+        "physical_slots": None,
+        "declared_slots": None,
+        "emitted_occurrences": 0,
+        "source_owner_certificate": self_invalid_owner(
+            "self-test global owner registry failure"),
+        "layout_relation": "registry-invalid",
+        "emission_relation": "not-evaluated",
+        "failure_kinds": ["comb-owner-registry-invalid"],
+        "why": "self-test global owner registry failure",
+    }
+    registry_assertion = comb_assertion(
+        [registry_offender, invalid_owner_offender],
+        expected_ids=["p1c1"],
+    )
+    registry_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": registry_assertion},
+    }, self_owner_binding(["p1c1"]))
+    assert registry_audit["assertion_valid"], registry_audit
+    assert registry_audit["owner_certificates_invalid"] == 1
+    assert registry_audit["owner_certificates_valid"] == 0
+    assert registry_audit["combs_checked"] == 1
+    assert registry_audit["offender_dimensions"][
+        "<comb-owner-registry>"]["source_owner_certificate"][
+            "valid"] is False
 
     audit_truncated_record = {
         "comb_slots_match_printed": False,
