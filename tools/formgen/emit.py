@@ -3363,7 +3363,8 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
               styles: dict[tuple[int, int], RunStyle], backend: RuleBackend,
               options: Options, band_blobs: list[dict[str, Any]],
               warnings: list[str], split: PageSplit = WHOLE_PAGE,
-              fields: FieldPlan | None = None) -> str:
+              fields: FieldPlan | None = None,
+              used_style_keys: set[tuple[int, int]] | None = None) -> str:
     index = int(page_ir["index"])
     cells_by_id = {c["id"]: c for c in page_layout["cells"]}
     runs = page_ir["text_runs"]
@@ -3452,6 +3453,8 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
         rid = run_id(index, run_index)
         if rid in band_run_ids or not split.keep_run(run_index):
             continue
+        if used_style_keys is not None:
+            used_style_keys.add((index, run_index))
         parts.append(text_markup(run, rid, styles[(index, run_index)]))
     parts.append("</div>")
 
@@ -3478,6 +3481,8 @@ def emit_page(page_ir: dict[str, Any], page_layout: dict[str, Any],
                 parts.append(cell_markup(cell, fields))
             for rid, _cell, _ in sorted(plan.texts_by_row.get(row, []), key=_run_order):
                 key = (index, _run_index_of(rid))
+                if used_style_keys is not None:
+                    used_style_keys.add(key)
                 parts.append(text_markup(runs_by_id[rid], rid, styles[key],
                                          extra=(("data-band-row", str(row)),)))
         parts.append("</div>")
@@ -3732,8 +3737,10 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
                     f"Score the form against a reference with this page removed.")
 
     band_blobs: list[dict[str, Any]] = []
+    used_style_keys: set[tuple[int, int]] = set()
     pages = [emit_page(page_ir, page_layout, styles, backend, options, band_blobs,
-                       warnings, split.page(int(page_ir["index"])), fields)
+                       warnings, split.page(int(page_ir["index"])), fields,
+                       used_style_keys)
              for page_ir, page_layout in zip(ir["pages"], layout["pages"])
              if int(page_ir["index"]) in wanted]
 
@@ -3747,8 +3754,13 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
         link = (doc_link_markup(options.guide_href, "Guidelines and Instructions →")
                 if split.has_guide else "")
 
-    styles_css = [page_css(ir), font_face_css(styles, options, warnings),
-                  BASE_CSS.rstrip()]
+    styles_css = [
+        page_css(ir),
+        font_face_css(
+            {key: styles[key] for key in sorted(used_style_keys)},
+            options, warnings),
+        BASE_CSS.rstrip(),
+    ]
     field_style = field_css(fields)
     if field_style:
         styles_css.append(field_style)
