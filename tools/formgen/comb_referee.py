@@ -6187,12 +6187,37 @@ def bind_audit_assertion(
         subject["cell_id"] for subject in ledger["subjects"]
         if subject["state"] in {"active_resolved", "active_unresolved"}
     ]
-    if audit.get("expected_comb_ids") != active_order:
-        errors.append(
-            "audit expected IDs do not equal active ledger order")
-    if audit.get("checked_comb_ids") != active_order:
-        errors.append(
-            "audit checked IDs do not equal active ledger order")
+    active_ids = set(active_order)
+
+    def bound_ids(key: str, label: str) -> list[str] | None:
+        try:
+            return string_list(audit.get(key), label)
+        except RefereeError as error:
+            errors.append(str(error))
+            return None
+
+    expected_ids = bound_ids(
+        "expected_comb_ids", "audit expected comb IDs")
+    checked_ids = bound_ids(
+        "checked_comb_ids", "audit checked comb IDs")
+    if (expected_ids is not None and checked_ids is not None
+            and checked_ids != expected_ids):
+        errors.append("audit checked IDs differ from expected IDs")
+    for label, published_ids in (
+            ("expected", expected_ids), ("checked", checked_ids)):
+        if published_ids is None:
+            continue
+        published = set(published_ids)
+        missing = sorted(active_ids - published)
+        extra = sorted(published - active_ids)
+        if missing:
+            errors.append(
+                f"audit {label} IDs omit active ledger IDs: "
+                + ", ".join(missing[:8]))
+        if extra:
+            errors.append(
+                f"audit {label} IDs add non-active ledger IDs: "
+                + ", ".join(extra[:8]))
     emitted_ids = sorted(slots)
     if audit.get("emitted_comb_ids") != emitted_ids:
         errors.append("audit emitted inventory differs from parsed HTML")
@@ -6207,11 +6232,29 @@ def bind_audit_assertion(
     inference_aliases = {
         inference["cell_id"]: inference for inference in ledger["inferences"]
     }
+
+    def validated_noncomb_binding_offender(offender: Any) -> bool:
+        if not isinstance(offender, dict):
+            return False
+        failure_kinds = offender.get("failure_kinds") or ()
+        relation = offender.get("layout_relation")
+        emission_relation = offender.get("emission_relation")
+        return bool(
+            emission_relation == "invalid"
+            and (
+                (relation == "cell-binding-invalid"
+                 and "emitted-cell-binding-invalid" in failure_kinds)
+                or (relation == "not-owned"
+                    and "unowned-live-comb-markup" in failure_kinds)
+            )
+        )
+
     unknown = sorted(
-        cell_id for cell_id in audit.get("offenders", {})
+        cell_id for cell_id, offender in audit.get("offenders", {}).items()
         if _CELL_RE.fullmatch(cell_id)
         and cell_id not in ledger_aliases
         and cell_id not in inference_aliases
+        and not validated_noncomb_binding_offender(offender)
     )
     if unknown:
         errors.append(
@@ -6358,12 +6401,28 @@ def bind_tracked_provenance(slug: str, layout: dict[str, Any]
     return path, payload
 
 
+def audit_relation_for_subject(
+        subject: dict[str, Any],
+        audit_complete: bool,
+        audit_offender: dict[str, Any] | None,
+        ) -> tuple[int | None, str]:
+    """Publish audit topology only where the exhaustive audit proves it."""
+    if audit_offender is not None:
+        return audit_offender.get("printed"), "published-offender"
+    if audit_complete and subject["state"] in {
+            "active_resolved", "active_unresolved"}:
+        return int(subject["topology"]["cells"]), "complete-non-offender"
+    if audit_complete:
+        return None, "complete-blocked-subject"
+    return None, "unknown-truncated"
+
+
 def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     ledger_state = cell.get("ledger_state")
-    if ledger_state != "active_resolved" or cell.get("ledger_blocks_gate"):
+    if ledger_state not in {"active_resolved", "active_unresolved"}:
         return (
             "unevaluable",
-            "ledger subject is retained, unresolved, inferred, or blocking",
+            "ledger subject has no active topology for adjudication",
         )
     lattice = cell["latticed"]
     emitted = cell["emitted"]
@@ -6387,6 +6446,35 @@ def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     if lattice == audit and source != lattice:
         return "stop", "lattice and audit agree against the independent referee"
     return "stop", "referee, lattice, and audit all differ"
+
+
+def transition_decision(
+        cell: dict[str, Any], comparison_status: str) -> tuple[str, str]:
+    """Report review eligibility without mutating the blocking ledger."""
+    ledger_state = cell.get("ledger_state")
+    if ledger_state == "active_resolved":
+        return "none", "active ledger subject is already resolved"
+    if ledger_state == "active_unresolved":
+        if comparison_status == "agree":
+            return (
+                "eligible-for-reviewed-resolution",
+                "four-way evidence agrees; explicit review is still required",
+            )
+        return (
+            "blocked",
+            "active unresolved ledger subject remains blocking while "
+            f"comparison status is {comparison_status}",
+        )
+    if ledger_state == "retained_unresolved":
+        return (
+            "explicit-transition-required",
+            "retained unresolved subject has no active topology; an explicit "
+            "ledger transition is required",
+        )
+    return (
+        "blocked",
+        "unknown ledger state cannot be transitioned",
+    )
 
 
 def cell_sort_key(cell: dict[str, Any]) -> tuple[int, int, str]:
@@ -6615,18 +6703,8 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 emitted = slots.get(report_cell_id)
                 audit_offender = audit["offenders"].get(
                     subject["legacy_cell_id"])
-                if audit_offender is not None:
-                    audit_printed = audit_offender.get("printed")
-                    audit_relation = "published-offender"
-                elif audit["complete"] and subject["state"] == "active_resolved":
-                    audit_printed = int(subject["topology"]["cells"])
-                    audit_relation = "complete-non-offender"
-                elif audit["complete"]:
-                    audit_printed = None
-                    audit_relation = "complete-blocked-subject"
-                else:
-                    audit_printed = None
-                    audit_relation = "unknown-truncated"
+                audit_printed, audit_relation = audit_relation_for_subject(
+                    subject, bool(audit["complete"]), audit_offender)
                 cells.append({
                     "cell": report_cell_id,
                     "subject_key": subject["subject_key"],
@@ -6657,6 +6735,10 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         status, reason = comparison(cell, bool(audit.get("complete")))
         cell["comparison_status"] = status
         cell["comparison_reason"] = reason
+        transition_status, transition_reason = transition_decision(
+            cell, status)
+        cell["transition_status"] = transition_status
+        cell["transition_reason"] = transition_reason
         cell["four_way"] = {
             "referee": (
                 int(cell["referee"]["compartments"])
@@ -8138,6 +8220,33 @@ def self_test() -> int:
         }
         return item
 
+    def noncomb_binding_offender(
+            cell_id: str, failure_kind: str) -> dict[str, Any]:
+        if failure_kind == "emitted-cell-binding-invalid":
+            layout_relation = "cell-binding-invalid"
+            emission_state = "cell-binding-invalid"
+        elif failure_kind == "unowned-live-comb-markup":
+            layout_relation = "not-owned"
+            emission_state = "raw-live-comb-markup"
+        else:
+            raise AssertionError("unknown self-test non-comb failure kind")
+        return {
+            "cell": cell_id,
+            "page": 1,
+            "slots": None,
+            "latticed": None,
+            "printed": None,
+            "printed_divider_x": [],
+            "emission_state": emission_state,
+            "physical_slots": None,
+            "declared_slots": None,
+            "emitted_occurrences": 1,
+            "layout_relation": layout_relation,
+            "emission_relation": "invalid",
+            "failure_kinds": [failure_kind],
+            "why": "self-test canonical-looking non-comb binding offender",
+        }
+
     def comb_assertion(
             offenders: list[dict[str, Any]],
             *,
@@ -8304,10 +8413,89 @@ def self_test() -> int:
     assert bind_audit_assertion(
         bound_assertion, ledger_result, active_slots,
         active_inventory)["binding_valid"]
-    stale_assertion = clone(bound_assertion)
-    stale_assertion["expected_comb_ids"] = active_order[:-1]
+    permuted_assertion = clone(bound_assertion)
+    permuted_assertion["expected_comb_ids"] = list(reversed(active_order))
+    permuted_assertion["checked_comb_ids"] = list(reversed(active_order))
+    assert bind_audit_assertion(
+        permuted_assertion, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+    duplicate_assertion = clone(bound_assertion)
+    duplicate_assertion["expected_comb_ids"].append(active_order[0])
+    duplicate_assertion["checked_comb_ids"].append(active_order[0])
     assert not bind_audit_assertion(
-        stale_assertion, ledger_result, active_slots,
+        duplicate_assertion, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+    missing_assertion = clone(bound_assertion)
+    missing_assertion["expected_comb_ids"] = active_order[:-1]
+    missing_assertion["checked_comb_ids"] = active_order[:-1]
+    assert not bind_audit_assertion(
+        missing_assertion, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+    extra_assertion = clone(bound_assertion)
+    extra_assertion["expected_comb_ids"].append("p1c999")
+    extra_assertion["checked_comb_ids"].append("p1c999")
+    assert not bind_audit_assertion(
+        extra_assertion, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+    checked_mismatch = clone(bound_assertion)
+    checked_mismatch["checked_comb_ids"] = list(reversed(active_order))
+    assert not bind_audit_assertion(
+        checked_mismatch, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+
+    noncomb_offenders = [
+        noncomb_binding_offender(
+            "p1c998", "emitted-cell-binding-invalid"),
+        noncomb_binding_offender(
+            "p1c999", "unowned-live-comb-markup"),
+    ]
+    noncomb_assertion = comb_assertion(
+        noncomb_offenders, expected_ids=active_order)
+    noncomb_assertion["raw_live_comb_issues"] = 1
+    noncomb_assertion["emitted_cell_binding_issues"] = 1
+    noncomb_assertion["inventory_complete"] = False
+    noncomb_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": noncomb_assertion},
+    })
+    assert noncomb_audit["assertion_valid"], noncomb_audit["errors"]
+    assert bind_audit_assertion(
+        noncomb_audit, ledger_result, active_slots,
+        active_inventory)["binding_valid"]
+
+    mixed_binding = source_unevaluable_offender("p1c996")
+    mixed_binding["failure_kinds"].append(
+        "emitted-cell-binding-invalid")
+    mixed_unowned = source_unevaluable_offender("p1c997")
+    mixed_unowned["failure_kinds"].append(
+        "unowned-live-comb-markup")
+    mixed_assertion = comb_assertion(
+        [mixed_binding, mixed_unowned], expected_ids=active_order)
+    mixed_assertion["raw_live_comb_issues"] = 1
+    mixed_assertion["emitted_cell_binding_issues"] = 1
+    mixed_assertion["inventory_complete"] = False
+    mixed_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": mixed_assertion},
+    })
+    assert mixed_audit["assertion_valid"], mixed_audit["errors"]
+    mixed_binding_result = bind_audit_assertion(
+        mixed_audit, ledger_result, active_slots, active_inventory)
+    assert not mixed_binding_result["binding_valid"]
+    assert all(
+        cell_id in mixed_binding_result["reason"]
+        for cell_id in ("p1c996", "p1c997"))
+
+    unknown_assertion = comb_assertion(
+        [source_unevaluable_offender("p1c995")],
+        expected_ids=active_order)
+    unknown_audit = audit_evidence({
+        "comb_slots_match_printed": False,
+        "assertions": {"comb_slots_match_printed": unknown_assertion},
+    })
+    assert not unknown_audit["assertion_valid"]
+    assert not bind_audit_assertion(
+        unknown_audit, ledger_result, active_slots,
         active_inventory)["binding_valid"]
 
     roundtrip_fixture = {
@@ -8700,20 +8888,74 @@ def self_test() -> int:
             producer_sources=producer_sources,
         )["binding_valid"]
 
-    compared = {
+    assert audit_relation_for_subject(
+        ledger_result["subjects"][0], True, None
+    ) == (2, "complete-non-offender")
+    assert audit_relation_for_subject(
+        unresolved_result["subjects"][0], True, None
+    ) == (2, "complete-non-offender")
+    assert audit_relation_for_subject(
+        retained_result["subjects"][0], True, None
+    ) == (None, "complete-blocked-subject")
+
+    unresolved_compared = {
+        "ledger_state": "active_unresolved",
+        "ledger_blocks_gate": True,
+        "latticed": 3,
+        "emitted": 3,
+        "emitted_indexes_valid": True,
+        "audit_printed": 3,
+        "referee": {
+            "status": "measured",
+            "compartments": 3,
+            "positions_match": True,
+        },
+    }
+    comparison_cases = [
+        ("agree", True, {}, {}),
+        ("repair-lattice", True, {"audit_printed": 4},
+         {"compartments": 4}),
+        ("repair-audit", True, {"audit_printed": 4},
+         {"compartments": 3}),
+        ("stop", True, {"audit_printed": 3}, {"compartments": 5}),
+        ("stale-generation", True, {"emitted": 2}, {}),
+        ("unevaluable", False, {}, {}),
+    ]
+    for expected_status, audit_complete, updates, referee_updates in (
+            comparison_cases):
+        compared = clone(unresolved_compared)
+        compared.update(updates)
+        compared["referee"].update(referee_updates)
+        before = clone(compared)
+        status, _reason = comparison(compared, audit_complete)
+        assert status == expected_status, (expected_status, status)
+        transition_status, _transition_reason = transition_decision(
+            compared, status)
+        assert transition_status == (
+            "eligible-for-reviewed-resolution"
+            if status == "agree" else "blocked"
+        )
+        assert compared == before
+        assert compared["ledger_state"] == "active_unresolved"
+        assert compared["ledger_blocks_gate"] is True
+
+    resolved_compared = clone(unresolved_compared)
+    resolved_compared.update({
         "ledger_state": "active_resolved",
         "ledger_blocks_gate": False,
-        "latticed": 3, "emitted": 3, "emitted_indexes_valid": True,
-        "audit_printed": 4,
-        "referee": {"status": "measured", "compartments": 4,
-                    "positions_match": True},
-    }
-    assert comparison(compared, True)[0] == "repair-lattice"
-    compared["referee"]["compartments"] = 3
-    assert comparison(compared, True)[0] == "repair-audit"
-    compared["audit_printed"] = 3
-    compared["referee"]["compartments"] = 5
-    assert comparison(compared, True)[0] == "stop"
+    })
+    resolved_status, _ = comparison(resolved_compared, True)
+    assert resolved_status == "agree"
+    assert transition_decision(
+        resolved_compared, resolved_status)[0] == "none"
+
+    retained_compared = clone(unresolved_compared)
+    retained_compared["ledger_state"] = "retained_unresolved"
+    retained_status, _ = comparison(retained_compared, True)
+    assert retained_status == "unevaluable"
+    assert transition_decision(
+        retained_compared, retained_status)[0] == (
+            "explicit-transition-required")
 
     artifact = {
         "schema_version": 1,
