@@ -4976,6 +4976,18 @@ def _emission_geometry_from_layout(
     }
 
 
+def _layout_subject_sort_key(
+        item: tuple[str, dict[str, Any]],
+        ) -> tuple[int, int, str]:
+    """Match the referee's canonical page/cell ordering independently."""
+    cell_id, cell = item
+    match = re.fullmatch(r"p(\d+)c(\d+)", cell_id)
+    if match:
+        return int(match.group(1)), int(match.group(2)), cell_id
+    page = cell.get("page", 0) if isinstance(cell, dict) else 0
+    return int(page), sys.maxsize, cell_id
+
+
 def _layout_binding_projection(
         slug: str, layout: Any, guide: Any,
         lattice_record: dict[str, Any], layout_sha256: str,
@@ -5155,12 +5167,14 @@ def _layout_binding_projection(
         "expected_sha256": lattice_record.get("sha256"),
         "layout_generator": generator,
     }
+    ordered_cells = dict(sorted(
+        projected_cells.items(), key=_layout_subject_sort_key))
     result = {
         "layout_sha256": layout_sha256,
         "guide_sha256": guide_sha256,
         "lattice_evidence": lattice_evidence,
         "audit_expected_ids": audit_expected_ids,
-        "cells": projected_cells,
+        "cells": ordered_cells,
         "inferences": projected_inferences,
     }
     _layout_audit_owner_ids(result)
