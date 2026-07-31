@@ -655,6 +655,12 @@ def link_stylesheets(html: str, depth: str, own_css: str) -> str:
     html = html.replace("</head>", f"{links}\n</head>", 1)
     html = html.replace('url("fonts/', f'url("{depth}fonts/')
     html = html.replace("url('fonts/", f"url('{depth}fonts/")
+    # Font preloads are emitted in the document head for editable fields whose
+    # face has no visible printed run. They are browser URLs just like the
+    # @font-face src above, so the packaged bundle must climb to the shared
+    # fonts directory as well.
+    html = html.replace('href="fonts/', f'href="{depth}fonts/')
+    html = html.replace("href='fonts/", f"href='{depth}fonts/")
     # Artwork moved to the shared pool alongside fonts/, so every reference to
     # it has to climb out of the bundle too -- href/src in the markup and url()
     # in any inlined rule.

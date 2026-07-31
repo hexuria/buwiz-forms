@@ -3309,8 +3309,56 @@ class Options:
         self.guide_sources = dict(guide_sources or {})
 
 
+def _font_face_key(family: str, css_style: str, font_weight: str,
+                   font_file: str) -> tuple[str, str, str, str]:
+    return (family, css_style, font_weight, pathlib.PurePosixPath(font_file).name)
+
+
+def _field_font_face(plan: dict[str, Any], fields: FieldPlan) -> dict[str, Any] | None:
+    """Return the shipped face used by editable fields, if one exists.
+
+    FieldFace deliberately keeps only the key and the CSS declarations needed
+    by the input. The plan remains the authority for the file and @font-face
+    descriptor, so a field cannot silently fall back to a platform face merely
+    because no printed run on this document happened to use the modal face.
+    """
+    if not fields or fields.face is None:
+        return None
+    for face in plan.get("faces", ()):
+        if face.get("face_key") == fields.face.face_key:
+            if (face.get("status") == "resolved"
+                    and face.get("css_family") and face.get("font_file")):
+                return face
+            return None
+    return None
+
+
+def _font_href(font_file: str, options: Options) -> str:
+    name = pathlib.PurePosixPath(font_file).name
+    return f"{options.fonts_dir.rstrip('/')}/{name}" if options.fonts_dir else name
+
+
+def font_preload_hrefs(field_face: dict[str, Any] | None,
+                       visible_font_files: set[str], options: Options) -> tuple[str, ...]:
+    """Preload a field-only face so the isolated audit observes its request.
+
+    An empty input does not make Chromium request its font during the print
+    render. If that face is not also used by visible printed text, the CSS would
+    otherwise retain a dependency that the request-closure proof correctly
+    rejects. Preload only that missing file; visible text already loads the
+    other case, and a second request would be noise rather than evidence.
+    """
+    if field_face is None or not field_face.get("font_file"):
+        return ()
+    name = pathlib.PurePosixPath(str(field_face["font_file"])).name
+    if name in visible_font_files:
+        return ()
+    return (_font_href(str(field_face["font_file"]), options),)
+
+
 def font_face_css(styles: dict[tuple[int, int], RunStyle], options: Options,
-                  warnings: list[str]) -> str:
+                  warnings: list[str],
+                  extra_faces: Sequence[dict[str, Any]] = ()) -> str:
     """@font-face for exactly the faces the emitted runs actually reference.
 
     Keyed by weight as well as by family and style, and the weight *descriptor*
@@ -3320,16 +3368,25 @@ def font_face_css(styles: dict[tuple[int, int], RunStyle], options: Options,
     that single file for every weight and synthesise the rest -- emboldened
     outlines with advances no measurement in the plan covers.
     """
-    used: dict[tuple[str, str, str], str] = {}
+    used: dict[tuple[str, str, str, str], str] = {}
     for style in styles.values():
         if style.font_family and style.font_file:
-            used.setdefault(
-                (style.font_family, style.css_style, style.font_face_weight),
-                style.font_file)
+            key = _font_face_key(style.font_family, style.css_style,
+                                 style.font_face_weight, style.font_file)
+            used.setdefault(key, style.font_file)
+    for face in extra_faces:
+        family = str(face.get("css_family") or "")
+        font_file = str(face.get("font_file") or "")
+        if not family or not font_file:
+            continue
+        css_style = str(face.get("css_style") or "normal")
+        font_weight = str((face.get("font_face") or {}).get("weight") or "100 900")
+        used.setdefault(_font_face_key(family, css_style, font_weight, font_file),
+                        font_file)
     blocks = []
-    for (family, css_style, font_weight), font_file in sorted(used.items()):
+    for (family, css_style, font_weight, _name), font_file in sorted(used.items()):
         name = pathlib.PurePosixPath(font_file).name
-        href = f"{options.fonts_dir.rstrip('/')}/{name}" if options.fonts_dir else name
+        href = _font_href(font_file, options)
         if options.out_dir is not None and not (options.out_dir / options.fonts_dir / name).is_file():
             warnings.append(
                 f"missing font file {href}: the document references it but it is not "
@@ -3593,7 +3650,7 @@ def standalone_pdf_markup(split: DocumentSplit, options: Options,
 
 
 def _head(ir: dict[str, Any], title: str, styles: str, backend_name: str | None,
-          document: str) -> list[str]:
+          document: str, font_preloads: Sequence[str] = ()) -> list[str]:
     form = ir["form"]
     attributes = ['lang="en"', f'data-form="{esc_attr(form["code"])}"',
                   f'data-revision="{esc_attr(form["revision"])}"']
@@ -3606,6 +3663,11 @@ def _head(ir: dict[str, Any], title: str, styles: str, backend_name: str | None,
     # this module emitted before the split existed.
     if document != "form":
         attributes.append(f'data-document="{esc_attr(document)}"')
+    preloads = [
+        f'<link rel="preload" href="{esc_attr(href)}" as="font" '
+        'type="font/woff2" crossorigin>'
+        for href in sorted(set(font_preloads))
+    ]
     return [
         "<!doctype html>",
         f"<html {' '.join(attributes)}>",
@@ -3614,6 +3676,7 @@ def _head(ir: dict[str, Any], title: str, styles: str, backend_name: str | None,
         f"<title>{esc_text(title)}</title>",
         "<!-- Generated by tools/formgen/emit.py from the pinned PDF's own content "
         "stream. Do not hand-edit: regenerate. -->",
+        *preloads,
         "<style>",
         styles,
         "</style>",
@@ -3754,11 +3817,20 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
         link = (doc_link_markup(options.guide_href, "Guidelines and Instructions →")
                 if split.has_guide else "")
 
+    field_face = _field_font_face(plan, fields)
+    visible_font_files = {
+        pathlib.PurePosixPath(styles[key].font_file).name
+        for key in used_style_keys
+        if styles[key].font_file
+    }
+    field_preloads = font_preload_hrefs(
+        field_face, visible_font_files, options)
     styles_css = [
         page_css(ir),
         font_face_css(
             {key: styles[key] for key in sorted(used_style_keys)},
-            options, warnings),
+            options, warnings,
+            extra_faces=([field_face] if field_face is not None else [])),
         BASE_CSS.rstrip(),
     ]
     field_style = field_css(fields)
@@ -3769,7 +3841,8 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
     if split.guide_side and split.standalone_pdfs:
         styles_css.append(GUIDE_PDF_CSS)
     head = _head(ir, title, "\n".join(styles_css), backend.name,
-                 options.document if options.document != "form" else "form")
+                 options.document if options.document != "form" else "form",
+                 field_preloads)
     if link:
         head.append(link)
     tail = [
