@@ -64,6 +64,7 @@ import tempfile
 import traceback
 import types
 import urllib.parse
+from decimal import Decimal
 from html.parser import HTMLParser
 from typing import Any, Iterable, Sequence
 
@@ -259,6 +260,43 @@ COMB_FALLBACK_HALFWIDTH_PT = 0.6   # for an `l` op that declares no stroke width
 COMB_MINLEN_PT = 0.8
 COMB_YSLACK_PT = 0.5
 COMB_MAX_WIDTH_PT = 2.5   # 1.44pt group separators are in; column borders are not
+# The reviewed comb-subject ledger may certify only that one exact layout cell
+# owns one legacy subject rectangle.  Both active states are reviewed ownership
+# decisions; their resolved/unresolved distinction is topology evidence and is
+# deliberately not consumed by this oracle.
+COMB_OWNER_REVIEWED_STATES = frozenset({
+    "active_resolved",
+    "active_unresolved",
+})
+RETAINED_COMB_SUBJECT_KEYS = frozenset({
+    "subject_key",
+    "legacy_cell_id",
+    "legacy_bbox",
+    "cell_id",
+    "mapped_partition_cell_ids",
+    "mapped_partition_subject_keys",
+    "state",
+    "emission",
+    "reason_codes",
+    "legacy_comb",
+    "requires_independent_evidence",
+    "permitted_transitions",
+    "blocks_gate",
+})
+RETAINED_COMB_SUBJECT_OPTIONAL_KEYS = frozenset({
+    "erased_edge_replacement_candidates",
+})
+RETAINED_COMB_TRANSITIONS = (
+    "active_composite",
+    "retired_proven_false",
+)
+RETAINED_PARTITION_REASON_CODES = (
+    "emission-suppressed-no-rectangular-owner",
+    "painted-edge-partition",
+)
+RETAINED_NO_BAND_REASON_CODES = (
+    "emission-suppressed-no-final-visible-band",
+)
 # emit.py serialises point geometry to four decimals. Two rounded endpoints can
 # differ by at most two ten-thousandths of a point.
 EMITTED_GEOMETRY_EPS_PT = 0.0002
@@ -1425,6 +1463,551 @@ class CombTopologyError(ValueError):
     def __init__(self, message: str, evidence: dict[str, Any]) -> None:
         super().__init__(message)
         self.evidence = evidence
+
+
+COMB_SUBJECT_KEY_RE = re.compile(
+    r"p(?P<page>\d+)@"
+    r"(?P<x0>-?(?:\d+(?:\.\d*)?|\.\d+)),"
+    r"(?P<y0>-?(?:\d+(?:\.\d*)?|\.\d+)),"
+    r"(?P<x1>-?(?:\d+(?:\.\d*)?|\.\d+)),"
+    r"(?P<y1>-?(?:\d+(?:\.\d*)?|\.\d+))\Z"
+)
+
+
+def _canonical_decimal(value: Any) -> Decimal | None:
+    """Return one exact finite JSON-number identity without float coercion."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, Decimal):
+        return value if value.is_finite() else None
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return None
+        # `str` is Python's shortest round-tripping representation of the
+        # parsed float.  Comparing it with the Decimal parsed from retained
+        # bytes fails closed when json.loads already rounded a longer token.
+        return Decimal(str(value))
+    return None
+
+
+def _decimal_identity(value: Decimal) -> str:
+    """Stable, exact, non-exponent evidence for one Decimal identity."""
+    rendered = format(value, "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    if rendered in {"", "-0"}:
+        return "0"
+    return rendered
+
+
+def _exact_json_equal(left: Any, right: Any) -> bool:
+    """Recursively compare retained JSON without lossy numeric conversion."""
+    left_number = _canonical_decimal(left)
+    right_number = _canonical_decimal(right)
+    if left_number is not None or right_number is not None:
+        return (left_number is not None
+                and right_number is not None
+                and left_number == right_number)
+    if isinstance(left, dict) or isinstance(right, dict):
+        return (
+            isinstance(left, dict)
+            and isinstance(right, dict)
+            and set(left) == set(right)
+            and all(_exact_json_equal(left[key], right[key]) for key in left)
+        )
+    if isinstance(left, (list, tuple)) or isinstance(right, (list, tuple)):
+        return (
+            isinstance(left, (list, tuple))
+            and isinstance(right, (list, tuple))
+            and len(left) == len(right)
+            and all(_exact_json_equal(a, b) for a, b in zip(left, right))
+        )
+    return type(left) is type(right) and left == right
+
+
+@dataclasses.dataclass(frozen=True)
+class CombOwnerCertificate:
+    """Hash-bound reviewed identity for one comb owner, never its topology."""
+
+    page: int
+    cell_id: str
+    legacy_cell_id: str
+    subject_key: str
+    bbox: tuple[Decimal, Decimal, Decimal, Decimal]
+    state: str
+    layout_sha256: str
+
+    def evidence(self) -> dict[str, Any]:
+        return {
+            "criterion": "exact-reviewed-layout-comb-subject-owner-v1",
+            "valid": True,
+            "layout_sha256": self.layout_sha256,
+            "page": self.page,
+            "cell_id": self.cell_id,
+            "legacy_cell_id": self.legacy_cell_id,
+            "subject_key": self.subject_key,
+            "legacy_bbox": [
+                _decimal_identity(value) for value in self.bbox
+            ],
+            "bbox_number_format": "canonical-decimal-string-v1",
+            "state": self.state,
+            "supplies_topology": False,
+        }
+
+    def matches(self, page_index: int, cell: dict[str, Any]) -> bool:
+        try:
+            cell_id = cell["id"]
+            raw_bbox = tuple(
+                cell[key] for key in ("x0", "y0", "x1", "y1"))
+        except KeyError:
+            return False
+        canonical_id = (
+            CANONICAL_CELL_ID_RE.fullmatch(cell_id)
+            if isinstance(cell_id, str) else None
+        )
+        return (
+            page_index == self.page
+            and canonical_id is not None
+            and int(canonical_id.group(1)) == page_index
+            and cell_id == self.cell_id
+            and cell.get("subject_key") == self.subject_key
+            and _exact_number_vector(raw_bbox, self.bbox)
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class CombOwnerRegistry:
+    """Exact-byte layout binding and its identity-only owner certificates."""
+
+    certificates: dict[tuple[int, str], CombOwnerCertificate]
+    errors: dict[tuple[int, str], str]
+    binding_error: str | None = None
+
+    def resolve(
+            self, page_index: int, cell: dict[str, Any],
+            ) -> tuple[CombOwnerCertificate | None, str | None]:
+        if self.binding_error is not None:
+            return None, self.binding_error
+        if isinstance(page_index, bool) or not isinstance(page_index, int):
+            return None, "comb owner page index is not an integer"
+        cell_id = cell.get("id")
+        if not isinstance(cell_id, str):
+            return None, "comb owner cell has no string id"
+        key = (page_index, cell_id)
+        certificate = self.certificates.get(key)
+        if certificate is None:
+            return None, self.errors.get(
+                key,
+                "no exact unique reviewed comb_subject owns this layout cell",
+            )
+        if not certificate.matches(page_index, cell):
+            return None, (
+                "reviewed comb_subject certificate is stale for the active "
+                "layout cell identity or bbox"
+            )
+        return certificate, None
+
+
+def _exact_number_vector(left: Any, right: Any) -> bool:
+    """Numeric JSON equality with no geometry tolerance of any kind."""
+    if (not isinstance(left, (list, tuple))
+            or not isinstance(right, (list, tuple))
+            or len(left) != len(right)):
+        return False
+    pairs = [
+        (_canonical_decimal(a), _canonical_decimal(b))
+        for a, b in zip(left, right)
+    ]
+    return all(a is not None and b is not None and a == b
+               for a, b in pairs)
+
+
+def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
+    """Validate the hash-bound layout ledger without reading comb topology.
+
+    The exact retained layout bytes are the authority.  The parsed layout used
+    elsewhere in the assertion must still equal those bytes, and the digest
+    must be the digest recorded by the input snapshot.  Only identity, state,
+    and rectangle fields are inspected below: `cells`, `comb`, `divider_x`,
+    `slot_x`, band y, and grey are intentionally outside this certificate.
+    """
+    payload = getattr(bundle, "layout_payload", None)
+    expected_sha = getattr(bundle, "layout_sha256", None)
+    parsed_layout = getattr(bundle, "layout", None)
+    if not isinstance(payload, bytes) or not isinstance(expected_sha, str):
+        return CombOwnerRegistry(
+            {}, {},
+            "layout comb_subject ownership is not bound to retained bytes",
+        )
+    actual_sha = hashlib.sha256(payload).hexdigest()
+    if expected_sha != actual_sha:
+        return CombOwnerRegistry(
+            {}, {},
+            "retained layout bytes do not match their recorded SHA-256",
+        )
+    try:
+        retained_layout = json.loads(
+            payload.decode("utf-8"), parse_float=Decimal)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return CombOwnerRegistry(
+            {}, {}, "retained layout bytes are not valid UTF-8 JSON")
+    if not _exact_json_equal(retained_layout, parsed_layout):
+        return CombOwnerRegistry(
+            {}, {},
+            "parsed layout is stale relative to its retained hash-bound bytes",
+        )
+    pages = retained_layout.get("pages") if isinstance(retained_layout, dict) else None
+    if not isinstance(pages, list) or not pages:
+        return CombOwnerRegistry(
+            {}, {}, "hash-bound layout has no exhaustive page list")
+
+    layout_cells: dict[tuple[int, str], dict[str, Any]] = {}
+    layout_cells_by_subject: dict[tuple[int, str], dict[str, Any]] = {}
+    layout_cell_order: dict[tuple[int, str], int] = {}
+    comb_cells: set[tuple[int, str]] = set()
+    active_subjects: dict[tuple[int, str], dict[str, Any]] = {}
+    cell_ids: set[str] = set()
+    cell_subject_keys: set[str] = set()
+    subject_cell_ids: set[str] = set()
+    subject_keys: set[str] = set()
+    legacy_cell_ids: set[str] = set()
+    retained_partition_cells: set[tuple[int, str]] = set()
+    retained_partition_subjects: set[tuple[int, str]] = set()
+
+    def fail(reason: str) -> CombOwnerRegistry:
+        return CombOwnerRegistry({}, {}, reason)
+
+    def identity_bbox(
+            subject_key: Any,
+            page_index: int,
+            bbox: Any,
+            label: str,
+            ) -> tuple[
+                Decimal, Decimal, Decimal, Decimal
+            ] | CombOwnerRegistry:
+        if not _exact_number_vector(bbox, bbox) or len(bbox) != 4:
+            return fail(f"{label} has no exact four-number bbox")
+        canonical = tuple(_canonical_decimal(value) for value in bbox)
+        if any(value is None for value in canonical):
+            return fail(f"{label} has no exact four-number bbox")
+        values = canonical
+        if values[2] <= values[0] or values[3] <= values[1]:
+            return fail(f"{label} bbox has no positive area")
+        match = (
+            COMB_SUBJECT_KEY_RE.fullmatch(subject_key)
+            if isinstance(subject_key, str) else None
+        )
+        if match is None:
+            return fail(f"{label} has a malformed subject_key")
+        encoded = [
+            Decimal(match.group(name))
+            for name in ("x0", "y0", "x1", "y1")
+        ]
+        if (int(match.group("page")) != page_index
+                or not _exact_number_vector(encoded, bbox)):
+            return fail(f"{label} subject_key does not encode its exact bbox")
+        return values  # type: ignore[return-value]
+
+    # First bind the complete ordered page/cell registry. Subject mappings are
+    # validated only after every reverse cell identity is available.
+    for expected_page_index, page in enumerate(pages, 1):
+        page_value = page.get("index") if isinstance(page, dict) else None
+        if (not isinstance(page, dict)
+                or isinstance(page_value, bool)
+                or not isinstance(page_value, int)
+                or page_value != expected_page_index):
+            return fail(
+                "hash-bound layout pages are not exhaustive and ordered "
+                "from index 1")
+        page_index = page_value
+        raw_cells = page.get("cells")
+        raw_subjects = page.get("comb_subjects")
+        if not isinstance(raw_cells, list):
+            return fail(f"layout page {page_index} has no cell list")
+        if not isinstance(raw_subjects, list):
+            return fail(
+                f"layout page {page_index} has no reviewed comb_subject ledger")
+        for cell_order, cell in enumerate(raw_cells):
+            if not isinstance(cell, dict) or not isinstance(cell.get("id"), str):
+                return fail(
+                    f"layout page {page_index} contains a malformed cell")
+            cell_id = cell["id"]
+            canonical_id = CANONICAL_CELL_ID_RE.fullmatch(cell_id)
+            if canonical_id is None or int(canonical_id.group(1)) != page_index:
+                return fail(
+                    f"layout cell {cell_id} does not identify page {page_index}")
+            key = (page_index, cell_id)
+            subject_key = cell.get("subject_key")
+            cell_bbox = [
+                cell.get(name) for name in ("x0", "y0", "x1", "y1")
+            ]
+            bbox_or_error = identity_bbox(
+                subject_key, page_index, cell_bbox,
+                f"layout cell {cell_id}")
+            if isinstance(bbox_or_error, CombOwnerRegistry):
+                return bbox_or_error
+            if (key in layout_cells or cell_id in cell_ids
+                    or subject_key in cell_subject_keys):
+                return fail(
+                    "hash-bound layout contains duplicate cell identity")
+            layout_cells[key] = cell
+            layout_cells_by_subject[(page_index, subject_key)] = cell
+            layout_cell_order[key] = cell_order
+            cell_ids.add(cell_id)
+            cell_subject_keys.add(subject_key)
+            comb_value = cell.get("comb")
+            if comb_value is not None:
+                if not isinstance(comb_value, dict):
+                    return fail(
+                        f"layout cell {cell_id} has a malformed comb marker")
+                comb_cells.add(key)
+
+    # Then validate every subject, including retained/suppressed records. One
+    # malformed non-active record invalidates the complete registry; otherwise
+    # a corrupt ledger tail could still certify earlier active cells.
+    for page in pages:
+        page_index = page["index"]
+        raw_subjects = page["comb_subjects"]
+        for subject in raw_subjects:
+            if not isinstance(subject, dict):
+                return fail(
+                    f"layout page {page_index} contains a malformed comb_subject")
+            state = subject.get("state")
+            if state not in (*COMB_OWNER_REVIEWED_STATES, "retained_unresolved"):
+                return fail(
+                    f"layout page {page_index} comb_subject has unknown state")
+            cell_id = subject.get("cell_id")
+            subject_key = subject.get("subject_key")
+            legacy_cell_id = subject.get("legacy_cell_id")
+            legacy_bbox = subject.get("legacy_bbox")
+            bbox_or_error = identity_bbox(
+                subject_key, page_index, legacy_bbox,
+                f"layout page {page_index} comb_subject")
+            if isinstance(bbox_or_error, CombOwnerRegistry):
+                return bbox_or_error
+            if not isinstance(legacy_cell_id, str):
+                return fail(
+                    f"layout page {page_index} comb_subject has no legacy id")
+            legacy_canonical = CANONICAL_CELL_ID_RE.fullmatch(legacy_cell_id)
+            if (legacy_canonical is None
+                    or int(legacy_canonical.group(1)) != page_index):
+                return fail(
+                    f"comb_subject legacy id does not identify page {page_index}")
+            if (subject_key in subject_keys
+                    or legacy_cell_id in legacy_cell_ids):
+                return fail(
+                    "hash-bound layout contains duplicate comb_subject identity")
+            subject_keys.add(subject_key)
+            legacy_cell_ids.add(legacy_cell_id)
+
+            if state == "retained_unresolved":
+                subject_key_set = set(subject)
+                if (not RETAINED_COMB_SUBJECT_KEYS <= subject_key_set
+                        or subject_key_set - RETAINED_COMB_SUBJECT_KEYS
+                        - RETAINED_COMB_SUBJECT_OPTIONAL_KEYS):
+                    return fail(
+                        "retained_unresolved comb_subject schema is malformed")
+                if (cell_id is not None
+                        or subject.get("emission") != "suppressed"
+                        or subject.get("requires_independent_evidence") is not True
+                        or subject.get("blocks_gate") is not True
+                        or tuple(subject.get("permitted_transitions") or ())
+                        != RETAINED_COMB_TRANSITIONS
+                        or not isinstance(subject.get("legacy_comb"), dict)):
+                    return fail(
+                        "retained_unresolved suppression/blocking/transition "
+                        "evidence is incomplete")
+                reason_codes_value = subject.get("reason_codes")
+                if (not isinstance(reason_codes_value, list)
+                        or tuple(reason_codes_value) not in {
+                            RETAINED_PARTITION_REASON_CODES,
+                            RETAINED_NO_BAND_REASON_CODES,
+                        }):
+                    return fail(
+                        "retained_unresolved suppression reason evidence is "
+                        "malformed")
+                mapped_ids = subject.get("mapped_partition_cell_ids")
+                mapped_keys = subject.get("mapped_partition_subject_keys")
+                replacements = subject.get(
+                    "erased_edge_replacement_candidates")
+                if (not isinstance(mapped_ids, list)
+                        or not isinstance(mapped_keys, list)
+                        or len(mapped_ids) != len(mapped_keys)
+                        or (not mapped_ids and not replacements)
+                        or any(not isinstance(value, str)
+                               for value in (*mapped_ids, *mapped_keys))
+                        or len(mapped_ids) != len(set(mapped_ids))
+                        or len(mapped_keys) != len(set(mapped_keys))):
+                    return fail(
+                        "retained_unresolved partition mapping is malformed")
+                mapped_orders: list[int] = []
+                for mapped_id, mapped_subject_key in zip(
+                        mapped_ids, mapped_keys):
+                    mapped_id_match = CANONICAL_CELL_ID_RE.fullmatch(mapped_id)
+                    mapped_cell = layout_cells.get((page_index, mapped_id))
+                    reverse_cell = layout_cells_by_subject.get(
+                        (page_index, mapped_subject_key))
+                    if (mapped_id_match is None
+                            or int(mapped_id_match.group(1)) != page_index
+                            or mapped_cell is None
+                            or reverse_cell is not mapped_cell
+                            or mapped_cell.get("subject_key")
+                            != mapped_subject_key):
+                        return fail(
+                            "retained_unresolved partition mapping target or "
+                            "reverse subject_key mapping is stale")
+                    mapped_cell_key = (page_index, mapped_id)
+                    mapped_subject_identity = (
+                        page_index, mapped_subject_key)
+                    if (mapped_cell_key in retained_partition_cells
+                            or mapped_subject_identity
+                            in retained_partition_subjects):
+                        return fail(
+                            "retained_unresolved partition mapping target is "
+                            "owned more than once")
+                    retained_partition_cells.add(mapped_cell_key)
+                    retained_partition_subjects.add(mapped_subject_identity)
+                    mapped_orders.append(layout_cell_order[mapped_cell_key])
+                if mapped_orders != sorted(mapped_orders):
+                    return fail(
+                        "retained_unresolved partition mapping is not in "
+                        "layout cell order")
+                retained_cell = layout_cells_by_subject.get(
+                    (page_index, subject_key))
+                if (retained_cell is not None
+                        and retained_cell.get("comb") is not None):
+                    return fail(
+                        "retained_unresolved subject still owns an active comb")
+                if tuple(reason_codes_value) == RETAINED_NO_BAND_REASON_CODES:
+                    if (mapped_ids != [legacy_cell_id]
+                            or mapped_keys != [subject_key]
+                            or retained_cell is None
+                            or not _exact_number_vector(
+                                legacy_bbox,
+                                [retained_cell.get(name) for name in (
+                                    "x0", "y0", "x1", "y1")])):
+                        return fail(
+                            "retained_unresolved no-band identity mapping is "
+                            "stale")
+                elif retained_cell is not None:
+                    return fail(
+                        "retained_unresolved partition subject still has a "
+                        "layout owner")
+                if replacements is not None:
+                    if (not isinstance(replacements, list)
+                            or not replacements
+                            or any(not isinstance(item, dict)
+                                   for item in replacements)):
+                        return fail(
+                            "retained_unresolved replacement identity evidence "
+                            "is malformed")
+                    for replacement in replacements:
+                        candidate_id = replacement.get("cell_id")
+                        candidate_key = replacement.get("new_subject_key")
+                        candidate_bbox = replacement.get("new_bbox")
+                        candidate_cell = (
+                            layout_cells.get((page_index, candidate_id))
+                            if isinstance(candidate_id, str) else None
+                        )
+                        if (not isinstance(candidate_key, str)
+                                or replacement.get("old_subject_key")
+                                != subject_key
+                                or not _exact_number_vector(
+                                    replacement.get("old_bbox"), legacy_bbox)
+                                or replacement.get("blocks_gate") is not True
+                                or not isinstance(
+                                    replacement.get("activation_blockers"), list)
+                                or not replacement.get("activation_blockers")
+                                or any(not isinstance(value, str) for value in
+                                       replacement["activation_blockers"])
+                                or candidate_cell is None
+                                or candidate_cell.get("subject_key")
+                                != candidate_key
+                                or not _exact_number_vector(
+                                    candidate_bbox,
+                                    [candidate_cell.get(name) for name in (
+                                        "x0", "y0", "x1", "y1")])):
+                            return fail(
+                                "retained_unresolved replacement identity or "
+                                "blocking evidence is stale")
+                continue
+            if not isinstance(cell_id, str):
+                return fail("active comb_subject has no string cell_id")
+            canonical_id = CANONICAL_CELL_ID_RE.fullmatch(cell_id)
+            if canonical_id is None or int(canonical_id.group(1)) != page_index:
+                return fail(
+                    f"active comb_subject {cell_id} does not identify its page")
+            key = (page_index, cell_id)
+            if key in active_subjects or cell_id in subject_cell_ids:
+                return fail(
+                    "active comb_subject cell mapping is not unique")
+            if subject.get("mapped_partition_cell_ids") != [cell_id]:
+                return fail(
+                    "active comb_subject is not a one-to-one cell mapping")
+            reason_codes = subject.get("reason_codes")
+            if (not isinstance(reason_codes, list)
+                    or any(not isinstance(reason, str)
+                           for reason in reason_codes)
+                    or len(reason_codes) != len(set(reason_codes))
+                    or (state == "active_resolved"
+                        and (reason_codes or subject.get("blocks_gate") is not False))
+                    or (state == "active_unresolved"
+                        and (not reason_codes
+                             or subject.get("blocks_gate") is not True))):
+                return fail(
+                    "active comb_subject review/blocking evidence is malformed")
+            active_subjects[key] = subject
+            subject_cell_ids.add(cell_id)
+
+    orphan_active = sorted(set(active_subjects) - set(layout_cells))
+    if orphan_active:
+        page_index, cell_id = orphan_active[0]
+        return fail(
+            f"active comb_subject {cell_id} on page {page_index} is orphaned")
+    active_noncomb = sorted(set(active_subjects) - comb_cells)
+    if active_noncomb:
+        page_index, cell_id = active_noncomb[0]
+        return fail(
+            f"active comb_subject {cell_id} on page {page_index} owns no comb cell")
+    missing_active = sorted(comb_cells - set(active_subjects))
+    if missing_active:
+        page_index, cell_id = missing_active[0]
+        return fail(
+            f"comb cell {cell_id} on page {page_index} has no reviewed active "
+            "comb_subject")
+
+    certificates: dict[tuple[int, str], CombOwnerCertificate] = {}
+    for key in sorted(comb_cells):
+        page_index, cell_id = key
+        cell = layout_cells[key]
+        subject = active_subjects[key]
+        state = subject.get("state")
+        subject_key = subject.get("subject_key")
+        cell_subject_key = cell.get("subject_key")
+        legacy_cell_id = subject.get("legacy_cell_id")
+        legacy_bbox = subject.get("legacy_bbox")
+        cell_bbox = [cell.get(name) for name in ("x0", "y0", "x1", "y1")]
+        if (state not in COMB_OWNER_REVIEWED_STATES
+                or subject_key != cell_subject_key
+                or legacy_cell_id != cell_id
+                or not _exact_number_vector(legacy_bbox, cell_bbox)):
+            return fail(
+                f"active comb_subject {cell_id} identity/bbox is stale")
+        bbox_values = tuple(_canonical_decimal(value) for value in legacy_bbox)
+        if any(value is None for value in bbox_values):
+            return fail(f"active comb_subject {cell_id} bbox is not exact")
+        certificates[key] = CombOwnerCertificate(
+            page=page_index,
+            cell_id=cell_id,
+            legacy_cell_id=legacy_cell_id,
+            subject_key=subject_key,
+            bbox=bbox_values,  # type: ignore[arg-type]
+            state=state,
+            layout_sha256=actual_sha,
+        )
+    return CombOwnerRegistry(certificates, {})
 
 
 def _axis_aligned_quad_box(quad: Any) -> Rect | None:
@@ -3530,15 +4113,18 @@ def printed_compartments(
         cell: dict[str, Any],
         *,
         include_frame: bool = False,
+        owner_certificate: CombOwnerCertificate | None = None,
         ) -> tuple[int, list[float]] | tuple[
-            int, list[float], dict[str, Any]]:
+            int, list[float], dict[str, Any] | None]:
     """Count the source's final visible divider topology inside one comb.
 
-    The lattice supplies only the owning cell rectangle.  Candidate vertical
-    bands and tones come from raw source paint within (or crossing) that cell.
-    No member of the lattice's `comb` object is read.  If plausible source bands
-    or tones yield different topology, the oracle is unevaluable rather than
-    choosing the lattice-shaped answer.
+    The lattice supplies only an exact, reviewed owner identity and rectangle.
+    Candidate vertical bands, tones, and every divider come from raw source
+    paint within (or crossing) that cell.  No member of the lattice's `comb`
+    object or subject topology is read.  A complete source U-frame owns its
+    interior directly.  Without one, the reviewed certificate may establish
+    only *whose* rectangle this is, and only one unanimous source-derived
+    topology can be used.  Competing topology stays unevaluable.
     """
     try:
         x0, y0 = float(cell["x0"]), float(cell["y0"])
@@ -3549,6 +4135,11 @@ def printed_compartments(
         raise ValueError("comb owner geometry is non-finite")
     if x1 <= x0 or y1 <= y0:
         raise ValueError("comb owner has no positive area")
+    if (owner_certificate is not None
+            and not owner_certificate.matches(
+                int(owner_certificate.page), cell)):
+        raise ValueError(
+            "comb owner certificate does not bind this exact cell identity")
 
     owner = (x0, y0, x1, y1)
     bands, first_source_order = _source_band_candidates(page, owner)
@@ -3566,27 +4157,64 @@ def printed_compartments(
             dict[str, Any] | None,
         ]
     ] = []
-    foreign_reasons = {
-        "unmodeled source fill-image paint",
+    text_reasons = {
         "unmodeled source fill-text paint",
         "unmodeled source stroke-text paint",
     }
+    image_reason = "unmodeled source fill-image paint"
+    deferred_reasons = {*text_reasons, image_reason}
+    image_hits = sorted(
+        (
+            unsupported for unsupported in page.unsupported
+            if unsupported.reason == image_reason
+            and any(_rects_intersect(
+                (x0, band_y0, x1, band_y1), unsupported.rect)
+                for band_y0, band_y1 in bands)
+        ),
+        key=lambda item: (item.order, item.rect),
+    )
+    if image_hits:
+        raise CombTopologyError(
+            "unmodeled source fill-image paint intersects a plausible "
+            "source-derived comb band",
+            {
+                "criterion": "source-comb-band-image-free-required",
+                "owner_rect": [
+                    round(x0, 6), round(y0, 6),
+                    round(x1, 6), round(y1, 6),
+                ],
+                "candidate_bands": [
+                    [round(band_y0, 6), round(band_y1, 6)]
+                    for band_y0, band_y1 in bands
+                ],
+                "image_paint": [
+                    {
+                        "order": hit.order,
+                        "rect": [round(value, 6) for value in hit.rect],
+                    }
+                    for hit in image_hits
+                ],
+                **({
+                    "owner_certificate": owner_certificate.evidence(),
+                } if owner_certificate is not None else {}),
+            },
+        )
     blocked: set[str] = set()
     for band_y0, band_y1 in bands:
         subject = (x0, band_y0, x1, band_y1)
         nonforeign_hits = [
             unsupported for unsupported in page.unsupported
             if _rects_intersect(subject, unsupported.rect)
-            and unsupported.reason not in foreign_reasons
+            and unsupported.reason not in deferred_reasons
         ]
         if nonforeign_hits:
             blocked.update(hit.reason for hit in nonforeign_hits)
             continue
         for tone, topology in _band_topologies(
                 page, x0, x1, band_y0, band_y1):
-            foreign_hits = [
+            text_hits = [
                 unsupported for unsupported in page.unsupported
-                if unsupported.reason in foreign_reasons
+                if unsupported.reason in text_reasons
                 and first_source_order is not None
                 and unsupported.order > first_source_order
                 and _rects_intersect(subject, unsupported.rect)
@@ -3609,8 +4237,8 @@ def printed_compartments(
                     )
                 )
             ]
-            if foreign_hits:
-                blocked.update(hit.reason for hit in foreign_hits)
+            if text_hits:
+                blocked.update(hit.reason for hit in text_hits)
                 continue
             frame = _source_u_frame(
                 page, x0, x1, band_y0, band_y1, tone, topology)
@@ -3703,17 +4331,36 @@ def printed_compartments(
             f"(compartment counts {counts}; U-frames {framed_counts})")
     if len(frame_groups) != 1:
         counts = sorted({len(topology) + 1 for topology in topology_groups})
+        if len(topology_groups) == 1 and owner_certificate is not None:
+            chosen = topology_groups[0]
+            result = (len(chosen) + 1, [float(value) for value in chosen])
+            if not include_frame:
+                return result
+            return (*result, None)
+        criterion = (
+            "unanimous-source-derived-topology-required"
+            if owner_certificate is not None
+            else "independent-complete-source-u-frame-required"
+        )
+        reason = (
+            "reviewed comb owner has competing source-derived band/tone "
+            "topologies"
+            if owner_certificate is not None
+            else "plausible source-derived band/tone choices disagree without "
+                 "one complete source U-frame owner"
+        )
         raise CombTopologyError(
-            "plausible source-derived band/tone choices disagree without "
-            "one complete source U-frame owner "
-            f"(compartment counts {counts}; U-frames [])",
+            f"{reason} (compartment counts {counts}; U-frames [])",
             {
-                "criterion": "independent-complete-source-u-frame-required",
+                "criterion": criterion,
                 "owner_rect": [
                     round(x0, 6), round(y0, 6),
                     round(x1, 6), round(y1, 6),
                 ],
                 "unframed_compartment_counts": counts,
+                **({
+                    "owner_certificate": owner_certificate.evidence(),
+                } if owner_certificate is not None else {}),
             },
         )
     frame_key, chosen = frame_groups[0]
@@ -4633,6 +5280,8 @@ class Bundle:
     form_html_bytes: bytes | None = None
     render_assets: dict[str, bytes] = dataclasses.field(default_factory=dict)
     render_entrypoint: str | None = None
+    layout_payload: bytes | None = None
+    layout_sha256: str | None = None
 
     @functools.cached_property
     def pages(self) -> dict[int, dict]:
@@ -4801,6 +5450,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         return broken("no layout to read comb geometry from")
     if b.doc is None:
         return broken("source PDF not resolved; printed compartments unknown")
+    owner_registry = reviewed_comb_owner_registry(b)
     form_html = getattr(b, "form_html", None)
     emitted_by_id: dict[str, list[Cell]] = collections.defaultdict(list)
     for emitted_cell in b.cells:
@@ -4874,6 +5524,40 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     layout_unevaluable = 0
     stale_emission = 0
     emission_invalid = 0
+    owner_certificates_valid = 0
+    owner_certificates_invalid = 0
+    source_u_frame_evaluable = 0
+    source_certified_unframed_evaluable = 0
+    if owner_registry.binding_error is not None:
+        # Registry integrity is assertion-wide. It must fail even when every
+        # active comb is relocated, or when a malformed retained-only ledger
+        # has no active comb cell to enter the per-cell loop below.
+        offenders.append({
+            "cell": "<comb-owner-registry>",
+            "page": None,
+            "slots": None,
+            "latticed": None,
+            "printed": None,
+            "printed_divider_x": [],
+            "emission_state": "not-evaluated",
+            "effective_emission_state": "not-evaluated",
+            "physical_slots": None,
+            "declared_slots": None,
+            "emitted_occurrences": 0,
+            "source_owner_certificate": {
+                "criterion": "exact-reviewed-layout-comb-subject-owner-v1",
+                "valid": False,
+                "reason": owner_registry.binding_error,
+                "supplies_topology": False,
+            },
+            "layout_relation": "registry-invalid",
+            "emission_relation": "not-evaluated",
+            "failure_kinds": ["comb-owner-registry-invalid"],
+            "why": (
+                "reviewed comb owner registry is globally invalid: "
+                f"{owner_registry.binding_error}"
+            ),
+        })
     for cell_id in expected_ids:
         subjects = layout_subjects[cell_id]
         checked_ids.append(cell_id)
@@ -4889,6 +5573,12 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             stale_emission += int(base_stale_emission)
             emission_invalid += int(not emission["valid"])
             page_index, cell = subjects[0]
+            owner_certificates_invalid += 1
+            owner_certificate_reason = (
+                owner_registry.binding_error
+                or f"layout contains {len(subjects)} non-unique comb owners "
+                   f"for {cell_id}"
+            )
             offenders.append({
                 "cell": cell_id,
                 "page": page_index,
@@ -4900,6 +5590,13 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 "physical_slots": emission["physical_slots"],
                 "declared_slots": emission["declared_slots"],
                 "emitted_occurrences": emission["occurrences"],
+                "source_owner_certificate": {
+                    "criterion": (
+                        "exact-reviewed-layout-comb-subject-owner-v1"),
+                    "valid": False,
+                    "reason": owner_certificate_reason,
+                    "supplies_topology": False,
+                },
                 "layout_relation": "duplicate-subject",
                 "emission_relation": (
                     "invalid" if not emission["valid"] else "unbound"),
@@ -5007,6 +5704,19 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         )
         vector_page = b.vector_pages.get(page_index)
         latticed = cell["comb"]["cells"]
+        owner_certificate, owner_certificate_error = owner_registry.resolve(
+            page_index, cell)
+        if owner_certificate is None:
+            owner_certificates_invalid += 1
+            owner_certificate_evidence = {
+                "criterion": "exact-reviewed-layout-comb-subject-owner-v1",
+                "valid": False,
+                "reason": owner_certificate_error,
+                "supplies_topology": False,
+            }
+        else:
+            owner_certificates_valid += 1
+            owner_certificate_evidence = owner_certificate.evidence()
         evidence = {
             "cell": cell_id,
             "page": page_index,
@@ -5022,11 +5732,25 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             "emission_container_binding": container_binding,
             "emission_layout_position": layout_position,
             "emission_layout_outer_position": layout_outer_position,
+            "source_owner_certificate": owner_certificate_evidence,
         }
         failure_kinds: list[str] = []
         reasons: list[str] = []
         source_frame: dict[str, Any] | None = None
-        if vector_page is None:
+        if owner_certificate is None:
+            printed = None
+            xs = []
+            layout_relation = "unevaluable"
+            failure_kinds.append("source-topology-unevaluable")
+            reasons.append(
+                "invalid reviewed source owner certificate: "
+                f"{owner_certificate_error}")
+            evidence["source_topology_evidence"] = {
+                "criterion": "exact-reviewed-layout-comb-subject-owner-v1",
+                "owner_certificate": owner_certificate_evidence,
+            }
+            layout_unevaluable += 1
+        elif vector_page is None:
             printed = None
             xs: list[float] = []
             layout_relation = "unevaluable"
@@ -5036,7 +5760,11 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         else:
             try:
                 printed, xs, source_frame = printed_compartments(
-                    vector_page, cell, include_frame=True)
+                    vector_page,
+                    cell,
+                    include_frame=True,
+                    owner_certificate=owner_certificate,
+                )
             except ValueError as exc:
                 printed = None
                 xs = []
@@ -5047,6 +5775,10 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                     evidence["source_topology_evidence"] = exc.evidence
                 layout_unevaluable += 1
             else:
+                if source_frame is None:
+                    source_certified_unframed_evaluable += 1
+                else:
+                    source_u_frame_evaluable += 1
                 if latticed == printed:
                     layout_relation = "match"
                 else:
@@ -5339,6 +6071,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             for cell_id in duplicate_emitted_ids
         )
         or inventory_failures
+        or owner_registry.binding_error is not None
         or raw_inventory_issues
         or uncovered_cell_binding_issues
     )
@@ -5356,6 +6089,11 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         "inventory_complete": inventory_complete,
         "layout_mismatches": layout_mismatches,
         "layout_unevaluable": layout_unevaluable,
+        "owner_certificates_valid": owner_certificates_valid,
+        "owner_certificates_invalid": owner_certificates_invalid,
+        "source_u_frame_evaluable": source_u_frame_evaluable,
+        "source_certified_unframed_evaluable": (
+            source_certified_unframed_evaluable),
         "emission_behind_layout": stale_emission,
         "emission_invalid": emission_invalid,
     }
@@ -5789,11 +6527,17 @@ def load_bundle(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
         return payload.decode("utf-8")
 
     ir = json.loads(text("ir"))
+    layout_payload = snapshot.contents["layout"]
+    if layout_payload is None:
+        raise FileNotFoundError("required audit input missing: layout")
+    layout_sha256 = (
+        snapshot.manifest.get("inputs", {}).get("layout", {}).get("sha256")
+    )
     guide_html = snapshot.contents["guide_html"]
     return Bundle(
         slug=slug,
         ir=ir,
-        layout=json.loads(text("layout")),
+        layout=json.loads(layout_payload.decode("utf-8")),
         plan=json.loads(text("guide")),
         form_html=text("html"),
         guide_html=guide_html.decode("utf-8") if guide_html is not None else None,
@@ -5801,6 +6545,9 @@ def load_bundle(slug: str, ir_dir: pathlib.Path, html_dir: pathlib.Path,
         form_html_bytes=snapshot.contents["html"],
         render_assets=dict(snapshot.render_assets),
         render_entrypoint=snapshot.render_entrypoint,
+        layout_payload=layout_payload,
+        layout_sha256=(
+            str(layout_sha256) if layout_sha256 is not None else None),
     )
 
 
@@ -7533,17 +8280,70 @@ def self_test() -> int:
 
     complete = check_comb_slots_match_printed(CombPublicationFixture())
     check("comb publication keeps the offender beyond the old preview limit",
-          complete["offender_count"] == MAX_OFFENDERS + 1
-          and complete["offenders_published"] == MAX_OFFENDERS + 1
+          complete["offender_count"] == MAX_OFFENDERS + 2
+          and complete["offenders_published"] == MAX_OFFENDERS + 2
           and complete["offenders_omitted"] == 0
           and complete["offenders_complete"] is True
-          and len(complete["offenders"]) == MAX_OFFENDERS + 1
+          and len(complete["offenders"]) == MAX_OFFENDERS + 2
+          and complete["offenders"][0]["cell"]
+          == "<comb-owner-registry>"
           and complete["offenders"][-1]["cell"] == f"p1c{MAX_OFFENDERS}")
 
     class CombEmissionFixture:
         layout = {"pages": []}
         doc = object()
         relocated_cells: set[str] = set()
+
+        def _snapshot_layout(self) -> None:
+            self.layout = {
+                "pages": [
+                    self.layout_pages[index]
+                    for index in sorted(self.layout_pages)
+                ],
+            }
+            self.layout_payload = json.dumps(
+                self.layout, sort_keys=True, separators=(",", ":"),
+            ).encode("utf-8")
+            self.layout_sha256 = hashlib.sha256(
+                self.layout_payload).hexdigest()
+
+        def _bind_owner_registry(self) -> None:
+            for page_index, page in sorted(self.layout_pages.items()):
+                page["index"] = page_index
+                subjects = []
+                for cell in page["cells"]:
+                    bbox = [
+                        cell[name] for name in ("x0", "y0", "x1", "y1")
+                    ]
+                    decimal_bbox = [
+                        _canonical_decimal(value) for value in bbox
+                    ]
+                    if any(value is None for value in decimal_bbox):
+                        raise AssertionError("comb fixture bbox is not exact")
+                    subject_key = (
+                        f"p{page_index}@"
+                        + ",".join(
+                            _decimal_identity(value)
+                            for value in decimal_bbox
+                            if value is not None
+                        )
+                    )
+                    cell["subject_key"] = subject_key
+                    if not isinstance(cell.get("comb"), dict):
+                        continue
+                    subjects.append({
+                        "subject_key": subject_key,
+                        "legacy_cell_id": cell["id"],
+                        "legacy_bbox": bbox,
+                        "cell_id": cell["id"],
+                        "mapped_partition_cell_ids": [cell["id"]],
+                        "state": "active_unresolved",
+                        "reason_codes": ["competing-endpoint-topologies"],
+                        "cells": cell["comb"].get("cells"),
+                        "blocks_gate": True,
+                    })
+                page["comb_subjects"] = subjects
+            self._snapshot_layout()
 
         def __init__(self, cells: Sequence[Cell], count: int = 3) -> None:
             self.cells = list(cells)
@@ -7576,6 +8376,7 @@ def self_test() -> int:
                 0.0, 1.0, count + 1, "test-baseline",
             ))
             self.vector_pages = {1: VectorPage(tuple(dividers), ())}
+            self._bind_owner_registry()
 
     def emitted_comb_cell(
             cell_id: str = "p1c0",
@@ -7776,6 +8577,7 @@ def self_test() -> int:
                 "slot_x": [float(value) for value in slot_edges],
             },
         }]}}
+        fixture._bind_owner_registry()
         rail_and_dividers = [
             VectorPaint(
                 value - 0.12, 2.0, value + 0.12, 8.0,
@@ -8013,6 +8815,84 @@ def self_test() -> int:
         and duplicate_offender["emitted_occurrences"] == 2,
     )
 
+    duplicate_layout_fixture = CombEmissionFixture([valid_three])
+    duplicate_layout_cell = copy.deepcopy(
+        duplicate_layout_fixture.layout_pages[1]["cells"][0])
+    duplicate_layout_fixture.layout_pages[1]["cells"].append(
+        duplicate_layout_cell)
+    duplicate_layout = check_comb_slots_match_printed(
+        duplicate_layout_fixture)
+    duplicate_layout_offender = duplicate_layout["offenders"][0]
+    check(
+        "duplicate layout subjects publish and count an invalid certificate",
+        duplicate_layout["holds"] is False
+        and duplicate_layout["combs_checked"] == 1
+        and duplicate_layout["owner_certificates_valid"] == 0
+        and duplicate_layout["owner_certificates_invalid"] == 1
+        and (duplicate_layout["owner_certificates_valid"]
+             + duplicate_layout["owner_certificates_invalid"])
+        == duplicate_layout["combs_checked"]
+        and duplicate_layout_offender["source_owner_certificate"]["valid"]
+        is False
+        and duplicate_layout_offender["source_owner_certificate"]
+        ["supplies_topology"] is False,
+    )
+
+    malformed_retained_fixture = CombEmissionFixture([valid_three])
+    malformed_retained_page = malformed_retained_fixture.layout_pages[1]
+    malformed_retained_page["cells"].append({
+        "id": "p1c1",
+        "subject_key": "p1@40,0,50,10",
+        "x0": 40.0, "y0": 0.0, "x1": 50.0, "y1": 10.0,
+    })
+    malformed_retained_page["comb_subjects"].append({
+        "subject_key": "p1@40,0,50,10",
+        "legacy_cell_id": "p1c1",
+        "legacy_bbox": [40.0, 0.0, 50.0, 10.0],
+        "cell_id": None,
+        "mapped_partition_cell_ids": ["p1c1"],
+        "mapped_partition_subject_keys": ["p1@40,0,50,10"],
+        "state": "retained_unresolved",
+        # Deliberately corrupt: one malformed retained record must invalidate
+        # the otherwise valid p1c0 owner and block its complete U-frame.
+        "emission": "emitted",
+        "reason_codes": ["emission-suppressed-no-final-visible-band"],
+        "legacy_comb": {},
+        "requires_independent_evidence": True,
+        "permitted_transitions": [
+            "active_composite", "retired_proven_false"],
+        "blocks_gate": True,
+    })
+    malformed_retained_fixture._snapshot_layout()
+    malformed_retained_assertion = check_comb_slots_match_printed(
+        malformed_retained_fixture)
+    malformed_retained_registry_offender = next(
+        item for item in malformed_retained_assertion["offenders"]
+        if item["cell"] == "<comb-owner-registry>")
+    malformed_retained_offender = next(
+        item for item in malformed_retained_assertion["offenders"]
+        if item["cell"] == "p1c0")
+    check(
+        "global retained-ledger corruption makes every active comb offending",
+        malformed_retained_assertion["holds"] is False
+        and malformed_retained_assertion["combs_checked"] == 1
+        and malformed_retained_assertion["owner_certificates_valid"] == 0
+        and malformed_retained_assertion["owner_certificates_invalid"] == 1
+        and malformed_retained_assertion["layout_unevaluable"] == 1
+        and malformed_retained_assertion["source_u_frame_evaluable"] == 0
+        and malformed_retained_assertion["offender_count"] == 2
+        and malformed_retained_assertion["offenders_complete"] is True
+        and malformed_retained_registry_offender["failure_kinds"]
+        == ["comb-owner-registry-invalid"]
+        and malformed_retained_offender["layout_relation"] == "unevaluable"
+        and malformed_retained_offender["failure_kinds"]
+        == ["source-topology-unevaluable"]
+        and malformed_retained_offender["source_owner_certificate"]["valid"]
+        is False
+        and "invalid reviewed source owner certificate"
+        in malformed_retained_offender["why"],
+    )
+
     undeclared_slots_cell = dataclasses.replace(
         valid_three,
         attrs=re.sub(
@@ -8122,7 +9002,6 @@ def self_test() -> int:
     )
 
     class EmptyCombInventoryFixture:
-        layout = {"pages": []}
         doc = object()
         relocated_cells: set[str] = set()
         vector_pages: dict[int, VectorPage] = {}
@@ -8130,10 +9009,33 @@ def self_test() -> int:
         def __init__(self, cells: Sequence[Cell], *,
                      stats_comb_cells: int | None = None) -> None:
             self.cells = list(cells)
-            page: dict[str, Any] = {"cells": []}
+            page: dict[str, Any] = {
+                "index": 1,
+                "cells": [],
+                "comb_subjects": [],
+            }
             if stats_comb_cells is not None:
                 page["stats"] = {"comb_cells": stats_comb_cells}
             self.layout_pages = {1: page}
+            self.layout = {"pages": [page]}
+            self.layout_payload = json.dumps(
+                self.layout, sort_keys=True, separators=(",", ":"),
+            ).encode("utf-8")
+            self.layout_sha256 = hashlib.sha256(
+                self.layout_payload).hexdigest()
+
+    valid_pure_empty = check_comb_slots_match_printed(
+        EmptyCombInventoryFixture([]))
+    check(
+        "a valid hash-bound pure-empty comb inventory remains held",
+        valid_pure_empty["holds"] is True
+        and valid_pure_empty["inventory_complete"] is True
+        and valid_pure_empty["combs_expected"] == 0
+        and valid_pure_empty["combs_checked"] == 0
+        and valid_pure_empty["owner_certificates_valid"] == 0
+        and valid_pure_empty["owner_certificates_invalid"] == 0
+        and valid_pure_empty["offenders"] == [],
+    )
 
     emission_only_inventory = check_comb_slots_match_printed(
         EmptyCombInventoryFixture([emitted_comb_cell()]))
@@ -8157,20 +9059,106 @@ def self_test() -> int:
         and stats_only_inventory["inventory_complete"] is False,
     )
 
-    class RelocatedLiveCombFixture:
-        layout = {"pages": []}
-        doc = object()
-        cells = [valid_three]
-        relocated_cells = {"p1c0"}
-        layout_pages = {1: {"cells": [{
+    def bound_comb_inventory_fixture(
+            layout: dict[str, Any],
+            *,
+            cells: Sequence[Cell] = (),
+            relocated_cells: Iterable[str] = (),
+            ) -> Any:
+        payload = json.dumps(
+            layout, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")
+        return types.SimpleNamespace(
+            layout=layout,
+            layout_payload=payload,
+            layout_sha256=hashlib.sha256(payload).hexdigest(),
+            layout_pages={page["index"]: page for page in layout["pages"]},
+            doc=object(),
+            cells=list(cells),
+            relocated_cells=set(relocated_cells),
+            vector_pages={},
+        )
+
+    def retained_subject(*, corrupt_emission: bool) -> dict[str, Any]:
+        return {
+            "subject_key": "p1@40,0,50,10",
+            "legacy_cell_id": "p1c1",
+            "legacy_bbox": [40.0, 0.0, 50.0, 10.0],
+            "cell_id": None,
+            "mapped_partition_cell_ids": ["p1c1"],
+            "mapped_partition_subject_keys": ["p1@40,0,50,10"],
+            "state": "retained_unresolved",
+            "emission": "emitted" if corrupt_emission else "suppressed",
+            "reason_codes": [
+                "emission-suppressed-no-final-visible-band"],
+            "legacy_comb": {},
+            "requires_independent_evidence": True,
+            "permitted_transitions": [
+                "active_composite", "retired_proven_false"],
+            "blocks_gate": True,
+        }
+
+    retained_cell = {
+        "id": "p1c1",
+        "subject_key": "p1@40,0,50,10",
+        "x0": 40.0, "y0": 0.0, "x1": 50.0, "y1": 10.0,
+    }
+    corrupt_pure_empty_layout = {"pages": [{
+        "index": 1,
+        "cells": [copy.deepcopy(retained_cell)],
+        "comb_subjects": [retained_subject(corrupt_emission=True)],
+    }]}
+    corrupt_pure_empty = check_comb_slots_match_printed(
+        bound_comb_inventory_fixture(corrupt_pure_empty_layout))
+    corrupt_registry_offender = corrupt_pure_empty["offenders"][0]
+    check(
+        "corrupt retained-only inventory fails with complete registry evidence",
+        corrupt_pure_empty["holds"] is False
+        and corrupt_pure_empty["inventory_complete"] is False
+        and corrupt_pure_empty["combs_expected"] == 0
+        and corrupt_pure_empty["combs_checked"] == 0
+        and corrupt_pure_empty["owner_certificates_valid"] == 0
+        and corrupt_pure_empty["owner_certificates_invalid"] == 0
+        and corrupt_pure_empty["offender_count"] == 1
+        and corrupt_pure_empty["offenders_complete"] is True
+        and corrupt_registry_offender["cell"] == "<comb-owner-registry>"
+        and corrupt_registry_offender["failure_kinds"]
+        == ["comb-owner-registry-invalid"]
+        and corrupt_registry_offender["source_owner_certificate"]["valid"]
+        is False
+        and "suppression/blocking/transition"
+        in corrupt_registry_offender["source_owner_certificate"]["reason"],
+    )
+
+    active_relocated_cell = {
             "id": "p1c0", "x0": 0.0, "y0": 0.0,
             "x1": 40.0, "y1": 10.0,
+            "subject_key": "p1@0,0,40,10",
             "comb": {"cells": 3},
-        }]}}
-        vector_pages: dict[int, VectorPage] = {}
+    }
+    active_relocated_subject = {
+        "subject_key": "p1@0,0,40,10",
+        "legacy_cell_id": "p1c0",
+        "legacy_bbox": [0.0, 0.0, 40.0, 10.0],
+        "cell_id": "p1c0",
+        "mapped_partition_cell_ids": ["p1c0"],
+        "state": "active_unresolved",
+        "reason_codes": ["competing-endpoint-topologies"],
+        "cells": 3,
+        "blocks_gate": True,
+    }
+    valid_relocated_layout = {"pages": [{
+        "index": 1,
+        "cells": [copy.deepcopy(active_relocated_cell)],
+        "comb_subjects": [copy.deepcopy(active_relocated_subject)],
+    }]}
 
     relocated_live = check_comb_slots_match_printed(
-        RelocatedLiveCombFixture())
+        bound_comb_inventory_fixture(
+            valid_relocated_layout,
+            cells=[valid_three],
+            relocated_cells={"p1c0"},
+        ))
     check(
         "a relocated comb left live in form HTML fails as stale markup",
         relocated_live["holds"] is False
@@ -8178,6 +9166,31 @@ def self_test() -> int:
         and relocated_live["unexpected_emitted_comb_ids"] == ["p1c0"]
         and relocated_live["offenders"][0]["failure_kinds"]
         == ["unexpected-emitted-comb"],
+    )
+
+    corrupt_relocated_layout = copy.deepcopy(valid_relocated_layout)
+    corrupt_relocated_page = corrupt_relocated_layout["pages"][0]
+    corrupt_relocated_page["cells"].append(copy.deepcopy(retained_cell))
+    corrupt_relocated_page["comb_subjects"].append(
+        retained_subject(corrupt_emission=True))
+    corrupt_relocated = check_comb_slots_match_printed(
+        bound_comb_inventory_fixture(
+            corrupt_relocated_layout,
+            relocated_cells={"p1c0"},
+        ))
+    check(
+        "relocated active comb cannot hide a corrupt retained ledger tail",
+        corrupt_relocated["holds"] is False
+        and corrupt_relocated["expected_comb_ids"] == []
+        and corrupt_relocated["checked_comb_ids"] == []
+        and corrupt_relocated["owner_certificates_valid"] == 0
+        and corrupt_relocated["owner_certificates_invalid"] == 0
+        and corrupt_relocated["inventory_complete"] is False
+        and corrupt_relocated["offender_count"] == 1
+        and corrupt_relocated["offenders"][0]["cell"]
+        == "<comb-owner-registry>"
+        and corrupt_relocated["offenders"][0]["failure_kinds"]
+        == ["comb-owner-registry-invalid"],
     )
 
     # Geometry helpers, where an off-by-one epsilon would silently disable an
@@ -8292,10 +9305,356 @@ def self_test() -> int:
         return {
             "id": "p1c0", "x0": x0, "y0": cell_y0,
             "x1": x1, "y1": cell_y1,
+            "subject_key": (
+                f"p1@{x0:.2f},{cell_y0:.2f},{x1:.2f},{cell_y1:.2f}"),
             # Every field -- cells, divider_x, y0, y1 and divider_gray -- is
             # poison. The source oracle must never inspect this mapping.
             "comb": PoisonComb(),
         }
+
+    def owner_registry_fixture(
+            cell: dict[str, Any] | None = None,
+            *,
+            subject_updates: dict[str, Any] | None = None,
+            missing: bool = False,
+            duplicate: bool = False,
+            stale_parsed_layout: bool = False,
+            stale_digest: bool = False,
+            layout_mutator: Any = None,
+            ) -> tuple[
+                CombOwnerRegistry,
+                dict[str, Any],
+                CombOwnerCertificate | None,
+                str | None,
+            ]:
+        source_cell = cell or comb_subject()
+        identity_cell = {
+            "id": source_cell["id"],
+            "subject_key": source_cell["subject_key"],
+            **{key: source_cell[key] for key in ("x0", "y0", "x1", "y1")},
+            # Deliberately false topology: a valid identity certificate must
+            # still let the source's two dividers, not this value, decide.
+            "comb": {
+                "cells": 999,
+                "divider_x": [-999.0],
+                "slot_x": [-1000.0, 1000.0],
+                "y0": -999.0,
+                "y1": 999.0,
+                "divider_gray": 1.0,
+            },
+        }
+        subject = {
+            "subject_key": identity_cell["subject_key"],
+            "legacy_cell_id": identity_cell["id"],
+            "legacy_bbox": [
+                identity_cell[key] for key in ("x0", "y0", "x1", "y1")
+            ],
+            "cell_id": identity_cell["id"],
+            "mapped_partition_cell_ids": [identity_cell["id"]],
+            "state": "active_unresolved",
+            "reason_codes": ["competing-endpoint-topologies"],
+            "cells": 999,
+            "blocks_gate": True,
+        }
+        if subject_updates:
+            subject.update(copy.deepcopy(subject_updates))
+        subjects = [] if missing else [subject]
+        if duplicate:
+            subjects.append(copy.deepcopy(subject))
+        layout_fixture = {
+            "pages": [{
+                "index": 1,
+                "cells": [identity_cell],
+                "comb_subjects": subjects,
+            }],
+        }
+        if layout_mutator is not None:
+            layout_mutator(layout_fixture)
+        payload = json.dumps(
+            layout_fixture, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")
+        parsed_layout = copy.deepcopy(layout_fixture)
+        if stale_parsed_layout:
+            parsed_layout["pages"][0]["cells"][0]["x1"] += 1.0
+        digest = (
+            "0" * 64 if stale_digest else hashlib.sha256(payload).hexdigest()
+        )
+        registry = reviewed_comb_owner_registry(types.SimpleNamespace(
+            layout=parsed_layout,
+            layout_payload=payload,
+            layout_sha256=digest,
+        ))
+        certificate, reason = registry.resolve(1, identity_cell)
+        return registry, identity_cell, certificate, reason
+
+    valid_registry, valid_owner_cell, valid_owner, valid_owner_reason = (
+        owner_registry_fixture())
+    check(
+        "one exact reviewed hash-bound comb_subject certifies owner identity",
+        valid_owner is not None
+        and valid_owner_reason is None
+        and valid_registry.binding_error is None,
+    )
+    if valid_owner is not None:
+        certificate_evidence = valid_owner.evidence()
+        certified_unframed = printed_compartments(
+            source_page(
+                source_paint(10), source_paint(20), framed=False),
+            valid_owner_cell,
+            include_frame=True,
+            owner_certificate=valid_owner,
+        )
+        check(
+            "reviewed ownership admits only the unanimous source topology",
+            certified_unframed == (3, [10.0, 20.0], None),
+        )
+        check(
+            "ownership certificate publishes deterministic identity-only evidence",
+            certificate_evidence == valid_owner.evidence()
+            and json.dumps(certificate_evidence, sort_keys=True)
+            == json.dumps(valid_owner.evidence(), sort_keys=True)
+            and certificate_evidence["supplies_topology"] is False
+            and not ({"cells", "comb", "divider_x", "slot_x", "y0", "y1",
+                      "divider_gray"} & set(certificate_evidence)),
+        )
+
+    missing_registry = owner_registry_fixture(missing=True)
+    duplicate_registry = owner_registry_fixture(duplicate=True)
+    bbox_registry = owner_registry_fixture(subject_updates={
+        "legacy_bbox": [0.0, 0.0, 41.0, 10.0],
+    })
+    malformed_retained_state_registry = owner_registry_fixture(subject_updates={
+        "state": "retained_unresolved",
+        "cell_id": None,
+    })
+    stale_layout_registry = owner_registry_fixture(stale_parsed_layout=True)
+    stale_digest_registry = owner_registry_fixture(stale_digest=True)
+    for label, fixture, phrase in (
+            ("missing", missing_registry, "no reviewed active"),
+            ("duplicate", duplicate_registry, "duplicate comb_subject"),
+            ("mismatched bbox", bbox_registry, "exact bbox"),
+            ("mismatched state", malformed_retained_state_registry,
+             "schema is malformed"),
+            ("stale parsed layout", stale_layout_registry, "stale"),
+            ("stale layout digest", stale_digest_registry, "SHA-256")):
+        _registry, _cell, certificate, reason = fixture
+        check(
+            f"{label} comb_subject ownership certificate fails closed",
+            certificate is None
+            and reason is not None
+            and phrase in reason,
+        )
+
+    def append_orphan_active(layout_fixture: dict[str, Any]) -> None:
+        layout_fixture["pages"][0]["comb_subjects"].append({
+            "subject_key": "p1@50.00,0.00,60.00,10.00",
+            "legacy_cell_id": "p1c9",
+            "legacy_bbox": [50.0, 0.0, 60.0, 10.0],
+            "cell_id": "p1c9",
+            "mapped_partition_cell_ids": ["p1c9"],
+            "state": "active_unresolved",
+            "reason_codes": ["competing-endpoint-topologies"],
+            "blocks_gate": True,
+        })
+
+    def append_competing_active(layout_fixture: dict[str, Any]) -> None:
+        layout_fixture["pages"][0]["comb_subjects"].append({
+            "subject_key": "p1@1.00,0.00,39.00,10.00",
+            "legacy_cell_id": "p1c9",
+            "legacy_bbox": [1.0, 0.0, 39.0, 10.0],
+            "cell_id": "p1c0",
+            "mapped_partition_cell_ids": ["p1c0"],
+            "state": "active_resolved",
+        })
+
+    orphan_active_registry = owner_registry_fixture(
+        layout_mutator=append_orphan_active)
+    competing_active_registry = owner_registry_fixture(
+        layout_mutator=append_competing_active)
+    unknown_state_registry = owner_registry_fixture(subject_updates={
+        "state": "active_future",
+    })
+    bool_page_registry = owner_registry_fixture(
+        layout_mutator=lambda value: value["pages"][0].__setitem__(
+            "index", True))
+    bool_coordinate_registry = owner_registry_fixture(
+        layout_mutator=lambda value: value["pages"][0]["cells"][0].__setitem__(
+            "x0", True))
+    for label, fixture, phrase in (
+            ("orphan active", orphan_active_registry, "orphaned"),
+            ("competing active bbox/subject", competing_active_registry,
+             "mapping is not unique"),
+            ("unknown active state", unknown_state_registry, "unknown state"),
+            ("boolean page", bool_page_registry, "exhaustive and ordered"),
+            ("boolean coordinate", bool_coordinate_registry, "four-number")):
+        _registry, _cell, certificate, reason = fixture
+        check(
+            f"{label} invalidates the exhaustive ownership registry",
+            certificate is None and reason is not None and phrase in reason,
+        )
+    def append_valid_retained(layout_fixture: dict[str, Any]) -> None:
+        page = layout_fixture["pages"][0]
+        retained_cell = {
+            "id": "p1c1",
+            "subject_key": "p1@50.00,0.00,60.00,10.00",
+            "x0": 50.0, "y0": 0.0, "x1": 60.0, "y1": 10.0,
+        }
+        page["cells"].append(retained_cell)
+        page["comb_subjects"].append({
+            "subject_key": retained_cell["subject_key"],
+            "legacy_cell_id": retained_cell["id"],
+            "legacy_bbox": [50.0, 0.0, 60.0, 10.0],
+            "cell_id": None,
+            "mapped_partition_cell_ids": [retained_cell["id"]],
+            "mapped_partition_subject_keys": [retained_cell["subject_key"]],
+            "state": "retained_unresolved",
+            "emission": "suppressed",
+            "reason_codes": [
+                "emission-suppressed-no-final-visible-band"],
+            # Presence is schema evidence only; the ownership registry never
+            # reads retained topology.
+            "legacy_comb": {},
+            "requires_independent_evidence": True,
+            "permitted_transitions": [
+                "active_composite", "retired_proven_false"],
+            "blocks_gate": True,
+        })
+
+    retained_registry_fixture = owner_registry_fixture(
+        layout_mutator=append_valid_retained)
+    retained_registry = retained_registry_fixture[0]
+    retained_cell = {
+        "id": "p1c1",
+        "subject_key": "p1@50.00,0.00,60.00,10.00",
+        "x0": 50.0, "y0": 0.0, "x1": 60.0, "y1": 10.0,
+    }
+    retained_certificate, retained_reason = retained_registry.resolve(
+        1, retained_cell)
+    check(
+        "valid retained_unresolved evidence does not invalidate active owners",
+        retained_registry_fixture[2] is not None
+        and retained_registry.binding_error is None,
+    )
+    check(
+        "retained_unresolved subject is allowed but cannot certify a cell",
+        retained_certificate is None
+        and retained_reason is not None
+        and "no exact unique reviewed" in retained_reason,
+    )
+
+    def corrupt_retained(
+            field: str, value: Any,
+            ) -> Any:
+        def mutate(layout_fixture: dict[str, Any]) -> None:
+            append_valid_retained(layout_fixture)
+            layout_fixture["pages"][0]["comb_subjects"][-1][field] = value
+        return mutate
+
+    retained_corruptions = (
+        (
+            "reverse partition mapping",
+            owner_registry_fixture(layout_mutator=corrupt_retained(
+                "mapped_partition_subject_keys",
+                ["p1@0.00,0.00,40.00,10.00"])),
+            "reverse subject_key mapping",
+        ),
+        (
+            "suppression emission",
+            owner_registry_fixture(layout_mutator=corrupt_retained(
+                "emission", "emitted")),
+            "suppression/blocking/transition",
+        ),
+        (
+            "blocking evidence",
+            owner_registry_fixture(layout_mutator=corrupt_retained(
+                "blocks_gate", False)),
+            "suppression/blocking/transition",
+        ),
+        (
+            "permitted transition evidence",
+            owner_registry_fixture(layout_mutator=corrupt_retained(
+                "permitted_transitions",
+                ["retired_proven_false", "active_composite"])),
+            "suppression/blocking/transition",
+        ),
+    )
+    for label, fixture, phrase in retained_corruptions:
+        check(
+            f"malformed retained {label} invalidates every active certificate",
+            fixture[2] is None
+            and fixture[3] is not None
+            and phrase in fixture[3],
+        )
+
+    def append_noncontiguous_page(layout_fixture: dict[str, Any]) -> None:
+        append_valid_retained(layout_fixture)
+        layout_fixture["pages"].append({
+            "index": 3, "cells": [], "comb_subjects": []})
+
+    noncontiguous_registry = owner_registry_fixture(
+        layout_mutator=append_noncontiguous_page)
+    check(
+        "noncontiguous retained layout pages invalidate active certificates",
+        noncontiguous_registry[2] is None
+        and noncontiguous_registry[3] is not None
+        and "exhaustive and ordered" in noncontiguous_registry[3],
+    )
+    check(
+        "exact ownership number equality rejects JSON booleans",
+        not _exact_number_vector([True, 0.0], [1.0, 0.0])
+        and not _exact_number_vector([1.0, 0.0], [True, 0.0]),
+    )
+    check(
+        "exact ownership numbers do not collapse integers above 2^53",
+        not _exact_number_vector(
+            [9_007_199_254_740_993], [9_007_199_254_740_992]),
+    )
+    check(
+        "exact ownership numbers preserve distinct decimal identities",
+        not _exact_number_vector(
+            [Decimal("0.1")], [Decimal("0.10000000000000001")])
+        and not _exact_json_equal(
+            [Decimal("0.10000000000000001")], [0.1]),
+    )
+    high_precision_certificate = CombOwnerCertificate(
+        page=1,
+        cell_id="p1c0",
+        legacy_cell_id="p1c0",
+        subject_key="p1@0.10000000000000001,0,1,1",
+        bbox=(
+            Decimal("0.10000000000000001"), Decimal("0"),
+            Decimal("1"), Decimal("1"),
+        ),
+        state="active_unresolved",
+        layout_sha256="0" * 64,
+    )
+    check(
+        "certificate matching rejects a float-rounded decimal bbox",
+        not high_precision_certificate.matches(1, {
+            "id": "p1c0",
+            "subject_key": "p1@0.10000000000000001,0,1,1",
+            "x0": 0.1, "y0": 0, "x1": 1, "y1": 1,
+        })
+        and high_precision_certificate.evidence()["legacy_bbox"][0]
+        == "0.10000000000000001",
+    )
+
+    if valid_owner is not None:
+        try:
+            printed_compartments(
+                source_page(
+                    source_paint(10), source_paint(20), framed=False),
+                comb_subject(x0=5.0, x1=35.0),
+                owner_certificate=valid_owner,
+            )
+        except ValueError as exc:
+            arbitrary_owner_failed = "does not bind this exact cell" in str(exc)
+        else:
+            arbitrary_owner_failed = False
+        check(
+            "a reviewed certificate cannot be reused for an arbitrary bbox",
+            arbitrary_owner_failed,
+        )
 
     basic = printed_compartments(
         source_page(source_paint(10), source_paint(20)),
@@ -8409,6 +9768,90 @@ def self_test() -> int:
     else:
         ambiguous_failed = False
     check("equal competing final-paint topologies fail closed", ambiguous_failed)
+    if valid_owner is not None:
+        try:
+            printed_compartments(
+                ambiguous_page,
+                valid_owner_cell,
+                owner_certificate=valid_owner,
+            )
+        except CombTopologyError as exc:
+            certified_competition_failed = (
+                exc.evidence.get("criterion")
+                == "unanimous-source-derived-topology-required"
+                and exc.evidence.get("unframed_compartment_counts") == [2]
+                and exc.evidence.get("owner_certificate")
+                == valid_owner.evidence()
+            )
+        else:
+            certified_competition_failed = False
+        check(
+            "reviewed ownership never chooses between competing source topology",
+            certified_competition_failed,
+        )
+
+        unsupported_owner_page = source_page(
+            source_paint(10), source_paint(20), framed=False)
+        unsupported_owner_page = VectorPage(
+            unsupported_owner_page.paints,
+            (UnsupportedVectorPaint(
+                (9.0, 2.0, 11.0, 8.0),
+                99,
+                "unsupported test source paint",
+            ),),
+        )
+        try:
+            printed_compartments(
+                unsupported_owner_page,
+                valid_owner_cell,
+                owner_certificate=valid_owner,
+            )
+        except ValueError as exc:
+            certified_unsupported_failed = (
+                "unsupported test source paint" in str(exc))
+        else:
+            certified_unsupported_failed = False
+        check(
+            "reviewed ownership cannot bypass unsupported source paint",
+            certified_unsupported_failed,
+        )
+
+        for framed_image_owner in (False, True):
+            for image_order in (-100, 100):
+                between_divider_image_page = source_page(
+                    source_paint(10), source_paint(20),
+                    framed=framed_image_owner)
+                between_divider_image_page = VectorPage(
+                    between_divider_image_page.paints,
+                    (UnsupportedVectorPaint(
+                        (14.0, 2.0, 16.0, 8.0),
+                        image_order,
+                        "unmodeled source fill-image paint",
+                    ),),
+                )
+                try:
+                    printed_compartments(
+                        between_divider_image_page,
+                        valid_owner_cell,
+                        owner_certificate=valid_owner,
+                    )
+                except CombTopologyError as exc:
+                    between_divider_image_failed = (
+                        exc.evidence.get("criterion")
+                        == "source-comb-band-image-free-required"
+                        and exc.evidence.get("image_paint") == [{
+                            "order": image_order,
+                            "rect": [14.0, 2.0, 16.0, 8.0],
+                        }]
+                    )
+                else:
+                    between_divider_image_failed = False
+                check(
+                    "between-divider fill-image blocks source topology for "
+                    f"framed={framed_image_owner} regardless of source order "
+                    f"{image_order}",
+                    between_divider_image_failed,
+                )
 
     unframed_expansion_page = source_page(
         source_paint(10), source_paint(20), source_paint(45),
@@ -8465,6 +9908,27 @@ def self_test() -> int:
         check(
             f"a {left:g}..{right:g} bbox cannot manufacture inner frame rails",
             cropped_frame_failed,
+        )
+    (_cropped_registry, cropped_owner_cell, cropped_owner,
+     _cropped_reason) = owner_registry_fixture(
+         comb_subject(x0=10.0, x1=30.0))
+    if cropped_owner is not None:
+        try:
+            printed_compartments(
+                maximal_frame_page,
+                cropped_owner_cell,
+                owner_certificate=cropped_owner,
+            )
+        except CombTopologyError as exc:
+            certified_cropped_frame_failed = (
+                "crops a wider source U-frame" in str(exc)
+                and exc.evidence.get("cropped_sides") == ["left", "right"]
+            )
+        else:
+            certified_cropped_frame_failed = False
+        check(
+            "reviewed ownership cannot crop a wider source U-frame",
+            certified_cropped_frame_failed,
         )
 
     disconnected_baseline_page = source_page(
@@ -9521,6 +10985,26 @@ def self_test() -> int:
         "an expanded owner cannot absorb a corridor outside its source frame",
         expanded_frame_failed,
     )
+    (_expanded_registry, expanded_owner_cell, expanded_owner,
+     _expanded_reason) = owner_registry_fixture(comb_subject(x1=50.0))
+    if expanded_owner is not None:
+        try:
+            printed_compartments(
+                expanded_frame_page,
+                expanded_owner_cell,
+                owner_certificate=expanded_owner,
+            )
+        except CombTopologyError as exc:
+            certified_expanded_frame_failed = (
+                "absorbs unframed source corridors" in str(exc)
+                and exc.evidence.get("unframed_corridors") == [45.0]
+            )
+        else:
+            certified_expanded_frame_failed = False
+        check(
+            "reviewed ownership cannot absorb unframed source corridors",
+            certified_expanded_frame_failed,
+        )
 
     hanging_frame_page = source_page(
         source_paint(5, order=0),
