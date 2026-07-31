@@ -2771,7 +2771,18 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         cell["is_empty"] = not cell["text_run_ids"]
         cell["kind"] = classify_cell(cell["is_empty"], cell["border_count"], "comb" in cell)
         cell.pop("_component_root")
+    # The gate binds the reviewed active-owner registry to the exact order of
+    # the current layout cell stream.  Legacy subjects are discovered in
+    # legacy-bbox order, but a repaired lattice can split/reuse those subjects
+    # such that that order no longer matches the emitted cells.  Keep retained
+    # subjects deterministic after the active owners without changing their
+    # identity or topology evidence.
+    current_cell_order = {
+        str(cell["id"]): index for index, cell in enumerate(cells)
+    }
     subject_ledger.sort(key=lambda subject: (
+        0 if subject.get("cell_id") in current_cell_order else 1,
+        current_cell_order.get(str(subject.get("cell_id")), len(cells)),
         subject["legacy_bbox"] is None,
         subject["legacy_bbox"] or (),
         subject["subject_key"],
