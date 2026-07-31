@@ -172,8 +172,10 @@ ALIGN_TOL_PT = 0.6
 COLUMN_OVERLAP_FRACTION = 0.6
 
 # A vacant cell this many lattice rows tall, taller than it is wide, is a frame
-# gutter rather than a row's entry box: the 13 x 69pt strip between TABLE 1 and
-# TABLE 2 on 1700 p2 belongs to no row and nobody can write in it.
+# gutter rather than a row's entry box. The lattice may represent one source
+# gutter as either one tall cell or several vertically adjacent cells; the
+# latter count together only when the source geometry has uninterrupted side
+# rails and no horizontal stroke between them.
 GUTTER_MIN_ROW_SPAN = 3
 
 # Pre-printed text has to actually sit inside a box before it explains it away;
@@ -269,9 +271,71 @@ def comb_bands(cell: dict[str, Any]) -> list[dict[str, Any]]:
     return bands
 
 
-def is_gutter(cell: dict[str, Any]) -> bool:
-    return (cell["row_span"] >= GUTTER_MIN_ROW_SPAN
-            and (cell["y1"] - cell["y0"]) > (cell["x1"] - cell["x0"]))
+def has_border(cell: dict[str, Any], side: str) -> bool:
+    """Whether source rule geometry supplies this side of a lattice cell."""
+    return (cell.get("border") or {}).get(side) is not None
+
+
+def is_gutter(cell: dict[str, Any],
+              band: Sequence[dict[str, Any]] = ()) -> bool:
+    """Is this narrow vacancy a source-visible frame gutter?
+
+    A gutter normally arrives as one tall cell. A later lattice refinement can
+    split that same source geometry at text-row y coordinates even though no
+    horizontal rule exists there. Reconstruct only that provable shape: exact
+    column alignment, visible rails on both sides, no text or comb, and an open
+    seam between every adjacent fragment. Separately boxed entry cells retain
+    their horizontal strokes and therefore never join this chain.
+
+    `band` is deliberately the candidate guide region rather than the page.
+    The walk is bidirectional inside that region because lattice refinement can
+    make the candidate cell a middle fragment. Geometry above the proposed cut
+    is absent from `band` and cannot help explain a vacancy below it.
+    """
+    height = cell["y1"] - cell["y0"]
+    width = cell["x1"] - cell["x0"]
+    if not band:
+        return cell["row_span"] >= GUTTER_MIN_ROW_SPAN and height > width
+    if (not has_border(cell, "left") or not has_border(cell, "right")
+            or cell["text_run_ids"] or comb_bands(cell)):
+        return False
+
+    def is_fragment(other: dict[str, Any]) -> bool:
+        return (exactly_one_column(cell, other)
+                and has_border(other, "left")
+                and has_border(other, "right")
+                and not other.get("text_run_ids")
+                and not comb_bands(other))
+
+    fragments = {other["id"]: other for other in [*band, cell]
+                 if is_fragment(other)}
+    reached: dict[str, dict[str, Any]] = {}
+    pending = [cell]
+    while pending:
+        current = pending.pop()
+        if current["id"] in reached:
+            continue
+        reached[current["id"]] = current
+        above = [other for other in fragments.values()
+                 if other["id"] != current["id"]
+                 and abs(other["y1"] - current["y0"]) <= ALIGN_TOL_PT
+                 and not has_border(other, "bottom")
+                 and not has_border(current, "top")]
+        below = [other for other in fragments.values()
+                 if other["id"] != current["id"]
+                 and abs(other["y0"] - current["y1"]) <= ALIGN_TOL_PT
+                 and not has_border(current, "bottom")
+                 and not has_border(other, "top")]
+        # A source gutter is one unbranched channel. More than one neighbour on
+        # either edge is ambiguous even if the prefix already spans enough rows.
+        if len(above) > 1 or len(below) > 1:
+            return False
+        pending.extend([*above, *below])
+
+    top = min(part["y0"] for part in reached.values())
+    bottom = max(part["y1"] for part in reached.values())
+    row_span = sum(part["row_span"] for part in reached.values())
+    return row_span >= GUTTER_MIN_ROW_SPAN and (bottom - top) > width
 
 
 def is_control(cell: dict[str, Any], cells: Sequence[dict[str, Any]]) -> bool:
@@ -318,7 +382,7 @@ def classify_vacancy(cell: dict[str, Any], band: Sequence[dict[str, Any]],
     column's own header ("Amount of Tax Withheld (6)") vouch for the money boxes
     beneath it, which is precisely backwards.
     """
-    if is_gutter(cell):
+    if is_gutter(cell, band):
         return Vacancy(cell["id"], "gutter")
     if is_control(cell, cells):
         return Vacancy(cell["id"], "control")
@@ -1105,6 +1169,43 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
                  "Table 1 – Alphanumeric Tax Code (ATC)",
                  "ALPHANUMERIC TAX CODES (ATC)"):
         check(marker_hit(text) is not None, f"no marker fired on guide heading {text!r}")
+
+    # A source gutter remains a gutter when extra lattice y coordinates split it
+    # into fragments without adding ink. This is deliberately a geometry test:
+    # a real horizontal stroke makes the same stack a sequence of entry boxes.
+    rail = {"thickness_pt": 1.44, "gray": 0.0}
+    gutter_top = {
+        "id": "gutter-top", "x0": 10.0, "y0": 10.0, "x1": 20.0, "y1": 28.0,
+        "row_span": 2, "text_run_ids": [],
+        "border": {"top": rail, "bottom": None, "left": rail, "right": rail},
+    }
+    gutter_tail = {
+        "id": "gutter-tail", "x0": 10.0, "y0": 28.0, "x1": 20.0, "y1": 36.0,
+        "row_span": 1, "text_run_ids": [],
+        "border": {"top": None, "bottom": None, "left": rail, "right": rail},
+    }
+    check(is_gutter(gutter_top, [gutter_top, gutter_tail]),
+          "an open, fragmented source gutter was treated as a fillable box")
+    check(is_gutter(gutter_tail, [gutter_top, gutter_tail]),
+          "a middle gutter fragment could not find its source geometry above it")
+    competing_tails = [
+        {
+            "id": f"competing-tail-{suffix}",
+            "x0": 10.0, "y0": 36.0, "x1": 20.0, "y1": 44.0,
+            "row_span": 1, "text_run_ids": [],
+            "border": {"top": None, "bottom": None, "left": rail, "right": rail},
+        }
+        for suffix in ("a", "b")
+    ]
+    check(not is_gutter(gutter_top, [gutter_top, gutter_tail, *competing_tails]),
+          "a qualifying gutter prefix ignored competing source continuations")
+    boxed_tail = dict(gutter_tail)
+    boxed_tail.update({
+        "id": "boxed-tail",
+        "border": {"top": rail, "bottom": rail, "left": rail, "right": rail},
+    })
+    check(not is_gutter(gutter_top, [gutter_top, boxed_tail]),
+          "a horizontal source stroke was ignored when joining gutter fragments")
 
     rows = sweep(ir_dir, layout_dir, source_root)
     check(len(rows) == 51, f"expected 51 forms in the corpus, got {len(rows)}")
