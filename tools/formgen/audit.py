@@ -7286,6 +7286,54 @@ def _extract_retained_candidate(
     }
 
 
+_ROUND_TRIP_TOTAL_KEYS = frozenset({
+    "rules_missing", "rules_extra", "rules_thickness_violations",
+    "text_missing", "text_extra", "text_mismatched",
+    "images_missing", "images_extra", "images_placement_violations",
+})
+_ROUND_TRIP_PAPER_KEYS = frozenset({
+    "reference", "candidate", "problems", "ok",
+})
+
+
+def _validated_verifier_report(
+        report: Any,
+        ) -> tuple[bool, str | None, dict[str, int]]:
+    """Validate the exact report shape emitted by verify.diff_ir()."""
+    if not isinstance(report, dict):
+        raise RuntimeError("verifier returned no report object")
+    paper = report.get("paper")
+    if (not isinstance(paper, dict)
+            or set(paper) != _ROUND_TRIP_PAPER_KEYS
+            or type(paper.get("ok")) is not bool
+            or not isinstance(paper.get("problems"), list)
+            or any(not isinstance(item, str)
+                   for item in paper.get("problems", []))):
+        raise RuntimeError("verifier paper evidence is missing or malformed")
+    for side in ("reference", "candidate"):
+        value = paper.get(side)
+        if (not isinstance(value, dict)
+                or set(value) != {"width_pt", "height_pt", "page_count"}):
+            raise RuntimeError(
+                f"verifier paper {side} evidence is missing or malformed")
+    paper_ok = paper["ok"]
+    hard_failure = report.get("hard_failure")
+    if (hard_failure is not None
+            and (not isinstance(hard_failure, str) or not hard_failure)):
+        raise RuntimeError("verifier hard-failure evidence is malformed")
+    if (paper_ok and hard_failure is not None) or (
+            not paper_ok and hard_failure != "paper mismatch"):
+        raise RuntimeError("verifier paper/hard-failure relation is false")
+    totals = report.get("totals")
+    if (not isinstance(totals, dict)
+            or set(totals) != _ROUND_TRIP_TOTAL_KEYS):
+        raise RuntimeError("verifier totals are missing or unsupported")
+    if any(type(value) is not int or value < 0
+           for value in totals.values()):
+        raise RuntimeError("verifier totals contain a nonnegative-int violation")
+    return paper_ok, hard_failure, dict(totals)
+
+
 def round_trip(bundle: Bundle, html_dir: pathlib.Path,
                work: pathlib.Path) -> dict[str, Any]:
     """Print with Chromium, re-extract, diff against the source IR."""
@@ -7315,37 +7363,37 @@ def round_trip(bundle: Bundle, html_dir: pathlib.Path,
     }
     report = verify.diff_ir(reference, candidate, verify.Tolerances(),
                             roles=["structural"])
-    totals = report.get("totals", {})
+    paper_ok, hard_failure, totals = _validated_verifier_report(report)
 
     # Denominators come from the source IR, so a percentage always answers
     # "of what the official form contains, how much did we reproduce".
     rules_ref = sum(p["stats"]["rules_structural"] for p in reference["pages"])
     text_ref = sum(len(p["text_runs"]) for p in reference["pages"])
-    rules_missing = totals.get("rules_missing", 0)
-    text_missing = totals.get("text_missing", 0)
+    rules_missing = totals["rules_missing"]
+    text_missing = totals["text_missing"]
 
     # verify.py short-circuits on a paper mismatch and never walks the pages, so
     # every total comes back 0. Zero missing rules is indistinguishable from a
     # perfect form unless the record says which it is -- and reading the first
     # as the second is precisely the failure this project keeps paying for. The
     # gate treats `measured: false` as unevaluable, which counts as a failure.
-    measured = report.get("hard_failure") is None
+    measured = hard_failure is None
 
     record.update({
         "measured": measured,
-        "hard_failure": report.get("hard_failure"),
-        "paper_ok": bool(report.get("paper", {}).get("ok", True)),
+        "hard_failure": hard_failure,
+        "paper_ok": paper_ok,
         "rules_ref": rules_ref,
-        "rules_missing": rules_missing,
-        "rules_extra": totals.get("rules_extra", 0),
-        "rules_thickness_violations": totals.get("rules_thickness_violations", 0),
+        "rules_missing": totals["rules_missing"],
+        "rules_extra": totals["rules_extra"],
+        "rules_thickness_violations": totals["rules_thickness_violations"],
         "rules_pct": round(100.0 * (rules_ref - rules_missing) / rules_ref, 2) if rules_ref else None,
         "text_ref": text_ref,
         "text_missing": text_missing,
-        "text_extra": totals.get("text_extra", 0),
+        "text_extra": totals["text_extra"],
         "text_pct": round(100.0 * (text_ref - text_missing) / text_ref, 2) if text_ref else None,
-        "images_missing": totals.get("images_missing", 0),
-        "images_placement_violations": totals.get("images_placement_violations", 0),
+        "images_missing": totals["images_missing"],
+        "images_placement_violations": totals["images_placement_violations"],
     })
     return record
 
@@ -7465,6 +7513,73 @@ def self_test() -> int:
     def check(name: str, condition: bool) -> None:
         if not condition:
             failures.append(name)
+
+    verifier_totals = {
+        key: 0 for key in sorted(_ROUND_TRIP_TOTAL_KEYS)
+    }
+    verifier_paper = {
+        "reference": {"width_pt": 100.0, "height_pt": 100.0,
+                      "page_count": 1},
+        "candidate": {"width_pt": 100.0, "height_pt": 100.0,
+                      "page_count": 1},
+        "problems": [],
+        "ok": True,
+    }
+    verifier_fixture = {
+        "paper": verifier_paper,
+        "totals": verifier_totals,
+    }
+    try:
+        verifier_result = _validated_verifier_report(verifier_fixture)
+    except Exception as error:  # noqa: BLE001 - the fixture must be complete
+        verifier_result = None
+        failures.append(
+            "complete verifier report must validate: "
+            f"{type(error).__name__}: {error}")
+    check(
+        "complete verifier report preserves paper and totals",
+        verifier_result is not None
+        and verifier_result[0] is True
+        and verifier_result[1] is None
+        and verifier_result[2] == verifier_totals,
+    )
+    verifier_malformed = [
+        ("missing paper", lambda value: value.pop("paper")),
+        ("bool paper verdict", lambda value: value["paper"].update({"ok": 1})),
+        ("missing total", lambda value: value["totals"].pop("text_missing")),
+        ("bool total", lambda value: value["totals"].update({"rules_missing": True})),
+        ("paper failure without hard failure", lambda value: value["paper"].update({"ok": False})),
+        ("paper success with hard failure", lambda value: value.update({"hard_failure": "paper mismatch"})),
+    ]
+    for label, mutator in verifier_malformed:
+        malformed = copy.deepcopy(verifier_fixture)
+        mutator(malformed)
+        try:
+            _validated_verifier_report(malformed)
+        except RuntimeError:
+            pass
+        except Exception as error:  # noqa: BLE001 - malformed must not crash
+            failures.append(
+                f"malformed verifier {label} raised {type(error).__name__}: {error}")
+        else:
+            failures.append(f"malformed verifier {label} must fail closed")
+    verifier_paper_failure = copy.deepcopy(verifier_fixture)
+    verifier_paper_failure["paper"]["ok"] = False
+    verifier_paper_failure["paper"]["problems"] = ["paper width mismatch"]
+    verifier_paper_failure["hard_failure"] = "paper mismatch"
+    try:
+        paper_failure_result = _validated_verifier_report(verifier_paper_failure)
+    except Exception as error:  # noqa: BLE001 - valid hard failure fixture
+        paper_failure_result = None
+        failures.append(
+            "verifier paper mismatch must validate as measured=false: "
+            f"{type(error).__name__}: {error}")
+    check(
+        "verifier paper mismatch retains complete zero totals",
+        paper_failure_result is not None
+        and paper_failure_result[0] is False
+        and paper_failure_result[1] == "paper mismatch",
+    )
 
     ir = {
         "form": {"code": "TEST", "revision": "0000"},
