@@ -23,20 +23,32 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ctypes
 import dataclasses
 import enum
+import errno
 import hashlib
+import html.parser
+import importlib.machinery
+import importlib.metadata
 import json
 import math
+import mimetypes
 import os
 import pathlib
+import platform
+import posixpath
+import re
 import shutil
 import signal
 import stat
 import subprocess
 import sys
+import sysconfig
 import tempfile
-from decimal import Decimal, InvalidOperation
+import time
+import urllib.parse
+from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation, localcontext
 from typing import Any, Callable, Iterable, Sequence
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -53,12 +65,14 @@ COMB_REFEREE_ATTESTATION = BUILD / "comb-referee-attested.json"
 COMB_REFEREE_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
 
 EXPECTED_FORMS = 51
+EXPECTED_IN_CORPUS_FORMS = 38
+EXPECTED_EXTRA_FORMS = 13
 EXPECTED_COMB_SUBJECTS = 4442
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
 COMB_REFEREE_SCOPE = "formgen-comb-referee-application-v1"
-AUDIT_APPLICATION_SCOPE = "formgen-audit-application-v1"
-AUDIT_APPLICATION_ATTESTATION_VERSION = 1
+AUDIT_APPLICATION_SCOPE = "formgen-audit-application-v2"
+AUDIT_APPLICATION_ATTESTATION_VERSION = 2
 COMB_REFEREE_TIMEOUT_SECONDS = 7200
 COMB_REFEREE_RUN_COUNT = 2
 COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS = 5
@@ -67,8 +81,28 @@ COMB_REFEREE_TOTAL_TIMEOUT_SECONDS = (
         COMB_REFEREE_TIMEOUT_SECONDS
         + 2 * COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS))
 ISOLATED_PYTHON_ATTESTED_FLAGS = [
-    "-I", "-B", "-X", "pycache_prefix=<fresh-empty-directory>",
+    "-I", "-S", "-B", "-X", "pycache_prefix=<fresh-empty-directory>",
 ]
+AUDIT_ROUNDTRIP_LAUNCH_ARGS = [
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--metrics-recording-only",
+    "--no-first-run",
+]
+AUDIT_ROUNDTRIP_SCOPE = (
+    "playwright-package-tree-and-explicit-chromium-executable")
+AUDIT_CANDIDATE_MATERIALIZATION = (
+    "private-0700-o_excl-o_nofollow-fsynced-unlinked-read-fd")
+AUDIT_PDF_NORMALIZATION_REPLACEMENT = "D:19700101000000+00'00'"
+ISOLATED_DEPENDENCY_PACKAGES = {
+    "pymupdf": ("pymupdf", "fitz"),
+    "playwright": ("playwright",),
+    "pyee": ("pyee",),
+    "greenlet": ("greenlet",),
+    "typing-extensions": ("typing_extensions.py",),
+}
 COMB_REFEREE_PRODUCERS = (
     "tools/formgen/gate.py",
     "tools/formgen/batch.py",
@@ -95,8 +129,11 @@ COMPARISON_NAMES = (
 
 # Modules that expose --self-test. lattice and fonts need an --ir argument, so
 # they are invoked with one rather than being excused from the check.
-SELF_TEST_MODULES = ("extract", "lattice", "fonts", "guides", "emit", "verify",
-                     "index_page", "comb_referee", "gate")
+SELF_TEST_MODULES = (
+    "extract", "lattice", "fonts", "guides", "emit", "verify", "index_page",
+    "audit", "comb_referee", "gate",
+)
+SELF_SUPERVISING_SELF_TEST_MODULES = frozenset({"comb_referee", "gate"})
 
 # The eight assertions from GOAL.md. gate.py does not implement them: audit.py
 # owns them, and the gate's job is to demand them. Each maps to the key audit.py
@@ -137,50 +174,1705 @@ def run(args: list[str], timeout: int = 5400) -> tuple[int, str]:
     return run_isolated_python(args, timeout)
 
 
-def run_isolated_python(
+def _normalise_distribution_name(value: str) -> str:
+    return re.sub(r"[-_.]+", "-", value).lower()
+
+
+def _approved_dependency_roots() -> tuple[pathlib.Path, ...]:
+    """Return interpreter-derived package roots without importing ``site``."""
+    candidates: list[str | None] = [
+        sysconfig.get_path("purelib"),
+        sysconfig.get_path("platlib"),
+    ]
+    schemes = set(sysconfig.get_scheme_names())
+    for scheme in ("osx_framework_user", "posix_user", "nt_user"):
+        if scheme not in schemes:
+            continue
+        candidates.extend((
+            sysconfig.get_path("purelib", scheme=scheme),
+            sysconfig.get_path("platlib", scheme=scheme),
+        ))
+    roots: list[pathlib.Path] = []
+    for value in candidates:
+        if not value:
+            continue
+        path = pathlib.Path(value).resolve()
+        if path.is_dir() and path not in roots:
+            roots.append(path)
+    return tuple(roots)
+
+
+def _distribution_metadata_name(path: pathlib.Path) -> str | None:
+    metadata = path / "METADATA"
+    try:
+        for line in metadata.read_text(encoding="utf-8").splitlines():
+            if line.startswith("Name:"):
+                return _normalise_distribution_name(line.partition(":")[2].strip())
+    except (OSError, UnicodeError):
+        return None
+    return None
+
+
+def _dependency_tree_records(
+        source: pathlib.Path, kind: str,
+        ) -> dict[str, dict[str, Any]]:
+    source = source.absolute()
+    source_parent = source.parent.resolve(strict=True)
+    parent_fd = _open_absolute_directory(source_parent)
+    try:
+        return _dependency_tree_records_at(
+            parent_fd, source.name, kind, str(source))
+    finally:
+        os.close(parent_fd)
+
+
+def _dependency_open_flags(*, directory: bool) -> int:
+    flags = (
+        os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0))
+    if directory:
+        flags |= getattr(os, "O_DIRECTORY", 0)
+    return flags
+
+
+def _open_absolute_directory(path: pathlib.Path | str) -> int:
+    absolute = pathlib.Path(path)
+    if not absolute.is_absolute():
+        raise RuntimeError(
+            f"isolated dependency root is not absolute: {absolute}")
+    descriptor = os.open(
+        os.path.sep, _dependency_open_flags(directory=True))
+    try:
+        for part in absolute.parts[1:]:
+            if part in {"", ".", ".."} or os.path.sep in part:
+                raise RuntimeError(
+                    f"isolated dependency root is unsafe: {absolute}")
+            child = os.open(
+                part, _dependency_open_flags(directory=True),
+                dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _fd_identity(item: os.stat_result) -> tuple[int, ...]:
+    return (
+        item.st_dev, item.st_ino, item.st_mode, item.st_size,
+        item.st_mtime_ns, item.st_ctime_ns,
+    )
+
+
+def _hash_stable_fd(descriptor: int) -> tuple[int, str, int]:
+    before = os.fstat(descriptor)
+    if not stat.S_ISREG(before.st_mode):
+        raise RuntimeError("isolated dependency descriptor is not regular")
+    digest = hashlib.sha256()
+    total = 0
+    while True:
+        chunk = os.pread(descriptor, 1024 * 1024, total)
+        if not chunk:
+            break
+        digest.update(chunk)
+        total += len(chunk)
+    after = os.fstat(descriptor)
+    if (_fd_identity(before) != _fd_identity(after)
+            or total != after.st_size):
+        raise RuntimeError(
+            "isolated dependency changed while hashing its open descriptor")
+    return total, digest.hexdigest(), stat.S_IMODE(after.st_mode)
+
+
+def _symlink_target_is_internal(relative: str, target: str) -> bool:
+    target_path = pathlib.PurePosixPath(target)
+    if target_path.is_absolute():
+        return False
+    stack = list(pathlib.PurePosixPath(relative).parent.parts)
+    for part in target_path.parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not stack:
+                return False
+            stack.pop()
+        else:
+            stack.append(part)
+    return True
+
+
+def _normalise_dependency_parts(parts: Iterable[str]) -> list[str] | None:
+    stack: list[str] = []
+    for part in parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not stack:
+                return None
+            stack.pop()
+        else:
+            stack.append(part)
+    return stack
+
+
+def _dependency_symlink_resolves(
+        records: dict[str, dict[str, Any]], relative: str,
+        ) -> bool:
+    link = records.get(relative)
+    if not isinstance(link, dict) or link.get("type") != "symlink":
+        return False
+    initial = _normalise_dependency_parts([
+        *pathlib.PurePosixPath(relative).parent.parts,
+        *pathlib.PurePosixPath(str(link.get("target", ""))).parts,
+    ])
+    if initial is None:
+        return False
+    pending = initial
+    expanded: set[tuple[str, ...]] = set()
+    for _ in range(len(records) + 1):
+        resolved: list[str] = []
+        restarted = False
+        for index, part in enumerate(pending):
+            candidate = "/".join([*resolved, part])
+            record = records.get(candidate)
+            if not isinstance(record, dict):
+                return False
+            if record.get("type") != "symlink":
+                resolved.append(part)
+                continue
+            state = tuple([*resolved, part, *pending[index + 1:]])
+            if state in expanded:
+                return False
+            expanded.add(state)
+            target = record.get("target")
+            if not isinstance(target, str):
+                return False
+            replacement = _normalise_dependency_parts([
+                *resolved,
+                *pathlib.PurePosixPath(target).parts,
+                *pending[index + 1:],
+            ])
+            if replacement is None:
+                return False
+            pending = replacement
+            restarted = True
+            break
+        if not restarted:
+            final = "/".join(resolved)
+            return final in records and records[final].get("type") in {
+                "file", "directory"}
+    return False
+
+
+def _dependency_tree_records_at(
+        parent_fd: int, name: str, kind: str, logical: str,
+        ) -> dict[str, dict[str, Any]]:
+    if kind not in {"file", "directory"}:
+        raise RuntimeError(f"isolated dependency kind is invalid: {logical}")
+    descriptor = os.open(
+        name, _dependency_open_flags(directory=kind == "directory"),
+        dir_fd=parent_fd)
+    try:
+        root_stat = os.fstat(descriptor)
+        if kind == "file":
+            byte_count, digest, mode = _hash_stable_fd(descriptor)
+            return {"": {
+                "path": "", "type": "file", "mode": mode,
+                "bytes": byte_count, "sha256": digest,
+            }}
+        if not stat.S_ISDIR(root_stat.st_mode):
+            raise RuntimeError(
+                f"isolated dependency directory is absent: {logical}")
+        records: dict[str, dict[str, Any]] = {
+            "": {
+                "path": "", "type": "directory",
+                "mode": stat.S_IMODE(root_stat.st_mode),
+            },
+        }
+
+        def visit(directory_fd: int, prefix: pathlib.PurePosixPath) -> None:
+            for child_name in sorted(os.listdir(directory_fd)):
+                relative = prefix / child_name
+                relative_text = relative.as_posix()
+                if ("__pycache__" in relative.parts
+                        or relative.suffix == ".pyc"):
+                    continue
+                before = os.stat(
+                    child_name, dir_fd=directory_fd,
+                    follow_symlinks=False)
+                if stat.S_ISLNK(before.st_mode):
+                    target = os.readlink(child_name, dir_fd=directory_fd)
+                    after = os.stat(
+                        child_name, dir_fd=directory_fd,
+                        follow_symlinks=False)
+                    if (_fd_identity(before) != _fd_identity(after)
+                            or not _symlink_target_is_internal(
+                                relative_text, target)):
+                        raise RuntimeError(
+                            "isolated dependency symlink changed or escapes: "
+                            f"{logical}/{relative_text} -> {target}")
+                    records[relative_text] = {
+                        "path": relative_text, "type": "symlink",
+                        "target": target,
+                    }
+                    continue
+                if stat.S_ISDIR(before.st_mode):
+                    child_fd = os.open(
+                        child_name, _dependency_open_flags(directory=True),
+                        dir_fd=directory_fd)
+                    try:
+                        opened = os.fstat(child_fd)
+                        if _fd_identity(before) != _fd_identity(opened):
+                            raise RuntimeError(
+                                "isolated dependency directory changed while "
+                                f"opening: {logical}/{relative_text}")
+                        records[relative_text] = {
+                            "path": relative_text, "type": "directory",
+                            "mode": stat.S_IMODE(opened.st_mode),
+                        }
+                        visit(child_fd, relative)
+                        if _fd_identity(opened) != _fd_identity(
+                                os.fstat(child_fd)):
+                            raise RuntimeError(
+                                "isolated dependency directory changed while "
+                                f"scanning: {logical}/{relative_text}")
+                    finally:
+                        os.close(child_fd)
+                    continue
+                if not stat.S_ISREG(before.st_mode):
+                    raise RuntimeError(
+                        f"isolated dependency is not regular: "
+                        f"{logical}/{relative_text}")
+                child_fd = os.open(
+                    child_name, _dependency_open_flags(directory=False),
+                    dir_fd=directory_fd)
+                try:
+                    opened = os.fstat(child_fd)
+                    if _fd_identity(before) != _fd_identity(opened):
+                        raise RuntimeError(
+                            "isolated dependency file changed while opening: "
+                            f"{logical}/{relative_text}")
+                    byte_count, digest, mode = _hash_stable_fd(child_fd)
+                finally:
+                    os.close(child_fd)
+                records[relative_text] = {
+                    "path": relative_text, "type": "file", "mode": mode,
+                    "bytes": byte_count, "sha256": digest,
+                }
+
+        visit(descriptor, pathlib.PurePosixPath())
+        for relative, record in records.items():
+            if (record.get("type") == "symlink"
+                    and not _dependency_symlink_resolves(records, relative)):
+                raise RuntimeError(
+                    f"isolated dependency symlink is dangling or cyclic: "
+                    f"{logical}/{relative}")
+        if _fd_identity(root_stat) != _fd_identity(os.fstat(descriptor)):
+            raise RuntimeError(
+                f"isolated dependency changed while scanning: {logical}")
+        return records
+    finally:
+        os.close(descriptor)
+
+
+def _hash_stable_file(path: pathlib.Path) -> tuple[int, str]:
+    before = path.stat(follow_symlinks=False)
+    payload = path.read_bytes()
+    after = path.stat(follow_symlinks=False)
+    identity = lambda item: (  # noqa: E731 - compact immutable identity
+        item.st_dev, item.st_ino, item.st_mode, item.st_size,
+        item.st_mtime_ns, item.st_ctime_ns,
+    )
+    if (identity(before) != identity(after)
+            or not stat.S_ISREG(after.st_mode)
+            or len(payload) != after.st_size):
+        raise RuntimeError(f"isolated dependency changed while hashing: {path}")
+    return len(payload), hashlib.sha256(payload).hexdigest()
+
+
+def _isolated_dependency_entries() -> list[dict[str, Any]]:
+    roots = _approved_dependency_roots()
+    if not roots:
+        raise RuntimeError("interpreter exposes no approved dependency roots")
+    dist_infos: dict[str, list[pathlib.Path]] = {}
+    for root in roots:
+        for candidate in sorted(root.glob("*.dist-info")):
+            name = _distribution_metadata_name(candidate)
+            if name is not None:
+                dist_infos.setdefault(name, []).append(candidate)
+
+    selected: list[pathlib.Path] = []
+    for distribution, package_names in ISOLATED_DEPENDENCY_PACKAGES.items():
+        for package_name in package_names:
+            matches = [root / package_name for root in roots
+                       if (root / package_name).exists()]
+            if len(matches) != 1:
+                raise RuntimeError(
+                    f"isolated dependency {package_name} has {len(matches)} "
+                    "approved candidates")
+            selected.append(matches[0])
+        metadata_matches = dist_infos.get(
+            _normalise_distribution_name(distribution), [])
+        if len(metadata_matches) != 1:
+            raise RuntimeError(
+                f"isolated distribution {distribution} has "
+                f"{len(metadata_matches)} approved metadata candidates")
+        selected.append(metadata_matches[0])
+
+    entries: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    for source in sorted(selected, key=lambda value: value.name):
+        if source.name in seen_names:
+            raise RuntimeError(
+                f"isolated dependency view has duplicate entry: {source.name}")
+        seen_names.add(source.name)
+        kind = "directory" if source.is_dir() else "file"
+        records = list(_dependency_tree_records(source, kind).values())
+        entries.append({
+            "name": source.name,
+            "root": str(source.parent.resolve(strict=True)),
+            "kind": kind,
+            "files": records,
+        })
+    return entries
+
+
+def _isolated_dependency_manifest(
+        entries: Sequence[dict[str, Any]],
+        ) -> dict[str, Any]:
+    payload = json.dumps(
+        list(entries), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False).encode("utf-8")
+    records = [
+        record for entry in entries for record in entry.get("files", [])
+        if isinstance(record, dict)
+    ]
+    return {
+        "schema": "formgen-isolated-python-dependencies-v2",
+        "algorithm": "sha256(canonical-json(entries))",
+        "entries": len(entries),
+        "files": sum(record.get("type") == "file" for record in records),
+        "directories": sum(
+            record.get("type") == "directory" for record in records),
+        "symlinks": sum(
+            record.get("type") == "symlink" for record in records),
+        "bytes": sum(
+            int(record.get("bytes", 0)) for record in records
+            if record.get("type") == "file"),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _isolated_dependency_file_projection(
+        entries: Sequence[dict[str, Any]],
+        ) -> dict[str, Any]:
+    """Retain the member identities needed to bind audit runtime claims."""
+    members = sorted(
+        ({
+            "path": (
+                entry["name"]
+                + (f"/{record['path']}" if record.get("path") else "")),
+            "bytes": record["bytes"],
+            "sha256": record["sha256"],
+        }
+         for entry in entries
+         for record in entry.get("files", [])
+         if isinstance(record, dict) and record.get("type") == "file"),
+        key=lambda value: value["path"],
+    )
+    unsigned = {
+        "algorithm": "sha256(canonical-json(path,bytes,sha256))",
+        "files": len(members),
+        "bytes": sum(member["bytes"] for member in members),
+        "members": members,
+    }
+    return {**unsigned, "sha256": canonical_digest(members)}
+
+
+def _isolated_dependency_tree_projections(
+        entries: Sequence[dict[str, Any]],
+        ) -> dict[str, Any]:
+    """Project each copied package tree in audit.py's closure algorithm."""
+    trees: dict[str, Any] = {}
+    for entry in entries:
+        name = entry.get("name")
+        if not isinstance(name, str) or not name or name in trees:
+            raise RuntimeError("isolated dependency tree name is invalid")
+        closure: list[tuple[str, str, int | None, str]] = []
+        for record in entry.get("files", []):
+            if not isinstance(record, dict) or not record.get("path"):
+                continue
+            if record.get("type") == "file":
+                closure.append((
+                    record["path"], "file", record["bytes"],
+                    record["sha256"]))
+            elif record.get("type") == "symlink":
+                closure.append((
+                    record["path"], "symlink", None, record["target"]))
+        closure.sort(key=lambda item: item[0])
+        payload = json.dumps(
+            closure, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+        trees[name] = {
+            "logical_root": name,
+            "algorithm": "sha256(canonical-json(path,type,bytes,digest))",
+            "files": sum(item[1] == "file" for item in closure),
+            "symlinks": sum(item[1] == "symlink" for item in closure),
+            "bytes": sum(
+                int(item[2] or 0) for item in closure if item[1] == "file"),
+            "tree_sha256": sha256_bytes(payload),
+        }
+    return {
+        "algorithm": "per-entry-audit-tree-closure-v1",
+        "trees": trees,
+        "sha256": canonical_digest(trees),
+    }
+
+
+def _current_isolated_dependency_manifest() -> dict[str, Any]:
+    return _isolated_dependency_manifest(_isolated_dependency_entries())
+
+
+def _private_dependency_record(record: dict[str, Any]) -> dict[str, Any]:
+    expected = dict(record)
+    if record.get("type") in {"file", "directory"}:
+        expected["mode"] = int(record["mode"]) & ~0o222
+    return expected
+
+
+def _open_directory_components(
+        root_fd: int, parts: Sequence[str],
+        ) -> int:
+    descriptor = os.dup(root_fd)
+    try:
+        for part in parts:
+            if part in {"", ".", ".."} or "/" in part:
+                raise RuntimeError(
+                    "isolated dependency path has an unsafe component")
+            child = os.open(
+                part, _dependency_open_flags(directory=True),
+                dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _dependency_record_parts(relative: Any) -> tuple[str, ...]:
+    if not isinstance(relative, str):
+        raise RuntimeError("isolated dependency path is not text")
+    if relative == "":
+        return ()
+    path = pathlib.PurePosixPath(relative)
+    if path.is_absolute() or any(part in {"", ".", ".."}
+                                 for part in path.parts):
+        raise RuntimeError(f"isolated dependency path is unsafe: {relative}")
+    if path.as_posix() != relative:
+        raise RuntimeError(
+            f"isolated dependency path is not canonical: {relative}")
+    return path.parts
+
+
+def _verified_dependency_file(
+        descriptor: int, record: dict[str, Any], *, private: bool,
+        ) -> None:
+    byte_count, digest, mode = _hash_stable_fd(descriptor)
+    expected = _private_dependency_record(record) if private else record
+    if (expected.get("type") != "file"
+            or expected.get("bytes") != byte_count
+            or expected.get("sha256") != digest
+            or expected.get("mode") != mode):
+        raise RuntimeError(
+            f"isolated dependency file identity changed: {record.get('path')}")
+
+
+def _copy_fd_payload(source_fd: int, destination_fd: int) -> None:
+    offset = 0
+    while True:
+        chunk = os.pread(source_fd, 1024 * 1024, offset)
+        if not chunk:
+            break
+        view = memoryview(chunk)
+        while view:
+            written = os.write(destination_fd, view)
+            if written <= 0:
+                raise RuntimeError("isolated dependency copy made no progress")
+            view = view[written:]
+        offset += len(chunk)
+    os.fsync(destination_fd)
+
+
+def _clone_dependency_fd(
+        source_fd: int, destination_parent_fd: int, name: str,
+        ) -> bool:
+    if sys.platform != "darwin":
+        return False
+    library = ctypes.CDLL(None, use_errno=True)
+    clone = getattr(library, "fclonefileat", None)
+    if clone is None:
+        return False
+    clone.argtypes = [
+        ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+    clone.restype = ctypes.c_int
+    # Bind the source open descriptor and forbid destination traversal.
+    flags = 0x2 | 0x8 | 0x10  # NOOWNERCOPY | NOFOLLOW_ANY | RESOLVE_BENEATH
+    if clone(
+            source_fd, destination_parent_fd,
+            os.fsencode(name), flags) == 0:
+        return True
+    error_number = ctypes.get_errno()
+    if error_number not in {
+            errno.ENOTSUP, errno.EXDEV, errno.EINVAL, errno.ENOSYS,
+            errno.EPERM, errno.EACCES}:
+        raise OSError(error_number, os.strerror(error_number), name)
+    try:
+        os.unlink(name, dir_fd=destination_parent_fd)
+    except FileNotFoundError:
+        pass
+    return False
+
+
+def _materialize_dependency_file(
+        source_fd: int, destination_parent_fd: int, name: str,
+        record: dict[str, Any],
+        ) -> None:
+    source_before = _fd_identity(os.fstat(source_fd))
+    _verified_dependency_file(source_fd, record, private=False)
+    cloned = _clone_dependency_fd(source_fd, destination_parent_fd, name)
+    if not cloned:
+        destination_fd = os.open(
+            name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+            0o600, dir_fd=destination_parent_fd)
+        try:
+            _copy_fd_payload(source_fd, destination_fd)
+        finally:
+            os.close(destination_fd)
+    destination_fd = os.open(
+        name, _dependency_open_flags(directory=False),
+        dir_fd=destination_parent_fd)
+    try:
+        os.fchmod(destination_fd, int(record["mode"]) & ~0o222)
+        _verified_dependency_file(destination_fd, record, private=True)
+    finally:
+        os.close(destination_fd)
+    if source_before != _fd_identity(os.fstat(source_fd)):
+        raise RuntimeError(
+            f"isolated dependency source changed while copying: "
+            f"{record.get('path')}")
+
+
+def _materialize_isolated_dependencies(
+        entries: Sequence[dict[str, Any]], view: pathlib.Path,
+        ) -> None:
+    view_fd = _open_absolute_directory(view.resolve(strict=True))
+    expected_names: set[str] = set()
+    try:
+        for entry in entries:
+            name = entry.get("name")
+            root_value = entry.get("root")
+            kind = entry.get("kind")
+            records_value = entry.get("files")
+            if (not isinstance(name, str) or not name
+                    or name in expected_names or "/" in name
+                    or name in {".", ".."}
+                    or not isinstance(root_value, str)
+                    or not pathlib.Path(root_value).is_absolute()
+                    or kind not in {"file", "directory"}
+                    or not isinstance(records_value, list)):
+                raise RuntimeError(
+                    "isolated dependency manifest is malformed")
+            expected_names.add(name)
+            records: dict[str, dict[str, Any]] = {}
+            for record in records_value:
+                if not isinstance(record, dict):
+                    raise RuntimeError(
+                        "isolated dependency record is malformed")
+                relative = record.get("path")
+                _dependency_record_parts(relative)
+                if relative in records:
+                    raise RuntimeError(
+                        f"isolated dependency duplicates path: {name}/{relative}")
+                records[relative] = record
+            root_record = records.get("")
+            if (not isinstance(root_record, dict)
+                    or root_record.get("type") != kind):
+                raise RuntimeError(
+                    f"isolated dependency root record is invalid: {name}")
+
+            approved_root_fd = _open_absolute_directory(root_value)
+            source_fd = os.open(
+                name, _dependency_open_flags(directory=kind == "directory"),
+                dir_fd=approved_root_fd)
+            try:
+                if kind == "file":
+                    _materialize_dependency_file(
+                        source_fd, view_fd, name, root_record)
+                    continue
+                source_stat = os.fstat(source_fd)
+                if (not stat.S_ISDIR(source_stat.st_mode)
+                        or stat.S_IMODE(source_stat.st_mode)
+                        != root_record.get("mode")):
+                    raise RuntimeError(
+                        f"isolated dependency root changed: {name}")
+                os.mkdir(name, 0o700, dir_fd=view_fd)
+                destination_fd = os.open(
+                    name, _dependency_open_flags(directory=True),
+                    dir_fd=view_fd)
+                try:
+                    ordered = sorted(
+                        (record for relative, record in records.items()
+                         if relative),
+                        key=lambda record: (
+                            len(_dependency_record_parts(record["path"])),
+                            record.get("type") != "directory",
+                            record["path"],
+                        ))
+                    directory_modes: list[tuple[tuple[str, ...], int]] = []
+                    for record in ordered:
+                        parts = _dependency_record_parts(record["path"])
+                        source_parent = _open_directory_components(
+                            source_fd, parts[:-1])
+                        destination_parent = _open_directory_components(
+                            destination_fd, parts[:-1])
+                        child_name = parts[-1]
+                        try:
+                            record_type = record.get("type")
+                            if record_type == "directory":
+                                child_source = os.open(
+                                    child_name,
+                                    _dependency_open_flags(directory=True),
+                                    dir_fd=source_parent)
+                                try:
+                                    mode = stat.S_IMODE(
+                                        os.fstat(child_source).st_mode)
+                                finally:
+                                    os.close(child_source)
+                                if mode != record.get("mode"):
+                                    raise RuntimeError(
+                                        "isolated dependency directory mode "
+                                        f"changed: {name}/{record['path']}")
+                                os.mkdir(
+                                    child_name, 0o700,
+                                    dir_fd=destination_parent)
+                                directory_modes.append((parts, mode))
+                            elif record_type == "file":
+                                child_source = os.open(
+                                    child_name,
+                                    _dependency_open_flags(directory=False),
+                                    dir_fd=source_parent)
+                                try:
+                                    _materialize_dependency_file(
+                                        child_source, destination_parent,
+                                        child_name, record)
+                                finally:
+                                    os.close(child_source)
+                            elif record_type == "symlink":
+                                before = os.stat(
+                                    child_name, dir_fd=source_parent,
+                                    follow_symlinks=False)
+                                target = os.readlink(
+                                    child_name, dir_fd=source_parent)
+                                after = os.stat(
+                                    child_name, dir_fd=source_parent,
+                                    follow_symlinks=False)
+                                if (_fd_identity(before) != _fd_identity(after)
+                                        or not stat.S_ISLNK(before.st_mode)
+                                        or target != record.get("target")
+                                        or not _symlink_target_is_internal(
+                                            record["path"], target)):
+                                    raise RuntimeError(
+                                        "isolated dependency symlink changed: "
+                                        f"{name}/{record['path']}")
+                                os.symlink(
+                                    target, child_name,
+                                    dir_fd=destination_parent)
+                            else:
+                                raise RuntimeError(
+                                    "isolated dependency record type is "
+                                    f"invalid: {name}/{record['path']}")
+                        finally:
+                            os.close(source_parent)
+                            os.close(destination_parent)
+                    for parts, mode in sorted(
+                            directory_modes,
+                            key=lambda item: len(item[0]), reverse=True):
+                        child_destination = _open_directory_components(
+                            destination_fd, parts)
+                        try:
+                            os.fchmod(child_destination, mode & ~0o222)
+                        finally:
+                            os.close(child_destination)
+                    os.fchmod(
+                        destination_fd,
+                        int(root_record["mode"]) & ~0o222)
+                finally:
+                    os.close(destination_fd)
+                if _fd_identity(source_stat) != _fd_identity(
+                        os.fstat(source_fd)):
+                    raise RuntimeError(
+                        f"isolated dependency root changed while copying: {name}")
+            finally:
+                os.close(source_fd)
+                os.close(approved_root_fd)
+    finally:
+        os.close(view_fd)
+    errors = _validate_isolated_dependencies(entries, view)
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    view.chmod(stat.S_IMODE(view.stat().st_mode) & ~0o222)
+
+
+def _validate_isolated_dependencies(
+        entries: Sequence[dict[str, Any]], view: pathlib.Path,
+        ) -> list[str]:
+    errors: list[str] = []
+    expected_names: set[str] = set()
+    for entry in entries:
+        name = entry.get("name")
+        root_value = entry.get("root")
+        kind = entry.get("kind")
+        records = entry.get("files")
+        if (not isinstance(name, str) or not name or name in expected_names
+                or not isinstance(root_value, str)
+                or kind not in {"file", "directory"}
+                or not isinstance(records, list)):
+            errors.append("isolated dependency manifest is malformed")
+            continue
+        expected_names.add(name)
+        expected_files = {
+            record.get("path"): _private_dependency_record(record)
+            for record in records
+            if isinstance(record, dict) and isinstance(record.get("path"), str)
+        }
+        if len(expected_files) != len(records):
+            errors.append(f"isolated dependency manifest duplicates paths: {name}")
+            continue
+        try:
+            actual_files = _dependency_tree_records(view / name, kind)
+        except (OSError, RuntimeError) as error:
+            errors.append(
+                f"isolated private dependency cannot be read: {name}: {error}")
+            continue
+        if actual_files != expected_files:
+            errors.append(
+                f"isolated private dependency inventory/digest changed: {name}")
+    try:
+        actual_names = {path.name for path in view.iterdir()}
+    except OSError as error:
+        errors.append(f"isolated dependency view cannot be read: {error}")
+    else:
+        if actual_names != expected_names:
+            errors.append("isolated dependency view inventory changed")
+    return errors
+
+
+ISOLATED_PYTHON_BOOTSTRAP = r'''#!/usr/bin/env python3
+import hashlib
+import json
+import os
+import pathlib
+import runpy
+import signal
+import stat
+import subprocess
+import sys
+import time
+
+
+def fail(message):
+    raise RuntimeError("isolated Python bootstrap: " + message)
+
+
+def stable_payload(path):
+    before = path.stat(follow_symlinks=False)
+    payload = path.read_bytes()
+    after = path.stat(follow_symlinks=False)
+    identity = lambda item: (
+        item.st_dev, item.st_ino, item.st_mode, item.st_size,
+        item.st_mtime_ns, item.st_ctime_ns)
+    if (identity(before) != identity(after)
+            or not stat.S_ISREG(after.st_mode)
+            or len(payload) != after.st_size):
+        fail("file changed while hashing: " + str(path))
+    return payload
+
+
+def tree_records(source, kind):
+    if source.is_symlink():
+        fail("dependency is a symlink: " + str(source))
+    if kind == "file":
+        if not source.is_file():
+            fail("dependency file is absent: " + str(source))
+        payload = stable_payload(source)
+        return {"": {
+            "path": "", "type": "file", "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "mode": stat.S_IMODE(
+                source.stat(follow_symlinks=False).st_mode)}}
+    if kind != "directory" or not source.is_dir():
+        fail("dependency directory is absent: " + str(source))
+    root = source.resolve(strict=True)
+    records = {"": {
+        "path": "", "type": "directory",
+        "mode": stat.S_IMODE(source.stat(follow_symlinks=False).st_mode)}}
+    for path in sorted(source.rglob("*")):
+        relative = path.relative_to(source)
+        if "__pycache__" in relative.parts or path.suffix == ".pyc":
+            continue
+        if path.is_symlink():
+            target = os.readlink(path)
+            try:
+                path.resolve(strict=True).relative_to(root)
+            except (FileNotFoundError, ValueError):
+                fail("dependency symlink escapes: " + str(path))
+            records[relative.as_posix()] = {
+                "path": relative.as_posix(), "type": "symlink",
+                "target": target}
+            continue
+        if path.is_dir():
+            records[relative.as_posix()] = {
+                "path": relative.as_posix(), "type": "directory",
+                "mode": stat.S_IMODE(
+                    path.stat(follow_symlinks=False).st_mode)}
+            continue
+        if not stat.S_ISREG(path.stat(follow_symlinks=False).st_mode):
+            fail("dependency is not regular: " + str(path))
+        payload = stable_payload(path)
+        records[relative.as_posix()] = {
+            "path": relative.as_posix(), "type": "file",
+            "bytes": len(payload),
+            "sha256": hashlib.sha256(payload).hexdigest(),
+            "mode": stat.S_IMODE(
+                path.stat(follow_symlinks=False).st_mode)}
+    return records
+
+
+def validate_dependencies(spec):
+    view = pathlib.Path(spec["dependency_view"])
+    expected_names = set()
+    for entry in spec["dependencies"]:
+        name = entry["name"]
+        if name in expected_names:
+            fail("duplicate dependency entry: " + name)
+        expected_names.add(name)
+        source = view / name
+        actual = tree_records(source, entry["kind"])
+        expected = {}
+        for record in entry["files"]:
+            private = dict(record)
+            if private.get("type") in {"file", "directory"}:
+                private["mode"] = int(private["mode"]) & ~0o222
+            expected[private["path"]] = private
+        if len(expected) != len(entry["files"]) or actual != expected:
+            fail("private dependency inventory/digest changed: " + name)
+    if {path.name for path in view.iterdir()} != expected_names:
+        fail("dependency view inventory changed")
+
+
+def load_bound_json(path, digest):
+    payload = stable_payload(path)
+    if hashlib.sha256(payload).hexdigest() != digest:
+        fail("launch specification digest changed")
+    value = json.loads(payload)
+    if not isinstance(value, dict) or value.get("schema") != 1:
+        fail("launch specification is malformed")
+    return value
+
+
+def write_root_receipt(
+        spec, target_argv, worker_exit, target_exit,
+        lingering_descendants_detected, cleanup_complete):
+    value = {
+        "schema": "formgen-isolated-python-bootstrap-receipt-v2",
+        "executable": str(pathlib.Path(sys.executable).resolve()),
+        "isolated": sys.flags.isolated,
+        "no_site": sys.flags.no_site,
+        "dont_write_bytecode": bool(sys.dont_write_bytecode),
+        "pycache_prefix": str(pathlib.Path(sys.pycache_prefix or "").resolve()),
+        "cwd": str(pathlib.Path.cwd().resolve()),
+        "pythonpath_absent": "PYTHONPATH" not in os.environ,
+        "pythonhome_absent": "PYTHONHOME" not in os.environ,
+        "site_not_loaded": "site" not in sys.modules,
+        "bootstrap_sha256": spec["bootstrap_sha256"],
+        "spec_sha256": spec["spec_sha256"],
+        "dependency_manifest_sha256": spec["dependency_manifest"]["sha256"],
+        "target_argv_sha256": spec["target_argv_sha256"],
+        "worker_exit": worker_exit,
+        "target_exit": target_exit,
+        "recursive_launcher_installed": True,
+        "process_group_supervised": True,
+        "subprocess_popen_python_rewrite_installed": True,
+        "os_process_control_guards_installed": True,
+        "lingering_descendants_detected": lingering_descendants_detected,
+        "cleanup_complete": cleanup_complete,
+    }
+    payload = (json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        + "\n").encode("utf-8")
+    temporary = pathlib.Path(spec["receipt_path"] + "." + str(os.getpid()))
+    descriptor = os.open(
+        temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        if os.write(descriptor, payload) != len(payload):
+            fail("root receipt write was partial")
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.replace(temporary, spec["receipt_path"])
+
+
+def isolated_command(spec, python_argv):
+    return [
+        sys.executable, "-I", "-S", "-B", "-X",
+        "pycache_prefix=" + spec["pycache_prefix"],
+        spec["bootstrap"], spec["spec_path"], spec["spec_sha256"],
+        spec["bootstrap_sha256"], "child", str(os.getpgrp()), "--",
+        *python_argv,
+    ]
+
+
+def install_recursive_launcher(spec):
+    original_popen = subprocess.Popen
+    executable = pathlib.Path(spec["executable"])
+    bootstrap = pathlib.Path(spec["bootstrap"])
+
+    def resolved_command(value, environment):
+        try:
+            raw = os.fsdecode(os.fspath(value))
+        except (OSError, TypeError, ValueError):
+            return None
+        if os.path.sep in raw:
+            candidates = [pathlib.Path(raw)]
+        else:
+            candidates = [
+                pathlib.Path(directory) / raw
+                for directory in os.get_exec_path(environment)]
+        for candidate in candidates:
+            try:
+                if candidate.is_file() and os.access(candidate, os.X_OK):
+                    return candidate.resolve()
+            except (OSError, RuntimeError):
+                continue
+        return None
+
+    def bounded_popen(command, *args, **kwargs):
+        if args:
+            fail("positional subprocess options are forbidden")
+        if kwargs.get("preexec_fn") is not None:
+            fail("subprocess preexec_fn can escape process supervision")
+        if kwargs.get("executable") is not None:
+            fail("subprocess executable override is forbidden")
+        if kwargs.get("shell"):
+            fail("subprocess shell mode is forbidden")
+        kwargs["close_fds"] = True
+        kwargs["start_new_session"] = False
+        if "process_group" in kwargs:
+            kwargs["process_group"] = None
+        rewritten = command
+        is_python = False
+        if (not kwargs.get("shell") and isinstance(command, (list, tuple))
+                and command):
+            effective_environment = dict(
+                os.environ if kwargs.get("env") is None else kwargs["env"])
+            is_python = (
+                resolved_command(command[0], effective_environment)
+                == executable)
+            if is_python:
+                rewritten = isolated_command(spec, list(command[1:]))
+                environment = effective_environment
+                environment.pop("PYTHONPATH", None)
+                environment.pop("PYTHONHOME", None)
+                environment["PYTHONDONTWRITEBYTECODE"] = "1"
+                environment["PYTHONPYCACHEPREFIX"] = spec["pycache_prefix"]
+                environment["PYTHONNOUSERSITE"] = "1"
+                environment["PYTHONSAFEPATH"] = "1"
+                kwargs["env"] = environment
+        process = original_popen(rewritten, *args, **kwargs)
+        if os.name == "posix":
+            observed_session = os.getsid(process.pid)
+            observed_group = os.getpgid(process.pid)
+        else:
+            observed_session = observed_group = -1
+        if (observed_session != os.getsid(0)
+                or observed_group != os.getpgrp()):
+            try:
+                if (observed_group > 1
+                        and observed_group != os.getpgrp()):
+                    os.killpg(observed_group, signal.SIGKILL)
+                else:
+                    process.kill()
+                process.wait(timeout=5)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            fail("subprocess escaped the supervised process group")
+        return process
+
+    subprocess.Popen = bounded_popen
+    if os.name == "posix":
+        def refuse_detachment(*_args, **_kwargs):
+            fail("process detachment is forbidden in isolated execution")
+
+        for name in (
+                "_exit", "fork", "forkpty", "posix_spawn", "posix_spawnp",
+                "execl", "execle", "execlp", "execlpe",
+                "execv", "execve", "execvp", "execvpe",
+                "setsid", "setpgrp", "setpgid", "system", "popen",
+                "spawnl", "spawnle", "spawnlp", "spawnlpe",
+                "spawnv", "spawnve", "spawnvp", "spawnvpe"):
+            if hasattr(os, name):
+                setattr(os, name, refuse_detachment)
+    return original_popen
+
+
+def process_group_members(group):
+    if os.name != "posix":
+        fail("process-group supervision requires POSIX")
+    executable = next(
+        (path for path in ("/bin/ps", "/usr/bin/ps")
+         if pathlib.Path(path).is_file()), None)
+    if executable is None:
+        fail("cannot locate an absolute ps executable")
+    probe = subprocess.Popen(
+        [executable, "-axo", "pid=,pgid="],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        start_new_session=False)
+    output, diagnostic = probe.communicate(timeout=5)
+    if probe.returncode != 0:
+        fail("cannot enumerate supervised process group: " + diagnostic)
+    members = set()
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) != 2:
+            continue
+        try:
+            pid, pgid = map(int, fields)
+        except ValueError:
+            continue
+        if pgid == group and pid != probe.pid:
+            members.add(pid)
+    return members
+
+
+def clean_supervised_process_group():
+    group = os.getpgrp()
+    if os.getpid() != group or os.getsid(0) != group:
+        fail("root launcher is not the live process-group/session leader")
+    lingering = process_group_members(group) - {os.getpid()}
+    detected = bool(lingering)
+    deadline = time.monotonic() + 5.0
+    while lingering and time.monotonic() < deadline:
+        for pid in sorted(lingering):
+            try:
+                if os.getpgid(pid) == group:
+                    os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        time.sleep(0.05)
+        lingering = process_group_members(group) - {os.getpid()}
+    return detected, not lingering
+
+
+def supervise_root(spec, target_argv):
+    original_popen = install_recursive_launcher(spec)
+    worker = original_popen(
+        isolated_command(spec, target_argv),
+        close_fds=True, start_new_session=False)
+    worker_exit = worker.wait()
+    validate_dependencies(load_bound_json(
+        pathlib.Path(spec["spec_path"]), spec["spec_sha256"]))
+    lingering, cleanup_complete = clean_supervised_process_group()
+    target_exit = worker_exit
+    if lingering or not cleanup_complete:
+        target_exit = 125
+    write_root_receipt(
+        spec, target_argv, worker_exit, target_exit,
+        lingering, cleanup_complete)
+    raise SystemExit(target_exit)
+
+
+def dispatch(argv):
+    values = list(argv)
+    while values and values[0] in {"-B", "-E", "-I", "-S", "-s", "-P", "-u"}:
+        values.pop(0)
+    while values and (values[0] == "-X" or values[0].startswith("-X")):
+        option = values.pop(0)
+        if option == "-X":
+            if not values:
+                fail("missing value for -X")
+            values.pop(0)
+    if not values:
+        fail("no Python target was supplied")
+    if values[0] == "-c":
+        if len(values) < 2:
+            fail("missing source for -c")
+        source = values[1]
+        sys.argv = ["-c", *values[2:]]
+        namespace = {
+            "__name__": "__main__", "__package__": None,
+            "__spec__": None, "__builtins__": __builtins__,
+        }
+        exec(compile(source, "<string>", "exec"), namespace, namespace)
+        return
+    if values[0] == "-m":
+        if len(values) < 2:
+            fail("missing module for -m")
+        sys.argv = [values[1], *values[2:]]
+        sys.path.insert(0, os.getcwd())
+        runpy.run_module(values[1], run_name="__main__", alter_sys=True)
+        return
+    if values[0].startswith("-"):
+        fail("unsupported Python option: " + values[0])
+    target = pathlib.Path(values[0]).resolve(strict=True)
+    if not target.is_file():
+        fail("Python target is not a file: " + str(target))
+    sys.argv = [str(target), *values[1:]]
+    sys.path.insert(0, str(target.parent))
+    runpy.run_path(str(target), run_name="__main__")
+
+
+def main():
+    if (len(sys.argv) < 7 or sys.argv[6] != "--"
+            or sys.argv[4] not in {"root", "child"}):
+        fail("bootstrap argv is malformed")
+    spec_path = pathlib.Path(sys.argv[1])
+    spec_digest = sys.argv[2]
+    bootstrap_digest = sys.argv[3]
+    mode = sys.argv[4]
+    group_token = sys.argv[5]
+    target_argv = sys.argv[7:]
+    bootstrap = pathlib.Path(__file__).resolve(strict=True)
+    if hashlib.sha256(stable_payload(bootstrap)).hexdigest() != bootstrap_digest:
+        fail("bootstrap digest changed")
+    spec = load_bound_json(spec_path, spec_digest)
+    if spec.get("spec_sha256") != "":
+        fail("launch specification digest slot is not canonical")
+    spec["spec_sha256"] = spec_digest
+    if (pathlib.Path(sys.executable).resolve() != pathlib.Path(spec["executable"])
+            or pathlib.Path.cwd().resolve() != pathlib.Path(spec["repo"])
+            or pathlib.Path(sys.pycache_prefix or "").resolve()
+            != pathlib.Path(spec["pycache_prefix"]).resolve()
+            or not sys.flags.isolated or not sys.flags.no_site
+            or not sys.dont_write_bytecode or "site" in sys.modules):
+        fail("interpreter isolation contract is false")
+    if (str(bootstrap) != spec["bootstrap"]
+            or str(spec_path.resolve(strict=True)) != spec["spec_path"]
+            or bootstrap_digest != spec["bootstrap_sha256"]):
+        fail("launch identity is false")
+    validate_dependencies(spec)
+    sys.path.append(spec["dependency_view"])
+    if mode == "root":
+        if (group_token != "root" or os.name != "posix"
+                or os.getpid() != os.getpgrp()
+                or os.getpid() != os.getsid(0)):
+            fail("root launcher is not its own session/process-group leader")
+        supervise_root(spec, target_argv)
+    try:
+        expected_group = int(group_token)
+    except ValueError:
+        fail("worker process-group identity is malformed")
+    if (os.name != "posix" or expected_group <= 1
+            or os.getpgrp() != expected_group
+            or os.getsid(0) != expected_group):
+        fail("worker escaped the root launcher's supervised process group")
+    install_recursive_launcher(spec)
+    pending = None
+    target_exit = 0
+    try:
+        dispatch(target_argv)
+    except SystemExit as error:
+        pending = error
+        target_exit = error.code if isinstance(error.code, int) else (
+            0 if error.code is None else 1)
+    except BaseException as error:
+        pending = error
+        target_exit = 1
+    try:
+        validate_dependencies(load_bound_json(spec_path, spec_digest))
+        if hashlib.sha256(stable_payload(bootstrap)).hexdigest() != bootstrap_digest:
+            fail("bootstrap changed during execution")
+    except BaseException as error:
+        pending = error
+        target_exit = 1
+    if pending is not None:
+        raise pending
+
+
+main()
+'''
+
+
+@dataclasses.dataclass
+class IsolatedPythonExecution:
+    code: int
+    output: str
+    receipt: dict[str, Any] | None
+
+
+def _compact_digest(value: Any) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _host_process_group_members(group: int) -> tuple[set[int], list[str]]:
+    errors: list[str] = []
+    executable = next(
+        (path for path in ("/bin/ps", "/usr/bin/ps")
+         if pathlib.Path(path).is_file()), None)
+    if executable is None:
+        return set(), ["cannot locate an absolute ps executable"]
+    try:
+        result = subprocess.run(
+            [executable, "-axo", "pid=,pgid="],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            timeout=2, check=False)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return set(), [
+            f"cannot enumerate isolated process group: {error}"]
+    if result.returncode != 0:
+        return set(), [
+            "cannot enumerate isolated process group: "
+            + result.stderr.strip()]
+    members: set[int] = set()
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) != 2:
+            continue
+        try:
+            pid, process_group = map(int, fields)
+        except ValueError:
+            continue
+        if process_group == group:
+            members.add(pid)
+    return members, errors
+
+
+def _signal_isolated_group_members(
+        group: int, members: Iterable[int],
+        ) -> list[str]:
+    errors: list[str] = []
+    for pid in sorted(set(members), reverse=True):
+        if pid <= 1 or pid == os.getpid():
+            errors.append(f"refused unsafe isolated process id: {pid}")
+            continue
+        try:
+            if os.getpgid(pid) != group:
+                errors.append(
+                    f"isolated process left its bound group: {pid}")
+                continue
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except PermissionError as error:
+            errors.append(
+                f"cannot signal isolated process {pid}: {error}")
+    return errors
+
+
+def _force_reap_isolated_process(
+        process: subprocess.Popen[Any], group: int | None,
+        ) -> tuple[bool, list[str]]:
+    """Best-effort bounded finalizer that never trusts a recycled root PID."""
+    errors: list[str] = []
+    deadline = time.monotonic() + COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS
+    if group is None:
+        try:
+            process.kill()
+        except (OSError, ProcessLookupError) as error:
+            errors.append(f"cannot kill unbound isolated root: {error}")
+        try:
+            process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        except (OSError, subprocess.TimeoutExpired) as error:
+            errors.append(f"cannot reap unbound isolated root: {error}")
+            return False, errors
+        return True, errors
+
+    root_exited = False
+    group_quiescent = False
+    while time.monotonic() < deadline:
+        if not root_exited:
+            try:
+                root_exited = os.waitid(
+                    os.P_PID, process.pid,
+                    os.WEXITED | os.WNOHANG | os.WNOWAIT) is not None
+            except ChildProcessError:
+                errors.append(
+                    "isolated root was reaped before final cleanup")
+                break
+            except OSError as error:
+                errors.append(
+                    f"cannot observe isolated root during cleanup: {error}")
+        members, member_errors = _host_process_group_members(group)
+        errors.extend(error for error in member_errors if error not in errors)
+        allowed = {process.pid} if root_exited else set()
+        residual = members - allowed
+        if not member_errors and not residual and root_exited:
+            group_quiescent = True
+            break
+        targets = set(residual)
+        if not root_exited:
+            targets.add(process.pid)
+        for error in _signal_isolated_group_members(group, targets):
+            if error not in errors:
+                errors.append(error)
+        time.sleep(0.05)
+    try:
+        process.wait(timeout=max(0.1, deadline - time.monotonic()))
+    except (OSError, subprocess.TimeoutExpired) as error:
+        errors.append(f"cannot reap isolated root after cleanup: {error}")
+        return False, errors
+    return group_quiescent, errors
+
+
+def _wait_and_reap_isolated_process(
+        process: subprocess.Popen[Any], timeout: int,
+        ) -> tuple[bool, bool, list[str]]:
+    errors: list[str] = []
+    group: int | None = None
+    reaped = False
+    pending: BaseException | None = None
+    timed_out = False
+    cleanup_complete = False
+    lingering: set[int] = set()
+    try:
+        if (os.name != "posix" or not hasattr(os, "waitid")
+                or not hasattr(os, "WNOWAIT")):
+            raise RuntimeError(
+                "isolated process supervision requires POSIX waitid/WNOWAIT")
+        observed_group = os.getpgid(process.pid)
+        if (observed_group != process.pid or observed_group <= 1
+                or observed_group == os.getpgrp()):
+            raise RuntimeError(
+                f"refused unsafe isolated process group: {observed_group}")
+        group = observed_group
+        deadline = time.monotonic() + timeout
+        exited = False
+        while time.monotonic() < deadline:
+            try:
+                observation = os.waitid(
+                    os.P_PID, process.pid,
+                    os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            except ChildProcessError:
+                raise RuntimeError(
+                    "isolated process was reaped outside its supervisor")
+            if observation is not None:
+                exited = True
+                break
+            time.sleep(0.05)
+        timed_out = not exited
+        members, member_errors = _host_process_group_members(group)
+        errors.extend(error for error in member_errors if error not in errors)
+        lingering = members - {process.pid} if exited else set()
+        if timed_out or lingering or member_errors:
+            finalized, final_errors = _force_reap_isolated_process(
+                process, group)
+            reaped = True
+            errors.extend(error for error in final_errors if error not in errors)
+            cleanup_complete = finalized and not member_errors
+        else:
+            cleanup_deadline = (
+                time.monotonic() + COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS)
+            process.wait(timeout=max(
+                0.1, cleanup_deadline - time.monotonic()))
+            reaped = True
+            cleanup_complete = True
+    except BaseException as error:  # cleanup happens in the finalizer below
+        pending = error
+    finally:
+        if not reaped:
+            finalized, final_errors = _force_reap_isolated_process(
+                process, group)
+            reaped = True
+            cleanup_complete = cleanup_complete and finalized
+            errors.extend(error for error in final_errors if error not in errors)
+    if pending is not None:
+        if isinstance(pending, (KeyboardInterrupt, SystemExit)):
+            raise pending
+        errors.append(
+            "isolated process supervisor raised: "
+            f"{type(pending).__name__}: {pending}")
+        cleanup_complete = False
+    if lingering:
+        errors.append(
+            f"{len(lingering)} supervised descendant(s) outlived the root")
+        cleanup_complete = False
+    return timed_out, cleanup_complete, errors
+
+
+def _validate_bootstrap_receipt(
+        value: Any, spec: dict[str, Any], child_exit: int,
+        ) -> list[str]:
+    expected_keys = {
+        "schema", "executable", "isolated", "no_site",
+        "dont_write_bytecode", "pycache_prefix", "cwd",
+        "pythonpath_absent", "pythonhome_absent", "site_not_loaded",
+        "bootstrap_sha256", "spec_sha256", "dependency_manifest_sha256",
+        "target_argv_sha256", "worker_exit", "target_exit",
+        "recursive_launcher_installed", "process_group_supervised",
+        "subprocess_popen_python_rewrite_installed",
+        "os_process_control_guards_installed",
+        "lingering_descendants_detected",
+        "cleanup_complete",
+    }
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        return ["isolated bootstrap receipt schema is invalid"]
+    expected = {
+        "schema": "formgen-isolated-python-bootstrap-receipt-v2",
+        "executable": spec["executable"],
+        "isolated": 1,
+        "no_site": 1,
+        "dont_write_bytecode": True,
+        "pycache_prefix": spec["pycache_prefix"],
+        "cwd": spec["repo"],
+        "pythonpath_absent": True,
+        "pythonhome_absent": True,
+        "site_not_loaded": True,
+        "bootstrap_sha256": spec["bootstrap_sha256"],
+        "spec_sha256": spec["spec_sha256"],
+        "dependency_manifest_sha256": spec["dependency_manifest"]["sha256"],
+        "target_argv_sha256": spec["target_argv_sha256"],
+        "worker_exit": child_exit,
+        "target_exit": child_exit,
+        "recursive_launcher_installed": True,
+        "process_group_supervised": True,
+        "subprocess_popen_python_rewrite_installed": True,
+        "os_process_control_guards_installed": True,
+        "lingering_descendants_detected": False,
+        "cleanup_complete": True,
+    }
+    return [] if value == expected else ["isolated bootstrap receipt is false"]
+
+
+def run_isolated_python_attested(
         args: list[str], timeout: int = 5400,
         base_environment: dict[str, str] | None = None,
-        ) -> tuple[int, str]:
+        ) -> IsolatedPythonExecution:
     environment = dict(
         os.environ if base_environment is None else base_environment)
     environment.pop("PYTHONPATH", None)
     environment.pop("PYTHONHOME", None)
-    with tempfile.TemporaryDirectory(
-            prefix=".gate-python-pycache-") as pycache_prefix:
-        # batch.py launches the individual Python generator stages.  These
-        # variables give those grandchildren the same source-only cache and
-        # safe-path policy even though their argv is constructed by batch.py.
-        environment["PYTHONDONTWRITEBYTECODE"] = "1"
-        environment["PYTHONPYCACHEPREFIX"] = pycache_prefix
-        environment["PYTHONNOUSERSITE"] = "1"
-        environment["PYTHONSAFEPATH"] = "1"
-        process = subprocess.Popen(
-            [
-                sys.executable, "-I", "-B", "-X",
-                f"pycache_prefix={pycache_prefix}", *args,
-            ], cwd=REPO,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            env=environment, start_new_session=(os.name == "posix"))
-        try:
-            stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            if os.name == "posix":
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            else:
-                process.kill()
+    try:
+        with tempfile.TemporaryDirectory(
+                prefix=".gate-python-isolated-") as temporary:
+            root = pathlib.Path(temporary)
+            pycache_prefix = root / "pycache"
+            dependency_view = root / "dependencies"
+            pycache_prefix.mkdir()
+            dependency_view.mkdir()
+            entries = _isolated_dependency_entries()
+            _materialize_isolated_dependencies(entries, dependency_view)
+            dependency_errors = _validate_isolated_dependencies(
+                entries, dependency_view)
+            if dependency_errors:
+                return IsolatedPythonExecution(
+                    125, "; ".join(dependency_errors) + "\n", None)
+            bootstrap = root / "bootstrap.py"
+            bootstrap.write_text(ISOLATED_PYTHON_BOOTSTRAP, encoding="utf-8")
+            bootstrap_payload = bootstrap.read_bytes()
+            bootstrap_digest = hashlib.sha256(bootstrap_payload).hexdigest()
+            spec_path = root / "launch.json"
+            receipt_path = root / "receipt.json"
+            dependency_manifest = _isolated_dependency_manifest(entries)
+            spec: dict[str, Any] = {
+                "schema": 1,
+                "executable": str(pathlib.Path(sys.executable).resolve()),
+                "repo": str(REPO.resolve()),
+                "pycache_prefix": str(pycache_prefix.resolve()),
+                "dependency_view": str(dependency_view.resolve()),
+                "dependencies": entries,
+                "dependency_manifest": dependency_manifest,
+                "bootstrap": str(bootstrap.resolve()),
+                "bootstrap_sha256": bootstrap_digest,
+                "spec_path": str(spec_path.resolve()),
+                "spec_sha256": "",
+                "receipt_path": str(receipt_path.resolve()),
+                "target_argv_sha256": _compact_digest(args),
+            }
+            # The digest field cannot include itself.  Bind the canonical
+            # unsigned payload and publish that digest beside the file.
+            unsigned_payload = json.dumps(
+                spec, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=False).encode("utf-8")
+            spec_digest = hashlib.sha256(unsigned_payload).hexdigest()
+            spec_path.write_bytes(unsigned_payload)
+            spec["spec_sha256"] = spec_digest
+            # The bootstrap receives the digest out of band and confirms the
+            # on-disk bytes.  Its in-memory spec records the same value only
+            # after loading so recursive children can reuse it.
+            environment["PYTHONDONTWRITEBYTECODE"] = "1"
+            environment["PYTHONPYCACHEPREFIX"] = str(pycache_prefix)
+            environment["PYTHONNOUSERSITE"] = "1"
+            environment["PYTHONSAFEPATH"] = "1"
+            command = [
+                sys.executable, "-I", "-S", "-B", "-X",
+                f"pycache_prefix={pycache_prefix}", str(bootstrap),
+                str(spec_path), spec_digest, bootstrap_digest,
+                "root", "root", "--", *args,
+            ]
+            stdout_path = root / "stdout.log"
+            stderr_path = root / "stderr.log"
+            with (stdout_path.open("wb") as stdout_stream,
+                  stderr_path.open("wb") as stderr_stream):
+                process = subprocess.Popen(
+                    command, cwd=REPO,
+                    stdout=stdout_stream, stderr=stderr_stream,
+                    env=environment, start_new_session=(os.name == "posix"))
+                timed_out, cleanup_complete, cleanup_errors = (
+                    _wait_and_reap_isolated_process(process, timeout))
+            stdout = stdout_path.read_text(
+                encoding="utf-8", errors="replace")
+            stderr = stderr_path.read_text(
+                encoding="utf-8", errors="replace")
+            if timed_out:
+                detail = stdout + stderr
+                if cleanup_errors:
+                    detail += "\n" + "; ".join(cleanup_errors)
+                detail += f"\nisolated Python process exceeded {timeout}s\n"
+                receipt = {
+                    "schema": "formgen-isolated-python-launch-receipt-v2",
+                    "timed_out": True,
+                    "cleanup_complete": cleanup_complete,
+                    "dependency_manifest": dependency_manifest,
+                    "command_flags": list(ISOLATED_PYTHON_ATTESTED_FLAGS),
+                    "process_group_supervised": True,
+                    "subprocess_popen_python_rewrite_installed": True,
+                    "os_process_control_guards_installed": True,
+                }
+                return IsolatedPythonExecution(124, detail, receipt)
+            if not cleanup_complete or cleanup_errors:
+                detail = stdout + stderr
+                if cleanup_errors:
+                    detail += "\n" + "; ".join(cleanup_errors)
+                return IsolatedPythonExecution(125, detail + "\n", None)
+            post_errors = _validate_isolated_dependencies(
+                entries, dependency_view)
+            if (bootstrap.read_bytes() != bootstrap_payload
+                    or hashlib.sha256(spec_path.read_bytes()).hexdigest()
+                    != spec_digest):
+                post_errors.append("isolated launcher bytes changed")
+            if post_errors:
+                return IsolatedPythonExecution(
+                    125, stdout + stderr + "\n"
+                    + "; ".join(post_errors) + "\n", None)
             try:
-                stdout, stderr = process.communicate(
-                    timeout=COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                stdout, stderr = process.communicate()
-            return 124, (
-                stdout + stderr
-                + f"\nisolated Python process exceeded {timeout}s\n")
-        return process.returncode, stdout + stderr
+                bootstrap_receipt = json.loads(receipt_path.read_bytes())
+            except (OSError, UnicodeError, ValueError, RecursionError) as error:
+                return IsolatedPythonExecution(
+                    125, stdout + stderr
+                    + f"\nisolated bootstrap receipt is absent: {error}\n",
+                    None)
+            receipt_errors = _validate_bootstrap_receipt(
+                bootstrap_receipt, spec, process.returncode)
+            if receipt_errors:
+                return IsolatedPythonExecution(
+                    125, stdout + stderr + "\n"
+                    + "; ".join(receipt_errors) + "\n", None)
+            receipt = {
+                "schema": "formgen-isolated-python-launch-receipt-v2",
+                "bootstrap": bootstrap_receipt,
+                "dependency_manifest": dependency_manifest,
+                "command_flags": list(ISOLATED_PYTHON_ATTESTED_FLAGS),
+                "pythonpath_removed": True,
+                "pythonhome_removed": True,
+                "source_dependencies_copied_from_verified_fds": True,
+                "private_dependencies_validated_before_after": True,
+                "process_group_supervised": True,
+                "subprocess_popen_python_rewrite_installed": True,
+                "os_process_control_guards_installed": True,
+                "supervised_group_quiescent": True,
+                "timed_out": False,
+                "cleanup_complete": True,
+                "child_exit": process.returncode,
+            }
+            return IsolatedPythonExecution(
+                process.returncode, stdout + stderr, receipt)
+    except Exception as error:  # noqa: BLE001 - isolation failure is evidence
+        return IsolatedPythonExecution(
+            125, "isolated Python launcher could not be established: "
+            f"{type(error).__name__}: {error}\n", None)
+
+
+def run_isolated_python(
+        args: list[str], timeout: int = 5400,
+        base_environment: dict[str, str] | None = None,
+        ) -> tuple[int, str]:
+    execution = run_isolated_python_attested(
+        args, timeout, base_environment)
+    return execution.code, execution.output
+
+
+def _run_direct_supervised_python(
+        args: list[str], timeout: int, *, no_site: bool,
+        ) -> tuple[int, str]:
+    """Run a behavioral self-test outside the production bootstrap.
+
+    Gate/referee must exercise their own supervisor; audit's short browser
+    deadline must avoid paying for a second nested dependency materialization.
+    Gate/referee remain isolated and no-site. Audit uses ``-E`` so its approved
+    user-site dependencies stay available; it is still sanitized,
+    bytecode-free, and supervised. This is behavioral coverage, not evidence.
+    """
+    environment = dict(os.environ)
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+    try:
+        with tempfile.TemporaryDirectory(
+                prefix=".gate-self-supervising-") as temporary:
+            root = pathlib.Path(temporary)
+            pycache_prefix = root / "pycache"
+            pycache_prefix.mkdir()
+            stdout_path = root / "stdout.log"
+            stderr_path = root / "stderr.log"
+            environment.update({
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "PYTHONPYCACHEPREFIX": str(pycache_prefix),
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONSAFEPATH": "1",
+            })
+            python_flags = (["-I", "-S", "-B"] if no_site
+                            else ["-E", "-B"])
+            command = [sys.executable, *python_flags, "-X",
+                       f"pycache_prefix={pycache_prefix}", *args]
+            with (stdout_path.open("wb") as stdout_stream,
+                  stderr_path.open("wb") as stderr_stream):
+                process = subprocess.Popen(
+                    command, cwd=REPO, stdout=stdout_stream,
+                    stderr=stderr_stream, env=environment,
+                    start_new_session=(os.name == "posix"))
+                timed_out, cleanup_complete, cleanup_errors = (
+                    _wait_and_reap_isolated_process(process, timeout))
+            output = stdout_path.read_text(
+                encoding="utf-8", errors="replace")
+            output += stderr_path.read_text(
+                encoding="utf-8", errors="replace")
+            if timed_out:
+                return 124, output + (
+                    f"\nself-supervising Python exceeded {timeout}s\n")
+            if not cleanup_complete or cleanup_errors:
+                return 125, output + "\n" + "; ".join(cleanup_errors)
+            return int(process.returncode), output
+    except Exception as error:  # noqa: BLE001 - self-test must fail closed
+        return 125, (
+            "self-supervising Python could not be established: "
+            f"{type(error).__name__}: {error}\n")
+
+
+def run_self_supervising_python(
+        args: list[str], timeout: int = 900,
+        ) -> tuple[int, str]:
+    return _run_direct_supervised_python(args, timeout, no_site=True)
+
+
+def run_dependency_self_test_python(
+        args: list[str], timeout: int = 900,
+        ) -> tuple[int, str]:
+    return _run_direct_supervised_python(args, timeout, no_site=False)
 
 
 def load(path: pathlib.Path) -> object | None:
@@ -211,6 +1903,27 @@ def _is_sha256(value: Any) -> bool:
 
 def _is_count(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _json_type_exact_equal(left: Any, right: Any) -> bool:
+    """Compare JSON-shaped evidence without Python's bool/int equivalence."""
+    pending = [(left, right)]
+    while pending:
+        observed, expected = pending.pop()
+        if type(observed) is not type(expected):
+            return False
+        if isinstance(observed, dict):
+            if set(observed) != set(expected):
+                return False
+            pending.extend(
+                (observed[key], expected[key]) for key in observed)
+        elif isinstance(observed, list):
+            if len(observed) != len(expected):
+                return False
+            pending.extend(zip(observed, expected))
+        elif observed != expected:
+            return False
+    return True
 
 
 def _stable_file_record(path: pathlib.Path, logical: str) -> dict[str, Any]:
@@ -323,7 +2036,7 @@ def _layout_declared_inputs(
                 f"layout changed while discovering inputs: {slug}")
         try:
             layout = json.loads(layout_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        except (OSError, UnicodeError, ValueError, RecursionError) as error:
             raise CombRefereeScopeError(f"invalid layout for {slug}: {error}") from error
         source = layout.get("source") if isinstance(layout, dict) else None
         if not isinstance(source, dict):
@@ -714,9 +2427,25 @@ def _normalise_outer_comb_assertion(
     if not isinstance(holds, bool) or not isinstance(offenders, list):
         raise CombRefereeScopeError(
             "comb audit verdict/offender inventory is malformed")
+    expected_keys = {
+        *AUDIT_ASSERTION_SUMMARY_KEYS, "holds", "reason", "offenders",
+    }
+    if holds is False:
+        expected_keys |= BASIC_ASSERTION_PUBLICATION_KEYS
+    if set(assertion) != expected_keys:
+        raise CombRefereeScopeError(
+            "comb audit assertion schema is incomplete or unsupported")
+    reason = assertion.get("reason")
+    if (not isinstance(reason, str)
+            or (holds and reason != "")
+            or (not holds and not reason)):
+        raise CombRefereeScopeError(
+            "comb audit assertion reason is inconsistent")
     expected_ids = assertion.get("expected_comb_ids")
     checked_ids = assertion.get("checked_comb_ids")
-    if (not isinstance(expected_ids, list)
+    if (not _is_count(assertion.get("combs_expected"))
+            or not _is_count(assertion.get("combs_checked"))
+            or not isinstance(expected_ids, list)
             or not all(isinstance(item, str) and item for item in expected_ids)
             or len(expected_ids) != len(set(expected_ids))
             or checked_ids != expected_ids
@@ -990,7 +2719,7 @@ AUDIT_APPLICATION_ENVELOPE_KEYS = {
 AUDIT_APPLICATION_INVOCATION_KEYS = {
     "executable", "resolved_executable", "python_flags",
     "pythonpath_removed", "pythonhome_removed", "timeout_seconds", "output",
-    "child_exit",
+    "target_argv", "child_exit", "launcher_receipt",
 }
 AUDIT_APPLICATION_RAW_KEYS = {
     "file", "bytes", "sha256", "form_count",
@@ -999,16 +2728,135 @@ AUDIT_APPLICATION_RELATIONS = {
     "clean_revision_before_after",
     "tracked_producers_equal_head_before_after",
     "declared_inputs_hashed_before_after",
+    "per_form_input_manifests_bound_to_application_snapshot",
     "python_executable_hashed_before_after",
     "sanitized_python_environment",
     "isolated_python_mode",
+    "isolated_dependencies_bound",
+    "verified_fd_dependency_materialization",
     "fresh_isolated_pycache_prefix",
     "hard_timeout_enforced",
+    "process_group_supervised",
+    "subprocess_popen_python_rewrite_installed",
+    "os_process_control_guards_installed",
+    "supervised_process_group_cleanup_attested",
     "audit_report_schema_valid",
     "validated_output_only",
     "atomic_report_publish",
     "atomic_envelope_publish",
 }
+
+
+def isolated_launch_receipt_errors(
+        value: Any, dependency_manifest: Any, child_exit: int,
+        resolved_executable: str,
+        expected_target_argv: Sequence[str] | None = None,
+        ) -> list[str]:
+    errors: list[str] = []
+    if not _is_count(child_exit):
+        errors.append("isolated launch expected child exit is malformed")
+    expected_keys = {
+        "schema", "bootstrap", "dependency_manifest", "command_flags",
+        "pythonpath_removed", "pythonhome_removed",
+        "source_dependencies_copied_from_verified_fds",
+        "private_dependencies_validated_before_after",
+        "process_group_supervised",
+        "subprocess_popen_python_rewrite_installed",
+        "os_process_control_guards_installed",
+        "supervised_group_quiescent", "timed_out", "cleanup_complete",
+        "child_exit",
+    }
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        return ["isolated launch receipt schema is unsupported"]
+    bootstrap = value.get("bootstrap")
+    bootstrap_keys = {
+        "schema", "executable", "isolated", "no_site",
+        "dont_write_bytecode", "pycache_prefix", "cwd",
+        "pythonpath_absent", "pythonhome_absent", "site_not_loaded",
+        "bootstrap_sha256", "spec_sha256", "dependency_manifest_sha256",
+        "target_argv_sha256", "worker_exit", "target_exit",
+        "recursive_launcher_installed", "process_group_supervised",
+        "subprocess_popen_python_rewrite_installed",
+        "os_process_control_guards_installed",
+        "lingering_descendants_detected",
+        "cleanup_complete",
+    }
+    if not isinstance(bootstrap, dict) or set(bootstrap) != bootstrap_keys:
+        errors.append("isolated bootstrap receipt schema is unsupported")
+        bootstrap = {}
+    for key in (
+            "bootstrap_sha256", "spec_sha256", "target_argv_sha256"):
+        if not _is_sha256(bootstrap.get(key)):
+            errors.append(f"isolated bootstrap receipt has invalid {key}")
+    if (expected_target_argv is not None
+            and bootstrap.get("target_argv_sha256")
+            != _compact_digest(list(expected_target_argv))):
+        errors.append("isolated bootstrap receipt targets another invocation")
+    pycache_prefix = bootstrap.get("pycache_prefix")
+    pycache_path = (
+        pathlib.Path(pycache_prefix) if isinstance(pycache_prefix, str)
+        else pathlib.Path())
+    resolved_pycache = pycache_path.resolve(strict=False)
+    temporary_root = pathlib.Path(tempfile.gettempdir()).resolve()
+    if (not isinstance(pycache_prefix, str)
+            or not pycache_path.is_absolute()
+            or ".." in pycache_path.parts
+            or resolved_pycache.name != "pycache"
+            or not resolved_pycache.parent.name.startswith(
+                ".gate-python-isolated-")
+            or resolved_pycache.parent.parent != temporary_root
+            or resolved_pycache == REPO
+            or REPO in resolved_pycache.parents):
+        errors.append("isolated bootstrap pycache prefix is unsafe")
+    if (bootstrap.get("schema")
+            != "formgen-isolated-python-bootstrap-receipt-v2"
+            or bootstrap.get("executable") != resolved_executable
+            or type(bootstrap.get("isolated")) is not int
+            or bootstrap.get("isolated") != 1
+            or type(bootstrap.get("no_site")) is not int
+            or bootstrap.get("no_site") != 1
+            or bootstrap.get("dont_write_bytecode") is not True
+            or bootstrap.get("cwd") != str(REPO.resolve())
+            or bootstrap.get("pythonpath_absent") is not True
+            or bootstrap.get("pythonhome_absent") is not True
+            or bootstrap.get("site_not_loaded") is not True
+            or bootstrap.get("recursive_launcher_installed") is not True
+            or bootstrap.get("process_group_supervised") is not True
+            or bootstrap.get(
+                "subprocess_popen_python_rewrite_installed") is not True
+            or bootstrap.get(
+                "os_process_control_guards_installed") is not True
+            or bootstrap.get("lingering_descendants_detected") is not False
+            or bootstrap.get("cleanup_complete") is not True
+            or not _is_count(bootstrap.get("worker_exit"))
+            or bootstrap.get("worker_exit") != child_exit
+            or not _is_count(bootstrap.get("target_exit"))
+            or bootstrap.get("target_exit") != child_exit):
+        errors.append("isolated bootstrap observations are incomplete")
+    if (not isinstance(dependency_manifest, dict)
+            or not _json_type_exact_equal(
+                value.get("dependency_manifest"), dependency_manifest)
+            or bootstrap.get("dependency_manifest_sha256")
+            != dependency_manifest.get("sha256")):
+        errors.append("isolated dependency manifest is stale or unbound")
+    if (value.get("schema") != "formgen-isolated-python-launch-receipt-v2"
+            or value.get("command_flags") != ISOLATED_PYTHON_ATTESTED_FLAGS
+            or value.get("pythonpath_removed") is not True
+            or value.get("pythonhome_removed") is not True
+            or value.get(
+                "source_dependencies_copied_from_verified_fds") is not True
+            or value.get("private_dependencies_validated_before_after") is not True
+            or value.get("process_group_supervised") is not True
+            or value.get(
+                "subprocess_popen_python_rewrite_installed") is not True
+            or value.get("os_process_control_guards_installed") is not True
+            or value.get("supervised_group_quiescent") is not True
+            or value.get("timed_out") is not False
+            or value.get("cleanup_complete") is not True
+            or not _is_count(value.get("child_exit"))
+            or value.get("child_exit") != child_exit):
+        errors.append("isolated parent launch observations are incomplete")
+    return errors
 
 
 def validate_audit_application_envelope(
@@ -1043,13 +2891,16 @@ def validate_audit_application_envelope(
         "enforcement_scope": "application-only",
     }
     for key, expected in boundary.items():
-        if envelope.get(key) != expected:
+        if (envelope.get(key) is not expected
+                if isinstance(expected, bool)
+                else envelope.get(key) != expected):
             errors.append(f"audit application boundary is invalid: {key}")
     snapshot = envelope.get("application_snapshot")
     if not isinstance(snapshot, dict):
         errors.append("audit application snapshot is missing")
         snapshot = {}
-    if current_scope is not None and snapshot != current_scope:
+    if (current_scope is not None
+            and not _json_type_exact_equal(snapshot, current_scope)):
         errors.append("audit application envelope is stale")
     invocation = envelope.get("invocation")
     if not isinstance(invocation, dict):
@@ -1057,7 +2908,30 @@ def validate_audit_application_envelope(
         invocation = {}
     elif set(invocation) != AUDIT_APPLICATION_INVOCATION_KEYS:
         errors.append("audit application invocation schema is unsupported")
-    snapshot_python = snapshot.get("runtime", {}).get("python", {})
+    snapshot_runtime = snapshot.get("runtime")
+    if not isinstance(snapshot_runtime, dict):
+        errors.append("audit application runtime snapshot is malformed")
+        snapshot_runtime = {}
+    snapshot_python = snapshot_runtime.get("python")
+    if not isinstance(snapshot_python, dict):
+        errors.append("audit application Python snapshot is malformed")
+        snapshot_python = {}
+    snapshot_dependencies = snapshot_runtime.get("python_dependencies")
+    target_argv = invocation.get("target_argv")
+    target_path: pathlib.Path | None = None
+    if (not isinstance(target_argv, list)
+            or len(target_argv) != 3
+            or any(not isinstance(value, str) for value in target_argv)):
+        errors.append("audit application target argv is malformed")
+        target_argv = []
+    else:
+        target_path = pathlib.Path(target_argv[2])
+        if (target_argv[:2] != [str(HERE / "audit.py"), "--out"]
+                or not target_path.is_absolute()
+                or target_path.name != "audit.json"
+                or not target_path.parent.name.startswith(".full-audit-")
+                or target_path == AUDIT_JSON):
+            errors.append("audit application target argv is not the private audit")
     if (invocation.get("executable") != sys.executable
             or invocation.get("resolved_executable")
             != snapshot_python.get("path")
@@ -1067,8 +2941,12 @@ def validate_audit_application_envelope(
             or invocation.get("pythonhome_removed") is not True
             or invocation.get("timeout_seconds") != 5400
             or invocation.get("output") != "private-temporary-output"
+            or not _is_count(invocation.get("child_exit"))
             or invocation.get("child_exit") != 0):
         errors.append("audit application invocation contract is incomplete")
+    errors.extend(isolated_launch_receipt_errors(
+        invocation.get("launcher_receipt"), snapshot_dependencies, 0,
+        str(snapshot_python.get("path", "")), target_argv or None))
     raw = envelope.get("raw_report")
     if not isinstance(raw, dict):
         errors.append("audit application raw-report identity is missing")
@@ -1076,14 +2954,19 @@ def validate_audit_application_envelope(
     elif set(raw) != AUDIT_APPLICATION_RAW_KEYS:
         errors.append("audit application raw-report schema is unsupported")
     try:
-        form_count = len(json.loads(audit_payload))
-    except (UnicodeError, json.JSONDecodeError, TypeError):
+        audit_data = json.loads(audit_payload)
+        form_count = len(audit_data)
+    except (UnicodeError, ValueError, RecursionError, TypeError):
+        audit_data = None
         form_count = -1
     if (raw.get("file") != "build/audit.json"
+            or not _is_count(raw.get("bytes"))
             or raw.get("bytes") != len(audit_payload)
             or raw.get("sha256") != sha256_bytes(audit_payload)
+            or not _is_count(raw.get("form_count"))
             or raw.get("form_count") != form_count):
         errors.append("audit application raw report is stale or unbound")
+    errors.extend(audit_payload_snapshot_binding_errors(audit_data, snapshot))
     return errors
 
 
@@ -1092,7 +2975,7 @@ def _audit_snapshot(application_scope: dict[str, Any]) -> dict[str, Any]:
     try:
         payload = AUDIT_JSON.read_bytes()
         data = json.loads(payload)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise CombRefereeScopeError(f"audit JSON is malformed: {error}") from error
     if (sha256_bytes(payload) != record["sha256"]
             or not isinstance(data, list) or len(data) != EXPECTED_FORMS):
@@ -1101,7 +2984,7 @@ def _audit_snapshot(application_scope: dict[str, Any]) -> dict[str, Any]:
     try:
         envelope_payload = AUDIT_APPLICATION_ATTESTATION.read_bytes()
         envelope = json.loads(envelope_payload)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeError, ValueError, RecursionError) as error:
         raise CombRefereeScopeError(
             f"audit application attestation is malformed: {error}") from error
     envelope_errors = validate_audit_application_envelope(
@@ -1160,6 +3043,267 @@ def _audit_snapshot(application_scope: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+class GateAuditRenderDependencyScanner(html.parser.HTMLParser):
+    """Independent local-resource inventory for the audit application gate."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.references: list[tuple[str, str]] = []
+        self.errors: list[str] = []
+        self.style_depth = 0
+
+    def _add(self, value: str | None, kind: str) -> None:
+        if value is not None and value.strip():
+            self.references.append((value.strip(), kind))
+
+    def _srcset(self, value: str | None, kind: str) -> None:
+        if value is None:
+            return
+        # A data URL may itself contain commas, so this deliberately refuses
+        # to pretend the simple srcset splitter can inventory that closure.
+        if "data:" in value.lower():
+            self.errors.append(
+                "data URLs in srcset are unsupported by the closure parser")
+            return
+        for candidate in value.split(","):
+            parts = candidate.strip().split()
+            if parts:
+                self._add(parts[0], kind)
+
+    def handle_starttag(
+            self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = {key.lower(): value for key, value in attrs}
+        lowered = tag.lower()
+        if lowered == "base" and values.get("href"):
+            self.errors.append(
+                "base href is forbidden in an isolated render snapshot")
+        if (lowered == "meta"
+                and (values.get("http-equiv") or "").lower() == "refresh"):
+            self.errors.append(
+                "meta refresh is forbidden in an isolated render snapshot")
+        if lowered == "style":
+            self.style_depth += 1
+        self.references.extend(
+            (url, "inline-style")
+            for url in _gate_audit_css_urls(values.get("style") or ""))
+        if lowered == "script":
+            self._add(values.get("src"), "script")
+        elif lowered == "link":
+            rel = {item.lower() for item in (values.get("rel") or "").split()}
+            if rel & {"stylesheet", "preload", "modulepreload", "icon", "manifest"}:
+                self._add(values.get("href"), "link")
+        elif lowered in {"img", "source"}:
+            self._add(values.get("src"), lowered)
+            self._srcset(values.get("srcset"), f"{lowered}-srcset")
+        elif lowered in {"video", "audio", "track", "embed", "iframe"}:
+            self._add(values.get("src"), lowered)
+            if lowered == "video":
+                self._add(values.get("poster"), "video-poster")
+        elif lowered == "object":
+            self._add(values.get("data"), "object")
+        elif lowered == "input" and (
+                values.get("type") or "").lower() == "image":
+            self._add(values.get("src"), "input-image")
+        elif lowered == "image":
+            self._add(
+                values.get("href") or values.get("xlink:href"), "svg-image")
+
+    def handle_startendtag(
+            self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag.lower() == "style" and self.style_depth:
+            self.style_depth -= 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "style" and self.style_depth:
+            self.style_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self.style_depth:
+            self.references.extend(
+                (url, "style-block") for url in _gate_audit_css_urls(data))
+
+
+_GATE_AUDIT_CSS_URL_RE = re.compile(
+    r"""url\(\s*(?P<quote>["']?)(?P<url>.*?)(?P=quote)\s*\)""",
+    re.IGNORECASE,
+)
+_GATE_AUDIT_CSS_IMPORT_RE = re.compile(
+    r"""@import\s+(?:url\(\s*)?(?P<quote>["'])(?P<url>.*?)(?P=quote)""",
+    re.IGNORECASE,
+)
+
+
+def _gate_audit_css_urls(css: str) -> list[str]:
+    return [
+        *(match.group("url")
+          for match in _GATE_AUDIT_CSS_IMPORT_RE.finditer(css)),
+        *(match.group("url")
+          for match in _GATE_AUDIT_CSS_URL_RE.finditer(css)),
+    ]
+
+
+def _gate_audit_logical_resource(reference: str, base: str) -> str | None:
+    parsed = urllib.parse.urlsplit(reference.strip())
+    if parsed.scheme.lower() == "data":
+        return None
+    if (parsed.scheme or parsed.netloc or reference.startswith("//")
+            or parsed.path.startswith("/") or parsed.query):
+        raise CombRefereeScopeError(
+            f"external, absolute, or query-bearing render resource: {reference}")
+    if not parsed.path:
+        return None
+    decoded = urllib.parse.unquote(parsed.path)
+    if ("\\" in decoded
+            or any(ord(character) < 32 or ord(character) == 127
+                   for character in decoded)):
+        raise CombRefereeScopeError(
+            f"invalid render resource path: {reference}")
+    logical = posixpath.normpath(
+        posixpath.join(posixpath.dirname(base), decoded))
+    if (logical in {"", ".", ".."} or logical.startswith("../")
+            or pathlib.PurePosixPath(logical).is_absolute()):
+        raise CombRefereeScopeError(
+            f"render resource escapes snapshot: {reference}")
+    return logical
+
+
+def _stable_payload(path: pathlib.Path, logical: str) -> bytes:
+    before = _stable_file_record(path, logical)
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise CombRefereeScopeError(f"cannot retain {logical}: {error}") from error
+    after = _stable_file_record(path, logical)
+    if (before != after or before.get("bytes") != len(payload)
+            or before.get("sha256") != sha256_bytes(payload)):
+        raise CombRefereeScopeError(
+            f"file changed while retaining exact bytes: {logical}")
+    return payload
+
+
+def _gate_audit_render_dependencies(
+        html_payload: bytes, entrypoint: str, html_tree: dict[str, Any],
+        ) -> tuple[list[dict[str, Any]], list[str]]:
+    try:
+        text = html_payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        return [], [f"HTML is not UTF-8: {error}"]
+    scanner = GateAuditRenderDependencyScanner()
+    try:
+        scanner.feed(text)
+        scanner.close()
+    except Exception as error:  # noqa: BLE001 - malformed HTML is evidence
+        return [], [f"HTML dependency scan failed: {type(error).__name__}: {error}"]
+    errors = list(scanner.errors)
+    pending = [(reference, entrypoint, kind)
+               for reference, kind in scanner.references]
+    metadata: dict[str, dict[str, Any]] = {}
+    payloads: dict[str, bytes] = {}
+    visited_css: set[str] = set()
+    tree_files = _manifest_files(html_tree)
+    while pending:
+        reference, referrer, kind = pending.pop(0)
+        try:
+            logical = _gate_audit_logical_resource(reference, referrer)
+        except CombRefereeScopeError as error:
+            errors.append(f"{referrer}: {error}")
+            continue
+        if logical is None:
+            continue
+        item = metadata.setdefault(logical, {
+            "path": logical, "mime_type": None, "present": False,
+            "bytes": None, "sha256": None, "kinds": set(),
+            "referrers": set(),
+        })
+        item["kinds"].add(kind)
+        item["referrers"].add(referrer)
+        if logical in payloads:
+            continue
+        candidate = BUILD / "html" / pathlib.PurePosixPath(logical)
+        logical_tree_path = f"build/html/{logical}"
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to((BUILD / "html").resolve(strict=True))
+            if resolved != candidate or not resolved.is_file():
+                raise CombRefereeScopeError("symlinked or non-file dependency")
+            payload = _stable_payload(candidate, logical_tree_path)
+            expected = tree_files.get(logical_tree_path)
+            if (not isinstance(expected, dict)
+                    or expected.get("bytes") != len(payload)
+                    or expected.get("sha256") != sha256_bytes(payload)):
+                raise CombRefereeScopeError(
+                    "dependency bytes differ from captured HTML tree")
+        except (OSError, ValueError, CombRefereeScopeError) as error:
+            errors.append(
+                f"{referrer}: unresolved render dependency {reference!r} "
+                f"({error})")
+            continue
+        payloads[logical] = payload
+        mime_type = mimetypes.guess_type(logical)[0]
+        if mime_type is None:
+            errors.append(f"{logical}: unknown render dependency MIME type")
+            continue
+        item.update({
+            "mime_type": mime_type, "present": True,
+            "bytes": len(payload), "sha256": sha256_bytes(payload),
+        })
+        if logical.lower().endswith(".css") and logical not in visited_css:
+            visited_css.add(logical)
+            try:
+                css = payload.decode("utf-8")
+            except UnicodeDecodeError as error:
+                errors.append(f"{logical}: CSS is not UTF-8 ({error})")
+                continue
+            pending.extend(
+                (nested, logical, "css")
+                for nested in _gate_audit_css_urls(css))
+    entries = [
+        {
+            **{key: value for key, value in item.items()
+               if key not in {"kinds", "referrers"}},
+            "kinds": sorted(item["kinds"]),
+            "referrers": sorted(item["referrers"]),
+        }
+        for _logical, item in sorted(metadata.items())
+    ]
+    return entries, sorted(set(errors))
+
+
+def _audit_render_binding_snapshots(
+        html_tree: dict[str, Any], slugs: Iterable[str],
+        ) -> dict[str, Any]:
+    tree_files = _manifest_files(html_tree)
+    bindings: dict[str, Any] = {}
+    for slug in sorted(slugs):
+        logical = f"build/html/{slug}.html"
+        entry = tree_files.get(logical)
+        if not isinstance(entry, dict):
+            raise CombRefereeScopeError(
+                f"audit render entrypoint is absent from snapshot: {slug}")
+        payload = _stable_payload(BUILD / "html" / f"{slug}.html", logical)
+        if (entry.get("bytes") != len(payload)
+                or entry.get("sha256") != sha256_bytes(payload)):
+            raise CombRefereeScopeError(
+                f"audit render entrypoint changed during snapshot: {slug}")
+        dependencies, errors = _gate_audit_render_dependencies(
+            payload, f"{slug}.html", html_tree)
+        if errors:
+            raise CombRefereeScopeError(
+                f"audit render dependency closure is unevaluable for {slug}: "
+                + "; ".join(errors[:3]))
+        bindings[slug] = {
+            "html_sha256": entry["sha256"],
+            "entrypoint": f"{slug}.html",
+            "dependencies": dependencies,
+            "errors": [],
+            "complete": True,
+            "network_policy": (
+                "deny-except-retained-relative-resources-and-inline-data"),
+        }
+    return bindings
+
+
 def capture_audit_application_snapshot() -> dict[str, Any]:
     """Capture every application byte consumed by the isolated audit run."""
     git = _git_state()
@@ -1181,6 +3325,15 @@ def capture_audit_application_snapshot() -> dict[str, Any]:
     if poppler_name is None:
         raise CombRefereeScopeError("pdftocairo is not installed")
     poppler_path = pathlib.Path(poppler_name).resolve()
+    dependency_entries = _isolated_dependency_entries()
+    runtime_library: dict[str, Any] | None = None
+    library = sysconfig.get_config_var("LDLIBRARY")
+    library_dir = sysconfig.get_config_var("LIBDIR")
+    if library and library_dir:
+        candidate = pathlib.Path(str(library_dir)) / str(library)
+        if candidate.is_file():
+            runtime_library = _stable_file_record(
+                candidate.resolve(), "python/runtime-library")
     artifact_trees = {
         name: _tree_manifest(path, f"build/{name}")
         for name, path in COMB_REFEREE_ARTIFACT_TREES.items()
@@ -1188,6 +3341,8 @@ def capture_audit_application_snapshot() -> dict[str, Any]:
     layout_bindings = _layout_binding_snapshots(
         artifact_trees["layout"], artifact_trees["guides"],
         producers["tools/formgen/lattice.py"])
+    render_bindings = _audit_render_binding_snapshots(
+        artifact_trees["html"], layout_bindings)
     provenance, sources = _layout_declared_inputs(
         artifact_trees["layout"], git["commit"])
     return {
@@ -1195,10 +3350,27 @@ def capture_audit_application_snapshot() -> dict[str, Any]:
         "producers": producers,
         "runtime": {
             "python": _stable_file_record(python_path, str(python_path)),
+            "python_identity": {
+                "implementation": platform.python_implementation(),
+                "version": platform.python_version(),
+                "cache_tag": str(sys.implementation.cache_tag),
+            },
+            "python_runtime_library": runtime_library,
+            "python_dependencies": _isolated_dependency_manifest(
+                dependency_entries),
+            "python_dependency_files": _isolated_dependency_file_projection(
+                dependency_entries),
+            "python_dependency_trees": _isolated_dependency_tree_projections(
+                dependency_entries),
+            "pymupdf_distribution_version": importlib.metadata.version(
+                "pymupdf"),
+            "playwright_distribution_version": importlib.metadata.version(
+                "playwright"),
             "pdftocairo": _stable_file_record(poppler_path, str(poppler_path)),
         },
         "artifact_trees": artifact_trees,
         "layout_bindings": layout_bindings,
+        "render_bindings": render_bindings,
         "provenance": provenance,
         "source_pdfs": sources,
     }
@@ -1488,9 +3660,82 @@ def _transition_for_cell(ledger_state: str, comparison_status: str
 
 
 def _finite_number(value: Any) -> bool:
-    return (isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            and math.isfinite(float(value)))
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return True if isinstance(value, int) else math.isfinite(value)
+
+
+_PERCENTAGE_EVIDENCE = {
+    "rules_pct": ("rules_ref", "rules_missing"),
+    "text_pct": ("text_ref", "text_missing"),
+}
+
+
+def _percentage_evidence_errors(
+        record: dict[str, Any], pct_key: str, label: str,
+        ) -> list[str]:
+    """Bind a published percentage to its positive source denominator."""
+    relation = _PERCENTAGE_EVIDENCE.get(pct_key)
+    if relation is None:
+        return [f"{label}: unsupported percentage metric {pct_key}"]
+    reference_key, missing_key = relation
+    reference = record.get(reference_key)
+    missing = record.get(missing_key)
+    percentage = record.get(pct_key)
+    errors: list[str] = []
+    if not _is_count(reference) or reference == 0:
+        errors.append(
+            f"{label}: {reference_key} is absent or not a positive int")
+    if not _is_count(missing):
+        errors.append(
+            f"{label}: {missing_key} is absent or not a nonnegative int")
+    if (not _finite_number(percentage)
+            or not 0 <= percentage <= 100):
+        errors.append(
+            f"{label}: {pct_key} is absent or not finite in 0..100")
+    if not errors:
+        if missing > reference:
+            errors.append(
+                f"{label}: {pct_key} is not derived from "
+                f"{reference_key} and {missing_key}")
+        else:
+            # Match audit.py's producer expression exactly.  Re-idealising
+            # this as an exact Decimal ratio rejects honest reports at binary
+            # floating-point half-cent boundaries (for example 4000/1).
+            try:
+                expected = round(
+                    100.0 * (reference - missing) / reference, 2)
+            except (OverflowError, ZeroDivisionError, ValueError):
+                # A producer-shaped JSON integer can be larger than a binary
+                # float even though its percentage is still well-defined.
+                # Keep that evidence evaluable with the exact fallback; the
+                # normal path above remains byte-for-byte audit.py's formula.
+                try:
+                    with localcontext() as context:
+                        context.prec = max(
+                            reference.bit_length(), missing.bit_length(), 64) + 16
+                        expected_decimal = (
+                            Decimal(100)
+                            * (Decimal(reference) - Decimal(missing))
+                            / Decimal(reference)
+                        ).quantize(
+                            Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+                except (InvalidOperation, ValueError, ZeroDivisionError):
+                    errors.append(
+                        f"{label}: {pct_key} cannot be re-derived from "
+                        f"{reference_key} and {missing_key}")
+                else:
+                    if Decimal(str(percentage)) != expected_decimal:
+                        errors.append(
+                            f"{label}: {pct_key} is not derived from "
+                            f"{reference_key} and {missing_key}")
+            else:
+                observed = Decimal(str(percentage))
+                if observed != Decimal(str(expected)):
+                    errors.append(
+                        f"{label}: {pct_key} is not derived from "
+                        f"{reference_key} and {missing_key}")
+    return errors
 
 
 def _finite_number_list(value: Any, *, length: int | None = None) -> bool:
@@ -2946,7 +5191,7 @@ def _layout_binding_snapshots(
         try:
             layout = json.loads(layout_path.read_text(encoding="utf-8"))
             guide = json.loads(guide_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        except (OSError, UnicodeError, ValueError, RecursionError) as error:
             raise CombRefereeScopeError(
                 f"cannot parse layout/guide projection for {slug}: {error}") from error
         result[slug] = _layout_binding_projection(
@@ -3845,13 +6090,16 @@ def validate_comb_referee_envelope(
         "enforcement_scope": "application-only",
     }
     for key, expected in boundary.items():
-        if envelope.get(key) != expected:
+        if (envelope.get(key) is not expected
+                if isinstance(expected, bool)
+                else envelope.get(key) != expected):
             errors.append(f"attestation boundary is invalid: {key}")
     snapshot = envelope.get("application_snapshot")
     if not isinstance(snapshot, dict):
         errors.append("attestation application snapshot is missing")
         snapshot = {}
-    if current_snapshot is not None and snapshot != current_snapshot:
+    if (current_snapshot is not None
+            and not _json_type_exact_equal(snapshot, current_snapshot)):
         errors.append("attestation is stale for the current application snapshot")
     invocation = envelope.get("invocation")
     if not isinstance(invocation, dict):
@@ -3862,7 +6110,7 @@ def validate_comb_referee_envelope(
     child_exit = invocation.get("child_exit")
     expected_exit = {"ok": 0, "disagreement": 1, "unevaluable": 2}.get(
         report.get("status"))
-    if child_exit != expected_exit:
+    if not _is_count(child_exit) or child_exit != expected_exit:
         errors.append("attested child exit disagrees with report status")
     snapshot_python = (
         snapshot.get("runtime", {}).get("python", {})
@@ -3878,6 +6126,9 @@ def validate_comb_referee_envelope(
             or invocation.get("total_timeout_seconds")
             != COMB_REFEREE_TOTAL_TIMEOUT_SECONDS
             or invocation.get("run_count") != COMB_REFEREE_RUN_COUNT
+            or not isinstance(invocation.get("child_exits"), list)
+            or any(not _is_count(value)
+                   for value in invocation.get("child_exits", []))
             or invocation.get("child_exits")
             != [expected_exit] * COMB_REFEREE_RUN_COUNT
             or invocation.get("output") != "private-temporary-output"):
@@ -3889,6 +6140,7 @@ def validate_comb_referee_envelope(
     elif set(raw) != RAW_REPORT_KEYS:
         errors.append("attested raw report schema is unsupported")
     if (raw.get("file") != "build/comb-referee.json"
+            or not _is_count(raw.get("bytes"))
             or raw.get("bytes") != len(raw_payload)
             or raw.get("sha256") != sha256_bytes(raw_payload)
             or raw.get("payload_sha256") != report.get("payload_sha256")
@@ -3946,7 +6198,7 @@ def _comb_referee_command(
         output: pathlib.Path, pycache_prefix: pathlib.Path,
         ) -> list[str]:
     return [
-        sys.executable, "-I", "-B", "-X",
+        sys.executable, "-I", "-S", "-B", "-X",
         f"pycache_prefix={pycache_prefix}", str(HERE / "comb_referee.py"),
         "--source-root", str(COMB_REFEREE_SOURCE_ROOT),
         "--layout-dir", str(BUILD / "layout"),
@@ -4121,7 +6373,7 @@ def check_comb_referee() -> Result:
         envelope_payload = COMB_REFEREE_ATTESTATION.read_bytes()
         report = json.loads(raw_payload)
         envelope = json.loads(envelope_payload)
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    except (OSError, UnicodeError, ValueError, RecursionError) as error:
         return Result("comb-referee", Verdict.UNEVALUABLE,
                       f"missing or malformed report/envelope: {error}")
     child_exit = None
@@ -4185,7 +6437,7 @@ def refresh_comb_referee_report() -> Result:
                 try:
                     payload = fresh_path.read_bytes()
                     child_report = json.loads(payload)
-                except (OSError, UnicodeError, json.JSONDecodeError) as error:
+                except (OSError, UnicodeError, ValueError, RecursionError) as error:
                     raise CombRefereeScopeError(
                         f"referee run {run_index + 1} produced no usable "
                         f"report: {error}") from error
@@ -4287,30 +6539,431 @@ AUDIT_INPUT_MANIFEST_KEYS = {
     "attestation_complete", "enforceable", "complete", "missing_required",
     "inputs", "render",
 }
+BASIC_ASSERTION_COUNT_FIELDS = {
+    "inputs_over_printed_text": (
+        ("cells_checked",), ("emitted_cell_binding_issues",)),
+    "money_boxes_have_inputs": (
+        ("boxes_checked", "combs_fully_inked"),
+        ("emitted_cell_binding_issues",)),
+    "rules_below_guide_cut": (("cuts",), ("area_fills_below_cut",)),
+    "run_colour_matches_ir": (("runs_checked",), ()),
+    "reflow_rate_without_description": (("rate_tables",), ("rows_checked",)),
+    "image_transform_applied": (("placements",), ()),
+    "no_invented_codepoints": (("characters_examined",), ()),
+}
+BASIC_ASSERTION_PUBLICATION_KEYS = {
+    "offender_count", "offenders_published", "offenders_omitted",
+    "offenders_complete",
+}
+
+
+def _basic_assertion_detail_errors(name: str, value: Any) -> list[str]:
+    """Validate one non-comb assertion's complete producer publication."""
+    if name not in BASIC_ASSERTION_COUNT_FIELDS:
+        return [f"unsupported basic assertion: {name}"]
+    if not isinstance(value, dict):
+        return [f"{name} detail is not an object"]
+    required_counts, optional_counts = BASIC_ASSERTION_COUNT_FIELDS[name]
+    holds = value.get("holds")
+    required = {"holds", "reason", "offenders", *required_counts}
+    allowed = required | set(optional_counts)
+    if holds is False:
+        required |= BASIC_ASSERTION_PUBLICATION_KEYS
+        allowed |= BASIC_ASSERTION_PUBLICATION_KEYS
+    errors: list[str] = []
+    if set(value) - allowed:
+        errors.append(f"{name} detail has unsupported fields")
+    if required - set(value):
+        errors.append(f"{name} detail omits required fields")
+    reason = value.get("reason")
+    offenders = value.get("offenders")
+    if (not isinstance(holds, bool)
+            or not isinstance(reason, str)
+            or not isinstance(offenders, list)):
+        errors.append(f"{name} common detail is malformed")
+    for field in (*required_counts, *optional_counts):
+        if field in value and not _is_count(value.get(field)):
+            errors.append(f"{name} {field} is not a nonnegative integer")
+    if holds is True:
+        if reason != "" or offenders != []:
+            errors.append(f"{name} held verdict has offender evidence")
+    elif holds is False:
+        count = value.get("offender_count")
+        published = value.get("offenders_published")
+        omitted = value.get("offenders_omitted")
+        complete = value.get("offenders_complete")
+        if (not reason
+                or not _is_count(count)
+                or not _is_count(published)
+                or not _is_count(omitted)
+                or not isinstance(complete, bool)
+                or not isinstance(offenders, list)
+                or published != len(offenders)
+                or count != published + omitted
+                or complete is not (omitted == 0)):
+            errors.append(f"{name} offender publication relation is false")
+    return errors
+
+
+def _canonical_form_inventory_from_paths(
+        paths: Iterable[str],
+        ) -> dict[str, bool]:
+    """Resolve only the two supported tracked provenance layouts.
+
+    A set comprehension used to silently discard the 13 forms below
+    ``forms/extra`` and would also have hidden a duplicate slug split across
+    the two roots.  Keep the originating path until uniqueness is proved.
+    """
+    provenance_by_slug: dict[str, tuple[str, bool]] = {}
+    for name in paths:
+        parts = pathlib.PurePosixPath(name).parts
+        if not parts or parts[-1] != "provenance.json":
+            continue
+        if (len(parts) == 3 and parts[0] == "forms"
+                and parts[1] != "extra"):
+            slug = parts[1]
+            in_corpus = True
+        elif (len(parts) == 4 and parts[:2] == ("forms", "extra")):
+            slug = parts[2]
+            in_corpus = False
+        else:
+            raise CombRefereeScopeError(
+                f"unsupported tracked provenance path: {name}")
+        if not slug or slug in provenance_by_slug:
+            previous = provenance_by_slug.get(slug, ("<invalid>", False))[0]
+            raise CombRefereeScopeError(
+                f"duplicate tracked form slug {slug}: {previous}, {name}")
+        provenance_by_slug[slug] = (name, in_corpus)
+    if len(provenance_by_slug) != EXPECTED_FORMS:
+        raise CombRefereeScopeError(
+            f"tracked form corpus has {len(provenance_by_slug)}/"
+            f"{EXPECTED_FORMS} slugs")
+    direct_count = sum(value[1] for value in provenance_by_slug.values())
+    extra_count = len(provenance_by_slug) - direct_count
+    if (direct_count != EXPECTED_IN_CORPUS_FORMS
+            or extra_count != EXPECTED_EXTRA_FORMS):
+        raise CombRefereeScopeError(
+            "tracked form root distribution is "
+            f"{direct_count}/{extra_count}, expected "
+            f"{EXPECTED_IN_CORPUS_FORMS}/{EXPECTED_EXTRA_FORMS}")
+    return {
+        slug: value[1] for slug, value in sorted(provenance_by_slug.items())}
+
+
+def _canonical_form_slugs_from_paths(paths: Iterable[str]) -> frozenset[str]:
+    return frozenset(_canonical_form_inventory_from_paths(paths))
+
+
+def _tracked_form_paths(head: str | None = None) -> list[str]:
+    revision = head or _git_text(("rev-parse", "--verify", "HEAD"))
+    payload = _git((
+        "ls-tree", "-r", "-z", "--name-only", revision, "--", "forms",
+    ))
+    names = payload.decode("utf-8", errors="strict").split("\0")
+    if names and names[-1] == "":
+        names.pop()
+    return names
+
+
+def canonical_form_inventory(head: str | None = None) -> dict[str, bool]:
+    """Map every tracked slug to its direct(True)/extra(False) root."""
+    return _canonical_form_inventory_from_paths(_tracked_form_paths(head))
 
 
 def canonical_form_slugs(head: str | None = None) -> frozenset[str]:
     """The exact tracked corpus, independent of regenerated working bytes."""
-    revision = head or _git_text(("rev-parse", "--verify", "HEAD"))
-    paths = _git((
-        "ls-tree", "-r", "--name-only", revision, "--", "forms",
-    )).decode("utf-8", errors="strict").splitlines()
-    slugs = {
-        parts[1]
-        for name in paths
-        for parts in (pathlib.PurePosixPath(name).parts,)
-        if len(parts) == 3
-        and parts[0] == "forms"
-        and parts[2] == "provenance.json"
-    }
-    if len(slugs) != EXPECTED_FORMS:
-        raise CombRefereeScopeError(
-            f"tracked form corpus has {len(slugs)}/{EXPECTED_FORMS} slugs")
-    return frozenset(slugs)
+    return frozenset(canonical_form_inventory(head))
+
+
+_BATCH_SOURCE_KEYS = {"role", "file", "sha256"}
+_BATCH_GUIDE_KEYS = {
+    "document", "origins", "moved_from_form", "standalone_pdfs",
+    "reclaimed_pt_total", "reclaimed_pct_mean", "reclaimed_pct_min",
+    "reclaimed_pct_max", "note",
+}
+_BATCH_MOVED_GUIDE_KEYS = {
+    "page", "cut_y_pt", "reclaimed_pt", "reclaimed_pct", "marker",
+    "marker_pattern", "moved", "straddlers_kept_by_form", "moved_to",
+}
+_BATCH_MOVED_COUNTS = {
+    "rules", "cells", "text_runs", "area_fills", "images",
+}
+_BATCH_STANDALONE_GUIDE_KEYS = {
+    "file", "sha256", "linked_as", "reflowed_into",
+}
+
+
+def _batch_path_matches(value: Any, logical: str) -> bool:
+    return (isinstance(value, str) and "\\" not in value
+            and value in {logical, str(REPO / logical)})
+
+
+def _batch_decimal(value: Any) -> Decimal | None:
+    if not _finite_number(value):
+        return None
+    try:
+        result = Decimal(value) if isinstance(value, int) else Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+    return result if result.is_finite() else None
+
+
+def _batch_string_inventory(value: Any) -> bool:
+    return (isinstance(value, list)
+            and all(isinstance(item, str) and item for item in value)
+            and value == sorted(set(value)))
+
+
+def _batch_record_evidence_errors(
+        record: dict[str, Any], slug: str,
+        ) -> list[str]:
+    """Require complete nested evidence for one successful conversion."""
+    errors: list[str] = []
+    pages = record.get("pages")
+    html_bytes = record.get("html_bytes")
+    if not _is_count(pages) or pages == 0:
+        errors.append(f"batch page count is incomplete: {slug}")
+    if not _is_count(html_bytes) or html_bytes == 0:
+        errors.append(f"batch HTML byte count is incomplete: {slug}")
+    paper = record.get("paper")
+    paper_match = (re.fullmatch(
+        r"([0-9]+(?:\.[0-9]+)?)x([0-9]+(?:\.[0-9]+)?)", paper)
+        if isinstance(paper, str) else None)
+    if (paper_match is None
+            or any(Decimal(value) <= 0 for value in paper_match.groups())):
+        errors.append(f"batch paper evidence is incomplete: {slug}")
+    if not _batch_path_matches(
+            record.get("html"), f"build/html/{slug}.html"):
+        errors.append(f"batch HTML output relation is false: {slug}")
+
+    fonts = record.get("fonts")
+    if not _batch_string_inventory(fonts):
+        errors.append(f"batch font inventory is malformed: {slug}")
+    growables = record.get("growables")
+    if not isinstance(growables, list):
+        errors.append(f"batch growable inventory is malformed: {slug}")
+        growables = []
+    for item in growables:
+        if (not isinstance(item, dict)
+                or set(item) != {"page", "rows", "capacity", "pitch_pt"}
+                or not _is_count(item.get("page")) or item.get("page") < 1
+                or (_is_count(pages) and item.get("page") > pages)
+                or not _is_count(item.get("rows")) or item.get("rows") < 1
+                or not _is_count(item.get("capacity"))
+                or item.get("capacity") < 1
+                or not _finite_number(item.get("pitch_pt"))
+                or item.get("pitch_pt") <= 0):
+            errors.append(f"batch growable evidence is malformed: {slug}")
+            break
+
+    raw_sources = record.get("sources")
+    sources = raw_sources if isinstance(raw_sources, list) else []
+    if (not isinstance(raw_sources, list)
+            or any(not isinstance(source, dict)
+                   or set(source) != _BATCH_SOURCE_KEYS
+                   or not isinstance(source.get("role"), str)
+                   or source.get("role") not in {"form", "guide"}
+                   or not isinstance(source.get("file"), str)
+                   or not source.get("file")
+                   or not _is_sha256(source.get("sha256"))
+                   for source in sources)):
+        errors.append(f"batch source inventory is malformed: {slug}")
+    form_sources = [
+        source for source in sources
+        if isinstance(source, dict) and source.get("role") == "form"
+    ]
+    guide_sources = [
+        source for source in sources
+        if isinstance(source, dict) and source.get("role") == "guide"
+    ]
+    if (len(form_sources) != 1
+            or form_sources[0].get("file") != record.get("source_file")
+            or form_sources[0].get("sha256") != record.get("sha256")):
+        errors.append(f"batch form source relation is false: {slug}")
+    source_files = [
+        source.get("file") for source in sources
+        if isinstance(source, dict)
+        and isinstance(source.get("file"), str)
+    ]
+    if (len(source_files) != len(sources)
+            or len(set(source_files)) != len(source_files)):
+        errors.append(f"batch source filenames are duplicated: {slug}")
+
+    detected = record.get("guide_detected")
+    if (not isinstance(detected, dict)
+            or set(detected) != {"inline_pages", "standalone_pdfs"}):
+        errors.append(f"batch guide detection is malformed: {slug}")
+        inline_pages: list[Any] = []
+        standalone_names: list[Any] = []
+    else:
+        inline_pages = detected.get("inline_pages")
+        standalone_names = detected.get("standalone_pdfs")
+        if (not isinstance(inline_pages, list)
+                or any(not _is_count(page) or page < 1
+                       or (_is_count(pages) and page > pages)
+                       for page in inline_pages)
+                or inline_pages != sorted(set(inline_pages))):
+            errors.append(f"batch inline-guide pages are malformed: {slug}")
+            inline_pages = []
+        if not _batch_string_inventory(standalone_names):
+            errors.append(
+                f"batch standalone-guide inventory is malformed: {slug}")
+            standalone_names = []
+    if standalone_names != [source.get("file") for source in guide_sources]:
+        errors.append(f"batch standalone-guide sources are unbound: {slug}")
+
+    guide_build = record.get("guide_build")
+    if (not isinstance(guide_build, dict)
+            or set(guide_build) != {"plan", "html", "pdfs"}):
+        errors.append(f"batch guide-build evidence is malformed: {slug}")
+        guide_build = {}
+    if not _batch_path_matches(
+            guide_build.get("plan"), f"build/guides/{slug}.guide.json"):
+        errors.append(f"batch guide plan relation is false: {slug}")
+    guide_pdfs = guide_build.get("pdfs")
+    if (not _batch_string_inventory(guide_pdfs)
+            or [pathlib.PurePosixPath(item).name for item in guide_pdfs]
+            != standalone_names):
+        errors.append(f"batch guide PDF relation is false: {slug}")
+
+    guide_source_irs = record.get("guide_source_irs")
+    if not _batch_string_inventory(guide_source_irs):
+        errors.append(f"batch guide IR inventory is malformed: {slug}")
+        guide_source_irs = []
+    expected_guide_irs = [
+        f"build/ir/guides/{slug}.guide-{index}.ir.json"
+        for index in range(1, len(standalone_names) + 1)
+    ]
+    if (len(guide_source_irs) != len(expected_guide_irs)
+            or any(not _batch_path_matches(value, expected)
+                   for value, expected in zip(
+                       guide_source_irs, expected_guide_irs))):
+        errors.append(f"batch guide IR relation is false: {slug}")
+
+    font_plans = record.get("font_plans")
+    if (not _batch_string_inventory(font_plans)
+            or len(font_plans) != 1
+            or not _batch_path_matches(
+                font_plans[0] if font_plans else None,
+                f"build/fonts/{slug}.fontplan.json")):
+        errors.append(f"batch font-plan relation is false: {slug}")
+
+    raw_guide = record.get("guide")
+    has_guide = bool(inline_pages or standalone_names)
+    if has_guide is not isinstance(raw_guide, dict):
+        errors.append(f"batch guide presence relation is false: {slug}")
+    if not has_guide:
+        if raw_guide is not None or guide_build.get("html") is not None:
+            errors.append(f"batch absent guide relation is false: {slug}")
+        return errors
+    if (not isinstance(raw_guide, dict)
+            or set(raw_guide) != _BATCH_GUIDE_KEYS):
+        errors.append(f"batch guide publication is malformed: {slug}")
+        return errors
+    if (raw_guide.get("document") != "guide.html"
+            or raw_guide.get("origins") != [
+                *(["inline-region"] if inline_pages else []),
+                *(["standalone-pdf"] if standalone_names else []),
+            ]
+            or not isinstance(raw_guide.get("note"), str)
+            or not raw_guide.get("note")
+            or not _batch_path_matches(
+                guide_build.get("html"),
+                f"build/html/{slug}.guide.html")):
+        errors.append(f"batch guide metadata relation is false: {slug}")
+    moved = raw_guide.get("moved_from_form")
+    if (not isinstance(moved, list) or len(moved) != len(inline_pages)
+            or [item.get("page") for item in moved
+                if isinstance(item, dict)] != inline_pages):
+        errors.append(f"batch moved-guide inventory is false: {slug}")
+        moved = []
+    valid_moved: list[dict[str, Any]] = []
+    for item in moved:
+        counts = item.get("moved") if isinstance(item, dict) else None
+        cut_y = item.get("cut_y_pt") if isinstance(item, dict) else None
+        reclaimed = (
+            item.get("reclaimed_pt") if isinstance(item, dict) else None)
+        reclaimed_pct = (
+            item.get("reclaimed_pct") if isinstance(item, dict) else None)
+        if (not isinstance(item, dict)
+                or set(item) != _BATCH_MOVED_GUIDE_KEYS
+                or not _is_count(item.get("page"))
+                or item.get("page") < 1
+                or _batch_decimal(cut_y) is None
+                or cut_y < 0
+                or _batch_decimal(reclaimed) is None
+                or reclaimed < 0
+                or _batch_decimal(reclaimed_pct) is None
+                or not 0 <= reclaimed_pct <= 100
+                or not isinstance(item.get("marker"), str)
+                or not item.get("marker").strip()
+                or not isinstance(item.get("marker_pattern"), str)
+                or not item.get("marker_pattern").strip()
+                or not isinstance(counts, dict)
+                or set(counts) != _BATCH_MOVED_COUNTS
+                or any(not _is_count(counts.get(key))
+                       for key in _BATCH_MOVED_COUNTS)
+                or not _is_count(item.get("straddlers_kept_by_form"))
+                or item.get("moved_to") != "guide.html"):
+            errors.append(f"batch moved-guide evidence is malformed: {slug}")
+            break
+        valid_moved.append(item)
+    standalone = raw_guide.get("standalone_pdfs")
+    if not isinstance(standalone, list) or len(standalone) != len(guide_sources):
+        errors.append(f"batch standalone-guide publication is false: {slug}")
+        standalone = []
+    for item, source in zip(standalone, guide_sources):
+        if (not isinstance(item, dict)
+                or set(item) != _BATCH_STANDALONE_GUIDE_KEYS
+                or item.get("file") != source.get("file")
+                or item.get("sha256") != source.get("sha256")
+                or item.get("linked_as") != f"guides/{source.get('file')}"
+                or item.get("reflowed_into") != "guide.html"):
+            errors.append(
+                f"batch standalone-guide evidence is malformed: {slug}")
+            break
+    summary_keys = (
+        "reclaimed_pt_total", "reclaimed_pct_mean",
+        "reclaimed_pct_min", "reclaimed_pct_max",
+    )
+    summary_values = {key: raw_guide.get(key) for key in summary_keys}
+    for key, value in summary_values.items():
+        if (not _finite_number(value) or value < 0
+                or ("pct" in key and value > 100)):
+            errors.append(f"batch guide summary is malformed: {slug}/{key}")
+    if len(valid_moved) == len(moved):
+        reclaimed_values = [
+            _batch_decimal(item["reclaimed_pt"]) for item in valid_moved]
+        pct_values = [
+            _batch_decimal(item["reclaimed_pct"]) for item in valid_moved]
+        if all(value is not None for value in [*reclaimed_values, *pct_values]):
+            reclaimed_decimals = [
+                value for value in reclaimed_values if value is not None]
+            pct_decimals = [value for value in pct_values if value is not None]
+            expected_summaries = {
+                "reclaimed_pt_total": sum(
+                    reclaimed_decimals, Decimal(0)).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_EVEN),
+                "reclaimed_pct_mean": (
+                    (sum(pct_decimals, Decimal(0)) / len(pct_decimals))
+                    .quantize(Decimal("1"), rounding=ROUND_HALF_EVEN)
+                    if pct_decimals else Decimal(0)),
+                "reclaimed_pct_min": (
+                    min(pct_decimals) if pct_decimals else Decimal(0)),
+                "reclaimed_pct_max": (
+                    max(pct_decimals) if pct_decimals else Decimal(0)),
+            }
+            for key, expected in expected_summaries.items():
+                observed = _batch_decimal(summary_values[key])
+                if observed is None or observed != expected:
+                    errors.append(
+                        f"batch guide summary is not derived: {slug}/{key}")
+    return errors
 
 
 def batch_report_errors(
         data: Any, expected_slugs: frozenset[str],
+        expected_in_corpus: dict[str, bool] | None = None,
         ) -> list[str]:
     errors: list[str] = []
     if not isinstance(data, list):
@@ -4332,36 +6985,25 @@ def batch_report_errors(
         if not slug or slug != expected_slug:
             errors.append(f"batch record identity relation is false: {slug}")
         slugs.append(slug)
-        if (not isinstance(record.get("in_corpus"), bool)
+        in_corpus = record.get("in_corpus")
+        if (not isinstance(in_corpus, bool)
                 or not isinstance(record.get("source_file"), str)
                 or not record["source_file"]
                 or not _is_sha256(record.get("sha256"))
                 or record.get("stage_failed") is not None
                 or record.get("error") is not None):
             errors.append(f"batch record did not complete: {slug}")
+        if (expected_in_corpus is not None and slug in expected_in_corpus
+                and in_corpus is not expected_in_corpus[slug]):
+            errors.append(f"batch form root classification is false: {slug}")
         for key in (
                 "images_extracted", "pages", "rules", "text_runs", "images",
                 "cells", "comb_cells", "html_bytes"):
             if not _is_count(record.get(key)):
                 errors.append(f"batch record count is malformed: {slug}/{key}")
-        if (not isinstance(record.get("paper"), str)
-                or not isinstance(record.get("uniform_paper"), bool)
-                or not isinstance(record.get("fonts"), list)
-                or not isinstance(record.get("growables"), list)
-                or not isinstance(record.get("sources"), list)
-                or not isinstance(record.get("guide_detected"), dict)
-                or not isinstance(record.get("guide_build"), dict)
-                or not isinstance(record.get("guide_source_irs"), list)
-                or not isinstance(record.get("font_plans"), list)):
-            errors.append(f"batch record evidence is malformed: {slug}")
-        form_sources = [
-            source for source in record.get("sources", [])
-            if isinstance(source, dict) and source.get("role") == "form"
-        ]
-        if (len(form_sources) != 1
-                or form_sources[0].get("file") != record.get("source_file")
-                or form_sources[0].get("sha256") != record.get("sha256")):
-            errors.append(f"batch source relation is false: {slug}")
+        if not isinstance(record.get("uniform_paper"), bool):
+            errors.append(f"batch uniform-paper evidence is malformed: {slug}")
+        errors.extend(_batch_record_evidence_errors(record, slug))
     if len(slugs) != len(set(slugs)):
         errors.append("batch report contains duplicate slugs")
     if set(slugs) != set(expected_slugs):
@@ -4371,6 +7013,7 @@ def batch_report_errors(
 
 def _fresh_batch_report(
         path: pathlib.Path, expected_slugs: frozenset[str],
+        expected_inventory: dict[str, bool],
         ) -> tuple[dict[str, Any], bytes]:
     record = _stable_file_record(path, "build/batch-report.json")
     payload = path.read_bytes()
@@ -4378,14 +7021,425 @@ def _fresh_batch_report(
         raise CombRefereeScopeError("batch report changed while validating")
     try:
         data = json.loads(payload)
-    except (UnicodeError, json.JSONDecodeError) as error:
+    except (UnicodeError, ValueError, RecursionError) as error:
         raise CombRefereeScopeError(f"batch report is malformed: {error}") from error
-    errors = batch_report_errors(data, expected_slugs)
+    errors = batch_report_errors(data, expected_slugs, expected_inventory)
     if errors:
         raise CombRefereeScopeError("; ".join(errors[:5]))
     record["form_count"] = len(data)
     record["slug_sha256"] = canonical_digest(sorted(expected_slugs))
     return record, payload
+
+
+AUDIT_PRODUCER_KEYS = {
+    "file", "bytes", "sha256", "dependencies",
+    "dependency_execution_bound", "audit_execution_bound",
+    "assertion_producer_bound", "roundtrip_runtime_bound_in_record",
+    "standalone_attestation_complete", "incomplete_reason",
+}
+AUDIT_PRODUCER_DEPENDENCY_KEYS = {
+    "file", "bytes", "sha256", "loaded_origin",
+    "executed_from_snapshotted_source",
+}
+AUDIT_RUNTIME_KEYS = {
+    "python", "pymupdf", "loaded_application_files",
+    "stdlib_and_system_shared_libraries_bound", "scope_complete",
+    "incomplete_reason",
+}
+AUDIT_RUNTIME_FILES_KEYS = {
+    "algorithm", "files", "bytes", "tree_sha256", "members",
+    "validated_before_after",
+}
+AUDIT_INPUT_ROLES = {"ir", "layout", "html", "guide", "guide_html", "source_pdf"}
+AUDIT_INPUT_FILE_KEYS = {"file", "required", "present", "bytes", "sha256"}
+AUDIT_SOURCE_INPUT_KEYS = {
+    *AUDIT_INPUT_FILE_KEYS, "logical_identity", "path", "expected_sha256",
+}
+AUDIT_RENDER_KEYS = {
+    "entrypoint", "dependencies", "errors", "complete", "network_policy",
+}
+AUDIT_RENDER_DEPENDENCY_KEYS = {
+    "path", "mime_type", "present", "bytes", "sha256", "kinds", "referrers",
+}
+
+
+def _audit_input_manifest_shape_errors(
+        manifest: Any, slug: str,
+        ) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(manifest, dict) or set(manifest) != AUDIT_INPUT_MANIFEST_KEYS:
+        return [f"audit input manifest schema is unsupported: {slug}"]
+    if (manifest.get("schema") != "formgen-audit-input-manifest-v1"
+            or manifest.get("algorithm") != "sha256"
+            or manifest.get("inputs_complete") is not True
+            or manifest.get("attestation_complete") is not False
+            or manifest.get("enforceable") is not False
+            or manifest.get("complete") is not False
+            or manifest.get("missing_required") != []):
+        errors.append(f"audit input manifest verdict is malformed: {slug}")
+
+    producer = manifest.get("producer")
+    if not isinstance(producer, dict) or set(producer) != AUDIT_PRODUCER_KEYS:
+        errors.append(f"audit producer manifest is malformed: {slug}")
+    else:
+        dependencies = producer.get("dependencies")
+        if (producer.get("file") != "tools/formgen/audit.py"
+                or not _is_count(producer.get("bytes"))
+                or not _is_sha256(producer.get("sha256"))
+                or producer.get("dependency_execution_bound") is not True
+                or producer.get("audit_execution_bound") is not False
+                or producer.get("assertion_producer_bound") is not False
+                or producer.get("roundtrip_runtime_bound_in_record") is not False
+                or producer.get("standalone_attestation_complete") is not False
+                or not isinstance(producer.get("incomplete_reason"), str)
+                or not producer.get("incomplete_reason")
+                or not isinstance(dependencies, list)):
+            errors.append(f"audit producer relations are malformed: {slug}")
+        else:
+            names: list[str] = []
+            for dependency in dependencies:
+                if (not isinstance(dependency, dict)
+                        or set(dependency) != AUDIT_PRODUCER_DEPENDENCY_KEYS):
+                    errors.append(
+                        f"audit producer dependency is malformed: {slug}")
+                    continue
+                name = dependency.get("file")
+                names.append(name if isinstance(name, str) else "")
+                if (not _is_count(dependency.get("bytes"))
+                        or not _is_sha256(dependency.get("sha256"))
+                        or dependency.get("loaded_origin") != name
+                        or dependency.get(
+                            "executed_from_snapshotted_source") is not True):
+                    errors.append(
+                        f"audit producer dependency relation is false: {slug}")
+            if names != ["tools/formgen/extract.py", "tools/formgen/verify.py"]:
+                errors.append(
+                    f"audit producer dependency inventory is false: {slug}")
+
+    runtime = manifest.get("runtime")
+    if not isinstance(runtime, dict) or set(runtime) != AUDIT_RUNTIME_KEYS:
+        errors.append(f"audit base runtime manifest is malformed: {slug}")
+    else:
+        python = runtime.get("python")
+        pymupdf = runtime.get("pymupdf")
+        loaded = runtime.get("loaded_application_files")
+        if (not isinstance(python, dict)
+                or set(python) != {"implementation", "version", "cache_tag"}
+                or any(not isinstance(python.get(key), str)
+                       or not python.get(key)
+                       for key in python)
+                or not isinstance(pymupdf, dict)
+                or set(pymupdf) != {"package_version", "version_bind"}
+                or any(not isinstance(pymupdf.get(key), str)
+                       or not pymupdf.get(key)
+                       for key in pymupdf)
+                or pymupdf.get("package_version") != pymupdf.get("version_bind")
+                or runtime.get(
+                    "stdlib_and_system_shared_libraries_bound") is not False
+                or runtime.get("scope_complete") is not False
+                or not isinstance(runtime.get("incomplete_reason"), str)
+                or not runtime.get("incomplete_reason")):
+            errors.append(f"audit base runtime identity is malformed: {slug}")
+        if not isinstance(loaded, dict) or set(loaded) != AUDIT_RUNTIME_FILES_KEYS:
+            errors.append(f"audit loaded runtime files are malformed: {slug}")
+        else:
+            members = loaded.get("members")
+            member_tuples: list[tuple[str, int, str]] = []
+            if isinstance(members, list):
+                for member in members:
+                    if (not isinstance(member, dict)
+                            or set(member) != {"file", "bytes", "sha256"}
+                            or not isinstance(member.get("file"), str)
+                            or not member.get("file")
+                            or not _is_count(member.get("bytes"))
+                            or not _is_sha256(member.get("sha256"))):
+                        errors.append(
+                            f"audit runtime member is malformed: {slug}")
+                        continue
+                    member_tuples.append((
+                        member["file"], member["bytes"], member["sha256"]))
+            else:
+                errors.append(f"audit runtime member inventory is malformed: {slug}")
+            try:
+                runtime_payload = json.dumps(
+                    member_tuples, separators=(",", ":")).encode("ascii")
+            except (UnicodeEncodeError, ValueError, OverflowError):
+                runtime_payload = b""
+                errors.append(
+                    f"audit runtime member canonicalization failed: {slug}")
+            if (loaded.get("algorithm")
+                    != "sha256(canonical-json(logical-file,bytes,sha256))"
+                    or loaded.get("validated_before_after") is not True
+                    or loaded.get("files") != len(member_tuples)
+                    or loaded.get("bytes")
+                    != sum(member[1] for member in member_tuples)
+                    or loaded.get("tree_sha256")
+                    != sha256_bytes(runtime_payload)
+                    or len({member[0] for member in member_tuples})
+                    != len(member_tuples)
+                    or member_tuples != sorted(
+                        member_tuples, key=lambda item: item[0])):
+                errors.append(f"audit runtime member relation is false: {slug}")
+
+    inputs = manifest.get("inputs")
+    if not isinstance(inputs, dict) or set(inputs) != AUDIT_INPUT_ROLES:
+        errors.append(f"audit input role inventory is malformed: {slug}")
+    else:
+        for role, value in inputs.items():
+            keys = (AUDIT_SOURCE_INPUT_KEYS
+                    if role == "source_pdf" else AUDIT_INPUT_FILE_KEYS)
+            required = role != "guide_html"
+            if (not isinstance(value, dict) or set(value) != keys
+                    or value.get("required") is not required
+                    or not isinstance(value.get("present"), bool)
+                    or not isinstance(value.get("file"), str)
+                    or not value.get("file")):
+                errors.append(f"audit input role is malformed: {slug}/{role}")
+                continue
+            if value.get("present") is True:
+                if (not _is_count(value.get("bytes"))
+                        or not _is_sha256(value.get("sha256"))):
+                    errors.append(
+                        f"audit present input identity is malformed: {slug}/{role}")
+            elif (required or value.get("bytes") is not None
+                  or value.get("sha256") is not None):
+                errors.append(
+                    f"audit missing input relation is false: {slug}/{role}")
+            if role == "source_pdf" and (
+                    not isinstance(value.get("logical_identity"), str)
+                    or not value.get("logical_identity")
+                    or not isinstance(value.get("path"), str)
+                    or not value.get("path")
+                    or not _is_sha256(value.get("expected_sha256"))):
+                errors.append(f"audit source input is malformed: {slug}")
+
+    render = manifest.get("render")
+    if not isinstance(render, dict) or set(render) != AUDIT_RENDER_KEYS:
+        errors.append(f"audit render manifest is malformed: {slug}")
+    else:
+        dependencies = render.get("dependencies")
+        if (render.get("entrypoint") != f"{slug}.html"
+                or render.get("errors") != []
+                or render.get("complete") is not True
+                or render.get("network_policy")
+                != "deny-except-retained-relative-resources-and-inline-data"
+                or not isinstance(dependencies, list)):
+            errors.append(f"audit render relation is malformed: {slug}")
+        else:
+            paths: list[str] = []
+            for dependency in dependencies:
+                if (not isinstance(dependency, dict)
+                        or set(dependency) != AUDIT_RENDER_DEPENDENCY_KEYS):
+                    errors.append(f"audit render dependency is malformed: {slug}")
+                    continue
+                path = dependency.get("path")
+                paths.append(path if isinstance(path, str) else "")
+                if (not isinstance(path, str) or not path
+                        or pathlib.PurePosixPath(path).is_absolute()
+                        or pathlib.PurePosixPath(path).as_posix() != path
+                        or "\\" in path
+                        or ".." in pathlib.PurePosixPath(path).parts
+                        or dependency.get("present") is not True
+                        or not _is_count(dependency.get("bytes"))
+                        or not _is_sha256(dependency.get("sha256"))
+                        or not isinstance(dependency.get("mime_type"), str)
+                        or not dependency.get("mime_type")
+                        or not isinstance(dependency.get("kinds"), list)
+                        or not dependency.get("kinds")
+                        or not all(isinstance(item, str) and item
+                                   for item in dependency.get("kinds", []))
+                        or (all(isinstance(item, str)
+                                for item in dependency.get("kinds", []))
+                            and dependency.get("kinds")
+                            != sorted(set(dependency.get("kinds", []))))
+                        or not isinstance(dependency.get("referrers"), list)
+                        or not dependency.get("referrers")
+                        or not all(isinstance(item, str) and item
+                                   for item in dependency.get("referrers", []))
+                        or (all(isinstance(item, str)
+                                for item in dependency.get("referrers", []))
+                            and dependency.get("referrers")
+                            != sorted(set(dependency.get("referrers", []))))):
+                    errors.append(
+                        f"audit render dependency relation is false: {slug}")
+            if paths != sorted(paths) or len(paths) != len(set(paths)):
+                errors.append(f"audit render dependency order is false: {slug}")
+    return errors
+
+
+def _audit_roundtrip_payload_errors(
+        record: dict[str, Any], slug: str,
+        ) -> list[str]:
+    """Require the complete successful browser/print/re-extraction record."""
+    errors: list[str] = []
+    runtime = record.get("roundtrip_runtime")
+    requests = record.get("render_requests")
+    candidate = record.get("candidate_pdf")
+    runtime_keys = {
+        "mode", "playwright_package_version", "dependency_closure",
+        "chromium", "same_resolution_session_used_for_render",
+        "dependency_closure_validated_before_after",
+        "system_shared_libraries_bound", "native_host_environment_bound",
+        "scope", "scope_complete", "incomplete_reason",
+        "live_browser_version", "explicit_executable_path_used",
+        "launch_args", "service_workers", "browser_context_offline",
+        "websocket_policy", "request_policy",
+        "playwright_operation_timeout_ms", "hard_deadline_seconds",
+        "hard_deadline_enforced_by", "deadline_cleanup_policy",
+    }
+    if not isinstance(runtime, dict) or set(runtime) != runtime_keys:
+        errors.append(f"audit roundtrip runtime is malformed: {slug}")
+        runtime = {}
+    else:
+        deadline = runtime.get("hard_deadline_seconds")
+        if (runtime.get("mode") != "playwright-exact-executable"
+                or not isinstance(runtime.get("playwright_package_version"), str)
+                or not runtime.get("playwright_package_version")
+                or runtime.get(
+                    "same_resolution_session_used_for_render") is not True
+                or runtime.get(
+                    "dependency_closure_validated_before_after") is not True
+                or runtime.get("explicit_executable_path_used") is not True
+                or runtime.get("browser_context_offline") is not True
+                or runtime.get("service_workers") != "block"
+                or runtime.get("websocket_policy")
+                != "record-and-leave-unconnected"
+                or runtime.get("request_policy") != "formgen-snapshot-only-v1"
+                or not _finite_number(deadline) or deadline != 60.0
+                or runtime.get("playwright_operation_timeout_ms") != 120000
+                or isinstance(
+                    runtime.get("playwright_operation_timeout_ms"), bool)
+                or runtime.get("hard_deadline_enforced_by")
+                != "isolated-render-worker-process-v1"
+                or runtime.get("deadline_cleanup_policy")
+                != "kill-worker-and-chromium-process-group"
+                or runtime.get("system_shared_libraries_bound") is not False
+                or runtime.get("native_host_environment_bound") is not False
+                or runtime.get("scope") != AUDIT_ROUNDTRIP_SCOPE
+                or runtime.get("scope_complete") is not False
+                or not isinstance(runtime.get("incomplete_reason"), str)
+                or not runtime.get("incomplete_reason")
+                or runtime.get("launch_args") != AUDIT_ROUNDTRIP_LAUNCH_ARGS):
+            errors.append(f"audit roundtrip execution relation is false: {slug}")
+        closure = runtime.get("dependency_closure")
+        if (not isinstance(closure, dict)
+                or set(closure) != {
+                    "logical_root", "algorithm", "files", "symlinks",
+                    "bytes", "tree_sha256"}
+                or closure.get("logical_root") != "playwright"
+                or closure.get("algorithm")
+                != "sha256(canonical-json(path,type,bytes,digest))"
+                or any(not _is_count(closure.get(key))
+                       for key in ("files", "symlinks", "bytes"))
+                or not _is_sha256(closure.get("tree_sha256"))):
+            errors.append(f"audit roundtrip dependency closure is malformed: {slug}")
+        chromium = runtime.get("chromium")
+        chromium_file = chromium.get("file") if isinstance(chromium, dict) else None
+        if (not isinstance(chromium, dict)
+                or set(chromium) != {
+                    "file", "bytes", "sha256", "version_output"}
+                or not isinstance(chromium_file, str)
+                or not chromium_file.startswith("playwright/")
+                or posixpath.normpath(chromium_file) != chromium_file
+                or ".." in pathlib.PurePosixPath(chromium_file).parts
+                or not _is_count(chromium.get("bytes"))
+                or chromium.get("bytes") == 0
+                or not _is_sha256(chromium.get("sha256"))
+                or not isinstance(chromium.get("version_output"), str)
+                or not chromium.get("version_output")
+                or not isinstance(runtime.get("live_browser_version"), str)
+                or not runtime.get("live_browser_version")
+                or chromium.get("version_output", "").rsplit(" ", 1)[-1]
+                != runtime.get("live_browser_version")):
+            errors.append(f"audit roundtrip Chromium identity is malformed: {slug}")
+
+    request_keys = {
+        "policy", "synthetic_origin", "fulfilled", "fulfilled_requests",
+        "blocked", "blocked_requests", "blocked_websockets",
+        "all_requests_from_retained_closure",
+    }
+    if not isinstance(requests, dict) or set(requests) != request_keys:
+        errors.append(f"audit roundtrip request manifest is malformed: {slug}")
+    else:
+        manifest = record.get("input_manifest")
+        render = manifest.get("render") if isinstance(manifest, dict) else None
+        dependencies = render.get("dependencies") if isinstance(render, dict) else None
+        dependency_paths = [
+            item.get("path") for item in dependencies
+            if isinstance(item, dict)] if isinstance(dependencies, list) else []
+        entrypoint = render.get("entrypoint") if isinstance(render, dict) else None
+        paths_valid = bool(
+            isinstance(dependencies, list)
+            and isinstance(entrypoint, str) and entrypoint
+            and all(isinstance(item, str) and item for item in dependency_paths)
+            and len(dependency_paths) == len(dependencies)
+            and dependency_paths == sorted(dependency_paths)
+            and len(dependency_paths) == len(set(dependency_paths)))
+        retained = ({entrypoint, *dependency_paths} if paths_valid else set())
+        fulfilled = requests.get("fulfilled")
+        derived = bool(
+            paths_valid
+            and isinstance(fulfilled, list) and fulfilled
+            and all(isinstance(item, str) and item for item in fulfilled)
+            and fulfilled == sorted(set(fulfilled))
+            and set(fulfilled) == retained
+            and requests.get("fulfilled_requests") == len(fulfilled)
+            and not isinstance(requests.get("fulfilled_requests"), bool)
+            and requests.get("blocked") == []
+            and requests.get("blocked_requests") == 0
+            and not isinstance(requests.get("blocked_requests"), bool)
+            and requests.get("blocked_websockets") == [])
+        if (requests.get("policy") != "formgen-snapshot-only-v1"
+                or requests.get("synthetic_origin") != "https://formgen.invalid"
+                or requests.get("all_requests_from_retained_closure") is not derived
+                or not derived):
+            errors.append(f"audit roundtrip request closure is false: {slug}")
+
+    candidate_keys = {
+        "bytes", "sha256", "retained_exact_bytes",
+        "chromium_returned_in_memory", "normalization", "materialization",
+        "expected_sha256_passed_to_extractor",
+        "validated_before_after_extraction", "candidate_ir_sha256",
+        "candidate_ir_digest_scope",
+    }
+    if not isinstance(candidate, dict) or set(candidate) != candidate_keys:
+        errors.append(f"audit candidate PDF manifest is malformed: {slug}")
+    else:
+        if (not _is_count(candidate.get("bytes"))
+                or candidate.get("bytes") == 0
+                or not _is_sha256(candidate.get("sha256"))
+                or not _is_sha256(candidate.get("candidate_ir_sha256"))
+                or candidate.get("retained_exact_bytes") is not True
+                or candidate.get("chromium_returned_in_memory") is not True
+                or candidate.get(
+                    "expected_sha256_passed_to_extractor") is not True
+                or candidate.get(
+                    "validated_before_after_extraction") is not True
+                or candidate.get("materialization")
+                != AUDIT_CANDIDATE_MATERIALIZATION
+                or candidate.get("candidate_ir_digest_scope")
+                != "source-and-generator-removed"):
+            errors.append(f"audit candidate PDF provenance is malformed: {slug}")
+        normalization = candidate.get("normalization")
+        if (not isinstance(normalization, dict)
+                or set(normalization) != {
+                    "algorithm", "fields_normalized", "replacement",
+                    "xref_offsets_preserved"}
+                or normalization.get("algorithm")
+                != "fixed-width-creation-modification-date-v1"
+                or normalization.get("fields_normalized") != 2
+                or isinstance(normalization.get("fields_normalized"), bool)
+                or normalization.get("replacement")
+                != AUDIT_PDF_NORMALIZATION_REPLACEMENT
+                or normalization.get("xref_offsets_preserved") is not True):
+            errors.append(f"audit candidate PDF normalization is malformed: {slug}")
+    if (record.get("measured") is not True
+            or record.get("hard_failure") is not None
+            or record.get("error") is not None
+            or record.get("status") != "ok"
+            or "roundtrip_liveness" in record):
+        errors.append(f"audit roundtrip success state is malformed: {slug}")
+    return errors
 
 
 def full_audit_payload_errors(
@@ -4409,21 +7463,30 @@ def full_audit_payload_errors(
         assertions = record.get("assertions")
         provenance = record.get("provenance_validation")
         attestation = record.get("attestation")
-        if (not isinstance(manifest, dict)
-                or set(manifest) != AUDIT_INPUT_MANIFEST_KEYS
-                or not isinstance(manifest.get("inputs"), dict)
-                or not isinstance(manifest.get("render"), dict)):
-            errors.append(f"audit input manifest is malformed: {slug}")
+        errors.extend(_audit_input_manifest_shape_errors(manifest, slug))
         if (not isinstance(provenance, dict)
                 or set(provenance) != {
                     "validated_before", "validated_after", "error"}
-                or not isinstance(provenance.get("validated_before"), bool)
-                or not isinstance(provenance.get("validated_after"), bool)):
+                or provenance.get("validated_before") is not True
+                or provenance.get("validated_after") is not True
+                or provenance.get("error") is not None):
             errors.append(f"audit provenance relation is malformed: {slug}")
         if (not isinstance(attestation, dict)
                 or set(attestation) != AUDIT_ATTESTATION_KEYS
-                or not isinstance(attestation.get("complete"), bool)
-                or not isinstance(attestation.get("enforceable"), bool)):
+                or attestation.get("inputs_complete") is not True
+                or attestation.get("producer_execution_bound") is not False
+                or attestation.get("base_runtime_scope_complete") is not False
+                or attestation.get(
+                    "roundtrip_runtime_scope_complete") is not False
+                or attestation.get("validated_before_after") is not True
+                or attestation.get("complete") is not False
+                or attestation.get("enforceable") is not False
+                or not isinstance(attestation.get("incomplete_reasons"), list)
+                or not attestation.get("incomplete_reasons")
+                or not all(isinstance(item, str) and item
+                           for item in attestation.get("incomplete_reasons", []))
+                or not isinstance(attestation.get("future_gate_required"), str)
+                or not attestation.get("future_gate_required")):
             errors.append(f"audit attestation is malformed: {slug}")
         if (not isinstance(assertions, dict)
                 or set(assertions) != set(REQUIRED_ASSERTIONS)):
@@ -4436,29 +7499,368 @@ def full_audit_payload_errors(
                     or not isinstance(detail.get("holds"), bool)
                     or record.get(key) is not detail.get("holds")):
                 errors.append(f"audit assertion relation is false: {slug}/{key}")
-            elif detail["holds"]:
+                continue
+            if key != "comb_slots_match_printed":
+                errors.extend(
+                    f"audit assertion publication is invalid: {slug}: {item}"
+                    for item in _basic_assertion_detail_errors(key, detail))
+            if detail["holds"]:
                 held_count += 1
         if record.get("assertions_held") != held_count:
             errors.append(f"audit assertion total is false: {slug}")
+        comb_detail = assertions.get("comb_slots_match_printed")
         try:
-            _normalise_outer_comb_assertion(
-                assertions.get("comb_slots_match_printed"))
+            _normalise_outer_comb_assertion(comb_detail)
         except CombRefereeScopeError as error:
             errors.append(f"audit comb publication is invalid: {slug}: {error}")
-        if record.get("comb_slots_match_printed") is not assertions[
-                "comb_slots_match_printed"].get("holds"):
+        if (not isinstance(comb_detail, dict)
+                or record.get("comb_slots_match_printed")
+                is not comb_detail.get("holds")):
             errors.append(f"audit top-level comb verdict is false: {slug}")
-        if record.get("status") not in {"ok", "error"}:
-            errors.append(f"audit status is invalid: {slug}")
-        if record.get("status") == "ok" and (
-                not isinstance(record.get("measured"), bool)
-                or not isinstance(record.get("paper_ok"), bool)):
+        if record.get("status") != "ok" or record.get("error") is not None:
+            errors.append(f"audit status is not complete: {slug}")
+        counters = (
+            "rules_missing", "rules_extra", "rules_thickness_violations",
+            "images_missing", "images_placement_violations",
+            "text_missing", "text_extra",
+        )
+        if (record.get("measured") is not True
+                or not isinstance(record.get("paper_ok"), bool)
+                or any(not _is_count(record.get(key)) for key in counters)):
             errors.append(f"audit round-trip relation is incomplete: {slug}")
+        for pct_key in _PERCENTAGE_EVIDENCE:
+            errors.extend(_percentage_evidence_errors(
+                record, pct_key, f"audit round-trip {slug}"))
+        errors.extend(_audit_roundtrip_payload_errors(record, slug))
     if len(slugs) != len(set(slugs)):
         errors.append("audit report contains duplicate slugs")
     if set(slugs) != set(expected_slugs):
         errors.append("audit report does not match the exact tracked slug corpus")
     return errors
+
+
+def _audit_runtime_projection_errors(
+        runtime: dict[str, Any], snapshot_runtime: Any, slug: str,
+        ) -> list[str]:
+    """Bind the child-reported loaded runtime members to outer exact bytes."""
+    errors: list[str] = []
+    if not isinstance(snapshot_runtime, dict):
+        return [f"outer audit runtime snapshot is absent: {slug}"]
+    if runtime.get("python") != snapshot_runtime.get("python_identity"):
+        errors.append(f"audit Python identity is not bound: {slug}")
+    expected_pymupdf_version = snapshot_runtime.get(
+        "pymupdf_distribution_version")
+    if (not isinstance(expected_pymupdf_version, str)
+            or not expected_pymupdf_version
+            or runtime.get("pymupdf") != {
+                "package_version": expected_pymupdf_version,
+                "version_bind": expected_pymupdf_version,
+            }):
+        errors.append(f"audit PyMuPDF version is not bound: {slug}")
+    projection = snapshot_runtime.get("python_dependency_files")
+    if not isinstance(projection, dict) or set(projection) != {
+            "algorithm", "files", "bytes", "members", "sha256"}:
+        return [f"outer Python dependency projection is malformed: {slug}"]
+    projected = projection.get("members")
+    if not isinstance(projected, list):
+        return [f"outer Python dependency members are malformed: {slug}"]
+    projected_tuples: list[tuple[str, int, str]] = []
+    for member in projected:
+        if (not isinstance(member, dict)
+                or set(member) != {"path", "bytes", "sha256"}
+                or not isinstance(member.get("path"), str)
+                or not member.get("path")
+                or not _is_count(member.get("bytes"))
+                or not _is_sha256(member.get("sha256"))):
+            errors.append(f"outer Python dependency member is malformed: {slug}")
+            continue
+        projected_tuples.append(
+            (member["path"], member["bytes"], member["sha256"]))
+    if (projected_tuples != sorted(projected_tuples)
+            or len({item[0] for item in projected_tuples})
+            != len(projected_tuples)
+            or projection.get("algorithm")
+            != "sha256(canonical-json(path,bytes,sha256))"
+            or projection.get("files") != len(projected_tuples)
+            or projection.get("bytes") != sum(item[1] for item in projected_tuples)
+            or projection.get("sha256") != canonical_digest([
+                {"path": path, "bytes": size, "sha256": digest}
+                for path, size, digest in projected_tuples
+            ])):
+        errors.append(f"outer Python dependency projection is false: {slug}")
+    projected_by_path = {
+        path: (size, digest) for path, size, digest in projected_tuples}
+
+    loaded = runtime.get("loaded_application_files")
+    loaded_members = loaded.get("members", []) if isinstance(loaded, dict) else []
+    loaded_by_name = {
+        member.get("file"): member
+        for member in loaded_members if isinstance(member, dict)
+    }
+    python_record = snapshot_runtime.get("python")
+    executable = loaded_by_name.get("python/executable")
+    if (not isinstance(python_record, dict)
+            or not isinstance(executable, dict)
+            or executable.get("bytes") != python_record.get("bytes")
+            or executable.get("sha256") != python_record.get("sha256")):
+        errors.append(f"audit Python executable is not bound: {slug}")
+    expected_library = snapshot_runtime.get("python_runtime_library")
+    reported_library = loaded_by_name.get("python/runtime-library")
+    if expected_library is None:
+        if reported_library is not None:
+            errors.append(f"audit Python runtime library is unexpected: {slug}")
+    elif (not isinstance(reported_library, dict)
+          or reported_library.get("bytes") != expected_library.get("bytes")
+          or reported_library.get("sha256") != expected_library.get("sha256")):
+        errors.append(f"audit Python runtime library is not bound: {slug}")
+
+    module_names = [
+        name for name in loaded_by_name
+        if isinstance(name, str) and name.startswith("module/")]
+    if "module/fitz" not in module_names or "module/pymupdf" not in module_names:
+        errors.append(f"audit PyMuPDF module inventory is incomplete: {slug}")
+    for logical in module_names:
+        module = logical.removeprefix("module/")
+        if module == "fitz":
+            candidate_paths = ["fitz/__init__.py"]
+        elif module == "pymupdf":
+            candidate_paths = ["pymupdf/__init__.py"]
+        elif re.fullmatch(
+                r"pymupdf(?:\.[A-Za-z_][A-Za-z0-9_]*)+", module):
+            stem = "pymupdf/" + module.removeprefix("pymupdf.").replace(".", "/")
+            candidate_paths = [
+                f"{stem}.py", f"{stem}/__init__.py",
+                *(f"{stem}{suffix}"
+                  for suffix in importlib.machinery.EXTENSION_SUFFIXES),
+            ]
+        else:
+            candidate_paths = []
+        report_member = loaded_by_name[logical]
+        matches = [
+            path for path in candidate_paths
+            if projected_by_path.get(path) == (
+                report_member.get("bytes"), report_member.get("sha256"))]
+        if len(matches) != 1:
+            errors.append(f"audit runtime module is not uniquely bound: {slug}/{logical}")
+    unexpected = sorted(
+        name for name in loaded_by_name
+        if name not in {"python/executable", "python/runtime-library"}
+        and name not in module_names)
+    if unexpected:
+        errors.append(f"audit runtime publishes unsupported members: {slug}")
+    return errors
+
+
+def _audit_roundtrip_snapshot_errors(
+        record: dict[str, Any], snapshot_runtime: Any, slug: str,
+        ) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(snapshot_runtime, dict):
+        return [f"outer roundtrip runtime snapshot is absent: {slug}"]
+    runtime = record.get("roundtrip_runtime")
+    if not isinstance(runtime, dict):
+        return [f"audit roundtrip runtime is absent: {slug}"]
+    trees_projection = snapshot_runtime.get("python_dependency_trees")
+    if (not isinstance(trees_projection, dict)
+            or set(trees_projection) != {"algorithm", "trees", "sha256"}
+            or trees_projection.get("algorithm")
+            != "per-entry-audit-tree-closure-v1"
+            or not isinstance(trees_projection.get("trees"), dict)
+            or trees_projection.get("sha256")
+            != canonical_digest(trees_projection.get("trees", {}))):
+        return [f"outer Python dependency tree projection is malformed: {slug}"]
+    expected_closure = trees_projection["trees"].get("playwright")
+    if (not isinstance(expected_closure, dict)
+            or runtime.get("dependency_closure") != expected_closure):
+        errors.append(f"audit Playwright closure is not bound: {slug}")
+    expected_version = snapshot_runtime.get("playwright_distribution_version")
+    if (not isinstance(expected_version, str) or not expected_version
+            or runtime.get("playwright_package_version") != expected_version):
+        errors.append(f"audit Playwright version is not bound: {slug}")
+    files_projection = snapshot_runtime.get("python_dependency_files")
+    projected: dict[str, tuple[int, str]] = {}
+    if isinstance(files_projection, dict):
+        members = files_projection.get("members")
+        if isinstance(members, list):
+            for member in members:
+                if (isinstance(member, dict)
+                        and isinstance(member.get("path"), str)
+                        and _is_count(member.get("bytes"))
+                        and _is_sha256(member.get("sha256"))):
+                    projected[member["path"]] = (
+                        member["bytes"], member["sha256"])
+    chromium = runtime.get("chromium")
+    chromium_file = chromium.get("file") if isinstance(chromium, dict) else None
+    if (not isinstance(chromium_file, str)
+            or projected.get(chromium_file) != (
+                chromium.get("bytes"), chromium.get("sha256"))):
+        errors.append(f"audit Chromium executable is not bound: {slug}")
+    return errors
+
+
+def _audit_payload_snapshot_binding_errors(
+        data: Any, snapshot: Any,
+        ) -> list[str]:
+    """Cross-bind every full-audit record to the immutable outer snapshot."""
+    if not isinstance(snapshot, dict):
+        return ["outer audit application snapshot is not an object"]
+    layout_bindings = snapshot.get("layout_bindings")
+    if not isinstance(layout_bindings, dict) or not layout_bindings:
+        return ["outer audit form inventory is absent"]
+    expected_slugs = frozenset(layout_bindings)
+    errors = full_audit_payload_errors(data, expected_slugs)
+    if errors or not isinstance(data, list):
+        return errors
+
+    producers = snapshot.get("producers")
+    trees = snapshot.get("artifact_trees")
+    source_snapshot = snapshot.get("source_pdfs")
+    snapshot_runtime = snapshot.get("runtime")
+    if not isinstance(producers, dict):
+        errors.append("outer audit producer snapshot is absent")
+        producers = {}
+    if not isinstance(trees, dict):
+        errors.append("outer audit artifact trees are absent")
+        trees = {}
+    source_relations = (
+        source_snapshot.get("relations", [])
+        if isinstance(source_snapshot, dict) else [])
+    if not isinstance(source_relations, list):
+        return ["outer audit source relations are malformed"]
+    source_by_slug = {
+        relation.get("slug"): relation
+        for relation in source_relations if isinstance(relation, dict)
+    }
+    if (len(source_by_slug) != len(source_relations)
+            or set(source_by_slug) != set(expected_slugs)):
+        errors.append("outer audit source relation inventory is false")
+
+    expected_producer_files = (
+        "tools/formgen/audit.py", "tools/formgen/extract.py",
+        "tools/formgen/verify.py",
+    )
+    if any(not isinstance(trees.get(name), dict)
+           for name in ("ir", "layout", "html", "guides")):
+        return ["outer audit artifact tree schema is malformed"]
+    tree_files = {name: _manifest_files(trees[name])
+                  for name in ("ir", "layout", "html", "guides")}
+    render_bindings = snapshot.get("render_bindings")
+    if (not isinstance(render_bindings, dict)
+            or set(render_bindings) != set(expected_slugs)):
+        errors.append("outer audit render binding inventory is false")
+        render_bindings = {}
+    runtime_digest: str | None = None
+    for record in data:
+        slug = record["slug"]
+        manifest = record["input_manifest"]
+        producer = manifest["producer"]
+        published_producers = [producer, *producer["dependencies"]]
+        for relative, published in zip(
+                expected_producer_files, published_producers):
+            expected = producers.get(relative)
+            if (not isinstance(expected, dict)
+                    or published.get("file") != relative
+                    or published.get("bytes") != expected.get("bytes")
+                    or published.get("sha256") != expected.get("sha256")):
+                errors.append(f"audit producer bytes are not bound: {slug}/{relative}")
+
+        current_runtime_digest = canonical_digest(manifest["runtime"])
+        if runtime_digest is None:
+            runtime_digest = current_runtime_digest
+        elif current_runtime_digest != runtime_digest:
+            errors.append(f"audit base runtime differs by form: {slug}")
+        errors.extend(_audit_runtime_projection_errors(
+            manifest["runtime"], snapshot_runtime, slug))
+        errors.extend(_audit_roundtrip_snapshot_errors(
+            record, snapshot_runtime, slug))
+
+        inputs = manifest["inputs"]
+        artifacts = {
+            "ir": ("ir", f"build/ir/{slug}.ir.json"),
+            "layout": ("layout", f"build/layout/{slug}.layout.json"),
+            "html": ("html", f"build/html/{slug}.html"),
+            "guide": ("guides", f"build/guides/{slug}.guide.json"),
+            "guide_html": ("html", f"build/html/{slug}.guide.html"),
+        }
+        for role, (tree_name, logical) in artifacts.items():
+            published = inputs[role]
+            expected = tree_files[tree_name].get(logical)
+            if expected is None and role == "guide_html":
+                if (published.get("file") != pathlib.PurePosixPath(logical).name
+                        or published.get("present") is not False
+                        or published.get("bytes") is not None
+                        or published.get("sha256") is not None):
+                    errors.append(f"audit optional input is falsely present: {slug}/{role}")
+                continue
+            if (not isinstance(expected, dict)
+                    or published.get("present") is not True
+                    or published.get("file") != pathlib.PurePosixPath(logical).name
+                    or published.get("bytes") != expected.get("bytes")
+                    or published.get("sha256") != expected.get("sha256")):
+                errors.append(f"audit generated input is not bound: {slug}/{role}")
+
+        source = inputs["source_pdf"]
+        relation = source_by_slug.get(slug)
+        selected = None
+        if isinstance(relation, dict):
+            selected = next((
+                candidate for candidate in relation.get("candidates", [])
+                if isinstance(candidate, dict)
+                and candidate.get("path") == relation.get("selected")), None)
+        layout_pin = relation.get("layout_pin") if isinstance(relation, dict) else None
+        if (not isinstance(relation, dict)
+                or not isinstance(selected, dict)
+                or not isinstance(layout_pin, dict)
+                or relation.get("matching_count") != 1
+                or source.get("file") != relation.get("declared_file")
+                or source.get("logical_identity") != layout_pin.get("file")
+                or source.get("path") != relation.get("selected")
+                or source.get("bytes") != relation.get("declared_bytes")
+                or source.get("sha256") != relation.get("declared_sha256")
+                or source.get("expected_sha256") != relation.get("declared_sha256")
+                or source.get("bytes") != selected.get("bytes")
+                or source.get("sha256") != selected.get("sha256")):
+            errors.append(f"audit source PDF is not bound: {slug}")
+
+        render = manifest["render"]
+        render_binding = render_bindings.get(slug)
+        expected_render = None
+        if isinstance(render_binding, dict):
+            expected_render = {
+                key: value for key, value in render_binding.items()
+                if key != "html_sha256"}
+        if (not isinstance(render_binding, dict)
+                or render_binding.get("html_sha256")
+                != inputs["html"].get("sha256")
+                or render != expected_render):
+            errors.append(
+                f"audit render dependency closure is not bound: {slug}")
+        dependency_paths = {
+            dependency["path"] for dependency in render["dependencies"]}
+        allowed_referrers = {render["entrypoint"], *dependency_paths}
+        for dependency in render["dependencies"]:
+            expected = tree_files["html"].get(
+                f"build/html/{dependency['path']}")
+            if (not isinstance(expected, dict)
+                    or dependency.get("bytes") != expected.get("bytes")
+                    or dependency.get("sha256") != expected.get("sha256")
+                    or not set(dependency.get("referrers", [])).issubset(
+                        allowed_referrers)):
+                errors.append(
+                    f"audit render dependency is not bound: {slug}/{dependency['path']}")
+    return errors
+
+
+def audit_payload_snapshot_binding_errors(
+        data: Any, snapshot: Any,
+        ) -> list[str]:
+    """Fail closed on malformed hostile evidence instead of propagating it."""
+    try:
+        return _audit_payload_snapshot_binding_errors(data, snapshot)
+    except Exception as error:  # noqa: BLE001 - malformed evidence is a verdict
+        return [
+            "audit payload/snapshot binding is malformed: "
+            f"{type(error).__name__}: {error}"]
 
 
 def compose_generated_scope(
@@ -4503,12 +7905,62 @@ def generated_scope_manifest(
     return compose_generated_scope(trees, report_record)
 
 
+def compose_audit_application_envelope(
+        snapshot: dict[str, Any], payload: bytes, form_count: int,
+        launcher_receipt: dict[str, Any], target_argv: Sequence[str],
+        child_exit: int = 0,
+        ) -> dict[str, Any]:
+    try:
+        audit_data = json.loads(payload)
+    except (UnicodeError, ValueError, RecursionError) as error:
+        raise CombRefereeScopeError(
+            f"cannot bind malformed audit payload: {error}") from error
+    binding_errors = audit_payload_snapshot_binding_errors(
+        audit_data, snapshot)
+    if binding_errors:
+        raise CombRefereeScopeError("; ".join(binding_errors[:5]))
+    relations = {key: True for key in AUDIT_APPLICATION_RELATIONS}
+    envelope: dict[str, Any] = {
+        "schema_version": AUDIT_APPLICATION_ATTESTATION_VERSION,
+        "application_scope_name": AUDIT_APPLICATION_SCOPE,
+        "application_snapshot": snapshot,
+        "invocation": {
+            "executable": sys.executable,
+            "resolved_executable": snapshot["runtime"]["python"]["path"],
+            "python_flags": list(ISOLATED_PYTHON_ATTESTED_FLAGS),
+            "pythonpath_removed": True,
+            "pythonhome_removed": True,
+            "timeout_seconds": 5400,
+            "output": "private-temporary-output",
+            "target_argv": list(target_argv),
+            "child_exit": child_exit,
+            "launcher_receipt": launcher_receipt,
+        },
+        "raw_report": {
+            "file": "build/audit.json",
+            "bytes": len(payload),
+            "sha256": sha256_bytes(payload),
+            "form_count": form_count,
+        },
+        "relations": relations,
+        "host_tcb_required": True,
+        "host_scope_complete": False,
+        "host_closure_claimed": False,
+        "operating_system_bound": False,
+        "python_stdlib_bound": False,
+        "dynamic_libraries_bound": False,
+        "application_scope_complete": all(relations.values()),
+        "enforceable": all(relations.values()),
+        "enforcement_scope": "application-only",
+    }
+    attach_self_digest(envelope)
+    return envelope
+
+
 def refresh_full_audit_report(
         target: pathlib.Path = AUDIT_JSON,
         attestation_target: pathlib.Path = AUDIT_APPLICATION_ATTESTATION,
         scratch_root: pathlib.Path = BUILD,
-        runner: Callable[[list[str], int], tuple[int, str]] = (
-            run_isolated_python),
         expected_slugs: frozenset[str] | None = None,
         scope_reader: Callable[[], dict[str, Any]] = (
             capture_audit_application_snapshot),
@@ -4524,9 +7976,11 @@ def refresh_full_audit_report(
     with tempfile.TemporaryDirectory(
             prefix=".full-audit-", dir=scratch_root) as temporary:
         fresh = pathlib.Path(temporary) / "audit.json"
+        target_argv = [str(HERE / "audit.py"), "--out", str(fresh)]
         try:
-            code, out = runner(
-                [str(HERE / "audit.py"), "--out", str(fresh)], 5400)
+            execution = run_isolated_python_attested(
+                target_argv, 5400)
+            code, out = execution.code, execution.output
         except Exception as error:  # noqa: BLE001 - child failure is evidence
             return Result(
                 "audit-refresh", Verdict.UNEVALUABLE,
@@ -4535,10 +7989,18 @@ def refresh_full_audit_report(
             tail = out.strip().splitlines()[-1:] or ["no diagnostic"]
             return Result("audit-refresh", Verdict.UNEVALUABLE,
                           f"full audit refresh failed: {tail[0]}")
+        receipt_errors = isolated_launch_receipt_errors(
+            execution.receipt, before.get("runtime", {}).get(
+                "python_dependencies"), code,
+            str(before.get("runtime", {}).get("python", {}).get("path", "")),
+            target_argv)
+        if receipt_errors:
+            return Result("audit-refresh", Verdict.UNEVALUABLE,
+                          "; ".join(receipt_errors[:5]))
         try:
             payload = fresh.read_bytes()
             data = json.loads(payload)
-        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        except (OSError, UnicodeError, ValueError, RecursionError) as error:
             return Result("audit-refresh", Verdict.UNEVALUABLE,
                           f"full audit produced no usable report: {error}")
         try:
@@ -4557,40 +8019,9 @@ def refresh_full_audit_report(
                 return Result(
                     "audit-refresh", Verdict.UNEVALUABLE,
                     "; ".join(scope_errors[:5]))
-            relations = {
-                key: True for key in AUDIT_APPLICATION_RELATIONS}
-            envelope: dict[str, Any] = {
-                "schema_version": AUDIT_APPLICATION_ATTESTATION_VERSION,
-                "application_scope_name": AUDIT_APPLICATION_SCOPE,
-                "application_snapshot": before,
-                "invocation": {
-                    "executable": sys.executable,
-                    "resolved_executable": before["runtime"]["python"]["path"],
-                    "python_flags": list(ISOLATED_PYTHON_ATTESTED_FLAGS),
-                    "pythonpath_removed": True,
-                    "pythonhome_removed": True,
-                    "timeout_seconds": 5400,
-                    "output": "private-temporary-output",
-                    "child_exit": code,
-                },
-                "raw_report": {
-                    "file": "build/audit.json",
-                    "bytes": len(payload),
-                    "sha256": sha256_bytes(payload),
-                    "form_count": len(data),
-                },
-                "relations": relations,
-                "host_tcb_required": True,
-                "host_scope_complete": False,
-                "host_closure_claimed": False,
-                "operating_system_bound": False,
-                "python_stdlib_bound": False,
-                "dynamic_libraries_bound": False,
-                "application_scope_complete": True,
-                "enforceable": True,
-                "enforcement_scope": "application-only",
-            }
-            attach_self_digest(envelope)
+            envelope = compose_audit_application_envelope(
+                before, payload, len(data), execution.receipt, target_argv,
+                code)
             envelope_payload = (
                 json.dumps(envelope, indent=2, sort_keys=True,
                            ensure_ascii=False) + "\n").encode("utf-8")
@@ -4619,13 +8050,26 @@ def refresh_full_pipeline(
         scratch_root: pathlib.Path = BUILD,
         batch_target: pathlib.Path = BATCH_REPORT,
         expected_slugs: frozenset[str] | None = None,
+        expected_inventory: dict[str, bool] | None = None,
         audit_identity_reader: Callable[[], dict[str, Any]] = (
             current_audit_identity),
         ) -> FullRefresh:
     """Two generations first, audit the final bytes, then referee exactly last."""
     diagnostics: list[str] = []
     try:
-        slugs = expected_slugs or canonical_form_slugs()
+        if expected_slugs is None and expected_inventory is None:
+            inventory = canonical_form_inventory()
+            slugs = frozenset(inventory)
+        elif (expected_slugs is not None
+              and isinstance(expected_inventory, dict)
+              and set(expected_inventory) == set(expected_slugs)
+              and all(isinstance(value, bool)
+                      for value in expected_inventory.values())):
+            slugs = expected_slugs
+            inventory = dict(expected_inventory)
+        else:
+            raise CombRefereeScopeError(
+                "custom generation slugs require an exact root inventory")
         scratch_root.mkdir(parents=True, exist_ok=True)
     except Exception as error:  # noqa: BLE001 - corpus identity is required
         return FullRefresh(
@@ -4664,7 +8108,7 @@ def refresh_full_pipeline(
                 )
             try:
                 report_record, payload = _fresh_batch_report(
-                    fresh_report, slugs)
+                    fresh_report, slugs, inventory)
                 generation = generation_reader(report_record)
             except Exception as error:  # noqa: BLE001
                 return FullRefresh(
@@ -4701,7 +8145,8 @@ def refresh_full_pipeline(
         f"byte-identical ({first_digest[:12]})")
     try:
         _atomic_write(batch_target, batch_payloads[1])
-        canonical_batch, _payload = _fresh_batch_report(batch_target, slugs)
+        canonical_batch, _payload = _fresh_batch_report(
+            batch_target, slugs, inventory)
         published_generation = generation_reader(canonical_batch)
     except Exception as error:  # noqa: BLE001
         return FullRefresh(
@@ -4798,6 +8243,7 @@ def refresh_final_comb_referee(
             generated_scope_manifest),
         batch_target: pathlib.Path = BATCH_REPORT,
         expected_slugs: frozenset[str] | None = None,
+        expected_inventory: dict[str, bool] | None = None,
         audit_identity_reader: Callable[[], dict[str, Any]] = (
             current_audit_identity),
         ) -> Result:
@@ -4808,8 +8254,21 @@ def refresh_final_comb_referee(
             "no deterministic post-audit scope exists; referee not run",
         )
     try:
-        slugs = expected_slugs or canonical_form_slugs()
-        batch_record, _payload = _fresh_batch_report(batch_target, slugs)
+        if expected_slugs is None and expected_inventory is None:
+            inventory = canonical_form_inventory()
+            slugs = frozenset(inventory)
+        elif (expected_slugs is not None
+              and isinstance(expected_inventory, dict)
+              and set(expected_inventory) == set(expected_slugs)
+              and all(isinstance(value, bool)
+                      for value in expected_inventory.values())):
+            slugs = expected_slugs
+            inventory = dict(expected_inventory)
+        else:
+            raise CombRefereeScopeError(
+                "custom generation slugs require an exact root inventory")
+        batch_record, _payload = _fresh_batch_report(
+            batch_target, slugs, inventory)
         current_generation = generation_reader(batch_record)
         current_scope = compose_final_referee_scope(
             current_generation, audit_identity_reader())
@@ -4853,7 +8312,13 @@ def check_self_tests() -> Result:
                 missing.append(f"{module} (no IR to test against)")
                 continue
             args += ["--ir", str(ir)]
-        code, _ = run(args, timeout=900)
+        if module in SELF_SUPERVISING_SELF_TEST_MODULES:
+            runner = run_self_supervising_python
+        elif module == "audit":
+            runner = run_dependency_self_test_python
+        else:
+            runner = run
+        code, _ = runner(args, timeout=900)
         if code != 0:
             failures.append(module)
     if missing:
@@ -4868,11 +8333,12 @@ def check_self_tests() -> Result:
 def check_conversion() -> Result:
     report = load(BATCH_REPORT)
     try:
-        expected_slugs = canonical_form_slugs()
+        inventory = canonical_form_inventory()
+        expected_slugs = frozenset(inventory)
     except Exception as error:  # noqa: BLE001 - exact corpus is mandatory
         return Result("conversion", Verdict.UNEVALUABLE,
                       f"cannot resolve tracked corpus: {error}")
-    errors = batch_report_errors(report, expected_slugs)
+    errors = batch_report_errors(report, expected_slugs, inventory)
     if errors:
         return Result("conversion", Verdict.FAIL, "; ".join(errors[:5]))
     return Result(
@@ -4881,17 +8347,135 @@ def check_conversion() -> Result:
     )
 
 
-def audit_records() -> list[dict] | None:
+def _audit_corpus_records() -> tuple[list[dict[str, Any]], list[str]]:
+    """Load the exact audit corpus without hiding malformed/error records."""
     data = load(AUDIT_JSON)
     if not isinstance(data, list):
-        return None
-    return [r for r in data if r.get("status") == "ok"]
+        return [], ["audit report is absent or not a list"]
+    errors: list[str] = []
+    records: list[dict[str, Any]] = []
+    slugs: list[str] = []
+    for index, value in enumerate(data):
+        if not isinstance(value, dict):
+            errors.append(f"audit record {index} is not an object")
+            continue
+        records.append(value)
+        slug = value.get("slug")
+        if not isinstance(slug, str) or not slug:
+            errors.append(f"audit record {index} has no slug")
+        else:
+            slugs.append(slug)
+        if value.get("status") not in {"ok", "error"}:
+            errors.append(f"audit record {slug or index} has invalid status")
+    if len(data) != EXPECTED_FORMS:
+        errors.append(f"audit covers {len(data)}/{EXPECTED_FORMS} forms")
+    if len(slugs) != len(set(slugs)):
+        errors.append("audit report contains duplicate slugs")
+    try:
+        expected_slugs = canonical_form_slugs()
+    except Exception as error:  # noqa: BLE001 - corpus identity is evidence
+        errors.append(f"cannot resolve tracked audit corpus: {error}")
+    else:
+        if set(slugs) != set(expected_slugs):
+            errors.append("audit report does not match the exact tracked slug corpus")
+    return records, errors
+
+
+def _metric_record_errors(
+        records: Sequence[dict[str, Any]], keys: Iterable[str] = (),
+        pct_key: str | None = None, paper: bool = False,
+        ) -> list[str]:
+    """Validate evidence shape before interpreting any metric value."""
+    errors: list[str] = []
+    required_keys = tuple(keys)
+    for index, record in enumerate(records):
+        slug = record.get("slug")
+        label = slug if isinstance(slug, str) and slug else str(index)
+        if record.get("status") != "ok":
+            errors.append(f"{label}: audit status is not ok")
+        if record.get("measured") is not True:
+            errors.append(f"{label}: measured is not exactly true")
+        for key in required_keys:
+            if not _is_count(record.get(key)):
+                errors.append(f"{label}: {key} is absent or not a nonnegative int")
+        if pct_key is not None:
+            errors.extend(_percentage_evidence_errors(
+                record, pct_key, label))
+        if paper and not isinstance(record.get("paper_ok"), bool):
+            errors.append(f"{label}: paper_ok is absent or not boolean")
+    return errors
+
+
+def _metric_audit_records(
+        keys: Iterable[str] = (), pct_key: str | None = None,
+        paper: bool = False,
+        ) -> tuple[list[dict[str, Any]], list[str]]:
+    records, errors = _audit_corpus_records()
+    if not errors:
+        errors.extend(_metric_record_errors(records, keys, pct_key, paper))
+    return records, errors
+
+
+def assertion_payload_errors(
+        data: Any, expected_slugs: frozenset[str],
+        ) -> list[str]:
+    """Validate the exact assertion-only publication before use or publish."""
+    if not isinstance(data, list):
+        return ["assertion audit report is not a list"]
+    errors: list[str] = []
+    slugs: list[str] = []
+    for index, record in enumerate(data):
+        if not isinstance(record, dict):
+            errors.append(f"assertion audit record is not an object: {index}")
+            continue
+        slug = record.get("slug")
+        if not isinstance(slug, str) or not slug:
+            errors.append(f"assertion audit record has no slug: {index}")
+            continue
+        slugs.append(slug)
+        if record.get("status") != "ok" or record.get("error") is not None:
+            errors.append(f"assertion audit record is not complete: {slug}")
+        details = record.get("assertions")
+        if (not isinstance(details, dict)
+                or set(details) != set(REQUIRED_ASSERTIONS)):
+            errors.append(f"assertion inventory is malformed: {slug}")
+            continue
+        held = 0
+        for key in REQUIRED_ASSERTIONS:
+            detail = details.get(key)
+            top_level = record.get(key)
+            if (not isinstance(top_level, bool)
+                    or not isinstance(detail, dict)
+                    or not isinstance(detail.get("holds"), bool)
+                    or top_level is not detail["holds"]):
+                errors.append(f"assertion relation is false: {slug}/{key}")
+                continue
+            if key == "comb_slots_match_printed":
+                try:
+                    _normalise_outer_comb_assertion(detail)
+                except CombRefereeScopeError as error:
+                    errors.append(
+                        f"comb assertion publication is invalid: {slug}: {error}")
+            else:
+                errors.extend(
+                    f"assertion publication is invalid: {slug}: {item}"
+                    for item in _basic_assertion_detail_errors(key, detail))
+            if top_level:
+                held += 1
+        if record.get("assertions_held") != held:
+            errors.append(f"assertion total is false: {slug}")
+    if len(slugs) != len(set(slugs)):
+        errors.append("assertion audit contains duplicate slugs")
+    if set(slugs) != set(expected_slugs):
+        errors.append("assertion audit does not match the exact tracked slug corpus")
+    return errors
 
 
 def refresh_assertions_report(
     target: pathlib.Path = AUDIT_JSON,
     scratch_root: pathlib.Path = BUILD,
     runner: Callable[[list[str], int], tuple[int, str]] = run,
+    expected_slugs: frozenset[str] | None = None,
 ) -> Result | None:
     """Atomically refresh the assertion audit, or return a fail-closed result."""
     scratch_root.mkdir(parents=True, exist_ok=True)
@@ -4905,9 +8489,16 @@ def refresh_assertions_report(
             tail = out.strip().splitlines()[-1:] or ["no diagnostic"]
             return Result("assertions", Verdict.UNEVALUABLE,
                           f"assertion audit refresh failed: {tail[0]}")
-        if not isinstance(load(fresh), list):
+        data = load(fresh)
+        try:
+            slugs = expected_slugs or canonical_form_slugs()
+        except Exception as error:  # noqa: BLE001 - corpus is evidence
             return Result("assertions", Verdict.UNEVALUABLE,
-                          "assertion audit refresh produced no usable report")
+                          f"cannot resolve tracked assertion corpus: {error}")
+        report_errors = assertion_payload_errors(data, slugs)
+        if report_errors:
+            return Result("assertions", Verdict.UNEVALUABLE,
+                          "; ".join(report_errors[:5]))
         try:
             fresh.replace(target)
         except OSError as error:
@@ -4917,37 +8508,24 @@ def refresh_assertions_report(
 
 
 def _tally(name: str, keys: Iterable[str], pct_key: str | None = None) -> Result:
-    records = audit_records()
-    if records is None:
-        return Result(name, Verdict.UNEVALUABLE, "no audit report")
-    if len(records) != EXPECTED_FORMS:
-        return Result(name, Verdict.FAIL,
-                      f"audit covers {len(records)}/{EXPECTED_FORMS} forms")
-
-    # A form whose round trip hard-failed reports every total as 0, because the
-    # differ never walked its pages. Counting those zeros as "clean" is how this
-    # gate came to report `rules clean on 51/51` while five forms had not been
-    # measured at all -- the same disease the gate exists to cure, in the gate.
-    unmeasured = [r["slug"] for r in records if r.get("measured") is False]
-    if unmeasured:
-        return Result(name, Verdict.UNEVALUABLE,
-                      f"{len(unmeasured)} form(s) not measured "
-                      f"({', '.join(unmeasured[:5])}); their totals are zeros "
-                      f"from a hard failure, not results")
+    key_tuple = tuple(keys)
+    records, errors = _metric_audit_records(key_tuple, pct_key)
+    if errors:
+        return Result(name, Verdict.UNEVALUABLE, "; ".join(errors[:5]))
 
     bad: list[str] = []
-    for key in keys:
-        offenders = [r for r in records if r.get(key)]
+    for key in key_tuple:
+        offenders = [r for r in records if r[key] != 0]
         if offenders:
-            total = sum(r.get(key, 0) for r in offenders)
+            total = sum(r[key] for r in offenders)
             bad.append(f"{key}={total} on {len(offenders)} form(s) "
                        f"(e.g. {offenders[0]['slug']})")
     if pct_key:
-        short = [r for r in records if r.get(pct_key) != 100.0]
+        short = [r for r in records if r[pct_key] != 100.0]
         if short:
-            worst = min(short, key=lambda r: r.get(pct_key) or 0)
+            worst = min(short, key=lambda r: r[pct_key])
             bad.append(f"{pct_key} below 100 on {len(short)} form(s), "
-                       f"worst {worst['slug']} {worst.get(pct_key)}%")
+                       f"worst {worst['slug']} {worst[pct_key]}%")
     if bad:
         return Result(name, Verdict.FAIL, "; ".join(bad))
     return Result(name, Verdict.PASS, f"clean on {len(records)}/{EXPECTED_FORMS}")
@@ -4959,10 +8537,10 @@ def check_rules() -> Result:
 
 
 def check_paper() -> Result:
-    records = audit_records()
-    if records is None:
-        return Result("paper", Verdict.UNEVALUABLE, "no audit report")
-    bad = [r["slug"] for r in records if not r.get("paper_ok")]
+    records, errors = _metric_audit_records(paper=True)
+    if errors:
+        return Result("paper", Verdict.UNEVALUABLE, "; ".join(errors[:5]))
+    bad = [r["slug"] for r in records if r["paper_ok"] is False]
     if bad:
         return Result("paper", Verdict.FAIL, f"{len(bad)} form(s): {', '.join(bad[:5])}")
     return Result("paper", Verdict.PASS, f"exact on {len(records)}/{EXPECTED_FORMS}")
@@ -4983,20 +8561,23 @@ def check_assertions() -> Result:
     UNEVALUABLE, which the gate counts as a failure -- the whole point of the
     exercise is that an unchecked claim must not read as a satisfied one.
     """
-    records = audit_records()
-    if records is None:
-        return Result("assertions", Verdict.UNEVALUABLE, "no audit report")
-    if len(records) != EXPECTED_FORMS:
-        return Result("assertions", Verdict.FAIL,
-                      f"audit covers {len(records)}/{EXPECTED_FORMS} forms")
-    absent = [k for k in REQUIRED_ASSERTIONS if not any(k in r for r in records)]
-    if absent:
-        return Result("assertions", Verdict.UNEVALUABLE,
-                      f"{len(absent)}/{len(REQUIRED_ASSERTIONS)} not implemented in "
-                      f"audit.py: {', '.join(sorted(absent))}")
+    records, errors = _audit_corpus_records()
+    if errors:
+        return Result("assertions", Verdict.UNEVALUABLE, "; ".join(errors[:5]))
+    try:
+        slugs = canonical_form_slugs()
+    except Exception as error:  # noqa: BLE001 - corpus identity is evidence
+        return Result(
+            "assertions", Verdict.UNEVALUABLE,
+            f"cannot resolve tracked assertion corpus: {error}")
+    publication_errors = assertion_payload_errors(records, slugs)
+    if publication_errors:
+        return Result(
+            "assertions", Verdict.UNEVALUABLE,
+            "; ".join(publication_errors[:5]))
     violations: list[str] = []
     for key, description in REQUIRED_ASSERTIONS.items():
-        offenders = [r["slug"] for r in records if r.get(key) is not True]
+        offenders = [r["slug"] for r in records if r[key] is False]
         if offenders:
             violations.append(f"{key} fails on {len(offenders)} form(s) "
                               f"({description})")
@@ -5006,14 +8587,111 @@ def check_assertions() -> Result:
                   f"all {len(REQUIRED_ASSERTIONS)} hold on {len(records)} forms")
 
 
+FINDINGS_TOP_LEVEL_KEYS = {
+    "schema_version", "source", "note", "cause_codes", "findings",
+}
+FINDING_KEYS = {
+    "id", "form", "page", "severity", "status", "what", "where",
+    "evidence", "cause", "audit_blind", "resolution",
+}
+FINDING_SEVERITIES = {"blocker", "major", "minor", "cosmetic"}
+FINDING_STATUSES = {"open", "fixed", "not-a-defect"}
+FINDINGS_BASELINE_COUNT = 138
+FINDING_IMMUTABLE_KEYS = (
+    "id", "form", "page", "severity", "what", "where", "evidence",
+    "cause", "audit_blind",
+)
+FINDINGS_IMMUTABLE_BASELINE_SHA256 = (
+    "1e6b13157096d15f608a6505602ef47368b307982f5eadb2c24b3bd0dc839723"
+)
+
+
+def findings_payload_errors(data: Any) -> list[str]:
+    """Validate the append-only review ledger before interpreting status."""
+    if not isinstance(data, dict) or set(data) != FINDINGS_TOP_LEVEL_KEYS:
+        return ["findings ledger schema is unsupported"]
+    errors: list[str] = []
+    cause_codes = data.get("cause_codes")
+    if (data.get("schema_version") != 1
+            or not isinstance(data.get("source"), str)
+            or not data.get("source")
+            or not isinstance(data.get("note"), str)
+            or not data.get("note")
+            or not isinstance(cause_codes, dict)
+            or not all(isinstance(key, str) and key
+                       and isinstance(value, str) and value
+                       for key, value in (
+                           cause_codes.items()
+                           if isinstance(cause_codes, dict) else ()))):
+        errors.append("findings ledger metadata is malformed")
+    findings = data.get("findings")
+    if not isinstance(findings, list):
+        return [*errors, "findings inventory is not a list"]
+    if len(findings) < FINDINGS_BASELINE_COUNT:
+        errors.append(
+            f"findings ledger has {len(findings)}/{FINDINGS_BASELINE_COUNT} "
+            "immutable historical entries")
+    identifiers: list[str] = []
+    valid_causes = set(cause_codes) if isinstance(cause_codes, dict) else set()
+    for index, finding in enumerate(findings, 1):
+        if not isinstance(finding, dict) or set(finding) != FINDING_KEYS:
+            errors.append(f"finding {index} schema is unsupported")
+            continue
+        identifier = finding.get("id")
+        identifiers.append(identifier if isinstance(identifier, str) else "")
+        resolution = finding.get("resolution")
+        cause = finding.get("cause")
+        if (identifier != f"F{index:03d}"
+                or not isinstance(finding.get("form"), str)
+                or not finding.get("form")
+                or not _is_count(finding.get("page"))
+                or finding.get("severity") not in FINDING_SEVERITIES
+                or finding.get("status") not in FINDING_STATUSES
+                or any(not isinstance(finding.get(key), str)
+                       or not finding.get(key)
+                       for key in ("what", "where", "evidence"))
+                or (cause is not None and cause not in valid_causes)
+                or not isinstance(finding.get("audit_blind"), bool)
+                or (resolution is not None
+                    and not isinstance(resolution, str))):
+            errors.append(f"finding {identifier or index} is malformed")
+        if (finding.get("status") in {"fixed", "not-a-defect"}
+                and (not isinstance(resolution, str)
+                     or not resolution.strip())):
+            errors.append(
+                f"finding {identifier or index} has no resolution evidence")
+    if len(identifiers) != len(set(identifiers)):
+        errors.append("findings ledger contains duplicate identifiers")
+    if len(findings) >= FINDINGS_BASELINE_COUNT:
+        try:
+            immutable_projection = {
+                "cause_codes": cause_codes,
+                "findings": [
+                    {key: finding[key] for key in FINDING_IMMUTABLE_KEYS}
+                    for finding in findings[:FINDINGS_BASELINE_COUNT]
+                ],
+            }
+            immutable_digest = canonical_digest(immutable_projection)
+        except (KeyError, TypeError, ValueError, OverflowError) as error:
+            errors.append(
+                "findings immutable baseline is unevaluable: "
+                f"{type(error).__name__}: {error}")
+        else:
+            if immutable_digest != FINDINGS_IMMUTABLE_BASELINE_SHA256:
+                errors.append("findings immutable baseline was rewritten")
+    return errors
+
+
 def check_findings() -> Result:
     data = load(FINDINGS)
-    if not isinstance(data, dict) or "findings" not in data:
-        return Result("findings", Verdict.UNEVALUABLE, "no findings ledger")
-    gating = [f for f in data["findings"] if f.get("severity") in ("blocker", "major")]
+    errors = findings_payload_errors(data)
+    if errors:
+        return Result("findings", Verdict.UNEVALUABLE, "; ".join(errors[:5]))
+    findings = data["findings"]
+    gating = [f for f in findings if f["severity"] in ("blocker", "major")]
     unresolved = [f for f in gating
-                  if f.get("status") not in ("fixed", "not-a-defect")
-                  or not (f.get("resolution") or "").strip()]
+                  if f["status"] not in ("fixed", "not-a-defect")
+                  or not (f["resolution"] or "").strip()]
     if unresolved:
         by_form: dict[str, int] = {}
         for f in unresolved:
@@ -5107,6 +8785,7 @@ def _synthetic_comb_fixture(
     artifact_payloads = {
         "ir": b"ir", "layout": b"layout", "html": b"html",
         "guides": b"guide", "guide_html": b"guide-html",
+        "asset": b"asset",
     }
     artifact_records = {
         "ir": {"path": "build/ir/fixture-1.ir.json", "bytes": 2,
@@ -5120,6 +8799,10 @@ def _synthetic_comb_fixture(
         "guide_html": {
             "path": "build/html/fixture-1.guide.html", "bytes": 10,
             "sha256": sha256_bytes(artifact_payloads["guide_html"]),
+        },
+        "asset": {
+            "path": "build/html/assets/fixture.png", "bytes": 5,
+            "sha256": sha256_bytes(artifact_payloads["asset"]),
         },
     }
     provenance_payload = b"provenance"
@@ -5277,8 +8960,15 @@ def _synthetic_comb_fixture(
             "expected_sha256": source_digest,
         },
     }
+    fixture_render_dependency = {
+        "path": "assets/fixture.png", "mime_type": "image/png",
+        "present": True, "bytes": artifact_records["asset"]["bytes"],
+        "sha256": artifact_records["asset"]["sha256"],
+        "kinds": ["img"], "referrers": ["fixture-1.html"],
+    }
     audit_render = {
-        "entrypoint": "fixture-1.html", "dependencies": [],
+        "entrypoint": "fixture-1.html",
+        "dependencies": [fixture_render_dependency],
         "errors": [], "complete": True,
         "network_policy": "deny-except-retained-relative-resources-and-inline-data",
     }
@@ -5298,7 +8988,37 @@ def _synthetic_comb_fixture(
         for index in range(2, EXPECTED_FORMS + 1)
     })
     audit_digest = sha256_bytes(b"audit")
-    html_files = [artifact_records["html"], artifact_records["guide_html"]]
+    html_files = [
+        artifact_records["html"], artifact_records["guide_html"],
+        artifact_records["asset"],
+    ]
+    fixture_dependency_entries = [
+        {
+            "name": name,
+            "root": "/synthetic",
+            "kind": "directory",
+            "files": [{
+                "path": "__init__.py", "type": "file", "mode": 0o444,
+                "bytes": len(name), "sha256": sha256_bytes(name.encode()),
+            }],
+        }
+        for name in ("fitz", "pymupdf")
+    ]
+    fixture_dependency_entries.append({
+        "name": "playwright",
+        "root": "/synthetic",
+        "kind": "directory",
+        "files": [
+            {
+                "path": "__init__.py", "type": "file", "mode": 0o444,
+                "bytes": 10, "sha256": sha256_bytes(b"playwright"),
+            },
+            {
+                "path": "driver/chromium", "type": "file", "mode": 0o555,
+                "bytes": 8, "sha256": sha256_bytes(b"chromium"),
+            },
+        ],
+    })
     snapshot: dict[str, Any] = {
         "git": {
             "commit": "1" * 40,
@@ -5311,6 +9031,20 @@ def _synthetic_comb_fixture(
                 "path": python_path, "bytes": 6,
                 "sha256": python_digest,
             },
+            "python_identity": {
+                "implementation": platform.python_implementation(),
+                "version": platform.python_version(),
+                "cache_tag": str(sys.implementation.cache_tag),
+            },
+            "python_runtime_library": None,
+            "python_dependencies": _isolated_dependency_manifest(
+                fixture_dependency_entries),
+            "python_dependency_files": _isolated_dependency_file_projection(
+                fixture_dependency_entries),
+            "python_dependency_trees": _isolated_dependency_tree_projections(
+                fixture_dependency_entries),
+            "pymupdf_distribution_version": "fixture",
+            "playwright_distribution_version": "fixture",
             "pdftocairo": {
                 "path": "/trusted/pdftocairo", "bytes": 10,
                 "sha256": poppler_digest,
@@ -5368,6 +9102,12 @@ def _synthetic_comb_fixture(
                 "inferences": {},
             },
         },
+        "render_bindings": {
+            "fixture-1": {
+                "html_sha256": artifact_records["html"]["sha256"],
+                **audit_render,
+            },
+        },
         "provenance": _file_manifest([provenance_record]),
         "source_pdfs": {
             "relation_count": 1, "candidate_file_count": 1,
@@ -5392,8 +9132,8 @@ def _synthetic_comb_fixture(
         "runtime_manifest_self_consistent": True,
         "base_runtime_closure_independently_attested": False,
         "roundtrip_runtime_closure_independently_attested": False,
-        "render_dependency_count": 0,
-        "render_dependencies": [],
+        "render_dependency_count": 1,
+        "render_dependencies": [fixture_render_dependency],
         "roundtrip_present": True,
     }
     fixture_ledger_binding = {
@@ -5734,7 +9474,9 @@ def _synthetic_batch_record(slug: str) -> dict[str, Any]:
     }
 
 
-def _synthetic_audit_record(slug: str) -> dict[str, Any]:
+def _synthetic_audit_record(
+        slug: str, application_scope: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
     comb_assertion = {
         "holds": True,
         "reason": "",
@@ -5759,33 +9501,236 @@ def _synthetic_audit_record(slug: str) -> dict[str, Any]:
         "emission_behind_layout": 0,
         "emission_invalid": 0,
     }
+    basic_counts = {
+        "inputs_over_printed_text": {
+            "cells_checked": 0, "emitted_cell_binding_issues": 0},
+        "money_boxes_have_inputs": {
+            "boxes_checked": 0, "combs_fully_inked": 0,
+            "emitted_cell_binding_issues": 0},
+        "rules_below_guide_cut": {
+            "cuts": 0, "area_fills_below_cut": 0},
+        "run_colour_matches_ir": {"runs_checked": 0},
+        "reflow_rate_without_description": {
+            "rate_tables": 0, "rows_checked": 0},
+        "image_transform_applied": {"placements": 0},
+        "no_invented_codepoints": {"characters_examined": 0},
+    }
     assertions = {
         key: (comb_assertion if key == "comb_slots_match_printed" else {
             "holds": True, "reason": "", "offenders": [],
+            **basic_counts[key],
         })
         for key in REQUIRED_ASSERTIONS
+    }
+    if application_scope is None:
+        producer_records = {
+            relative: {
+                "path": relative,
+                "bytes": len(relative.encode("utf-8")),
+                "sha256": sha256_bytes(relative.encode("utf-8")),
+            }
+            for relative in (
+                "tools/formgen/audit.py", "tools/formgen/extract.py",
+                "tools/formgen/verify.py")
+        }
+        python_record = {
+            "bytes": 6, "sha256": sha256_bytes(b"python")}
+        python_identity = {
+            "implementation": platform.python_implementation(),
+            "version": platform.python_version(),
+            "cache_tag": str(sys.implementation.cache_tag),
+        }
+        dependency_members = {
+            "fitz/__init__.py": {
+                "bytes": 4, "sha256": sha256_bytes(b"fitz")},
+            "pymupdf/__init__.py": {
+                "bytes": 7, "sha256": sha256_bytes(b"pymupdf")},
+            "playwright/driver/chromium": {
+                "bytes": 8, "sha256": sha256_bytes(b"chromium")},
+        }
+        input_digest = sha256_bytes(slug.encode("utf-8"))
+        inputs = {
+            role: {
+                "file": f"{slug}.{suffix}", "required": True,
+                "present": True, "bytes": 1, "sha256": input_digest,
+            }
+            for role, suffix in (
+                ("ir", "ir.json"), ("layout", "layout.json"),
+                ("html", "html"), ("guide", "guide.json"))
+        }
+        inputs["guide_html"] = {
+            "file": f"{slug}.guide.html", "required": False,
+            "present": False, "bytes": None, "sha256": None,
+        }
+        inputs["source_pdf"] = {
+            "file": f"{slug}.pdf", "logical_identity": f"external:{slug}.pdf",
+            "path": f"{slug}.pdf", "required": True, "present": True,
+            "bytes": 1, "sha256": input_digest,
+            "expected_sha256": input_digest,
+        }
+        render = {
+            "entrypoint": f"{slug}.html", "dependencies": [],
+            "errors": [], "complete": True,
+            "network_policy": (
+                "deny-except-retained-relative-resources-and-inline-data"),
+        }
+    else:
+        producer_records = application_scope["producers"]
+        snapshot_runtime = application_scope["runtime"]
+        python_record = snapshot_runtime["python"]
+        python_identity = snapshot_runtime["python_identity"]
+        dependency_members = {
+            member["path"]: member
+            for member in snapshot_runtime["python_dependency_files"]["members"]
+        }
+        audit_form = application_scope["audit"]["forms"][slug]
+        inputs = json.loads(json.dumps(audit_form["inputs"]))
+        render = json.loads(json.dumps(audit_form["render"]))
+    producer = {
+        "file": "tools/formgen/audit.py",
+        "bytes": producer_records["tools/formgen/audit.py"]["bytes"],
+        "sha256": producer_records["tools/formgen/audit.py"]["sha256"],
+        "dependencies": [
+            {
+                "file": relative,
+                "bytes": producer_records[relative]["bytes"],
+                "sha256": producer_records[relative]["sha256"],
+                "loaded_origin": relative,
+                "executed_from_snapshotted_source": True,
+            }
+            for relative in (
+                "tools/formgen/extract.py", "tools/formgen/verify.py")
+        ],
+        "dependency_execution_bound": True,
+        "audit_execution_bound": False,
+        "assertion_producer_bound": False,
+        "roundtrip_runtime_bound_in_record": False,
+        "standalone_attestation_complete": False,
+        "incomplete_reason": "synthetic standalone producer scope is incomplete",
+    }
+    runtime_members = [
+        {
+            "file": "module/fitz",
+            "bytes": dependency_members["fitz/__init__.py"]["bytes"],
+            "sha256": dependency_members["fitz/__init__.py"]["sha256"],
+        },
+        {
+            "file": "module/pymupdf",
+            "bytes": dependency_members["pymupdf/__init__.py"]["bytes"],
+            "sha256": dependency_members["pymupdf/__init__.py"]["sha256"],
+        },
+        {
+            "file": "python/executable",
+            "bytes": python_record["bytes"],
+            "sha256": python_record["sha256"],
+        },
+    ]
+    runtime_tuples = [
+        (member["file"], member["bytes"], member["sha256"])
+        for member in runtime_members]
+    runtime_payload = json.dumps(
+        runtime_tuples, separators=(",", ":")).encode("ascii")
+    runtime = {
+        "python": dict(python_identity),
+        "pymupdf": {"package_version": "fixture", "version_bind": "fixture"},
+        "loaded_application_files": {
+            "algorithm": "sha256(canonical-json(logical-file,bytes,sha256))",
+            "files": len(runtime_members),
+            "bytes": sum(member["bytes"] for member in runtime_members),
+            "tree_sha256": sha256_bytes(runtime_payload),
+            "members": runtime_members,
+            "validated_before_after": True,
+        },
+        "stdlib_and_system_shared_libraries_bound": False,
+        "scope_complete": False,
+        "incomplete_reason": "synthetic host runtime scope is incomplete",
+    }
+    if application_scope is None:
+        playwright_closure = {
+            "logical_root": "playwright",
+            "algorithm": "sha256(canonical-json(path,type,bytes,digest))",
+            "files": 1, "symlinks": 0, "bytes": 8,
+            "tree_sha256": sha256_bytes(b"synthetic-playwright-tree"),
+        }
+        playwright_version = "fixture"
+    else:
+        playwright_closure = application_scope["runtime"][
+            "python_dependency_trees"]["trees"]["playwright"]
+        playwright_version = application_scope["runtime"][
+            "playwright_distribution_version"]
+    chromium = dependency_members["playwright/driver/chromium"]
+    roundtrip_runtime = {
+        "mode": "playwright-exact-executable",
+        "playwright_package_version": playwright_version,
+        "dependency_closure": dict(playwright_closure),
+        "chromium": {
+            "file": "playwright/driver/chromium",
+            "bytes": chromium["bytes"], "sha256": chromium["sha256"],
+            "version_output": "Chromium 147.0.0.0",
+        },
+        "same_resolution_session_used_for_render": True,
+        "dependency_closure_validated_before_after": True,
+        "system_shared_libraries_bound": False,
+        "native_host_environment_bound": False,
+        "scope": AUDIT_ROUNDTRIP_SCOPE,
+        "scope_complete": False,
+        "incomplete_reason": "synthetic native host scope is incomplete",
+        "live_browser_version": "147.0.0.0",
+        "explicit_executable_path_used": True,
+        "launch_args": list(AUDIT_ROUNDTRIP_LAUNCH_ARGS),
+        "service_workers": "block",
+        "browser_context_offline": True,
+        "websocket_policy": "record-and-leave-unconnected",
+        "request_policy": "formgen-snapshot-only-v1",
+        "playwright_operation_timeout_ms": 120000,
+        "hard_deadline_seconds": 60.0,
+        "hard_deadline_enforced_by": "isolated-render-worker-process-v1",
+        "deadline_cleanup_policy": "kill-worker-and-chromium-process-group",
+    }
+    fulfilled = sorted({
+        render["entrypoint"],
+        *(item["path"] for item in render["dependencies"]),
+    })
+    render_requests = {
+        "policy": "formgen-snapshot-only-v1",
+        "synthetic_origin": "https://formgen.invalid",
+        "fulfilled": fulfilled,
+        "fulfilled_requests": len(fulfilled),
+        "blocked": [], "blocked_requests": 0, "blocked_websockets": [],
+        "all_requests_from_retained_closure": True,
+    }
+    candidate_pdf = {
+        "bytes": 1, "sha256": sha256_bytes(b"candidate-pdf"),
+        "retained_exact_bytes": True,
+        "chromium_returned_in_memory": True,
+        "normalization": {
+            "algorithm": "fixed-width-creation-modification-date-v1",
+            "fields_normalized": 2,
+            "replacement": AUDIT_PDF_NORMALIZATION_REPLACEMENT,
+            "xref_offsets_preserved": True,
+        },
+        "materialization": AUDIT_CANDIDATE_MATERIALIZATION,
+        "expected_sha256_passed_to_extractor": True,
+        "validated_before_after_extraction": True,
+        "candidate_ir_sha256": sha256_bytes(b"candidate-ir"),
+        "candidate_ir_digest_scope": "source-and-generator-removed",
     }
     record: dict[str, Any] = {
         "slug": slug,
         "status": "ok",
         "error": None,
         "input_manifest": {
-            "schema": 1,
+            "schema": "formgen-audit-input-manifest-v1",
             "algorithm": "sha256",
-            "producer": {},
-            "runtime": {},
+            "producer": producer,
+            "runtime": runtime,
             "inputs_complete": True,
             "attestation_complete": False,
             "enforceable": False,
             "complete": False,
             "missing_required": [],
-            "inputs": {},
-            "render": {
-                "entrypoint": f"{slug}.html", "dependencies": [],
-                "errors": [], "complete": True,
-                "network_policy": (
-                    "deny-except-retained-relative-resources-and-inline-data"),
-            },
+            "inputs": inputs,
+            "render": render,
         },
         "provenance_validation": {
             "validated_before": True,
@@ -5805,8 +9750,23 @@ def _synthetic_audit_record(slug: str) -> dict[str, Any]:
             "incomplete_reasons": ["synthetic host scope is incomplete"],
             "future_gate_required": "outer application wrapper",
         },
+        "roundtrip_runtime": roundtrip_runtime,
+        "render_requests": render_requests,
+        "candidate_pdf": candidate_pdf,
         "measured": True,
+        "hard_failure": None,
         "paper_ok": True,
+        "rules_ref": 1,
+        "rules_missing": 0,
+        "rules_extra": 0,
+        "rules_thickness_violations": 0,
+        "rules_pct": 100.0,
+        "images_missing": 0,
+        "images_placement_violations": 0,
+        "text_ref": 1,
+        "text_missing": 0,
+        "text_extra": 0,
+        "text_pct": 100.0,
     }
     record.update({key: True for key in REQUIRED_ASSERTIONS})
     return record
@@ -5825,10 +9785,69 @@ def self_test() -> int:
     if not Verdict.PASS.ok:
         failures.append("PASS must count as ok")
 
-    missing = check_assertions()
-    if missing.verdict is Verdict.PASS:
-        failures.append("assertions reported PASS while audit.py does not "
-                        "implement them")
+    scanner = GateAuditRenderDependencyScanner()
+    scanner.feed(
+        '<script src="assets/runtime.js"></script>'
+        '<base href="https://example.invalid/">'
+        '<meta http-equiv="refresh" content="0;url=elsewhere.html">')
+    scanner.close()
+    if ("assets/runtime.js", "script") not in scanner.references:
+        failures.append(
+            "independent audit render closure must include script sources")
+    if not any("base href" in error for error in scanner.errors):
+        failures.append(
+            "independent audit render closure must reject base href")
+    if not any("meta refresh" in error for error in scanner.errors):
+        failures.append(
+            "independent audit render closure must reject meta refresh")
+    srcset_scanner = GateAuditRenderDependencyScanner()
+    srcset_scanner.feed('<img srcset="data:image/png;base64,AAAA 1x">')
+    srcset_scanner.close()
+    if not srcset_scanner.errors:
+        failures.append(
+            "ambiguous data-URL srcset must make render closure unevaluable")
+
+    for malformed_runtime in (None, [], "runtime", 1):
+        malformed_envelope = {
+            "application_snapshot": {"runtime": malformed_runtime},
+            "invocation": {}, "raw_report": {},
+        }
+        try:
+            malformed_errors = validate_audit_application_envelope(
+                malformed_envelope, b"[]")
+        except Exception as error:  # noqa: BLE001 - regression probe
+            failures.append(
+                "malformed audit application runtime must not raise: "
+                f"{type(error).__name__}: {error}")
+        else:
+            if not malformed_errors:
+                failures.append(
+                    "malformed audit application runtime must fail closed")
+
+    findings_fixture = {
+        "schema_version": 1, "source": "synthetic", "note": "synthetic",
+        "cause_codes": {}, "findings": None,
+    }
+    if not findings_payload_errors(findings_fixture):
+        failures.append("a non-list findings inventory must fail closed")
+    findings_fixture["findings"] = [None]
+    if not findings_payload_errors(findings_fixture):
+        failures.append("a non-object finding must fail closed")
+    findings_fixture["findings"] = []
+    if not findings_payload_errors(findings_fixture):
+        failures.append("an empty findings ledger must fail closed")
+
+    huge_json_integer = ("[" + "9" * 5000 + "]").encode("ascii")
+    try:
+        huge_json_errors = validate_audit_application_envelope(
+            {}, huge_json_integer)
+    except Exception as error:  # noqa: BLE001 - hostile JSON probe
+        failures.append(
+            "huge JSON integers must not escape envelope validation: "
+            f"{type(error).__name__}: {error}")
+    else:
+        if not huge_json_errors:
+            failures.append("huge JSON integers must fail closed")
 
     probe = Result("probe", Verdict.UNEVALUABLE, "x")
     if summarise([probe]) == 0:
@@ -5841,6 +9860,67 @@ def self_test() -> int:
                         f"{len(REQUIRED_ASSERTIONS)}")
     if "comb_referee" not in SELF_TEST_MODULES:
         failures.append("comb_referee.py must be included in module self-tests")
+
+    direct_paths = [
+        f"forms/direct-{index}/provenance.json" for index in range(38)]
+    extra_paths = [
+        f"forms/extra/extra-{index}/provenance.json" for index in range(13)]
+    corpus_fixture = direct_paths + extra_paths + [
+        "forms/direct-0/unrelated\nname.json"]
+    try:
+        fixture_slugs = _canonical_form_slugs_from_paths(corpus_fixture)
+        if (len(fixture_slugs) != EXPECTED_FORMS
+                or "direct-0" not in fixture_slugs
+                or "extra-12" not in fixture_slugs):
+            failures.append(
+                "the canonical corpus must include 38 direct and 13 extra forms")
+    except Exception as error:  # noqa: BLE001 - self-test reports exact failure
+        failures.append(f"valid canonical corpus fixture failed: {error}")
+    for label, paths in (
+            ("duplicate", corpus_fixture + [
+                "forms/extra/direct-0/provenance.json"]),
+            ("missing", direct_paths[:-1] + extra_paths),
+            ("extra", direct_paths + extra_paths + [
+                "forms/direct-new/provenance.json"]),
+            ("wrong root distribution", direct_paths + extra_paths[:-1] + [
+                "forms/moved-extra/provenance.json"]),
+            ("nested", corpus_fixture + [
+                "forms/direct-0/nested/provenance.json"]),
+            ("unsupported namespace", corpus_fixture + [
+                "forms/archive/form/provenance.json"]),
+            ("reserved extra root", corpus_fixture + [
+                "forms/extra/provenance.json"]),
+            ):
+        try:
+            _canonical_form_slugs_from_paths(paths)
+        except CombRefereeScopeError:
+            pass
+        else:
+            failures.append(
+                f"canonical corpus must reject {label} provenance evidence")
+    try:
+        tracked_inventory = canonical_form_inventory()
+        if len(tracked_inventory) != EXPECTED_FORMS:
+            failures.append("the tracked canonical corpus must resolve 51 forms")
+        batch_fixture = []
+        for slug, in_corpus in tracked_inventory.items():
+            record = _synthetic_batch_record(slug)
+            record["in_corpus"] = in_corpus
+            batch_fixture.append(record)
+        if batch_report_errors(
+                batch_fixture, frozenset(tracked_inventory),
+                tracked_inventory):
+            failures.append(
+                "a correctly root-classified batch corpus must validate")
+        flipped_batch = json.loads(json.dumps(batch_fixture))
+        flipped_batch[0]["in_corpus"] = not flipped_batch[0]["in_corpus"]
+        if not batch_report_errors(
+                flipped_batch, frozenset(tracked_inventory),
+                tracked_inventory):
+            failures.append(
+                "a flipped batch in_corpus classification must fail closed")
+    except Exception as error:  # noqa: BLE001
+        failures.append(f"tracked canonical corpus failed: {error}")
 
     try:
         import py_compile
@@ -5865,38 +9945,514 @@ def self_test() -> int:
             module.write_text("VALUE = 'source'\n", encoding="utf-8")
             os.utime(module, ns=(
                 compiled_stat.st_atime_ns, compiled_stat.st_mtime_ns))
+            grandchild_probe = (
+                "import json,sys;import fitz;"
+                "print(json.dumps({"
+                "'isolated':sys.flags.isolated,"
+                "'no_site':sys.flags.no_site,"
+                "'site_loaded':'site' in sys.modules,"
+                "'pymupdf':bool(fitz.VersionBind)}))"
+            )
+            inert_bootstrap_bypass = (
+                "import os,time;\n"
+                "try: os.setsid()\n"
+                "except RuntimeError: print('BLOCKED')\n"
+                "else: print('DETACHED',flush=True); time.sleep(2)\n"
+            )
             probe = (
-                "import json,sys;"
+                "import json,os,subprocess,sys;"
                 f"sys.path.insert(0,{str(module_root)!r});"
                 "import cache_probe;"
+                "child=subprocess.run([sys.executable,'-c',"
+                f"{grandchild_probe!r}],capture_output=True,text=True);"
+                "detached=subprocess.run([sys.executable,'-c',"
+                "'import json,os;print(json.dumps([os.getpgrp(),os.getsid(0)]))'],"
+                "capture_output=True,text=True,start_new_session=True);"
+                "bootstrap=str(__import__('pathlib').Path(sys.pycache_prefix).parent/"
+                "'bootstrap.py');"
+                "argv_bypass=subprocess.run([sys.executable,'-c',"
+                f"{inert_bootstrap_bypass!r},bootstrap],"
+                "capture_output=True,text=True);"
+                "path_env=dict(os.environ);"
+                "path_env['PATH']=str(__import__('pathlib').Path(sys.executable).parent);"
+                "path_bypass=subprocess.run([__import__('pathlib').Path("
+                "sys.executable).name,'-c',"
+                f"{inert_bootstrap_bypass!r}],"
+                "capture_output=True,text=True,env=path_env);"
+                "blocked=[];"
+                "\ntry: os.posix_spawn('/bin/sleep',['sleep','20'],os.environ,setsid=True)"
+                "\nexcept RuntimeError: blocked.append('posix_spawn')"
+                "\ntry: os.fork()"
+                "\nexcept RuntimeError: blocked.append('fork')"
+                "\ntry: os._exit(0)"
+                "\nexcept RuntimeError: blocked.append('_exit')"
+                "\ntry: subprocess.Popen(['/bin/echo','unsafe'],0)"
+                "\nexcept RuntimeError: blocked.append('positional_popen')"
+                "\ntry: subprocess.Popen(['not-python'],executable=sys.executable)"
+                "\nexcept RuntimeError: blocked.append('executable_override')"
+                "\ntry: subprocess.Popen('echo unsafe',shell=True)"
+                "\nexcept RuntimeError: blocked.append('shell')"
+                "\n"
                 "print(json.dumps({"
                 "'value':cache_probe.VALUE,"
                 "'isolated':sys.flags.isolated,"
+                "'no_site':sys.flags.no_site,"
+                "'site_loaded':'site' in sys.modules,"
                 "'dont_write':sys.dont_write_bytecode,"
-                "'pycache_prefix':bool(sys.pycache_prefix)}))"
+                "'pycache_prefix':bool(sys.pycache_prefix),"
+                "'argv':sys.argv[1:],"
+                "'cwd':os.getcwd(),"
+                "'child_code':child.returncode,"
+                "'child':json.loads(child.stdout),"
+                "'detached_code':detached.returncode,"
+                "'detached_same_group':json.loads(detached.stdout)=="
+                "[os.getpgrp(),os.getsid(0)],"
+                "'argv_bypass':argv_bypass.stdout.strip(),"
+                "'path_bypass':path_bypass.stdout.strip(),"
+                "'blocked':blocked}))"
             )
             hostile_environment = dict(os.environ)
             hostile_environment["PYTHONPATH"] = str(shadow_root)
             hostile_environment["PYTHONHOME"] = str(shadow_root)
-            code, output = run_isolated_python(
-                ["-c", probe], 30, hostile_environment)
+            probe_argv = ["-c", probe, "sentinel"]
+            execution = run_isolated_python_attested(
+                probe_argv, 30, hostile_environment)
+            code, output = execution.code, execution.output
             lines = [line for line in output.splitlines() if line.strip()]
             isolation = json.loads(lines[-1]) if code == 0 and lines else {}
             if (isolation != {
                     "value": "source",
                     "isolated": 1,
+                    "no_site": 1,
+                    "site_loaded": False,
                     "dont_write": True,
                     "pycache_prefix": True,
+                    "argv": ["sentinel"],
+                    "cwd": str(REPO.resolve()),
+                    "child_code": 0,
+                    "child": {
+                        "isolated": 1,
+                        "no_site": 1,
+                        "site_loaded": False,
+                        "pymupdf": True,
+                    },
+                    "detached_code": 0,
+                    "detached_same_group": True,
+                    "argv_bypass": "BLOCKED",
+                    "path_bypass": "BLOCKED",
+                    "blocked": [
+                        "posix_spawn", "fork", "_exit",
+                        "positional_popen", "executable_override", "shell"],
                     } or marker.exists()):
                 failures.append(
                     "isolated Python child must ignore inherited sitecustomize "
-                    "and repository pyc")
+                    "and repository pyc, preserve argv/cwd, and bind descendants")
+            if (execution.receipt is None
+                    or isolated_launch_receipt_errors(
+                        execution.receipt,
+                        execution.receipt.get("dependency_manifest"), code,
+                        str(pathlib.Path(sys.executable).resolve()),
+                        probe_argv)):
+                failures.append(
+                    "isolated Python execution must publish a valid v2 receipt")
+
+            dependency_source = root / "dependency.py"
+            dependency_source.write_text("VALUE = 1\n", encoding="utf-8")
+            dependency_view = root / "dependency-view"
+            dependency_view.mkdir()
+            shutil.copy2(
+                dependency_source, dependency_view / dependency_source.name)
+            copied_dependency = dependency_view / dependency_source.name
+            copied_dependency.chmod(
+                stat.S_IMODE(copied_dependency.stat().st_mode) & ~0o222)
+            byte_count, digest = _hash_stable_file(dependency_source)
+            dependency_fixture = [{
+                "name": dependency_source.name,
+                "root": str(dependency_source.parent.resolve()),
+                "kind": "file",
+                "files": [{
+                    "path": "", "type": "file",
+                    "mode": stat.S_IMODE(dependency_source.stat().st_mode),
+                    "bytes": byte_count, "sha256": digest,
+                }],
+            }]
+            if _validate_isolated_dependencies(
+                    dependency_fixture, dependency_view):
+                failures.append(
+                    "a complete isolated dependency view must validate")
+            (dependency_view / dependency_source.name).unlink()
+            if not _validate_isolated_dependencies(
+                    dependency_fixture, dependency_view):
+                failures.append(
+                    "a missing isolated dependency link must fail closed")
+
+            fd_root = root / "fd-source"
+            package = fd_root / "package"
+            (package / "bin").mkdir(parents=True)
+            executable = package / "bin" / "tool"
+            executable.write_bytes(b"verified executable\n")
+            executable.chmod(0o755)
+            os.symlink("bin/tool", package / "tool-link")
+
+            def fd_entry() -> dict[str, Any]:
+                return {
+                    "name": package.name,
+                    "root": str(fd_root.resolve()),
+                    "kind": "directory",
+                    "files": list(_dependency_tree_records(
+                        package, "directory").values()),
+                }
+
+            original_clone = globals()["_clone_dependency_fd"]
+            fallback_view = root / "fd-fallback-view"
+            fallback_view.mkdir()
+            try:
+                globals()["_clone_dependency_fd"] = (
+                    lambda _source, _parent, _name: False)
+                fallback_entry = fd_entry()
+                _materialize_isolated_dependencies(
+                    [fallback_entry], fallback_view)
+            finally:
+                globals()["_clone_dependency_fd"] = original_clone
+            if (_validate_isolated_dependencies(
+                    [fallback_entry], fallback_view)
+                    or os.readlink(
+                        fallback_view / "package" / "tool-link")
+                    != "bin/tool"
+                    or stat.S_IMODE((
+                        fallback_view / "package" / "bin" / "tool"
+                    ).stat().st_mode) != 0o555):
+                failures.append(
+                    "same-FD fallback must preserve bytes, executable mode, "
+                    "and internal symlinks")
+
+            initial_mode_manifest = _isolated_dependency_manifest([fd_entry()])
+            executable.chmod(0o744)
+            changed_mode_manifest = _isolated_dependency_manifest([fd_entry()])
+            executable.chmod(0o755)
+            if (initial_mode_manifest["sha256"]
+                    == changed_mode_manifest["sha256"]):
+                failures.append(
+                    "isolated dependency digest must bind executable modes")
+
+            os.symlink("../missing", package / "dangling")
+            try:
+                _dependency_tree_records(package, "directory")
+            except RuntimeError:
+                pass
+            else:
+                failures.append(
+                    "isolated dependencies must reject dangling symlinks")
+            (package / "dangling").unlink()
+
+            swap_entry = fd_entry()
+            original_package = fd_root / "package-original"
+            package.rename(original_package)
+            os.symlink(original_package.name, package)
+            swap_view = root / "fd-swap-view"
+            swap_view.mkdir()
+            try:
+                _materialize_isolated_dependencies([swap_entry], swap_view)
+            except (OSError, RuntimeError):
+                pass
+            else:
+                failures.append(
+                    "a source path swapped to a symlink must fail closed")
+            package.unlink()
+            original_package.rename(package)
+
+            corrupt_view = root / "fd-corrupt-clone-view"
+            corrupt_view.mkdir()
+
+            def corrupt_clone(
+                    _source: int, destination_parent: int,
+                    name: str) -> bool:
+                descriptor = os.open(
+                    name, os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600, dir_fd=destination_parent)
+                try:
+                    os.write(descriptor, b"corrupt")
+                finally:
+                    os.close(descriptor)
+                return True
+
+            try:
+                globals()["_clone_dependency_fd"] = corrupt_clone
+                try:
+                    _materialize_isolated_dependencies(
+                        [dependency_fixture[0]], corrupt_view)
+                except RuntimeError:
+                    pass
+                else:
+                    failures.append(
+                        "a corrupt successful clone must fail destination "
+                        "verification")
+            finally:
+                globals()["_clone_dependency_fd"] = original_clone
+
+            mutate_view = root / "fd-mutated-source-view"
+            mutate_view.mkdir()
+            original_copy = globals()["_copy_fd_payload"]
+            original_source_mode = stat.S_IMODE(
+                dependency_source.stat().st_mode)
+
+            def mutate_during_copy(
+                    source_descriptor: int,
+                    destination_descriptor: int) -> None:
+                original_copy(source_descriptor, destination_descriptor)
+                os.fchmod(source_descriptor, original_source_mode ^ 0o100)
+
+            try:
+                globals()["_clone_dependency_fd"] = (
+                    lambda _source, _parent, _name: False)
+                globals()["_copy_fd_payload"] = mutate_during_copy
+                try:
+                    _materialize_isolated_dependencies(
+                        [dependency_fixture[0]], mutate_view)
+                except RuntimeError:
+                    pass
+                else:
+                    failures.append(
+                        "a source inode mutated during same-FD fallback must "
+                        "fail closed")
+            finally:
+                globals()["_clone_dependency_fd"] = original_clone
+                globals()["_copy_fd_payload"] = original_copy
+                dependency_source.chmod(original_source_mode)
+
+            timeout_started = time.monotonic()
+            timeout_execution = run_isolated_python_attested(
+                ["-c", "import time; time.sleep(60)"], 1)
+            timeout_elapsed = time.monotonic() - timeout_started
+            timeout_receipt = timeout_execution.receipt or {}
+            if (timeout_execution.code != 124
+                    or timeout_receipt.get("timed_out") is not True
+                    or timeout_receipt.get("cleanup_complete") is not True
+                    or timeout_elapsed
+                    > 1 + COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS + 10):
+                failures.append(
+                    "isolated Python hard timeout must clean up within its "
+                    "bounded allowance")
+
+            lingering_execution = run_isolated_python_attested([
+                "-c",
+                "import subprocess;"
+                "child=subprocess.Popen(['/bin/sleep','60']);"
+                "print('LINGERING',child.pid,flush=True)",
+            ], 30)
+            lingering_match = re.search(
+                r"^LINGERING ([0-9]+)$",
+                lingering_execution.output, re.MULTILINE)
+            lingering_alive = False
+            if lingering_match is not None:
+                try:
+                    os.kill(int(lingering_match.group(1)), 0)
+                except ProcessLookupError:
+                    pass
+                else:
+                    lingering_alive = True
+            if (lingering_execution.code == 0
+                    or lingering_match is None
+                    or lingering_alive
+                    or lingering_execution.receipt is not None):
+                failures.append(
+                    "a descendant that outlives the root must be killed and "
+                    "must invalidate the success receipt")
     except Exception as error:  # noqa: BLE001 - self-test must report failure
         failures.append(
             "isolated Python child probe failed: "
             f"{type(error).__name__}: {error}")
 
     clone = lambda value: json.loads(json.dumps(value))  # noqa: E731
+
+    try:
+        with tempfile.TemporaryDirectory(
+                prefix=".gate-metric-self-test-") as temporary:
+            metric_path = pathlib.Path(temporary) / "audit.json"
+            original_audit_path = AUDIT_JSON
+            globals()["AUDIT_JSON"] = metric_path
+            slugs = sorted(canonical_form_slugs())
+            valid_records = [_synthetic_audit_record(slug) for slug in slugs]
+
+            def publish_metric_fixture(records: Any) -> None:
+                metric_path.write_text(
+                    json.dumps(records, sort_keys=True) + "\n",
+                    encoding="utf-8")
+
+            publish_metric_fixture(valid_records)
+            for result in (
+                    check_rules(), check_paper(), check_artwork(), check_text(),
+                    check_assertions()):
+                if result.verdict is not Verdict.PASS:
+                    failures.append(
+                        f"complete metric fixture must pass {result.name}: "
+                        f"{result.detail}")
+
+            metric_fields = {
+                "measured", "paper_ok", "rules_ref", "rules_missing", "rules_extra",
+                "rules_thickness_violations", "rules_pct", "images_missing",
+                "images_placement_violations", "text_missing", "text_extra",
+                "text_ref", "text_pct",
+            }
+            assertion_only = clone(valid_records)
+            for record in assertion_only:
+                for key in metric_fields:
+                    record.pop(key, None)
+            publish_metric_fixture(assertion_only)
+            for checker in (
+                    check_rules, check_paper, check_artwork, check_text):
+                result = checker()
+                if result.verdict is not Verdict.UNEVALUABLE:
+                    failures.append(
+                        f"assertion-only audit must make {result.name} "
+                        "UNEVALUABLE")
+            if check_assertions().verdict is not Verdict.PASS:
+                failures.append(
+                    "assertion-only audit must remain usable for assertions")
+
+            assertion_key = "inputs_over_printed_text"
+            missing_assertion = clone(assertion_only)
+            missing_assertion[0].pop(assertion_key)
+            publish_metric_fixture(missing_assertion)
+            if check_assertions().verdict is not Verdict.UNEVALUABLE:
+                failures.append(
+                    "a missing per-form assertion must be UNEVALUABLE")
+            malformed_assertion = clone(assertion_only)
+            malformed_assertion[0][assertion_key] = None
+            publish_metric_fixture(malformed_assertion)
+            if check_assertions().verdict is not Verdict.UNEVALUABLE:
+                failures.append(
+                    "a malformed per-form assertion must be UNEVALUABLE")
+            failed_assertion = clone(assertion_only)
+            failed_assertion[0][assertion_key] = False
+            failed_assertion[0]["assertions"][assertion_key].update({
+                "holds": False,
+                "reason": "synthetic assertion failure",
+                "offender_count": 0,
+                "offenders_published": 0,
+                "offenders_omitted": 0,
+                "offenders_complete": True,
+            })
+            failed_assertion[0]["assertions_held"] -= 1
+            publish_metric_fixture(failed_assertion)
+            if check_assertions().verdict is not Verdict.FAIL:
+                failures.append(
+                    "a genuine false assertion must be FAIL")
+
+            malformed_values = (
+                ("measured", check_rules, [None, False, 0, 1, "true"]),
+                ("rules_missing", check_rules,
+                 [None, True, 1.5, "0", -1]),
+                ("rules_ref", check_rules,
+                 [None, True, 0, 1.5, "1", -1]),
+                ("rules_pct", check_rules,
+                 [None, float("nan"), float("inf"), float("-inf"),
+                  True, "100", -1, 101, 10 ** 1000]),
+                ("paper_ok", check_paper, [None, 0, 1, "true"]),
+                ("images_missing", check_artwork,
+                 [None, True, 1.5, "0", -1]),
+                ("text_pct", check_text,
+                 [None, float("nan"), float("inf"), True, "100", -1, 101]),
+                ("text_ref", check_text,
+                 [None, True, 0, 1.5, "1", -1]),
+            )
+            for key, checker, invalid_values in malformed_values:
+                missing_field = clone(valid_records)
+                missing_field[0].pop(key)
+                publish_metric_fixture(missing_field)
+                if checker().verdict is not Verdict.UNEVALUABLE:
+                    failures.append(
+                        f"missing metric field must make {key} UNEVALUABLE")
+                for invalid in invalid_values:
+                    malformed = clone(valid_records)
+                    malformed[0][key] = invalid
+                    publish_metric_fixture(malformed)
+                    if checker().verdict is not Verdict.UNEVALUABLE:
+                        failures.append(
+                            f"malformed metric field must make {key} "
+                            f"UNEVALUABLE: {invalid!r}")
+
+            for key, checker in (
+                    ("rules_missing", check_rules),
+                    ("images_missing", check_artwork),
+                    ("text_extra", check_text)):
+                genuine_failure = clone(valid_records)
+                genuine_failure[0][key] = 1
+                if key == "rules_missing":
+                    genuine_failure[0]["rules_pct"] = 0.0
+                publish_metric_fixture(genuine_failure)
+                if checker().verdict is not Verdict.FAIL:
+                    failures.append(
+                        f"valid nonzero {key} must be a metric failure")
+            for key, checker, value in (
+                    ("rules_pct", check_rules, 99.0),
+                    ("text_pct", check_text, 99.0),
+                    ("paper_ok", check_paper, False)):
+                genuine_failure = clone(valid_records)
+                genuine_failure[0][key] = value
+                if key == "rules_pct":
+                    genuine_failure[0].update({
+                        "rules_ref": 100, "rules_missing": 1})
+                elif key == "text_pct":
+                    genuine_failure[0].update({
+                        "text_ref": 100, "text_missing": 1})
+                publish_metric_fixture(genuine_failure)
+                if checker().verdict is not Verdict.FAIL:
+                    failures.append(
+                        f"valid failing {key} must be a metric failure")
+
+            inconsistent_percentage = clone(valid_records)
+            inconsistent_percentage[0]["rules_missing"] = 1
+            publish_metric_fixture(inconsistent_percentage)
+            if check_rules().verdict is not Verdict.UNEVALUABLE:
+                failures.append(
+                    "a percentage detached from its denominator must be "
+                    "UNEVALUABLE")
+
+            producer_rounding_boundary = clone(valid_records)
+            producer_rounding_boundary[0].update({
+                "rules_ref": 4000,
+                "rules_missing": 1,
+                # This is audit.py's binary-float round(..., 2) result.
+                "rules_pct": 99.97,
+            })
+            publish_metric_fixture(producer_rounding_boundary)
+            if _percentage_evidence_errors(
+                    producer_rounding_boundary[0], "rules_pct",
+                    "producer-rounding-fixture"):
+                failures.append(
+                    "producer percentage rounding boundary must remain "
+                    "evaluable")
+
+            identity_fixtures = []
+            missing_form = clone(valid_records[:-1])
+            identity_fixtures.append(("missing", missing_form))
+            extra_form = clone(valid_records)
+            extra_form.append(_synthetic_audit_record("not-in-corpus"))
+            identity_fixtures.append(("extra", extra_form))
+            duplicate_form = clone(valid_records)
+            duplicate_form[-1]["slug"] = duplicate_form[0]["slug"]
+            identity_fixtures.append(("duplicate", duplicate_form))
+            substituted_form = clone(valid_records)
+            substituted_form[-1]["slug"] = "not-in-corpus"
+            identity_fixtures.append(("substituted", substituted_form))
+            non_object = clone(valid_records)
+            non_object[-1] = "not-an-object"
+            identity_fixtures.append(("non-object", non_object))
+            for label, records in identity_fixtures:
+                publish_metric_fixture(records)
+                if (check_rules().verdict is not Verdict.UNEVALUABLE
+                        or check_assertions().verdict is not Verdict.UNEVALUABLE):
+                    failures.append(
+                        f"{label} audit corpus identity must fail closed")
+    except Exception as error:  # noqa: BLE001 - self-test names the breakage
+        failures.append(
+            "metric evidence self-test failed: "
+            f"{type(error).__name__}: {error}")
+    finally:
+        if "original_audit_path" in locals():
+            globals()["AUDIT_JSON"] = original_audit_path
+
     report, snapshot, raw_payload, envelope = _synthetic_comb_fixture()
     report_errors, report_stats = validate_comb_referee_report(
         report, child_exit=2, expected_forms=1, expected_subjects=1)
@@ -6982,6 +11538,7 @@ def self_test() -> int:
             prefix="formgen-gate-pipeline-self-test-") as pipeline_tmp:
         pipeline_root = pathlib.Path(pipeline_tmp)
         test_slugs = frozenset({"fixture-1"})
+        test_inventory = {"fixture-1": True}
         batch_payload = (json.dumps([
             _synthetic_batch_record("fixture-1")], indent=2) + "\n")
 
@@ -7015,6 +11572,7 @@ def self_test() -> int:
             scratch_root=pipeline_root,
             batch_target=pipeline_root / "published-batch.json",
             expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
             audit_identity_reader=lambda: clone(same_audit),
         )
         if ordering != ["batch.py", "batch.py", "audit.py", "referee"]:
@@ -7022,6 +11580,37 @@ def self_test() -> int:
                 "full refresh must order batch, batch, audit, referee exactly")
         if ordered_refresh.determinism.verdict is not Verdict.PASS:
             failures.append("identical pre-audit generations must pass determinism")
+
+        flipped_order: list[str] = []
+        flipped_record = _synthetic_batch_record("fixture-1")
+        flipped_record["in_corpus"] = False
+
+        def flipped_runner(args: list[str], _timeout: int) -> tuple[int, str]:
+            flipped_order.append(pathlib.Path(args[0]).name)
+            output = pathlib.Path(args[args.index("--report") + 1])
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(
+                json.dumps([flipped_record]) + "\n", encoding="utf-8")
+            return 0, ""
+
+        flipped_refresh = refresh_full_pipeline(
+            runner=flipped_runner,
+            generation_reader=lambda _batch: clone(same_generation),
+            audit_refresher=lambda: (
+                flipped_order.append("audit.py")
+                or Result("audit-refresh", Verdict.PASS, "must not run")),
+            referee_refresher=lambda: (
+                flipped_order.append("referee")
+                or Result("comb-referee", Verdict.PASS, "must not run")),
+            scratch_root=pipeline_root,
+            batch_target=pipeline_root / "flipped-batch.json",
+            expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
+        )
+        if (flipped_refresh.determinism.verdict is Verdict.PASS
+                or flipped_order != ["batch.py"]):
+            failures.append(
+                "full pipeline must reject a flipped form-root classification")
 
         changed_order: list[str] = []
         changed_generations = iter([
@@ -7046,6 +11635,7 @@ def self_test() -> int:
             scratch_root=pipeline_root,
             batch_target=pipeline_root / "changed-batch.json",
             expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
         )
         if (changed_refresh.determinism.verdict is not Verdict.FAIL
                 or changed_order != ["batch.py", "batch.py"]):
@@ -7066,6 +11656,7 @@ def self_test() -> int:
             scratch_root=pipeline_root,
             batch_target=pipeline_root / "stale-batch.json",
             expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
         )
         if (stale_refresh.determinism.verdict is Verdict.PASS
                 or stale_order != ["batch.py"]):
@@ -7095,6 +11686,7 @@ def self_test() -> int:
             scratch_root=pipeline_root,
             batch_target=pipeline_root / "audit-failure-batch.json",
             expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
         )
         if (audit_failure_refresh.audit_refresh.verdict
                 is not Verdict.UNEVALUABLE
@@ -7130,6 +11722,7 @@ def self_test() -> int:
             scratch_root=pipeline_root,
             batch_target=pipeline_root / "post-audit-batch.json",
             expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
         )
         if (post_audit_refresh.determinism.verdict is not Verdict.FAIL
                 or post_audit_order != ["batch.py", "batch.py", "audit.py"]):
@@ -7146,6 +11739,7 @@ def self_test() -> int:
                 "sha256": "f" * 64, "scope": "changed-after-checks"},
             batch_target=pipeline_root / "published-batch.json",
             expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
             audit_identity_reader=lambda: clone(same_audit),
         )
         if (final_result.verdict is not Verdict.UNEVALUABLE or final_order):
@@ -7160,6 +11754,7 @@ def self_test() -> int:
             generation_reader=lambda _batch: clone(same_generation),
             batch_target=pipeline_root / "published-batch.json",
             expected_slugs=test_slugs,
+            expected_inventory=test_inventory,
             audit_identity_reader=lambda: {
                 "path": "build/audit.json", "sha256": "0" * 64},
         )
@@ -7174,6 +11769,36 @@ def self_test() -> int:
         ]
         if not batch_report_errors(duplicate_batch, test_slugs):
             failures.append("duplicate batch-report slugs must fail closed")
+        malformed_batch = [_synthetic_batch_record("fixture-1")]
+        malformed_batch[0]["sources"] = None
+        try:
+            malformed_batch_errors = batch_report_errors(
+                malformed_batch, test_slugs)
+        except Exception as error:  # noqa: BLE001 - regression probe
+            failures.append(
+                "malformed batch sources must not raise: "
+                f"{type(error).__name__}: {error}")
+        else:
+            if not malformed_batch_errors:
+                failures.append("malformed batch sources must fail closed")
+        incomplete_batch = [_synthetic_batch_record("fixture-1")]
+        incomplete_batch[0].update({
+            "sources": [*incomplete_batch[0]["sources"], None],
+            "pages": 0, "html_bytes": 0, "html": None, "paper": "",
+            "guide_detected": {}, "guide_build": {}, "fonts": [None],
+            "font_plans": [],
+        })
+        try:
+            incomplete_batch_errors = batch_report_errors(
+                incomplete_batch, test_slugs)
+        except Exception as error:  # noqa: BLE001 - regression probe
+            failures.append(
+                "incomplete nested batch evidence must not raise: "
+                f"{type(error).__name__}: {error}")
+        else:
+            if not incomplete_batch_errors:
+                failures.append(
+                    "incomplete nested batch evidence must fail closed")
 
     disagreement = clone(report)
     disagreement["totals"]["comparisons"]["agree"] = 0
@@ -7185,8 +11810,9 @@ def self_test() -> int:
     command = _comb_referee_command(
         pathlib.Path("/tmp/private-report.json"),
         pathlib.Path("/tmp/private-empty-pycache"))
-    if command[:3] != [sys.executable, "-I", "-B"]:
-        failures.append("comb referee must use exact sys.executable with -I -B")
+    if command[:4] != [sys.executable, "-I", "-S", "-B"]:
+        failures.append(
+            "comb referee must use exact sys.executable with -I -S -B")
     environment_probe = {
         "PATH": "/poison", "PYTHONPATH": "poison", "PYTHONHOME": "poison",
     }
@@ -7203,11 +11829,13 @@ def self_test() -> int:
         audit_scope_reader = lambda: clone(audit_scope_fixture)
         target = root / "audit.json"
         target.write_text('[{"stale": true}]\n', encoding="utf-8")
+        assertion_slugs = frozenset({"fixture-1"})
 
         refresh_failure = refresh_assertions_report(
             target=target,
             scratch_root=root,
             runner=lambda _args, _timeout: (1, "synthetic refresh failure"),
+            expected_slugs=assertion_slugs,
         )
         if (refresh_failure is None
                 or refresh_failure.verdict is not Verdict.UNEVALUABLE):
@@ -7215,119 +11843,417 @@ def self_test() -> int:
         if load(target) != [{"stale": True}]:
             failures.append("a failed assertion refresh must not publish partial data")
 
-        def fake_refresh(args: list[str], _timeout: int) -> tuple[int, str]:
+        def invalid_refresh(args: list[str], _timeout: int) -> tuple[int, str]:
             out = pathlib.Path(args[args.index("--out") + 1])
             out.write_text('[{"fresh": true}]\n', encoding="utf-8")
             return 0, ""
 
-        refresh_success = refresh_assertions_report(
+        invalid_refresh_result = refresh_assertions_report(
             target=target,
             scratch_root=root,
-            runner=fake_refresh,
+            runner=invalid_refresh,
+            expected_slugs=assertion_slugs,
         )
-        if refresh_success is not None or load(target) != [{"fresh": True}]:
-            failures.append("a successful assertion refresh must publish fresh data")
+        if (invalid_refresh_result is None
+                or invalid_refresh_result.verdict is not Verdict.UNEVALUABLE
+                or load(target) != [{"stale": True}]):
+            failures.append(
+                "an invalid exit-0 assertion refresh must preserve prior data")
 
-        full_target = root / "full-audit.json"
-        full_target.write_text('[{"stale": true}]\n', encoding="utf-8")
+        valid_assertion_records = [_synthetic_audit_record("fixture-1")]
+
+        def valid_refresh(args: list[str], _timeout: int) -> tuple[int, str]:
+            out = pathlib.Path(args[args.index("--out") + 1])
+            out.write_text(
+                json.dumps(valid_assertion_records) + "\n", encoding="utf-8")
+            return 0, ""
+
+        refresh_success = refresh_assertions_report(
+            target=target, scratch_root=root, runner=valid_refresh,
+            expected_slugs=assertion_slugs)
+        if (refresh_success is not None
+                or load(target) != valid_assertion_records):
+            failures.append("a valid assertion refresh must publish fresh data")
+
         audit_slugs = frozenset(
             f"fixture-{index}" for index in range(EXPECTED_FORMS))
-        failed_full_audit = refresh_full_audit_report(
-            target=full_target,
-            attestation_target=root / "failed-audit-attested.json",
-            scratch_root=root,
-            runner=lambda _args, _timeout: (1, "synthetic full-audit failure"),
-            expected_slugs=audit_slugs,
-            scope_reader=audit_scope_reader,
-        )
-        if (failed_full_audit.verdict is not Verdict.UNEVALUABLE
-                or load(full_target) != [{"stale": True}]):
+        slug_only_records = [
+            {"slug": f"fixture-{index}"}
+            for index in range(EXPECTED_FORMS)
+        ]
+        if not full_audit_payload_errors(slug_only_records, audit_slugs):
             failures.append(
-                "a failed full audit refresh must not publish stale/partial data")
+                "a slug-only full-audit payload must fail closed")
 
-        def fake_slug_only_audit(
-                args: list[str], _timeout: int) -> tuple[int, str]:
-            out = pathlib.Path(args[args.index("--out") + 1])
-            out.write_text(json.dumps([
-                {"slug": f"fixture-{index}"}
-                for index in range(EXPECTED_FORMS)
-            ]) + "\n", encoding="utf-8")
-            return 0, ""
-
-        slug_only_audit = refresh_full_audit_report(
-            target=full_target,
-            attestation_target=root / "slug-audit-attested.json",
-            scratch_root=root,
-            runner=fake_slug_only_audit,
-            expected_slugs=audit_slugs,
-            scope_reader=audit_scope_reader,
-        )
-        if (slug_only_audit.verdict is not Verdict.UNEVALUABLE
-                or load(full_target) != [{"stale": True}]):
+        audit_records = [
+            _synthetic_audit_record(f"fixture-{index}")
+            for index in range(EXPECTED_FORMS)
+        ]
+        payload_errors = full_audit_payload_errors(
+            audit_records, audit_slugs)
+        if payload_errors:
             failures.append(
-                "a slug-only audit fixture must not replace prior evidence")
-
-        def fake_full_audit(
-                args: list[str], _timeout: int) -> tuple[int, str]:
-            out = pathlib.Path(args[args.index("--out") + 1])
-            out.write_text(json.dumps([
-                _synthetic_audit_record(f"fixture-{index}")
-                for index in range(EXPECTED_FORMS)
-            ]) + "\n", encoding="utf-8")
-            return 0, ""
-
-        successful_full_audit = refresh_full_audit_report(
-            target=full_target,
-            attestation_target=root / "full-audit-attested.json",
-            scratch_root=root,
-            runner=fake_full_audit,
-            expected_slugs=audit_slugs,
-            scope_reader=audit_scope_reader,
-        )
-        if (successful_full_audit.verdict is not Verdict.PASS
-                or not isinstance(load(full_target), list)
-                or len(load(full_target)) != EXPECTED_FORMS):
+                "a complete synthetic full-audit payload must validate: "
+                + "; ".join(payload_errors[:3]))
+        huge_denominators = clone(audit_records)
+        huge_denominators[0].update({
+            "rules_ref": 10 ** 10000, "text_ref": 10 ** 10000,
+        })
+        try:
+            huge_denominator_errors = full_audit_payload_errors(
+                huge_denominators, audit_slugs)
+        except Exception as error:  # noqa: BLE001 - hostile JSON probe
             failures.append(
-                "a complete full audit refresh must publish atomically")
+                "huge integer denominators must not raise: "
+                f"{type(error).__name__}: {error}")
         else:
-            attested_payload = full_target.read_bytes()
-            attested_envelope = load(root / "full-audit-attested.json")
-            if validate_audit_application_envelope(
-                    attested_envelope, attested_payload,
-                    audit_scope_fixture):
+            if huge_denominator_errors:
                 failures.append(
-                    "fresh audit application envelope must validate")
-            for label, mutator in (
-                    (
-                        "audit isolated-Python flags",
-                        lambda value: value["invocation"].update({
-                            "python_flags": []}),
-                    ),
-                    (
-                        "audit private output",
-                        lambda value: value["invocation"].update({
-                            "output": "build/audit.json"}),
-                    ),
-                    (
-                        "audit raw digest",
-                        lambda value: value["raw_report"].update({
-                            "sha256": "f" * 64}),
-                    )):
-                mutated_envelope = clone(attested_envelope)
-                mutator(mutated_envelope)
-                _resign_for_self_test(mutated_envelope)
-                if not validate_audit_application_envelope(
-                        mutated_envelope, attested_payload,
-                        audit_scope_fixture):
-                    failures.append(f"mutated {label} must fail closed")
-            changed_audit_scope = clone(audit_scope_fixture)
-            changed_audit_scope["artifact_trees"]["layout"]["sha256"] = (
-                "e" * 64)
+                    "valid huge integer denominators must remain evaluable: "
+                    + "; ".join(huge_denominator_errors[:3]))
+        for label, mutator in (
+                (
+                    "error status",
+                    lambda value: value[0].update({
+                        "status": "error", "error": "synthetic"}),
+                ),
+                (
+                    "missing metric",
+                    lambda value: value[0].pop("rules_missing"),
+                ),
+                (
+                    "missing metric denominator",
+                    lambda value: value[0].pop("rules_ref"),
+                ),
+                (
+                    "failed provenance",
+                    lambda value: value[0]["provenance_validation"].update({
+                        "validated_after": False}),
+                ),
+                (
+                    "incomplete render manifest",
+                    lambda value: value[0]["input_manifest"]["render"].update({
+                        "complete": False}),
+                ),
+                (
+                    "empty nested input manifest",
+                    lambda value: value[0]["input_manifest"].update({
+                        "schema": 1, "producer": {}, "runtime": {},
+                        "inputs": {}}),
+                ),
+                (
+                    "null input manifest",
+                    lambda value: value[0].__setitem__(
+                        "input_manifest", None),
+                ),
+                (
+                    "list input manifest",
+                    lambda value: value[0].__setitem__(
+                        "input_manifest", []),
+                ),
+                (
+                    "null render dependency inventory",
+                    lambda value: value[0]["input_manifest"]["render"].update({
+                        "dependencies": None}),
+                ),
+                (
+                    "huge runtime member byte count",
+                    lambda value: value[0]["input_manifest"]["runtime"]
+                    ["loaded_application_files"]["members"][0].update({
+                        "bytes": 10 ** 10000}),
+                ),
+                (
+                    "fabricated assertion detail",
+                    lambda value: value[0]["assertions"].update({
+                        "inputs_over_printed_text": {"holds": True}}),
+                ),
+                (
+                    "hostile render kinds",
+                    lambda value: value[0]["input_manifest"]["render"].update({
+                        "dependencies": [{
+                            "path": "asset.png", "mime_type": "image/png",
+                            "present": True, "bytes": 1,
+                            "sha256": "1" * 64, "kinds": [{}],
+                            "referrers": ["fixture-0.html"],
+                        }]}),
+                ),
+                (
+                    "malformed comb detail",
+                    lambda value: value[0]["assertions"].update({
+                        "comb_slots_match_printed": []}),
+                ),
+                (
+                    "malformed comb reason",
+                    lambda value: value[0]["assertions"]
+                    ["comb_slots_match_printed"].update({"reason": []}),
+                ),
+                (
+                    "boolean comb counts",
+                    lambda value: value[0]["assertions"]
+                    ["comb_slots_match_printed"].update({
+                        "combs_expected": False, "combs_checked": False}),
+                ),
+                (
+                    "unsupported comb field",
+                    lambda value: value[0]["assertions"]
+                    ["comb_slots_match_printed"].update({"invented": 1}),
+                ),
+                (
+                    "overflowing percentage",
+                    lambda value: value[0].update({
+                        "rules_pct": 10 ** 1000}),
+                )):
+            malformed_records = clone(audit_records)
+            mutator(malformed_records)
+            if not full_audit_payload_errors(
+                    malformed_records, audit_slugs):
+                failures.append(
+                    f"full audit must reject {label} evidence")
+        bound_audit_records = [
+            _synthetic_audit_record("fixture-1", snapshot)]
+        baseline_binding_errors = audit_payload_snapshot_binding_errors(
+            bound_audit_records, audit_scope_fixture)
+        if baseline_binding_errors:
+            failures.append(
+                "complete synthetic audit/snapshot binding must validate: "
+                + "; ".join(baseline_binding_errors[:3]))
+
+        incomplete_requests = clone(bound_audit_records)
+        entrypoint = incomplete_requests[0]["input_manifest"]["render"][
+            "entrypoint"]
+        incomplete_requests[0]["render_requests"].update({
+            "fulfilled": [entrypoint], "fulfilled_requests": 1,
+        })
+        if (not full_audit_payload_errors(
+                incomplete_requests, frozenset({"fixture-1"}))
+                or not audit_payload_snapshot_binding_errors(
+                    incomplete_requests, audit_scope_fixture)):
+            failures.append(
+                "roundtrip request evidence must exhaust the retained closure")
+
+        for label, mutator in (
+                ("producer digest", lambda value: value[0]["input_manifest"]
+                 ["producer"].update({"sha256": "f" * 64})),
+                ("PyMuPDF version", lambda value: value[0]["input_manifest"]
+                 ["runtime"]["pymupdf"].update({
+                     "package_version": "invented",
+                     "version_bind": "invented"})),
+                ("IR input digest", lambda value: value[0]["input_manifest"]
+                 ["inputs"]["ir"].update({"sha256": "e" * 64})),
+                ("source selected path", lambda value: value[0]
+                 ["input_manifest"]["inputs"]["source_pdf"].update({
+                     "path": "other.pdf"})),
+                ("render dependency subset", lambda value: value[0]
+                 ["input_manifest"]["render"].update({"dependencies": []})),
+                ("Playwright closure", lambda value: value[0]
+                 ["roundtrip_runtime"]["dependency_closure"].update({
+                     "tree_sha256": "d" * 64})),
+                ("Chromium executable", lambda value: value[0]
+                 ["roundtrip_runtime"]["chromium"].update({
+                     "sha256": "c" * 64})),
+                ("Chromium live version", lambda value: value[0]
+                 ["roundtrip_runtime"].update({
+                     "live_browser_version": "x"})),
+                ):
+            mutated_records = clone(bound_audit_records)
+            mutator(mutated_records)
+            if not audit_payload_snapshot_binding_errors(
+                    mutated_records, audit_scope_fixture):
+                failures.append(
+                    f"mutated audit {label} must fail snapshot binding")
+
+        absent_guide_scope = clone(audit_scope_fixture)
+        retained_html = [
+            item for item in absent_guide_scope["artifact_trees"]["html"]["files"]
+            if item["path"] != "build/html/fixture-1.guide.html"]
+        absent_guide_scope["artifact_trees"]["html"] = {
+            **_file_manifest(retained_html), "root": "build/html"}
+        absent_guide_records = clone(bound_audit_records)
+        absent_guide_records[0]["input_manifest"]["inputs"]["guide_html"] = {
+            "file": "transplanted.guide.html", "required": False,
+            "present": False, "bytes": None, "sha256": None,
+        }
+        if not audit_payload_snapshot_binding_errors(
+                absent_guide_records, absent_guide_scope):
+            failures.append(
+                "absent optional guide HTML must still bind its filename")
+
+        hostile_scope = clone(audit_scope_fixture)
+        hostile_scope["source_pdfs"]["relations"] = None
+        if not audit_payload_snapshot_binding_errors(
+                bound_audit_records, hostile_scope):
+            failures.append("hostile outer source relations must fail closed")
+
+        fake_module_scope = clone(audit_scope_fixture)
+        fake_member = {
+            "path": "pymupdf/fake/not-a-module.dat", "bytes": 7,
+            "sha256": sha256_bytes(b"fake-module"),
+        }
+        projection = fake_module_scope["runtime"]["python_dependency_files"]
+        projection["members"].append(fake_member)
+        projection["members"].sort(key=lambda item: item["path"])
+        projection["files"] = len(projection["members"])
+        projection["bytes"] = sum(
+            item["bytes"] for item in projection["members"])
+        projection["sha256"] = canonical_digest(projection["members"])
+        fake_module_records = clone(bound_audit_records)
+        loaded = fake_module_records[0]["input_manifest"]["runtime"][
+            "loaded_application_files"]
+        loaded["members"].append({
+            "file": "module/pymupdf.fake", "bytes": fake_member["bytes"],
+            "sha256": fake_member["sha256"],
+        })
+        loaded["members"].sort(key=lambda item: item["file"])
+        runtime_tuples = [
+            (item["file"], item["bytes"], item["sha256"])
+            for item in loaded["members"]]
+        loaded["files"] = len(runtime_tuples)
+        loaded["bytes"] = sum(item[1] for item in runtime_tuples)
+        loaded["tree_sha256"] = sha256_bytes(json.dumps(
+            runtime_tuples, separators=(",", ":")).encode("ascii"))
+        if not audit_payload_snapshot_binding_errors(
+                fake_module_records, fake_module_scope):
+            failures.append(
+                "runtime module identity must reject arbitrary descendants")
+
+        attested_payload = (
+            json.dumps(bound_audit_records, sort_keys=True) + "\n").encode(
+                "utf-8")
+        dependencies = audit_scope_fixture["runtime"][
+            "python_dependencies"]
+        pycache_prefix = str(
+            pathlib.Path(tempfile.gettempdir()).resolve()
+            / ".gate-python-isolated-selftest" / "pycache")
+        target_argv = [
+            str(HERE / "audit.py"), "--out",
+            str((root / ".full-audit-synthetic" / "audit.json").resolve()),
+        ]
+        synthetic_launcher_receipt = {
+            "schema": "formgen-isolated-python-launch-receipt-v2",
+            "bootstrap": {
+                "schema": (
+                    "formgen-isolated-python-bootstrap-receipt-v2"),
+                "executable": audit_scope_fixture["runtime"]["python"][
+                    "path"],
+                "isolated": 1,
+                "no_site": 1,
+                "dont_write_bytecode": True,
+                "pycache_prefix": pycache_prefix,
+                "cwd": str(REPO.resolve()),
+                "pythonpath_absent": True,
+                "pythonhome_absent": True,
+                "site_not_loaded": True,
+                "bootstrap_sha256": "1" * 64,
+                "spec_sha256": "2" * 64,
+                "dependency_manifest_sha256": dependencies["sha256"],
+                "target_argv_sha256": _compact_digest(target_argv),
+                "worker_exit": 0,
+                "target_exit": 0,
+                "recursive_launcher_installed": True,
+                "process_group_supervised": True,
+                "subprocess_popen_python_rewrite_installed": True,
+                "os_process_control_guards_installed": True,
+                "lingering_descendants_detected": False,
+                "cleanup_complete": True,
+            },
+            "dependency_manifest": clone(dependencies),
+            "command_flags": list(ISOLATED_PYTHON_ATTESTED_FLAGS),
+            "pythonpath_removed": True,
+            "pythonhome_removed": True,
+            "source_dependencies_copied_from_verified_fds": True,
+            "private_dependencies_validated_before_after": True,
+            "process_group_supervised": True,
+            "subprocess_popen_python_rewrite_installed": True,
+            "os_process_control_guards_installed": True,
+            "supervised_group_quiescent": True,
+            "timed_out": False,
+            "cleanup_complete": True,
+            "child_exit": 0,
+        }
+        attested_envelope = compose_audit_application_envelope(
+            audit_scope_fixture, attested_payload, len(bound_audit_records),
+            synthetic_launcher_receipt, target_argv)
+        envelope_errors = validate_audit_application_envelope(
+            attested_envelope, attested_payload, audit_scope_fixture)
+        if envelope_errors:
+            failures.append(
+                "fresh audit application envelope must validate: "
+                + "; ".join(envelope_errors[:3]))
+        transplanted_records = clone(bound_audit_records)
+        transplanted_records[0]["candidate_pdf"].update({
+            "bytes": 999, "sha256": "a" * 64,
+            "candidate_ir_sha256": "b" * 64,
+        })
+        transplanted_records[0].update({
+            "rules_ref": 100, "rules_missing": 99, "rules_pct": 1.0,
+            "text_ref": 100, "text_missing": 99, "text_pct": 1.0,
+        })
+        transplanted_payload = (
+            json.dumps(transplanted_records, sort_keys=True) + "\n").encode(
+                "utf-8")
+        if not validate_audit_application_envelope(
+                attested_envelope, transplanted_payload,
+                audit_scope_fixture):
+            failures.append(
+                "post-run candidate/metric transplantation must invalidate "
+                "the raw-report envelope")
+        for label, mutator in (
+                (
+                    "audit isolated-Python flags",
+                    lambda value: value["invocation"].update({
+                        "python_flags": []}),
+                ),
+                (
+                    "audit private output",
+                    lambda value: value["invocation"].update({
+                        "output": "build/audit.json"}),
+                ),
+                (
+                    "audit target argv",
+                    lambda value: value["invocation"].update({
+                        "target_argv": [str(HERE / "audit.py"), "--out",
+                                        str(root / "other" / "audit.json")]}),
+                ),
+                (
+                    "audit raw digest",
+                    lambda value: value["raw_report"].update({
+                        "sha256": "f" * 64}),
+                ),
+                (
+                    "audit dependency receipt",
+                    lambda value: value["invocation"]["launcher_receipt"][
+                        "dependency_manifest"].update({"sha256": "e" * 64}),
+                ),
+                (
+                    "audit timeout receipt",
+                    lambda value: value["invocation"]["launcher_receipt"].update(
+                        {"timed_out": True}),
+                ),
+                (
+                    "audit supervised-group quiescence",
+                    lambda value: value["invocation"]["launcher_receipt"].update(
+                        {"supervised_group_quiescent": False}),
+                ),
+                (
+                    "audit process-group supervision",
+                    lambda value: value["invocation"]["launcher_receipt"].update(
+                        {"process_group_supervised": False}),
+                )):
+            mutated_envelope = clone(attested_envelope)
+            mutator(mutated_envelope)
+            _resign_for_self_test(mutated_envelope)
             if not validate_audit_application_envelope(
-                    attested_envelope, attested_payload,
-                    changed_audit_scope):
-                failures.append(
-                    "post-audit application input mutation must fail closed")
+                    mutated_envelope, attested_payload,
+                    audit_scope_fixture):
+                failures.append(f"mutated {label} must fail closed")
+        changed_audit_scope = clone(audit_scope_fixture)
+        changed_audit_scope["artifact_trees"]["layout"]["sha256"] = (
+            "e" * 64)
+        if not validate_audit_application_envelope(
+                attested_envelope, attested_payload,
+                changed_audit_scope):
+            failures.append(
+                "post-audit application input mutation must fail closed")
 
     for name in failures:
         print(f"FAIL {name}", file=sys.stderr)
