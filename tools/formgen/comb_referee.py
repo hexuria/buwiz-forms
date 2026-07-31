@@ -2931,6 +2931,139 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
         and paint.x1 > x0 and paint.x0 < x1
         and paint.y1 > float(cell["y0"]) and paint.y0 < float(cell["y1"])
     ]
+    # Glyphs are never divider candidates, so they matter only when they can
+    # occlude an eligible interior vertical.  A glyph whose conservative bound
+    # merely touches the cell's own side cannot change compartment topology.
+    # Apply the same paper-width test used below for outward source candidates
+    # before allowing a glyph bound to make the subject unevaluable.
+    interior_candidates = [
+        paint for paint in candidates
+        if paint.x0 > x0 + POSITION_TOL_PT
+        and paint.x1 < x1 - POSITION_TOL_PT
+        and paint.x0 - x0 > paint.width
+        and x1 - paint.x1 > paint.width
+    ]
+
+    # A non-uniform empty gap is safe only when the source independently proves
+    # that the whole subject is one physical rectangle.  The certificate is
+    # deliberately stronger than "there are lines near four sides": one
+    # Poppler element must finally own all four complete target-tone edges.
+    # This distinguishes a genuinely irregular enclosed comb from two comb runs
+    # that lattice.py accidentally joined across a label or gutter.
+    cell_y0, cell_y1 = float(cell["y0"]), float(cell["y1"])
+
+    def final_owner(x: float, y: float) -> Paint | None:
+        active = [
+            paint for paint in page.paints
+            if paint.x0 <= x <= paint.x1 and paint.y0 <= y <= paint.y1
+        ]
+        return max(
+            active,
+            key=lambda paint: (paint.order, paint.element, paint.kind),
+            default=None,
+        )
+
+    def final_target_spans_horizontal(y: float) -> bool:
+        endpoints = {x0, x1}
+        for paint in page.paints:
+            if paint.y0 <= y <= paint.y1 and paint.x1 > x0 and paint.x0 < x1:
+                endpoints.update((max(x0, paint.x0), min(x1, paint.x1)))
+        ordered = sorted(endpoints)
+        for left, right in zip(ordered, ordered[1:]):
+            if right - left <= 1e-9:
+                continue
+            owner = final_owner((left + right) / 2, y)
+            if (owner is None or owner.clipped
+                    or abs(owner.tone - divider_tone) > 1e-8):
+                if ((left <= x0 + 1e-9 or right >= x1 - 1e-9)
+                        and right - left <= POSITION_TOL_PT):
+                    continue
+                return False
+        return True
+
+    def final_target_spans_vertical(x: float) -> bool:
+        endpoints = {cell_y0, cell_y1}
+        for paint in page.paints:
+            if (paint.x0 <= x <= paint.x1
+                    and paint.y1 > cell_y0 and paint.y0 < cell_y1):
+                endpoints.update((
+                    max(cell_y0, paint.y0), min(cell_y1, paint.y1)))
+        ordered = sorted(endpoints)
+        for top, bottom in zip(ordered, ordered[1:]):
+            if bottom - top <= 1e-9:
+                continue
+            owner = final_owner(x, (top + bottom) / 2)
+            if (owner is None or owner.clipped
+                    or abs(owner.tone - divider_tone) > 1e-8):
+                if ((top <= cell_y0 + 1e-9
+                     or bottom >= cell_y1 - 1e-9)
+                        and bottom - top <= POSITION_TOL_PT):
+                    continue
+                return False
+        return True
+
+    subject_frame_elements_cache: list[str] | None = None
+
+    def single_source_frame_elements() -> list[str]:
+        nonlocal subject_frame_elements_cache
+        if subject_frame_elements_cache is not None:
+            return subject_frame_elements_cache
+        paints_by_element: dict[str, list[Paint]] = {}
+        for paint in page.paints:
+            if (not paint.clipped
+                    and abs(paint.tone - divider_tone) <= 1e-8):
+                paints_by_element.setdefault(paint.element, []).append(paint)
+        subject_frame_elements: list[str] = []
+        for element, element_paints in sorted(paints_by_element.items()):
+            top_lines = [
+                paint for paint in element_paints
+                if paint.width > paint.height
+                and paint.x0 <= x0 + POSITION_TOL_PT
+                and paint.x1 >= x1 - POSITION_TOL_PT
+                and paint.y0 <= cell_y0 + POSITION_TOL_PT
+                and paint.y1 >= cell_y0 - POSITION_TOL_PT
+            ]
+            bottom_lines = [
+                paint for paint in element_paints
+                if paint.width > paint.height
+                and paint.x0 <= x0 + POSITION_TOL_PT
+                and paint.x1 >= x1 - POSITION_TOL_PT
+                and paint.y0 <= cell_y1 + POSITION_TOL_PT
+                and paint.y1 >= cell_y1 - POSITION_TOL_PT
+            ]
+            left_lines = [
+                paint for paint in element_paints
+                if paint.height > paint.width
+                and paint.y0 <= cell_y0 + POSITION_TOL_PT
+                and paint.y1 >= cell_y1 - POSITION_TOL_PT
+                and paint.x0 <= x0 + POSITION_TOL_PT
+                and paint.x1 >= x0 - POSITION_TOL_PT
+            ]
+            right_lines = [
+                paint for paint in element_paints
+                if paint.height > paint.width
+                and paint.y0 <= cell_y0 + POSITION_TOL_PT
+                and paint.y1 >= cell_y1 - POSITION_TOL_PT
+                and paint.x0 <= x1 + POSITION_TOL_PT
+                and paint.x1 >= x1 - POSITION_TOL_PT
+            ]
+            if (
+                any(final_target_spans_horizontal(
+                    (paint.y0 + paint.y1) / 2)
+                    for paint in top_lines)
+                and any(final_target_spans_horizontal(
+                    (paint.y0 + paint.y1) / 2)
+                    for paint in bottom_lines)
+                and any(final_target_spans_vertical(
+                    (paint.x0 + paint.x1) / 2)
+                    for paint in left_lines)
+                and any(final_target_spans_vertical(
+                    (paint.x0 + paint.x1) / 2)
+                    for paint in right_lines)
+            ):
+                subject_frame_elements.append(element)
+        subject_frame_elements_cache = subject_frame_elements
+        return subject_frame_elements_cache
     ambiguous_target_paints = [
         paint for paint in page.paints
         if paint.clipped
@@ -2956,7 +3089,28 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
             > POSITION_TOL_PT
         ):
             return False
-        if "glyph use" not in region.reason:
+        # Poppler normally emits text as glyph ``use`` nodes, but a few
+        # official forms carry outlined characters as broad curved paths.
+        # Neither kind is a straight compartment boundary.  A broad curved
+        # path can therefore affect topology only by covering or joining an
+        # eligible source divider; a narrow curved path remains unsupported
+        # because its bound could itself occupy a divider lane.
+        curved_overlap = (
+            min(region.y1, seed_y1) - max(region.y0, seed_y0)
+        )
+        curved_can_be_divider = (
+            region.reason == "curved SVG path"
+            and region.x1 - region.x0 <= max_width
+            and curved_overlap > (seed_y1 - seed_y0) / 2
+        )
+        occlusion_only = (
+            "glyph use" in region.reason
+            or (
+                region.reason == "curved SVG path"
+                and not curved_can_be_divider
+            )
+        )
+        if not occlusion_only:
             return True
         # Glyphs are explicitly excluded as divider candidates.  Their only
         # topology effect is possible occlusion of an earlier raw divider.
@@ -2969,14 +3123,14 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
                 region.x1 > paint.x0 and region.x0 < paint.x1
                 and region.y1 > max(seed_y0, paint.y0)
                 and region.y0 < min(seed_y1, paint.y1)
-                for paint in candidates
+                for paint in interior_candidates
             )
         return any(
             (region.order < 0 or region.order > paint.order)
             and region.x1 > paint.x0 and region.x0 < paint.x1
             and region.y1 > max(seed_y0, paint.y0)
             and region.y0 < min(seed_y1, paint.y1)
-            for paint in candidates
+            for paint in interior_candidates
         )
 
     intersecting_unsupported = [
@@ -3163,8 +3317,11 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
 
         extras: list[dict[str, Any]] = []
         partial: list[dict[str, Any]] = []
+        subject_gap_proofs: list[dict[str, Any]] = []
+        unproven_subject_gaps: list[dict[str, Any]] = []
         source_anchors = [float(match["source_x"]) for match in anchor_matches]
-        for left, right in zip(source_anchors, source_anchors[1:]):
+        for gap_index, (left, right) in enumerate(
+                zip(source_anchors, source_anchors[1:])):
             gap = right - left
             multiple = int(round(gap / pitch))
             integral_residual = abs(gap - multiple * pitch)
@@ -3205,6 +3362,50 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
                         "pitch_pt": round(pitch, 6),
                         "found_x": [item["x"] for item in between],
                     })
+                continue
+            # An empty gap wider than one measured pitch needs the stronger,
+            # independently verified single-frame certificate above and must
+            # contain no unsupported fixed ink.  Even an integral multi-pitch
+            # void could be two separate comb runs joined by a bad lattice
+            # subject.
+            if not between:
+                gap_unsupported = [
+                    region for region in page.unsupported
+                    if region.x1 > left and region.x0 < right
+                    and region.y1 > cell_y0 and region.y0 < cell_y1
+                    and min(region.x1, right) - max(region.x0, left)
+                    > POSITION_TOL_PT
+                    and min(region.y1, cell_y1) - max(region.y0, cell_y0)
+                    > POSITION_TOL_PT
+                ]
+                subject_frame_elements = single_source_frame_elements()
+                if subject_frame_elements and not gap_unsupported:
+                    subject_gap_proofs.append({
+                        "left": round(left, 6),
+                        "right": round(right, 6),
+                        "gap_pt": round(gap, 6),
+                        "pitch_pt": round(pitch, 6),
+                        "integral_residual_pt": round(
+                            integral_residual, 6),
+                        "single_frame_elements": subject_frame_elements,
+                        "unsupported_regions": [],
+                    })
+                    continue
+                unproven_subject_gaps.append({
+                    "left": round(left, 6), "right": round(right, 6),
+                    "reason": (
+                        "multi-pitch empty gap lacks a clean single-frame proof"
+                    ),
+                    "pitch_pt": round(pitch, 6),
+                    "gap_pt": round(gap, 6),
+                    "integral_residual_pt": round(integral_residual, 6),
+                    "single_frame_elements": subject_frame_elements,
+                    "unsupported_regions": [
+                        dataclasses.asdict(region)
+                        for region in gap_unsupported
+                    ],
+                    "found_x": [],
+                })
                 continue
             if integral_residual > POSITION_TOL_PT:
                 partial.append({
@@ -3386,6 +3587,8 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
                 for match in anchor_matches
             ),
             "anchors_complete": True,
+            "subject_gap_proofs": subject_gap_proofs,
+            "unproven_subject_gaps": unproven_subject_gaps,
             "components": [group for group in groups
                            if any(near(group["x"], x) for x in source_x)],
         })
@@ -3529,6 +3732,17 @@ def classify_band(cell: dict[str, Any], page: SvgPage) -> dict[str, Any]:
         return {
             "status": "unevaluable",
             "reason": "dominant source topology omits recognised anchors",
+            **coverage_evidence,
+            "chosen_topology": list(chosen_topology),
+            "topology_superset_relations": superset_relations,
+            "bands": measured,
+        }
+    if chosen.get("unproven_subject_gaps"):
+        return {
+            "status": "unevaluable",
+            "reason": (
+                "chosen source topology lacks a clean single-frame subject proof"
+            ),
             **coverage_evidence,
             "chosen_topology": list(chosen_topology),
             "topology_superset_relations": superset_relations,
@@ -4283,6 +4497,18 @@ def self_test() -> int:
         return Paint(x - 0.1, a, x + 0.1, b, tone, order,
                      "test", f"x{x}-o{order}")
 
+    def source_frame() -> list[Paint]:
+        return [
+            Paint(-0.1, -0.1, 40.1, 0.1, 0.0, 10,
+                  "stroke", "single-frame"),
+            Paint(-0.1, 9.9, 40.1, 10.1, 0.0, 11,
+                  "stroke", "single-frame"),
+            Paint(-0.1, -0.1, 0.1, 10.1, 0.0, 12,
+                  "stroke", "single-frame"),
+            Paint(39.9, -0.1, 40.1, 10.1, 0.0, 13,
+                  "stroke", "single-frame"),
+        ]
+
     cell = {
         "id": "p1c0", "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
         "comb": {"cells": 3, "divider_x": [10.0, 30.0],
@@ -4329,6 +4555,7 @@ def self_test() -> int:
         100, 100, [
             paint(10), paint(30),
             Paint(18, 2, 22, 6, 0.0, 3, "fill", "square"),
+            *source_frame(),
         ], [], "x"))
     assert square["status"] == "measured", square
     assert square["compartments"] == 3 and not square["extra_divider_x"], square
@@ -4338,6 +4565,7 @@ def self_test() -> int:
             paint(10, order=0), paint(20, order=1), paint(30, order=2),
             Paint(19, 2, 21, 8, 1.0, 3, "fill", "white-erasure"),
             Paint(18, 2, 22, 6, 0.0, 4, "fill", "square"),
+            *source_frame(),
         ], [], "x"))
     assert erased_under_square["status"] == "measured", erased_under_square
     assert (erased_under_square["compartments"] == 3
@@ -4391,6 +4619,38 @@ def self_test() -> int:
     }
     result = classify_band(non_integral, SvgPage(
         100, 100, [paint(10), paint(20), paint(35)], [], "x"))
+    assert result["status"] == "unevaluable", result
+
+    # A fully observed source comb may have deliberately non-uniform
+    # compartments.  Pitch is an inference aid for extra painted boundaries,
+    # not permission to invent a boundary where Poppler paints none.
+    non_uniform = {
+        **cell,
+        "comb": {**cell["comb"],
+                 "cells": 4,
+                 "divider_x": [7.5, 19.25, 30.25],
+                 "pitch_pt": 7.5},
+    }
+    result = classify_band(non_uniform, SvgPage(
+        100, 100,
+        [paint(7.5), paint(19.25), paint(30.25), *source_frame()],
+        [], "x"))
+    assert result["status"] == "measured", result
+    assert result["compartments"] == 4 and not result["extra_divider_x"], result
+    assert result["subject_gap_proofs"], result
+
+    # Two independent combs separated by a static-label-sized void are not one
+    # non-uniform comb merely because no divider is painted in the void.
+    conflated = {
+        **cell,
+        "x1": 100.0,
+        "comb": {**cell["comb"],
+                 "cells": 3,
+                 "divider_x": [10.0, 80.0],
+                 "pitch_pt": 10.0},
+    }
+    result = classify_band(conflated, SvgPage(
+        100, 100, [paint(10), paint(80)], [], "x"))
     assert result["status"] == "unevaluable", result
 
     short_extra = classify_band(cell, SvgPage(
@@ -4552,6 +4812,7 @@ def self_test() -> int:
     erased = SvgPage(100, 100, [
         paint(10, order=0), paint(20, order=1), paint(30, order=2),
         Paint(19, 0, 21, 10, 1.0, 3, "fill", "white"),
+        *source_frame(),
     ], [], "x")
     result = classify_band(cell, erased)
     assert result["status"] == "measured" and result["compartments"] == 3, result
@@ -4568,6 +4829,7 @@ def self_test() -> int:
     grey_overpaint = SvgPage(100, 100, [
         paint(10, order=0), paint(20, order=1), paint(30, order=2),
         Paint(19, 0, 21, 10, 0.5, 3, "fill", "grey"),
+        *source_frame(),
     ], [], "x")
     result = classify_band(cell, grey_overpaint)
     assert result["status"] == "measured" and result["compartments"] == 3, result
@@ -4577,6 +4839,7 @@ def self_test() -> int:
     black_overpaint = SvgPage(100, 100, [
         paint(10, order=0), paint(20, order=1), paint(30, order=2),
         Paint(15, 0, 25, 10, 0.0, 3, "fill", "broad-black"),
+        *source_frame(),
     ], [], "x")
     result = classify_band(cell, black_overpaint)
     assert result["status"] == "measured" and result["compartments"] == 3, result
@@ -4586,6 +4849,7 @@ def self_test() -> int:
     black_underpaint = SvgPage(100, 100, [
         Paint(15, 0, 25, 10, 0.0, 0, "fill", "broad-black"),
         paint(10, order=1), paint(20, order=2), paint(30, order=3),
+        *source_frame(),
     ], [], "x")
     result = classify_band(cell, black_underpaint)
     assert result["status"] == "measured" and result["compartments"] == 3, result
@@ -4597,6 +4861,48 @@ def self_test() -> int:
         100, 100, [paint(10), paint(20), paint(30)],
         [same_tone_glyph], "x"))
     assert result["status"] == "unevaluable", result
+
+    # A conservative glyph bound touching only the cell-side frame cannot
+    # occlude an eligible interior divider.  It must not make an otherwise
+    # exhaustive source topology unevaluable.
+    edge_glyph = UnsupportedRegion(
+        -1, 2, 0.2, 8, "glyph use may occlude geometry: #glyph-edge",
+        "glyph", 0.0, 4, False)
+    result = classify_band(cell, SvgPage(
+        100, 100, [paint(0), paint(10), paint(20), paint(30)],
+        [edge_glyph], "x"))
+    assert result["status"] == "measured", result
+    assert result["compartments"] == 4, result
+
+    # Some official fixed text is encoded as broad curved outlines instead of
+    # glyph-use nodes.  A broad curve wholly inside a compartment cannot be a
+    # straight divider and cannot occlude one.  A narrow curve, or a broad
+    # curve crossing an actual divider, remains unevaluable.
+    broad_curve_inside = UnsupportedRegion(
+        12, 2, 18, 8, "curved SVG path", "fixed-outline", 0.0, 4, False)
+    result = classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [broad_curve_inside], "x"))
+    assert result["status"] == "measured", result
+    narrow_curve = UnsupportedRegion(
+        19.8, 2, 20.2, 8, "curved SVG path",
+        "narrow-curve", 0.0, 4, False)
+    assert classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [narrow_curve], "x"))["status"] == "unevaluable"
+    short_narrow_curve = UnsupportedRegion(
+        15, 7.6, 15.4, 8, "curved SVG path",
+        "short-narrow-curve", 0.0, 4, False)
+    result = classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [short_narrow_curve], "x"))
+    assert result["status"] == "measured", result
+    broad_curve_crossing = UnsupportedRegion(
+        15, 2, 25, 8, "curved SVG path",
+        "crossing-outline", 0.0, 4, False)
+    assert classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [broad_curve_crossing], "x"))["status"] == "unevaluable"
 
     no_anchor = {**cell, "comb": {**cell["comb"], "cells": 1, "divider_x": []}}
     assert classify_band(no_anchor, page)["status"] == "unevaluable"
