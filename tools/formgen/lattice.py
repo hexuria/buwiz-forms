@@ -1839,6 +1839,30 @@ def boundary_topology_subset(left: Sequence[float],
     return True
 
 
+def comb_has_cell_owner(cell: dict[str, Any],
+                        comb: dict[str, Any]) -> bool:
+    """Whether a comb band has paper owned by this emitted rectangle.
+
+    Bands may legitimately straddle a shared horizontal rule, so full vertical
+    containment is too strict.  They must, however, have positive vertical
+    intersection with the cell and keep every physical slot boundary inside
+    its horizontal extent.  A merely touching band belongs to the adjacent
+    row and cannot be emitted with negative or entirely out-of-cell offsets.
+    """
+    slot_x = [float(value) for value in comb.get("slot_x") or ()]
+    if len(slot_x) < 2:
+        return False
+    vertical_overlap = (
+        min(float(cell["y1"]), float(comb["y1"]))
+        - max(float(cell["y0"]), float(comb["y0"]))
+    )
+    return (
+        vertical_overlap > 0.0
+        and slot_x[0] >= float(cell["x0"]) - CLUSTER_TOL_PT
+        and slot_x[-1] <= float(cell["x1"]) + CLUSTER_TOL_PT
+    )
+
+
 def source_owned_comb_frame(
         box: dict[str, Any],
         xl: Lattice, yl: Lattice,
@@ -2619,10 +2643,31 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         cell = output_by_subject.get(subject_key)
         legacy_comb = subject["comb"]
         final_candidate = subject["final_candidate"]
+        resolved = None if cell is None else cell.get("comb")
+        if (cell is not None and resolved is not None
+                and not comb_has_cell_owner(cell, resolved)):
+            raise ValueError(
+                f"{cell['id']}: current comb has no owning cell paper")
+        legacy_owned = bool(
+            cell is not None and comb_has_cell_owner(cell, legacy_comb))
+        final_candidate_owned = (
+            final_candidate
+            if cell is not None
+            and final_candidate is not None
+            and comb_has_cell_owner(cell, final_candidate)
+            else None
+        )
+        no_owned_band = bool(
+            cell is not None
+            and resolved is None
+            and not legacy_owned
+            and final_candidate_owned is None
+        )
         if (cell is None
                 or (cell.get("comb") is None
                     and final_candidate is None
-                    and not subject["has_final_support"])):
+                    and not subject["has_final_support"])
+                or no_owned_band):
             if cell is None:
                 sx0, sy0, sx1, sy1 = (
                     float(value) for value in subject["legacy_bbox"])
@@ -2666,7 +2711,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             subject_ledger.append(retained)
             continue
 
-        resolved = cell.get("comb")
+        final_candidate = final_candidate_owned
         if (resolved is not None and final_candidate is not None
                 and int(final_candidate["cells"]) > int(resolved["cells"])):
             cell["comb"] = mark_comb_unresolved(
@@ -2688,12 +2733,20 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 cell["comb"] = mark_comb_unresolved(
                     final_candidate, "no-final-visible-owned-band")
         elif int(resolved["cells"]) < int(legacy_comb["cells"]):
-            preserved = mark_comb_unresolved(
-                legacy_comb, "final-visible-count-regression",
-                method="legacy-continuity")
-            preserved["resolution"]["final_visible_candidate_cells"] = int(
-                resolved["cells"])
-            cell["comb"] = preserved
+            if legacy_owned:
+                preserved = mark_comb_unresolved(
+                    legacy_comb, "final-visible-count-regression",
+                    method="legacy-continuity")
+                preserved["resolution"]["final_visible_candidate_cells"] = int(
+                    resolved["cells"])
+                cell["comb"] = preserved
+            else:
+                cell["comb"] = mark_comb_unresolved(
+                    resolved, "anchor-ownership-disagreement")
+
+        if not legacy_owned:
+            cell["comb"] = mark_comb_unresolved(
+                cell["comb"], "anchor-ownership-disagreement")
 
         if cell.get("geometry_resolution"):
             cell["comb"] = mark_comb_unresolved(
@@ -2762,6 +2815,12 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         })
         cell.pop("comb")
         cell.pop("combs", None)
+
+    for cell in cells:
+        comb = cell.get("comb")
+        if comb is not None and not comb_has_cell_owner(cell, comb):
+            raise ValueError(
+                f"{cell['id']}: active comb has no owning cell paper")
 
     assigned, unplaced = assign_points(
         cells, [((r["x0"] + r["x1"]) / 2.0, (r["y0"] + r["y1"]) / 2.0, index)
@@ -3428,6 +3487,26 @@ def self_test(ir_path: pathlib.Path) -> int:
         [10.0, 20.0], [10.31, 19.7]),
         "outside-tolerance boundary drift was treated as equal")
 
+    owner_cell = {"x0": 0.0, "y0": 0.0, "x1": 30.0, "y1": 10.0}
+    owner_comb = {
+        "slot_x": [0.0, 10.0, 20.0, 30.0],
+        "y0": 5.0, "y1": 10.0,
+    }
+    check(comb_has_cell_owner(owner_cell, owner_comb),
+          "a contained comb band lost its cell owner")
+    check(comb_has_cell_owner(
+        owner_cell, {**owner_comb, "y0": -5.0, "y1": 0.1}),
+        "a positively overlapping shared-edge comb lost its cell owner")
+    check(not comb_has_cell_owner(
+        owner_cell, {**owner_comb, "y0": -5.0, "y1": 0.0}),
+        "an above-cell comb inherited the adjacent row")
+    check(not comb_has_cell_owner(
+        owner_cell, {**owner_comb, "y0": 10.0, "y1": 15.0}),
+        "a below-cell comb inherited the adjacent row")
+    check(not comb_has_cell_owner(
+        owner_cell, {**owner_comb, "slot_x": [-1.0, 10.0, 30.0]}),
+        "a horizontally unowned comb inherited the cell")
+
     # A normal four-sided comb has no crossed internal lattice edge, but its
     # final-visible frame can still prove which of two nested endpoint
     # topologies owns the writing band.  That certificate is topology proof;
@@ -3599,6 +3678,86 @@ def self_test(ir_path: pathlib.Path) -> int:
         f"same-count topology drift did not block the subject ledger: "
         f"{ledger_subjects}",
     )
+
+    # Legacy reconciliation must not attach the richer endpoint topology from
+    # an adjacent row merely because its long seed dividers cross this cell.
+    # Exercise both directions, with and without a valid current-owned band.
+    def inherited_endpoint_case(
+            label: str,
+            long_y: tuple[float, float],
+            extra_y: tuple[float, float],
+            with_current_band: bool,
+            ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        legacy_lines = [
+            {
+                **synthetic_vertical(
+                    x, long_y[0], long_y[1], 0.2, 50 + index),
+                "id": f"{label}-legacy-{index}",
+            }
+            for index, x in enumerate((10.0, 20.0))
+        ]
+        adjacent_extra = {
+            **synthetic_vertical(
+                15.0, extra_y[0], extra_y[1], 0.2, 52),
+            "id": f"{label}-adjacent-extra",
+        }
+        current_lines = [
+            {
+                **synthetic_vertical(x, 5.0, 10.0, 0.2, 53 + index),
+                "id": f"{label}-current-{index}",
+            }
+            for index, x in enumerate((10.0, 20.0))
+        ]
+        active_lines = current_lines if with_current_band else legacy_lines
+        active_extra = (
+            current_lines if with_current_band
+            else [*legacy_lines, adjacent_extra]
+        )
+        cells_result, _text_result, subjects_result, _inferences_result = (
+            build_cells(
+                1, ledger_x, ledger_y, DisjointSet(1),
+                [[True], [True]], [[True], [True]],
+                [ledger_left, ledger_right], [ledger_top, ledger_bottom],
+                active_lines, active_extra,
+                FinalPaint([
+                    ledger_left, ledger_right, ledger_top, ledger_bottom,
+                    *legacy_lines, adjacent_extra, *current_lines,
+                ]),
+                [],
+                legacy_dividers=legacy_lines,
+                legacy_extra_ink=[*legacy_lines, adjacent_extra],
+                final_supported_divider_ids=(
+                    {str(line["id"]) for line in legacy_lines}
+                    if with_current_band else None
+                ),
+            )
+        )
+        return cells_result, subjects_result
+
+    for direction, long_y, extra_y in (
+            ("above", (-5.0, 10.0), (-5.0, 0.0)),
+            ("below", (0.0, 15.0), (10.0, 15.0))):
+        for with_current_band in (False, True):
+            inherited_cells, inherited_subjects = inherited_endpoint_case(
+                f"{direction}-{'current' if with_current_band else 'legacy'}",
+                long_y, extra_y, with_current_band)
+            inherited_comb = (
+                inherited_cells[0].get("comb")
+                if len(inherited_cells) == 1 else None
+            )
+            check(
+                inherited_comb is not None
+                and inherited_comb.get("cells") == 3
+                and comb_has_cell_owner(inherited_cells[0], inherited_comb)
+                and len(inherited_subjects) == 1,
+                f"{direction}-cell endpoint topology inherited an adjacent band",
+            )
+            if inherited_comb is not None:
+                check(
+                    (inherited_comb.get("resolution") or {}).get("status")
+                    == ("resolved" if with_current_band else "unresolved"),
+                    f"{direction}-cell current-band precedence is wrong",
+                )
 
     # A thick group divider can paint a short horizontal endpoint cap without
     # producing an internal vertical lattice edge. That cap is safe only when
