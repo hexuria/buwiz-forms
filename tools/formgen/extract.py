@@ -131,11 +131,12 @@ class Segment:
     """One maximal axis-aligned filled bar."""
 
     __slots__ = ("axis", "near", "far", "start", "end", "gray", "rgb",
-                 "paint_seq", "paint_seq_max")
+                 "paint_seq", "paint_seq_max", "paint_spans")
 
     def __init__(self, axis: str, near: float, far: float, start: float, end: float,
                  gray: float | None, rgb: tuple[float, float, float] | None,
-                 paint_seq: int, paint_seq_max: int) -> None:
+                 paint_seq: int, paint_seq_max: int,
+                 paint_spans: Sequence[tuple[float, float, int]]) -> None:
         self.axis = axis      # "h" or "v"
         self.near = near      # y0 for h, x0 for v
         self.far = far        # y1 for h, x1 for v
@@ -145,6 +146,10 @@ class Segment:
         self.rgb = rgb
         self.paint_seq = paint_seq          # first contributing op
         self.paint_seq_max = paint_seq_max  # last contributing op
+        # Every offered long-axis interval survives, including exact duplicates.
+        # The canonical geometry-first order is part of the extractor contract;
+        # paint_seq retains the independent source paint order.
+        self.paint_spans = tuple(paint_spans)
 
     @property
     def thickness(self) -> float:
@@ -170,31 +175,63 @@ class Segment:
             "role": classify_tone(self.gray),
             "paint_seq": self.paint_seq,
             "paint_seq_max": self.paint_seq_max,
+            "paint_spans": [
+                {"start_pt": q(start), "end_pt": q(end), "paint_seq": seq}
+                for start, end, seq in self.paint_spans
+            ],
         }
 
 
 def merge_intervals(intervals: list[tuple[float, float, int]]
-                    ) -> list[tuple[float, float, int, int]]:
+                    ) -> list[tuple[
+                        float, float, int, int,
+                        tuple[tuple[float, float, int], ...],
+                    ]]:
     """Union 1-D intervals, joining anything within JOIN_EPSILON_PT.
 
     Each input carries the paint sequence of the op that contributed it, and
-    each merged run reports the first and last sequence it spans. A bar the
-    generator drew as fifteen short rects therefore still knows where it sits in
-    the page's paint order, which is what lets emit.py reproduce the source's
-    z-order instead of guessing at it from tone.
+    every merged run retains every input interval as well as the first and last
+    sequence it spans. The contributor list is scoped to that run, ordered by
+    ``(start, end, paint_seq)``, and deliberately not deduplicated. A bar the
+    generator painted twice therefore records two full-length contributors; a
+    late joint patch records only its tiny interval. That distinction is what
+    lets lattice.py reconstruct exact per-slab paint order instead of assigning
+    the merged hull to every contributing op.
     """
     if not intervals:
         return []
-    intervals.sort()
-    merged = [[intervals[0][0], intervals[0][1], intervals[0][2], intervals[0][2]]]
-    for start, end, seq in intervals[1:]:
+
+    ordered: list[tuple[float, float, int]] = []
+    for start, end, seq in intervals:
+        if (isinstance(start, bool) or not isinstance(start, (int, float))
+                or isinstance(end, bool) or not isinstance(end, (int, float))
+                or not math.isfinite(float(start))
+                or not math.isfinite(float(end))):
+            raise ValueError(f"invalid paint interval coordinates: {(start, end)!r}")
+        if isinstance(seq, bool) or not isinstance(seq, int) or seq < 0:
+            raise ValueError(f"invalid paint interval ordinal: {seq!r}")
+        quantised = (q(start), q(end), seq)
+        if quantised[1] <= quantised[0]:
+            raise ValueError(f"invalid paint interval extent: {quantised[:2]!r}")
+        ordered.append(quantised)
+
+    ordered.sort(key=lambda span: (span[0], span[1], span[2]))
+    first = ordered[0]
+    merged: list[list[Any]] = [
+        [first[0], first[1], first[2], first[2], [first]],
+    ]
+    for start, end, seq in ordered[1:]:
         if start <= merged[-1][1] + JOIN_EPSILON_PT:
             merged[-1][1] = max(merged[-1][1], end)
             merged[-1][2] = min(merged[-1][2], seq)
             merged[-1][3] = max(merged[-1][3], seq)
+            merged[-1][4].append((start, end, seq))
         else:
-            merged.append([start, end, seq, seq])
-    return [(a, b, lo, hi) for a, b, lo, hi in merged]
+            merged.append([start, end, seq, seq, [(start, end, seq)]])
+    return [
+        (q(a), q(b), lo, hi, tuple(spans))
+        for a, b, lo, hi, spans in merged
+    ]
 
 
 class PaintOrder:
@@ -382,11 +419,13 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
 
     segments: list[Segment] = []
     for (near, far, gray, rgb), spans in h_groups.items():
-        for start, end, lo, hi in merge_intervals(spans):
-            segments.append(Segment("h", near, far, start, end, gray, rgb, lo, hi))
+        for start, end, lo, hi, paint_spans in merge_intervals(spans):
+            segments.append(Segment(
+                "h", near, far, start, end, gray, rgb, lo, hi, paint_spans))
     for (near, far, gray, rgb), spans in v_groups.items():
-        for start, end, lo, hi in merge_intervals(spans):
-            segments.append(Segment("v", near, far, start, end, gray, rgb, lo, hi))
+        for start, end, lo, hi, paint_spans in merge_intervals(spans):
+            segments.append(Segment(
+                "v", near, far, start, end, gray, rgb, lo, hi, paint_spans))
 
     # A lone joint square that merged into nothing is noise, not structure.
     segments = [s for s in segments if s.length > MAX_RULE_THICKNESS_PT]
@@ -1198,6 +1237,38 @@ SELF_TEST_RETEXTED_RAWDICT_CODEPOINT = 0x00A7
 SELF_TEST_BAR_LIKE_FORM = "2316"
 SELF_TEST_LEANING_BARS = 12
 
+# Synthetic merge contract. The input is intentionally out of geometry order.
+# Cluster one contains two distinct full repaints, an exact duplicate contributor,
+# and a tiny much-later patch; cluster two joins only because its 0.01pt gap is
+# within the source join epsilon. Exact equality below proves that contributors
+# stay scoped to their own cluster and that neither deduplication nor hull
+# expansion can turn the late patch into a full repaint.
+SELF_TEST_MERGE_INTERVALS: tuple[tuple[float, float, int], ...] = (
+    (30.0, 31.0, 12),
+    (5.0, 5.25, 99),
+    (0.0, 10.0, 8),
+    (31.01, 32.0, 10),
+    (9.5, 12.0, 3),
+    (0.0, 10.0, 7),
+    (0.0, 10.0, 8),
+)
+SELF_TEST_MERGED_INTERVALS = [
+    (0.0, 12.0, 3, 99, (
+        (0.0, 10.0, 7),
+        (0.0, 10.0, 8),
+        (0.0, 10.0, 8),
+        (5.0, 5.25, 99),
+        (9.5, 12.0, 3),
+    )),
+    (30.0, 32.0, 10, 12, (
+        (30.0, 31.0, 12),
+        (31.01, 32.0, 10),
+    )),
+]
+
+PAINT_SPAN_KEYS = frozenset({"start_pt", "end_pt", "paint_seq"})
+MISSING_PAINT_SPANS = object()
+
 
 def texttrace_codepoints(page: fitz.Page) -> dict[tuple[float, float], set[int]]:
     """Every codepoint get_texttrace() reports, keyed by glyph origin.
@@ -1309,6 +1380,7 @@ def gather_evidence(source_root: pathlib.Path) -> dict[str, Any]:
         "ir": {}, "serialisations": [], "base_pixel_sha256": {},
         "mask_is_opaque": {},
         "codepoints": {}, "leaning_bars": {}, "desync": {},
+        "merged_intervals": merge_intervals(list(SELF_TEST_MERGE_INTERVALS)),
     }
     for code, (relative, revision, digest) in SELF_TEST_FIXTURES.items():
         path = source_root / relative
@@ -1388,11 +1460,161 @@ def check_paint_seq(evidence: dict[str, Any]) -> list[str]:
                     first = item.get("paint_seq")
                     last = item.get("paint_seq_max")
                     label = f"{code} p{page['index']} {kind}[{position}]"
-                    if not isinstance(first, int) or first < 0:
+                    if (isinstance(first, bool)
+                            or not isinstance(first, int) or first < 0):
                         failures.append(f"{label} paint_seq is {first!r}")
-                    elif not isinstance(last, int) or last < first:
+                    elif (isinstance(last, bool)
+                          or not isinstance(last, int) or last < first):
                         failures.append(f"{label} paint_seq_max {last!r} < {first}")
     return failures
+
+
+def is_finite_coordinate(value: Any) -> bool:
+    """Whether a JSON value is a real, finite coordinate rather than bool."""
+    return (not isinstance(value, bool)
+            and isinstance(value, (int, float))
+            and math.isfinite(float(value)))
+
+
+def is_paint_ordinal(value: Any) -> bool:
+    """Whether a JSON value is a non-negative integer paint ordinal."""
+    return not isinstance(value, bool) and isinstance(value, int) and value >= 0
+
+
+def validate_rule_paint_spans(rule: dict[str, Any], label: str) -> list[str]:
+    """Validate exact contributor provenance for one emitted merged rule.
+
+    This is deliberately stricter than a shape check. The contributor entries
+    must be canonical and complete enough to reproduce the merge: one connected
+    JOIN_EPSILON cluster, exact long-axis hull, and exact ordinal min/max. A
+    consumer can then ask which source paints covered a local slab without ever
+    assigning one contributor's ordinal to the complete merged hull.
+    """
+    failures: list[str] = []
+    raw = rule.get("paint_spans", MISSING_PAINT_SPANS)
+    if raw is MISSING_PAINT_SPANS:
+        return [f"{label} has no paint_spans"]
+    if not isinstance(raw, list):
+        return [f"{label} paint_spans is {type(raw).__name__}, expected list"]
+    if not raw:
+        return [f"{label} paint_spans is empty"]
+
+    parsed: list[tuple[float, float, int]] = []
+    for position, span in enumerate(raw):
+        span_label = f"{label} paint_spans[{position}]"
+        if not isinstance(span, dict):
+            failures.append(f"{span_label} is {type(span).__name__}, expected object")
+            continue
+        keys = frozenset(span)
+        if keys != PAINT_SPAN_KEYS:
+            missing = sorted(PAINT_SPAN_KEYS - keys)
+            extra = sorted(keys - PAINT_SPAN_KEYS)
+            failures.append(f"{span_label} keys differ: missing={missing} extra={extra}")
+            continue
+
+        start = span["start_pt"]
+        end = span["end_pt"]
+        seq = span["paint_seq"]
+        entry_valid = True
+        for field, value in (("start_pt", start), ("end_pt", end)):
+            if not is_finite_coordinate(value):
+                failures.append(f"{span_label} {field} is not a finite number: "
+                                f"{value!r}")
+                entry_valid = False
+            elif q(value) != float(value):
+                failures.append(f"{span_label} {field} is not q-coordinate: "
+                                f"{value!r}")
+                entry_valid = False
+        if not is_paint_ordinal(seq):
+            failures.append(f"{span_label} paint_seq is not a non-negative "
+                            f"integer: {seq!r}")
+            entry_valid = False
+        if entry_valid and float(end) <= float(start):
+            failures.append(f"{span_label} has non-positive extent "
+                            f"{start!r}->{end!r}")
+            entry_valid = False
+        if entry_valid:
+            parsed.append((q(start), q(end), seq))
+
+    # Invalid entries have already earned a precise error. Do not let them
+    # participate in sorting or union arithmetic and manufacture secondary ones.
+    if len(parsed) != len(raw):
+        return failures
+
+    canonical = sorted(parsed, key=lambda span: (span[0], span[1], span[2]))
+    if parsed != canonical:
+        failures.append(f"{label} paint_spans are not ordered by "
+                        "(start_pt, end_pt, paint_seq)")
+
+    axis = rule.get("axis")
+    if axis == "h":
+        rule_start, rule_end = rule.get("x0"), rule.get("x1")
+    elif axis == "v":
+        rule_start, rule_end = rule.get("y0"), rule.get("y1")
+    else:
+        failures.append(f"{label} has invalid axis {axis!r}")
+        return failures
+    bound_fields = (("x0", rule_start), ("x1", rule_end)) if axis == "h" else (
+        ("y0", rule_start), ("y1", rule_end))
+    invalid_bounds = False
+    for field, value in bound_fields:
+        if not is_finite_coordinate(value):
+            failures.append(f"{label} {field} is not a finite number: {value!r}")
+            invalid_bounds = True
+        elif q(value) != float(value):
+            failures.append(f"{label} {field} is not q-coordinate: {value!r}")
+            invalid_bounds = True
+    if invalid_bounds:
+        return failures
+
+    cluster_start = canonical[0][0]
+    cluster_end = canonical[0][1]
+    cluster_count = 1
+    for start, end, _seq in canonical[1:]:
+        if start > cluster_end + JOIN_EPSILON_PT:
+            cluster_count += 1
+        cluster_end = max(cluster_end, end)
+    if cluster_count != 1:
+        failures.append(f"{label} paint_spans form {cluster_count} clusters, "
+                        "expected exactly 1")
+    if float(rule_start) != cluster_start or float(rule_end) != q(cluster_end):
+        failures.append(f"{label} long-axis bounds {rule_start}->{rule_end} "
+                        f"do not equal contributor union {cluster_start}->{q(cluster_end)}")
+
+    seqs = [seq for _start, _end, seq in canonical]
+    first = rule.get("paint_seq")
+    last = rule.get("paint_seq_max")
+    if not is_paint_ordinal(first) or first != min(seqs):
+        failures.append(f"{label} paint_seq {first!r} != contributor min "
+                        f"{min(seqs)}")
+    if not is_paint_ordinal(last) or last != max(seqs):
+        failures.append(f"{label} paint_seq_max {last!r} != contributor max "
+                        f"{max(seqs)}")
+    return failures
+
+
+def check_rule_paint_spans(evidence: dict[str, Any]) -> list[str]:
+    """Every newly extracted rule carries a complete contributor contract."""
+    failures: list[str] = []
+    count = 0
+    for code, ir in evidence["ir"].items():
+        for page in ir["pages"]:
+            for position, rule in enumerate(page["rules"]):
+                count += 1
+                failures.extend(validate_rule_paint_spans(
+                    rule, f"{code} p{page['index']} rules[{position}]"))
+    if count == 0:
+        failures.append("paint_spans contract measured no rules")
+    return failures
+
+
+def check_interval_provenance(evidence: dict[str, Any]) -> list[str]:
+    """The interval union retains exact, duplicate, cluster-scoped contributors."""
+    actual = evidence.get("merged_intervals")
+    if actual != SELF_TEST_MERGED_INTERVALS:
+        return [f"merged interval provenance {actual!r} != "
+                f"{SELF_TEST_MERGED_INTERVALS!r}"]
+    return []
 
 
 def check_paint_order_reconciliation(evidence: dict[str, Any]) -> list[str]:
@@ -1657,6 +1879,8 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("determinism", check_determinism),
     ("paper", check_paper),
     ("paint-seq", check_paint_seq),
+    ("paint-spans", check_rule_paint_spans),
+    ("interval-provenance", check_interval_provenance),
     ("paint-order-reconciliation", check_paint_order_reconciliation),
     ("soft-masks", check_soft_masks),
     ("transforms", check_transforms),
@@ -1675,7 +1899,28 @@ def mutate_paper(evidence: dict[str, Any]) -> None:
 
 
 def mutate_paint_seq(evidence: dict[str, Any]) -> None:
-    del evidence["ir"]["2551Q"]["pages"][0]["rules"][0]["paint_seq"]
+    # Use non-rule ink so this mutation isolates the general paint-seq check
+    # from the stricter rule-only contributor contract.
+    for ir in evidence["ir"].values():
+        for page in ir["pages"]:
+            for kind in ("area_fills", "paths", "images"):
+                if page[kind]:
+                    del page[kind][0]["paint_seq"]
+                    return
+    raise AssertionError("paint-seq mutation found no non-rule ink")
+
+
+def mutate_paint_spans(evidence: dict[str, Any]) -> None:
+    del evidence["ir"]["2551Q"]["pages"][0]["rules"][0]["paint_spans"]
+
+
+def mutate_interval_provenance(evidence: dict[str, Any]) -> None:
+    """Lose one exact duplicate while leaving the merged hull and range intact."""
+    first = list(evidence["merged_intervals"][0])
+    spans = list(first[4])
+    del spans[2]
+    first[4] = tuple(spans)
+    evidence["merged_intervals"][0] = tuple(first)
 
 
 def mutate_paint_order_reconciliation(evidence: dict[str, Any]) -> None:
@@ -1734,6 +1979,9 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
     ("determinism", "one serialisation gains a byte", mutate_determinism),
     ("paper", "2551Q's height becomes Letter", mutate_paper),
     ("paint-seq", "a rule loses its paint_seq", mutate_paint_seq),
+    ("paint-spans", "a rule loses its contributor list", mutate_paint_spans),
+    ("interval-provenance", "an exact duplicate contributor is deduplicated",
+     mutate_interval_provenance),
     ("paint-order-reconciliation", "a desync is accepted instead of raising",
      mutate_paint_order_reconciliation),
     ("soft-masks", "a masked image reports its unmasked pixels", mutate_soft_masks),
@@ -1773,6 +2021,88 @@ def mutation_probes(evidence: dict[str, Any], stream: Any) -> list[str]:
     return failures
 
 
+def paint_span_contract_probes(stream: Any) -> list[str]:
+    """Prove malformed contributor contracts are rejected, case by case."""
+    start, end, first, last, spans = SELF_TEST_MERGED_INTERVALS[0]
+    valid = Segment(
+        "h", 20.0, 20.48, start, end, 0.0, None,
+        first, last, spans,
+    ).to_ir(0)
+    failures: list[str] = []
+    unexpected = validate_rule_paint_spans(valid, "valid synthetic rule")
+    if unexpected:
+        failures.append(f"valid paint_spans contract was rejected: {unexpected}")
+
+    def reverse_spans(rule: dict[str, Any]) -> None:
+        rule["paint_spans"].reverse()
+
+    cases: tuple[
+        tuple[str, str, Callable[[dict[str, Any]], Any]], ...
+    ] = (
+        ("missing-field", "has no paint_spans",
+         lambda rule: rule.pop("paint_spans")),
+        ("wrong-container", "expected list",
+         lambda rule: rule.__setitem__("paint_spans", {})),
+        ("empty", "is empty",
+         lambda rule: rule.__setitem__("paint_spans", [])),
+        ("wrong-entry", "expected object",
+         lambda rule: rule["paint_spans"].__setitem__(0, [])),
+        ("missing-key", "keys differ",
+         lambda rule: rule["paint_spans"][0].pop("end_pt")),
+        ("extra-key", "keys differ",
+         lambda rule: rule["paint_spans"][0].__setitem__("x0", 0.0)),
+        ("wrong-coordinate", "not a finite number",
+         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", "0")),
+        ("bool-coordinate", "not a finite number",
+         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", True)),
+        ("nan-coordinate", "not a finite number",
+         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", math.nan)),
+        ("infinite-coordinate", "not a finite number",
+         lambda rule: rule["paint_spans"][0].__setitem__("start_pt", math.inf)),
+        ("unquantised-coordinate", "not q-coordinate",
+         lambda rule: rule["paint_spans"][3].__setitem__("start_pt", 5.001)),
+        ("reversed-extent", "non-positive extent",
+         lambda rule: rule["paint_spans"][0].__setitem__("end_pt", -1.0)),
+        ("wrong-ordinal", "not a non-negative integer",
+         lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", 7.0)),
+        ("bool-ordinal", "not a non-negative integer",
+         lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", True)),
+        ("negative-ordinal", "not a non-negative integer",
+         lambda rule: rule["paint_spans"][0].__setitem__("paint_seq", -1)),
+        ("unsorted", "not ordered", reverse_spans),
+        ("disconnected-cluster", "form 2 clusters",
+         lambda rule: rule["paint_spans"][-1].update(
+             start_pt=20.0, end_pt=21.0)),
+        ("wrong-union", "do not equal contributor union",
+         lambda rule: rule.__setitem__("x1", 11.99)),
+        ("off-grid-parent-x0", "x0 is not q-coordinate",
+         lambda rule: rule.__setitem__("x0", 0.004)),
+        ("off-grid-parent-x1", "x1 is not q-coordinate",
+         lambda rule: rule.__setitem__("x1", 12.004)),
+        ("off-grid-parent-y0", "y0 is not q-coordinate",
+         lambda rule: rule.update(
+             axis="v", x0=20.0, x1=20.48, y0=0.004, y1=12.0)),
+        ("off-grid-parent-y1", "y1 is not q-coordinate",
+         lambda rule: rule.update(
+             axis="v", x0=20.0, x1=20.48, y0=0.0, y1=12.004)),
+        ("wrong-min", "contributor min",
+         lambda rule: rule.__setitem__("paint_seq", 4)),
+        ("wrong-max", "contributor max",
+         lambda rule: rule.__setitem__("paint_seq_max", 98)),
+    )
+    for name, expected, mutate in cases:
+        broken = copy.deepcopy(valid)
+        mutate(broken)
+        found = validate_rule_paint_spans(broken, name)
+        rejected = any(expected in message for message in found)
+        if not rejected:
+            failures.append(f"paint_spans probe {name!r} was not rejected as "
+                            f"{expected!r}: {found}")
+        print(f"  probe paint-spans:{name:<19} "
+              f"{'OK' if rejected else 'WEAK'}", file=stream)
+    return failures
+
+
 def self_test(source_root: pathlib.Path) -> int:
     """Assert Round 1's properties against the real PDFs, then prove they can fail.
 
@@ -1804,6 +2134,11 @@ def self_test(source_root: pathlib.Path) -> int:
     weak = mutation_probes(evidence, sys.stderr)
     failures.extend(weak)
     for message in weak:
+        print(f"    FAIL {message}", file=sys.stderr)
+
+    contract_failures = paint_span_contract_probes(sys.stderr)
+    failures.extend(contract_failures)
+    for message in contract_failures:
         print(f"    FAIL {message}", file=sys.stderr)
 
     print(f"self-test: {'PASS' if not failures else f'{len(failures)} FAILURE(S)'} "

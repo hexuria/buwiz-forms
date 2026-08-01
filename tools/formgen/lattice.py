@@ -95,6 +95,12 @@ CLUSTER_TOL_PT = 0.3
 # Two collinear fragments of one border count as continuous within this gap.
 JOIN_EPSILON_PT = 0.05
 
+# The extractor's interval-union contract is deliberately tighter than the
+# lattice's paper-geometry join. Consumers must reproduce the producer's exact
+# cluster rule; accepting a 0.02pt hole here would validate provenance that
+# extract.py itself can never emit.
+EXTRACT_JOIN_EPSILON_PT = 0.011
+
 # Row pitch tolerance for growable detection. The Schedule 1 band is 18.24pt
 # for rows 1-5 and 18.27pt for row 6 -- real drift, not rounding.
 PITCH_TOL_PT = 0.3
@@ -664,6 +670,177 @@ def paint_ordinal_range(paint: dict[str, Any]) -> tuple[int, int]:
     return min(first, last), max(first, last)
 
 
+def exact_rule_paint_span_layers(
+        paint: dict[str, Any],
+        ) -> list[dict[str, Any]] | None:
+    """Expand one merged rule into its exact source-painted fragments.
+
+    ``extract.merge_intervals`` historically retained only the first and last
+    source ordinal represented by a merged bar.  That range is deliberately
+    ambiguous: a late repaint of the whole bar and a late repaint of one tiny
+    fragment have the same envelope.  New extractor output carries every
+    contributing long-axis span and its singleton ordinal in ``paint_spans``.
+
+    Absence means legacy evidence and keeps the conservative range behaviour.
+    A present but malformed list is a producer-contract failure, not evidence
+    that may be ignored.  Raising here makes the extraction -> lattice caller
+    fail closed before it can publish geometry from corrupted provenance.
+    """
+    if "paint_spans" not in paint:
+        return None
+
+    raw_spans = paint.get("paint_spans")
+    axis = paint.get("axis")
+    if axis not in ("h", "v"):
+        raise ValueError("rule paint_spans require an h/v axis")
+    if not isinstance(raw_spans, list) or not raw_spans:
+        raise ValueError("rule paint_spans must be a non-empty list")
+
+    coordinate_names = ("x0", "x1") if axis == "h" else ("y0", "y1")
+    if not all(
+            type(paint.get(name)) in (int, float)
+            and math.isfinite(float(paint[name]))
+            for name in coordinate_names):
+        raise ValueError("rule paint_spans have invalid rule bounds")
+    rule_start = q(float(paint[coordinate_names[0]]))
+    rule_end = q(float(paint[coordinate_names[1]]))
+    if (rule_start != float(paint[coordinate_names[0]])
+            or rule_end != float(paint[coordinate_names[1]])):
+        raise ValueError("rule paint_spans have unquantised rule bounds")
+    if rule_end <= rule_start:
+        raise ValueError("rule paint_spans have non-positive rule bounds")
+
+    first = paint.get("paint_seq")
+    last = paint.get("paint_seq_max", first)
+    if (type(first) is not int or type(last) is not int
+            or first < 0 or last < first):
+        raise ValueError("rule paint_spans have invalid paint-order bounds")
+
+    parsed: list[tuple[float, float, int]] = []
+    expected_keys = {"start_pt", "end_pt", "paint_seq"}
+    for index, item in enumerate(raw_spans):
+        if not isinstance(item, dict) or set(item) != expected_keys:
+            raise ValueError(
+                f"rule paint_spans[{index}] has an invalid key set")
+        start_raw = item.get("start_pt")
+        end_raw = item.get("end_pt")
+        sequence = item.get("paint_seq")
+        if (type(start_raw) not in (int, float)
+                or type(end_raw) not in (int, float)
+                or not math.isfinite(float(start_raw))
+                or not math.isfinite(float(end_raw))
+                or type(sequence) is not int
+                or sequence < 0):
+            raise ValueError(
+                f"rule paint_spans[{index}] has invalid values")
+        start = float(start_raw)
+        end = float(end_raw)
+        if q(start) != start or q(end) != end or end <= start:
+            raise ValueError(
+                f"rule paint_spans[{index}] is not a positive quantised span")
+        parsed.append((start, end, sequence))
+
+    if parsed != sorted(parsed, key=lambda item: (item[0], item[1], item[2])):
+        raise ValueError("rule paint_spans are not in canonical order")
+    if min(sequence for _start, _end, sequence in parsed) != first:
+        raise ValueError("rule paint_spans do not bind paint_seq")
+    if max(sequence for _start, _end, sequence in parsed) != last:
+        raise ValueError("rule paint_spans do not bind paint_seq_max")
+
+    cluster_start, cluster_end, _sequence = parsed[0]
+    cluster_count = 1
+    for start, end, _sequence in parsed[1:]:
+        if start > cluster_end + EXTRACT_JOIN_EPSILON_PT:
+            cluster_count += 1
+        cluster_end = max(cluster_end, end)
+    if (cluster_count != 1
+            or q(cluster_start) != rule_start
+            or q(cluster_end) != rule_end):
+        raise ValueError("rule paint_spans do not reproduce the merged rule")
+
+    layers: list[dict[str, Any]] = []
+    for start, end, sequence in parsed:
+        layer = {key: value for key, value in paint.items()
+                 if key != "paint_spans"}
+        layer[coordinate_names[0]] = start
+        layer[coordinate_names[1]] = end
+        layer["paint_seq"] = sequence
+        layer["paint_seq_max"] = sequence
+        layer["_rule_paint_span"] = True
+        layers.append(layer)
+    return layers
+
+
+def rule_paint_join_bridges(
+        paint: dict[str, Any],
+        layers: Sequence[dict[str, Any]],
+        ) -> list[dict[str, Any]]:
+    """Preserve the extractor's measured interval-join continuity.
+
+    ``extract.merge_intervals`` treats contributor gaps of at most
+    ``EXTRACT_JOIN_EPSILON_PT`` as one bar.  Expanding the contributors for
+    paint-order evidence must not turn those accepted sub-cent gaps back into
+    breaks in the lattice.  Add a bridge only over an actual positive join gap,
+    with the two adjoining contributors' ordinal range.  A nonstructural paint
+    between those ordinals therefore keeps the bridge ambiguous/finally erased;
+    this does not revive a later knockout.
+    """
+    if not layers:
+        return []
+    axis = str(paint["axis"])
+    coordinate_names = ("x0", "x1") if axis == "h" else ("y0", "y1")
+    by_start: list[tuple[float, list[dict[str, Any]]]] = []
+    for layer in layers:
+        start = float(layer[coordinate_names[0]])
+        if not by_start or by_start[-1][0] != start:
+            by_start.append((start, [layer]))
+        else:
+            by_start[-1][1].append(layer)
+
+    first_group = by_start[0][1]
+    frontier_end = max(
+        float(layer[coordinate_names[1]]) for layer in first_group)
+    frontier_sequences = {
+        paint_ordinal(layer) for layer in first_group
+        if float(layer[coordinate_names[1]]) == frontier_end
+    }
+    bridges: list[dict[str, Any]] = []
+    for start, group in by_start[1:]:
+        group_end = max(
+            float(layer[coordinate_names[1]]) for layer in group)
+        group_frontier_sequences = {
+            paint_ordinal(layer) for layer in group
+            if float(layer[coordinate_names[1]]) == group_end
+        }
+        if start > frontier_end:
+            bridge = {
+                key: value for key, value in paint.items()
+                if key != "paint_spans"
+            }
+            bridge[coordinate_names[0]] = frontier_end
+            bridge[coordinate_names[1]] = start
+            # Every contributor beginning on the far side can be the first
+            # paint adjoining this join, even when canonical end-order puts a
+            # shorter fragment first. Bind the complete same-start ordinal
+            # set so an intervening nonstructural layer cannot be hidden.
+            ordinals = [
+                *frontier_sequences,
+                *(paint_ordinal(layer) for layer in group),
+            ]
+            bridge["paint_seq"] = min(ordinals)
+            bridge["paint_seq_max"] = max(ordinals)
+            bridge["_rule_paint_join_bridge"] = True
+            bridges.append(bridge)
+            frontier_end = group_end
+            frontier_sequences = group_frontier_sequences
+        elif group_end > frontier_end:
+            frontier_end = group_end
+            frontier_sequences = group_frontier_sequences
+        elif group_end == frontier_end:
+            frontier_sequences.update(group_frontier_sequences)
+    return bridges
+
+
 def point_segment_distance(point: Point, start: Point, end: Point) -> float:
     """Euclidean distance from a point to one finite line segment."""
     px, py = point
@@ -963,12 +1140,34 @@ class FinalPaint:
     bands.
     """
 
-    __slots__ = ("paints", "path_paints", "_visible")
+    __slots__ = (
+        "paints", "path_paints", "horizontal_rule_hulls", "_visible",
+    )
 
     def __init__(self, paints: Sequence[dict[str, Any]]) -> None:
-        expanded = [layer for paint in paints for layer in path_paint_layers(paint)]
+        expanded: list[dict[str, Any]] = []
+        horizontal_rule_hulls: list[dict[str, Any]] = []
+        for paint in paints:
+            for layer in path_paint_layers(paint):
+                exact_layers = exact_rule_paint_span_layers(layer)
+                if (layer.get("axis") == "h"
+                        and layer.get("role") == "structural"):
+                    # Exact contributor expansion is required for paint-order
+                    # compositing, but the producer's merged hull remains the
+                    # source certificate that adjacent fragments belong to one
+                    # horizontal rail.  Keep that hull only for rail
+                    # candidacy; final visibility is still proven from the
+                    # expanded paints by structural_rect_across().
+                    horizontal_rule_hulls.append(layer)
+                if exact_layers is None:
+                    expanded.append(layer)
+                else:
+                    expanded.extend(exact_layers)
+                    expanded.extend(rule_paint_join_bridges(
+                        layer, exact_layers))
         self.paints = tuple(expanded)
         self.path_paints = tuple(paint for paint in expanded if "_path_layer" in paint)
+        self.horizontal_rule_hulls = tuple(horizontal_rule_hulls)
         self._visible: dict[
             tuple[str, float, float, float, float], list[Interval]
         ] = {}
@@ -1216,10 +1415,7 @@ class FinalPaint:
         topology.  The rail must cover the complete field width and survive
         final-paint compositing; a short cap or an erased rule proves nothing.
         """
-        for paint in self.paints:
-            if (paint.get("axis") != "h"
-                    or paint.get("role") != "structural"):
-                continue
+        for paint in self.horizontal_rule_hulls:
             px0, py0, px1, py1 = paint_bounds(paint)
             if not (px0 <= x0 and px1 >= x1
                     and py0 <= y0 and py1 >= y1):
@@ -1609,6 +1805,11 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
             ink for ink in pool
             if ink["y0"] <= a + JOIN_EPSILON_PT
             and ink["y1"] >= b - JOIN_EPSILON_PT
+            # A fully overpainted vertical does not become a slot divider just
+            # because an unrelated horizontal rail crosses its old bbox. Exact
+            # contributor order lets ``definitely_erased`` distinguish that
+            # stale source mark from a genuine late repaint at the same x.
+            and not final_paint.definitely_erased(ink)
             and final_paint.structural_across(ink, a, b)
         ]
         if not any((
@@ -2324,6 +2525,107 @@ def same_boundary_topology(left: Sequence[float],
     )
 
 
+def retained_replacement_covers_inference(
+        subjects: Sequence[dict[str, Any]],
+        cell: dict[str, Any],
+        inferred_comb: dict[str, Any],
+        ) -> bool:
+    """Whether one retained blocker already records this exact inference.
+
+    An erased legacy edge can expand a current rectangle and thereby change its
+    geometry subject key. The retained legacy entry records that replacement
+    candidate explicitly and remains blocking pending independent evidence. If
+    the current-only pass also publishes the same candidate as a new inference,
+    one physical uncertainty is counted twice. Suppress only an exact, uniquely
+    represented candidate; stale or ambiguous evidence stays blocking.
+    """
+    # ``combs`` is emitted only when this rectangle carries more than one band.
+    # The retained candidate can cover the selected band, but it cannot account
+    # for any additional band; keep the current-only inference blocking instead
+    # of deleting the complete band inventory below.
+    if "combs" in cell:
+        return False
+
+    matches: list[dict[str, Any]] = []
+    for subject in subjects:
+        if (subject.get("state") != "retained_unresolved"
+                or subject.get("blocks_gate") is not True
+                or subject.get("requires_independent_evidence") is not True):
+            continue
+        replacements = subject.get("erased_edge_replacement_candidates")
+        if not isinstance(replacements, list):
+            continue
+        subject_matches = [
+            candidate for candidate in replacements
+            if (isinstance(candidate, dict)
+                and candidate.get("new_subject_key")
+                == cell.get("subject_key")
+                and candidate.get("cell_id") == cell.get("id"))
+        ]
+        if subject_matches and len(replacements) != 1:
+            return False
+        matches.extend(subject_matches)
+    if len(matches) != 1:
+        return False
+
+    candidate = matches[0]
+    blockers = candidate.get("activation_blockers")
+    if (candidate.get("blocks_gate") is not True
+            or candidate.get("one_to_one_geometry_candidate") is not True
+            or not isinstance(blockers, list)
+            or not blockers
+            or any(not isinstance(blocker, str) or not blocker.strip()
+                   for blocker in blockers)
+            or type(candidate.get("cells")) is not int
+            or type(inferred_comb.get("cells")) is not int
+            or type(inferred_comb.get("divider_count")) is not int
+            or candidate["cells"] < 2
+            or candidate["cells"] != inferred_comb["cells"]
+            or inferred_comb["divider_count"] != candidate["cells"] - 1):
+        return False
+
+    def quantized_coordinate(value: Any) -> bool:
+        return (type(value) in (int, float)
+                and math.isfinite(float(value))
+                and q(float(value)) == float(value))
+
+    def exact_coordinates(value: Any, expected: Sequence[float]) -> bool:
+        return (isinstance(value, list)
+                and len(value) == len(expected)
+                and all(quantized_coordinate(item)
+                        and quantized_coordinate(wanted)
+                        and q(float(item)) == q(float(wanted))
+                        for item, wanted in zip(value, expected)))
+
+    bbox = [cell.get(name) for name in ("x0", "y0", "x1", "y1")]
+    band_y = [inferred_comb.get("y0"), inferred_comb.get("y1")]
+    divider_x = inferred_comb.get("divider_x")
+    slot_x = inferred_comb.get("slot_x")
+    if not (isinstance(divider_x, list)
+            and isinstance(slot_x, list)
+            and len(divider_x) == candidate["cells"] - 1
+            and len(slot_x) == candidate["cells"] + 1
+            and exact_coordinates(candidate.get("new_bbox"), bbox)
+            and exact_coordinates(candidate.get("band_y"), band_y)
+            and exact_coordinates(candidate.get("divider_x"), divider_x)
+            and exact_coordinates(candidate.get("new_slot_x"), slot_x)):
+        return False
+
+    x0, y0, x1, y1 = (float(value) for value in bbox)
+    band_y0, band_y1 = (float(value) for value in band_y)
+    dividers = [float(value) for value in divider_x]
+    slots = [float(value) for value in slot_x]
+    return (
+        x0 < x1
+        and y0 < y1
+        and y0 <= band_y0 < band_y1 <= y1
+        and slots[0] == x0
+        and slots[-1] == x1
+        and slots[1:-1] == dividers
+        and all(left < right for left, right in zip(slots, slots[1:]))
+    )
+
+
 def boundary_topology_subset(left: Sequence[float],
                              right: Sequence[float]) -> bool:
     """Strict monotone one-to-one subset at the clustering tolerance.
@@ -2377,6 +2679,9 @@ def erased_legacy_divider_reduction_certificate(
                        and math.isfinite(float(value))
                        for value in [*raw_legacy_x, *raw_final_x])):
         return None
+    if any(q(float(value)) != float(value)
+           for value in [*raw_legacy_x, *raw_final_x]):
+        return None
     legacy_x = sorted(float(value) for value in raw_legacy_x)
     final_x = sorted(float(value) for value in raw_final_x)
     legacy_cells = legacy_comb.get("cells")
@@ -2401,11 +2706,57 @@ def erased_legacy_divider_reduction_certificate(
             for comb in (legacy_comb, final_comb)
             for name in ("y0", "y1")):
         return None
-    if (abs(float(legacy_comb["y0"]) - float(final_comb["y0"]))
-            > JOIN_EPSILON_PT + 1e-9
-            or abs(float(legacy_comb["y1"]) - float(final_comb["y1"]))
-            > JOIN_EPSILON_PT + 1e-9):
+    legacy_y0 = float(legacy_comb["y0"])
+    legacy_y1 = float(legacy_comb["y1"])
+    final_y0 = float(final_comb["y0"])
+    final_y1 = float(final_comb["y1"])
+    if (final_y0 < legacy_y0 - JOIN_EPSILON_PT - 1e-9
+            or final_y1 > legacy_y1 + JOIN_EPSILON_PT + 1e-9):
         return None
+
+    raw_legacy_slots = legacy_comb.get("slot_x") or ()
+    raw_final_slots = final_comb.get("slot_x") or ()
+    if (not isinstance(raw_legacy_slots, (list, tuple))
+            or not isinstance(raw_final_slots, (list, tuple))
+            or len(raw_legacy_slots) != legacy_cells + 1
+            or len(raw_final_slots) != final_cells + 1
+            or not all(type(value) in (int, float)
+                       and math.isfinite(float(value))
+                       for value in [*raw_legacy_slots, *raw_final_slots])):
+        return None
+    if any(q(float(value)) != float(value)
+           for value in [*raw_legacy_slots, *raw_final_slots]):
+        return None
+    if (any(float(left) >= float(right)
+            for left, right in zip(raw_legacy_slots, raw_legacy_slots[1:]))
+            or any(float(left) >= float(right)
+                   for left, right in zip(raw_final_slots, raw_final_slots[1:]))
+            or [q(value) for value in raw_legacy_slots[1:-1]]
+            != [q(value) for value in legacy_x]
+            or [q(value) for value in raw_final_slots[1:-1]]
+            != [q(value) for value in final_x]):
+        return None
+    legacy_outer = (
+        float(raw_legacy_slots[0]), float(raw_legacy_slots[-1]))
+    final_outer = (float(raw_final_slots[0]), float(raw_final_slots[-1]))
+    if any(q(old) != q(new)
+           for old, new in zip(legacy_outer, final_outer)):
+        return None
+
+    rail_trims: list[dict[str, Any]] = []
+    for edge, trim_y0, trim_y1 in (
+            ("top", legacy_y0, final_y0),
+            ("bottom", final_y1, legacy_y1)):
+        if trim_y1 - trim_y0 <= JOIN_EPSILON_PT + 1e-9:
+            continue
+        if not final_paint.horizontal_rail_across(
+                legacy_outer[0], legacy_outer[1], trim_y0, trim_y1):
+            return None
+        rail_trims.append({
+            "edge": edge,
+            "y0": q(trim_y0),
+            "y1": q(trim_y1),
+        })
 
     if not all(
             isinstance(witness, dict)
@@ -2477,6 +2828,9 @@ def erased_legacy_divider_reduction_certificate(
         "criterion": "final-visible-erased-legacy-divider-reduction-v1",
         "legacy_cells": len(legacy_x) + 1,
         "final_cells": len(final_x) + 1,
+        "legacy_band_y": [q(legacy_y0), q(legacy_y1)],
+        "final_paper_band_y": [q(final_y0), q(final_y1)],
+        "horizontal_rail_trims": rail_trims,
         "retained_divider_x": [q(value) for value in final_x],
         "erased_dividers": erased,
     }
@@ -3343,6 +3697,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             if candidate.get("geometry_resolution"):
                 blockers.extend(
                     candidate["geometry_resolution"].get("reason_codes") or ())
+            if not blockers:
+                blockers.append("independent-evidence-not-attested")
             candidates.append({
                 "cell_id": candidate["id"],
                 "old_subject_key": subject["subject_key"],
@@ -3620,6 +3976,11 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             continue
         inferred_comb = cell.get("comb") or rejected_inference
         if inferred_comb is None:
+            continue
+        if retained_replacement_covers_inference(
+                subject_ledger, cell, inferred_comb):
+            cell.pop("comb", None)
+            cell.pop("combs", None)
             continue
         inference_reasons = ["no-legacy-subject"]
         if rejected_inference is not None:
@@ -3933,14 +4294,20 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
         if str(rule.get("id")) not in proven_ids
         and not final_paint.definitely_erased(rule)
     ]
+    exact_erased_ids = {
+        str(rule.get("id"))
+        for rule in raw_structural
+        if "paint_spans" in rule and final_paint.definitely_erased(rule)
+    }
     surviving_ids = {
         str(rule.get("id"))
         for rule in [*proven_structural, *uncertain_structural]
     }
     # If one bar of a fused composite boundary survives, retain the complete
-    # measured stack as unresolved geometry so its published centre/IDs do not
-    # shift. An isolated erased rule (the adversarial erased baseline) has no
-    # surviving boundary mate and remains absent.
+    # measured stack so its published centre/IDs do not shift. Exact contributor
+    # provenance can prove that one companion was wholly erased; that companion
+    # remains continuity geometry but no longer contaminates the boundary's
+    # final-paint uncertainty when a surviving mate defines the fused line.
     companion_ids: set[str] = set()
     for defining, all_ink, axis in (
         (_raw_borders, raw_verticals, "v"),
@@ -3963,7 +4330,8 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
         rule for rule in raw_structural
         if str(rule.get("id")) in geometry_ids
     ]
-    uncertain_ids = geometry_ids - proven_ids
+    uncertain_ids = (
+        geometry_ids - proven_ids - (exact_erased_ids & companion_ids))
     # Grey ornament. It must be painted, but never as a black border -- the
     # raster-era mistake this project has already paid for once.
     decorative = [r for r in rules if r["role"] == "decorative"]
@@ -4438,6 +4806,228 @@ def self_test(ir_path: pathlib.Path) -> int:
         for band in ranged_bands),
         "interleaved paint range emitted a resolved two-cell comb")
 
+    # Exact contributor spans disambiguate that same ordinal envelope without
+    # assigning a late fragment's order to the whole merged bar. Two complete
+    # paints around the knockout certify the final black rule; a one-point-high
+    # late repaint exposes only that one point-high interval.
+    exact_repainted_seed = {
+        **ranged_seed,
+        "paint_spans": [
+            {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 1},
+            {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+        ],
+    }
+    exact_repainted_layers = exact_rule_paint_span_layers(
+        exact_repainted_seed)
+    check(
+        exact_repainted_layers is not None
+        and len(exact_repainted_layers) == 2
+        and [paint_ordinal_range(layer)
+             for layer in exact_repainted_layers] == [(1, 1), (100, 100)],
+        "duplicate complete rule paints lost their singleton source order",
+    )
+    exact_repainted_paint = FinalPaint([
+        exact_repainted_seed, middle_knockout,
+    ])
+    check(
+        exact_repainted_paint.visible_intervals(exact_repainted_seed)
+        == [(0.0, 10.0)]
+        and exact_repainted_paint.structural_across(
+            exact_repainted_seed, 0.0, 10.0),
+        "a complete late source repaint did not restore the exact rule",
+    )
+
+    partial_repainted_seed = {
+        **ranged_seed,
+        "paint_spans": [
+            {"start_pt": 0.0, "end_pt": 1.0, "paint_seq": 100},
+            {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 1},
+        ],
+    }
+    partial_repainted_paint = FinalPaint([
+        partial_repainted_seed, middle_knockout,
+    ])
+    check(
+        partial_repainted_paint.visible_intervals(partial_repainted_seed)
+        == [(0.0, 1.0)]
+        and not partial_repainted_paint.structural_across(
+            partial_repainted_seed, 0.0, 10.0),
+        "a tiny late fragment masqueraded as a complete source repaint",
+    )
+
+    exact_horizontal = {
+        **synthetic_horizontal(5.0, 0.0, 10.0, 0.2, 7),
+        "paint_spans": [
+            {"start_pt": 0.0, "end_pt": 5.0, "paint_seq": 7},
+            {"start_pt": 5.0, "end_pt": 10.0, "paint_seq": 7},
+        ],
+    }
+    horizontal_layers = exact_rule_paint_span_layers(exact_horizontal)
+    exact_horizontal_paint = FinalPaint([exact_horizontal])
+    check(
+        horizontal_layers is not None
+        and [(layer["x0"], layer["x1"])
+             for layer in horizontal_layers] == [(0.0, 5.0), (5.0, 10.0)]
+        and all((layer["y0"], layer["y1"])
+                == (exact_horizontal["y0"], exact_horizontal["y1"])
+                for layer in horizontal_layers)
+        and exact_horizontal_paint.structural_rect_across(
+            0.0, exact_horizontal["y0"], 10.0, exact_horizontal["y1"])
+        and exact_horizontal_paint.horizontal_rail_across(
+            0.0, 10.0, exact_horizontal["y0"], exact_horizontal["y1"]),
+        "split horizontal paint spans lost their full source rail",
+    )
+
+    joined_horizontal = {
+        **synthetic_horizontal(5.0, 0.0, 10.0, 0.2, 1),
+        "paint_seq_max": 3,
+        "paint_spans": [
+            {"start_pt": 0.0, "end_pt": 4.0, "paint_seq": 1},
+            {"start_pt": 4.01, "end_pt": 10.0, "paint_seq": 3},
+        ],
+    }
+    joined_horizontal_paint = FinalPaint([joined_horizontal])
+    check(
+        joined_horizontal_paint.structural_across_axis(
+            joined_horizontal, 0.0, 10.0, "h"),
+        "an extractor-joined 0.01pt contributor gap broke final continuity",
+    )
+    joined_gap_knockout = {
+        **synthetic_horizontal(5.0, 4.0, 4.01, 0.2, 2,
+                               role="knockout"),
+    }
+    check(
+        not FinalPaint([
+            joined_horizontal, joined_gap_knockout,
+        ]).structural_across_axis(joined_horizontal, 0.0, 10.0, "h"),
+        "an intervening knockout was hidden by an extractor join bridge",
+    )
+    same_start_join = {
+        **synthetic_horizontal(5.0, 0.0, 10.0, 0.2, 2),
+        "paint_seq_max": 100,
+        "paint_spans": [
+            {"start_pt": 0.0, "end_pt": 4.0, "paint_seq": 50},
+            {"start_pt": 4.01, "end_pt": 5.0, "paint_seq": 100},
+            {"start_pt": 4.01, "end_pt": 10.0, "paint_seq": 2},
+        ],
+    }
+    same_start_knockout = {
+        **synthetic_horizontal(5.0, 4.0, 4.01, 0.2, 25,
+                               role="knockout"),
+    }
+    check(
+        not FinalPaint([
+            same_start_join, same_start_knockout,
+        ]).structural_across_axis(same_start_join, 0.0, 10.0, "h"),
+        "a same-start contributor was omitted from a join bridge ordinal range",
+    )
+
+    malformed_span_contracts: list[tuple[str, dict[str, Any]]] = [
+        ("empty", {**exact_repainted_seed, "paint_spans": []}),
+        ("wrong-container",
+         {**exact_repainted_seed, "paint_spans": {}}),
+        ("wrong-item",
+         {**exact_repainted_seed, "paint_spans": [1]}),
+        ("extra-key", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 10.0,
+                 "paint_seq": 1, "extra": True},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("boolean-coordinate", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": False, "end_pt": 10.0, "paint_seq": 1},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("boolean-sequence", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": True},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("negative-sequence", {
+            **exact_repainted_seed,
+            "paint_seq": -1,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": -1},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("non-finite", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": math.inf, "paint_seq": 1},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("unquantised", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 9.999, "paint_seq": 1},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("non-positive", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 0.0, "paint_seq": 1},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("unsorted", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 100},
+                {"start_pt": 0.0, "end_pt": 10.0, "paint_seq": 1},
+            ],
+        }),
+        ("union-gap", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 4.0, "paint_seq": 1},
+                {"start_pt": 6.0, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("producer-only-gap", {
+            **exact_repainted_seed,
+            "paint_spans": [
+                {"start_pt": 0.0, "end_pt": 4.99, "paint_seq": 1},
+                {"start_pt": 5.01, "end_pt": 10.0, "paint_seq": 100},
+            ],
+        }),
+        ("unquantised-parent-start", {
+            **exact_repainted_seed,
+            "y0": 0.004,
+        }),
+        ("unquantised-parent-end", {
+            **exact_repainted_seed,
+            "y1": 10.004,
+        }),
+        ("minimum-mismatch", {
+            **exact_repainted_seed,
+            "paint_seq": 0,
+        }),
+        ("maximum-mismatch", {
+            **exact_repainted_seed,
+            "paint_seq_max": 101,
+        }),
+        ("invalid-axis", {
+            **exact_repainted_seed,
+            "axis": "x",
+        }),
+    ]
+    for label, hostile in malformed_span_contracts:
+        try:
+            FinalPaint([hostile])
+        except ValueError:
+            continue
+        check(False, f"malformed rule paint spans were accepted: {label}")
+
     # A smaller final-visible comb may replace its raw continuity count only
     # when every omitted source mark has one exact full-band witness and a
     # known-later complete erasure.  This is the paint/erase/repaint sequence
@@ -4459,10 +5049,12 @@ def self_test(ir_path: pathlib.Path) -> int:
     }
     reduction_legacy = {
         "cells": 3, "divider_x": [10.0, 20.0],
+        "slot_x": [0.0, 10.0, 20.0, 30.0],
         "y0": 5.0, "y1": 10.0,
     }
     reduction_final = {
         "cells": 2, "divider_x": [10.0],
+        "slot_x": [0.0, 10.0, 30.0],
         "y0": 5.0, "y1": 10.0,
         "resolution": {"status": "resolved"},
     }
@@ -4477,6 +5069,9 @@ def self_test(ir_path: pathlib.Path) -> int:
             "criterion": "final-visible-erased-legacy-divider-reduction-v1",
             "legacy_cells": 3,
             "final_cells": 2,
+            "legacy_band_y": [5.0, 10.0],
+            "final_paper_band_y": [5.0, 10.0],
+            "horizontal_rail_trims": [],
             "retained_divider_x": [10.0],
             "erased_dividers": [{
                 "divider_x": 20.0,
@@ -4488,6 +5083,75 @@ def self_test(ir_path: pathlib.Path) -> int:
         f"complete source-order erasure was not certified: "
         f"{reduction_certificate}",
     )
+
+    reduction_bottom_rail = synthetic_horizontal(
+        9.5, 0.0, 30.0, 1.0, 4)
+    rail_trimmed_final = {
+        **reduction_final,
+        "y1": 9.0,
+    }
+    rail_trimmed_paint = FinalPaint([
+        reduction_stale, reduction_knockout, reduction_retained,
+        reduction_bottom_rail,
+    ])
+    rail_trimmed_certificate = erased_legacy_divider_reduction_certificate(
+        reduction_legacy, rail_trimmed_final,
+        [reduction_retained, reduction_stale], rail_trimmed_paint)
+    check(
+        rail_trimmed_certificate is not None
+        and rail_trimmed_certificate.get("horizontal_rail_trims") == [{
+            "edge": "bottom", "y0": 9.0, "y1": 10.0,
+        }],
+        "a final paper band trimmed by its full-width baseline was rejected",
+    )
+    rail_endpoint = endpoint_band(
+        [reduction_retained], [reduction_retained, reduction_stale],
+        0.0, 30.0, [(-0.1, 0.1, 0.2), (29.9, 30.1, 0.2)],
+        rail_trimmed_paint)
+    check(
+        rail_endpoint is not None
+        and [q(centre(ink)) for ink in rail_endpoint[0]] == [10.0]
+        and all(evidence.get("divider_x") == [10.0]
+                for evidence in rail_endpoint[3]),
+        "an erased vertical revived as a competing topology inside a rail",
+    )
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, rail_trimmed_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, reduction_knockout, reduction_retained,
+        ])) is None,
+        "a shortened final band was accepted without a source rail")
+    partial_bottom_rail = {
+        **reduction_bottom_rail,
+        "x1": 29.0,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, rail_trimmed_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, reduction_knockout, reduction_retained,
+            partial_bottom_rail,
+        ])) is None,
+        "a partial-width rail certified a shortened final band")
+
+    malformed_reduction_slots = [
+        {**reduction_final, "slot_x": [0.0, 30.0]},
+        {**reduction_final, "slot_x": [0.0, 11.0, 30.0]},
+        {**reduction_final, "slot_x": [0.0, True, 30.0]},
+        {**reduction_final, "slot_x": [0.0, 10.0, 10.0]},
+        {**reduction_final, "slot_x": [0.0, 10.004, 30.0]},
+        {**reduction_final, "slot_x": [0.04, 10.0, 30.04]},
+    ]
+    for hostile_slots in malformed_reduction_slots:
+        check(erased_legacy_divider_reduction_certificate(
+            reduction_legacy, hostile_slots,
+            [reduction_retained, reduction_stale],
+            FinalPaint([
+                reduction_stale, reduction_knockout, reduction_retained,
+            ])) is None,
+            f"malformed reduction slot geometry was certified: "
+            f"{hostile_slots['slot_x']}")
 
     earlier_reduction_knockout = {
         **reduction_knockout,
@@ -4558,6 +5222,7 @@ def self_test(ir_path: pathlib.Path) -> int:
     tolerance_final = {
         **reduction_final,
         "divider_x": [10.30],
+        "slot_x": [0.0, 10.30, 30.0],
     }
     check(erased_legacy_divider_reduction_certificate(
         reduction_legacy, tolerance_final,
@@ -4569,6 +5234,7 @@ def self_test(ir_path: pathlib.Path) -> int:
     outside_tolerance_final = {
         **reduction_final,
         "divider_x": [10.31],
+        "slot_x": [0.0, 10.31, 30.0],
     }
     check(erased_legacy_divider_reduction_certificate(
         reduction_legacy, outside_tolerance_final,
@@ -4586,6 +5252,7 @@ def self_test(ir_path: pathlib.Path) -> int:
         **reduction_legacy,
         "cells": 4,
         "divider_x": [10.0, 10.20, 20.0],
+        "slot_x": [0.0, 10.0, 10.20, 20.0, 30.0],
     }
     check(erased_legacy_divider_reduction_certificate(
         close_legacy, reduction_final,
@@ -5450,6 +6117,174 @@ def self_test(ir_path: pathlib.Path) -> int:
         f"{inference_ledger}",
     )
 
+    represented_cell = {
+        "id": "p1c9",
+        "subject_key": "p1@0.00,0.00,30.00,10.00",
+        "x0": 0.0,
+        "y0": 0.0,
+        "x1": 30.0,
+        "y1": 10.0,
+    }
+    represented_comb = {
+        "cells": 3,
+        "divider_count": 2,
+        "divider_x": [10.0, 20.0],
+        "slot_x": [0.0, 10.0, 20.0, 30.0],
+        "y0": 2.0,
+        "y1": 4.0,
+    }
+    represented_candidate = {
+        "cell_id": "p1c9",
+        "new_subject_key": "p1@0.00,0.00,30.00,10.00",
+        "new_bbox": [0.0, 0.0, 30.0, 10.0],
+        "cells": 3,
+        "band_y": [2.0, 4.0],
+        "divider_x": [10.0, 20.0],
+        "new_slot_x": [0.0, 10.0, 20.0, 30.0],
+        "activation_blockers": ["independent-evidence-not-attested"],
+        "one_to_one_geometry_candidate": True,
+        "blocks_gate": True,
+    }
+
+    def represented_subject_with(**candidate_updates: Any) -> dict[str, Any]:
+        return {
+            "state": "retained_unresolved",
+            "blocks_gate": True,
+            "requires_independent_evidence": True,
+            "erased_edge_replacement_candidates": [{
+                **represented_candidate,
+                **candidate_updates,
+            }],
+        }
+
+    represented_subject = represented_subject_with()
+    check(
+        retained_replacement_covers_inference(
+            [represented_subject], represented_cell, represented_comb),
+        "an exact retained replacement did not cover its duplicate inference",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject], {
+                **represented_cell,
+                "combs": [
+                    represented_comb,
+                    {**represented_comb, "y0": 6.0, "y1": 8.0},
+                ],
+            }, represented_comb),
+        "a retained replacement suppressed a second comb band",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject, represented_subject],
+            represented_cell, represented_comb),
+        "ambiguous retained replacements suppressed an inference",
+    )
+    ambiguous_subject = {
+        **represented_subject,
+        "erased_edge_replacement_candidates": [
+            represented_candidate,
+            {
+                **represented_candidate,
+                "cell_id": "p1c10",
+                "new_subject_key": "p1@30.00,0.00,60.00,10.00",
+            },
+        ],
+    }
+    check(
+        not retained_replacement_covers_inference(
+            [ambiguous_subject], represented_cell, represented_comb),
+        "a stale one-to-one flag hid another replacement candidate",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(activation_blockers=[])],
+            represented_cell, represented_comb),
+        "a nonblocking retained replacement suppressed an inference",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(activation_blockers=[" "])],
+            represented_cell, represented_comb),
+        "a blank retained blocker suppressed an inference",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with()], represented_cell, {
+                **represented_comb,
+                "y0": 6.0,
+                "y1": 8.0,
+            }),
+        "a disjoint comb band was covered by a retained replacement",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(new_slot_x=[0.0, 10.0, 19.0, 30.0])],
+            represented_cell, represented_comb),
+        "stale retained slot evidence suppressed an inference",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(divider_x=[10.004, 20.0])],
+            represented_cell, represented_comb),
+        "off-grid retained coordinates suppressed an inference",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(band_y=[2.004, 4.0])],
+            represented_cell, represented_comb),
+        "an off-grid retained band suppressed an inference",
+    )
+    malformed_outer_comb = {
+        **represented_comb,
+        "slot_x": [1.0, 10.0, 20.0, 30.0],
+    }
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(
+                new_slot_x=malformed_outer_comb["slot_x"])],
+            represented_cell, malformed_outer_comb),
+        "mutually malformed outer-slot evidence suppressed an inference",
+    )
+    malformed_order_comb = {
+        **represented_comb,
+        "divider_x": [20.0, 10.0],
+        "slot_x": [0.0, 20.0, 10.0, 30.0],
+    }
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(
+                divider_x=malformed_order_comb["divider_x"],
+                new_slot_x=malformed_order_comb["slot_x"])],
+            represented_cell, malformed_order_comb),
+        "mutually descending slot evidence suppressed an inference",
+    )
+    malformed_duplicate_comb = {
+        **represented_comb,
+        "divider_x": [10.0, 10.0],
+        "slot_x": [0.0, 10.0, 10.0, 30.0],
+    }
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(
+                divider_x=malformed_duplicate_comb["divider_x"],
+                new_slot_x=malformed_duplicate_comb["slot_x"])],
+            represented_cell, malformed_duplicate_comb),
+        "mutually duplicate slot evidence suppressed an inference",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(cells=True)],
+            represented_cell, represented_comb),
+        "a boolean retained cell count suppressed an inference",
+    )
+    check(
+        not retained_replacement_covers_inference(
+            [represented_subject_with(new_bbox=[False, 0.0, 30.0, 10.0])],
+            represented_cell, represented_comb),
+        "a boolean retained coordinate suppressed an inference",
+    )
+
     owned_band_cells, owned_band_subjects = inherited_endpoint_case(
         "owned-endpoint-band", (-5.0, 10.0), (5.0, 10.0), False)
     owned_band_comb = (
@@ -5891,10 +6726,12 @@ def self_test(ir_path: pathlib.Path) -> int:
     }
     hole_legacy = {
         "cells": 3, "divider_x": [5.0, 8.0],
+        "slot_x": [0.0, 5.0, 8.0, 10.0],
         "y0": 0.0, "y1": 10.0,
     }
     hole_final = {
         "cells": 2, "divider_x": [8.0],
+        "slot_x": [0.0, 8.0, 10.0],
         "y0": 0.0, "y1": 10.0,
         "resolution": {"status": "resolved"},
     }
