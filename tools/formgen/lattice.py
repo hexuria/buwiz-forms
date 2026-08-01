@@ -773,6 +773,29 @@ class FinalPaint:
             for start, end in self.visible_spans(ink, axis)
         )
 
+    def horizontal_rail_across(self, x0: float, x1: float,
+                               y0: float, y1: float) -> bool:
+        """Whether a slab is wholly inked by one final-visible horizontal rail.
+
+        Inside such a slab there is no paper on which crossing black ink can
+        prove a vertical slot boundary.  A vertical from the row above and a
+        vertical from the row below otherwise appear to overlap by exactly the
+        horizontal rule thickness and manufacture a combined endpoint
+        topology.  The rail must cover the complete field width and survive
+        final-paint compositing; a short cap or an erased rule proves nothing.
+        """
+        for paint in self.paints:
+            if (paint.get("axis") != "h"
+                    or paint.get("role") != "structural"):
+                continue
+            px0, py0, px1, py1 = paint_bounds(paint)
+            if not (px0 <= x0 and px1 >= x1
+                    and py0 <= y0 and py1 >= y1):
+                continue
+            if self.structural_across_axis(paint, x0, x1, "h"):
+                return True
+        return False
+
     def definitely_erased(self, ink: dict[str, Any]) -> bool:
         """Whether one known-later nonstructural layer covers the whole bbox.
 
@@ -1074,7 +1097,7 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
                   frame: Sequence[InkSpan],
                   final_paint: FinalPaint
                   ) -> tuple[list[dict[str, Any]], float, float,
-                             list[dict[str, Any]]] | None:
+                             list[dict[str, Any]], bool] | None:
     """Final-visible endpoint topology plus every competing topology.
 
     Heavy digit-group separators are often nested inside the thin character
@@ -1142,10 +1165,14 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
 
     slab_records: list[tuple[float, float, tuple[float, ...],
                              list[dict[str, Any]]]] = []
+    evidence_slab_records: list[tuple[
+        float, float, tuple[float, ...], list[dict[str, Any]]
+    ]] = []
     ordered = sorted(endpoints)
     for a, b in zip(ordered, ordered[1:]):
         if b <= a:
             continue
+        horizontal_rail = final_paint.horizontal_rail_across(x0, x1, a, b)
         active = [
             ink for ink in pool
             if ink["y0"] <= a + JOIN_EPSILON_PT
@@ -1176,19 +1203,36 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
             topology_ink.append(ink)
         topology = tuple(q(centre(ink)) for ink in topology_ink)
         if topology:
-            slab_records.append((a, b, topology, topology_ink))
+            record = (a, b, topology, topology_ink)
+            evidence_slab_records.append(record)
+            # A full-width horizontal rail contains no paper that can
+            # establish the direction of crossing ink. Boundaries proved only
+            # inside it stay in the conflict evidence, but cannot win topology
+            # selection or certify a comb by themselves.
+            if not horizontal_rail:
+                slab_records.append(record)
 
+    horizontal_rail_only = not slab_records and bool(evidence_slab_records)
+    if horizontal_rail_only:
+        # Preserve an already-published subject as unresolved evidence.  It
+        # cannot certify topology, but removing it here would silently change
+        # subject identity before an independent transition adjudicates it.
+        slab_records = list(evidence_slab_records)
     if not slab_records:
         return None
 
     coverage: dict[tuple[float, ...], float] = collections.defaultdict(float)
     for a, b, topology, _ in slab_records:
         coverage[topology] += b - a
+    evidence_coverage: dict[tuple[float, ...], float] = (
+        collections.defaultdict(float))
+    for a, b, topology, _ in evidence_slab_records:
+        evidence_coverage[topology] += b - a
     topology_runs: dict[tuple[float, ...], list[Interval]] = {}
     topology_evidence: list[dict[str, Any]] = []
-    for topology in sorted(coverage):
+    for topology in sorted(evidence_coverage):
         records = sorted(
-            (a, b) for a, b, candidate, _inks in slab_records
+            (a, b) for a, b, candidate, _inks in evidence_slab_records
             if candidate == topology)
         runs: list[Interval] = []
         for a, b in records:
@@ -1221,7 +1265,7 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
         ) for divider_x in topology)
         topology_evidence.append({
             "divider_x": list(topology),
-            "coverage_pt": q(coverage[topology]),
+            "coverage_pt": q(evidence_coverage[topology]),
             "runs": [[q(a), q(b)] for a, b in runs],
             "corridors_continuous": corridors_continuous,
         })
@@ -1253,7 +1297,8 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
             (q(centre(ink)), -paint_ordinal(ink),
              -float(ink["thickness_pt"])) for ink in inks),
     )
-    return representatives, chosen_y0, chosen_y1, topology_evidence
+    return (representatives, chosen_y0, chosen_y1, topology_evidence,
+            horizontal_rail_only)
 
 
 def band_ink(extra: Sequence[dict[str, Any]], x0: float, x1: float,
@@ -1359,7 +1404,8 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
         selected = endpoint_band(seed, extra, x0, x1, frame, final_paint)
         if selected is None:
             continue
-        band, band_y0, band_y1, topology_evidence = selected
+        (band, band_y0, band_y1, topology_evidence,
+         horizontal_rail_only) = selected
         xs = sorted(q(centre(d)) for d in band)
         boundaries = [q(x0), *xs, q(x1)]
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
@@ -1385,6 +1431,8 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             reason_codes.append("split-anchor-run-topology")
         if len(topology_evidence) > 1:
             reason_codes.append("competing-endpoint-topologies")
+        if horizontal_rail_only:
+            reason_codes.append("horizontal-rail-only-topology")
         if any(len(evidence["runs"]) > 1
                and not evidence["corridors_continuous"]
                for evidence in topology_evidence):
@@ -1787,6 +1835,12 @@ def mark_comb_unresolved(comb: dict[str, Any], *reason_codes: str,
     previous = dict(marked.get("resolution") or {})
     reasons = set(previous.get("reason_codes") or ())
     reasons.update(reason for reason in reason_codes if reason)
+    # Once ownership proves that no final-visible band exists, the narrower
+    # rail-only observation is redundant.  Keep one stable root cause in the
+    # published contract while retaining the rail check for otherwise owned
+    # candidates.
+    if "no-final-visible-owned-band" in reasons:
+        reasons.discard("horizontal-rail-only-topology")
     previous.update({
         "status": "unresolved",
         "method": method or previous.get("method") or "unresolved",
@@ -3384,11 +3438,77 @@ def self_test(ir_path: pathlib.Path) -> int:
         synthetic_paint)
     check(endpoint is not None, "endpoint-slab comb topology was not found")
     if endpoint is not None:
-        endpoint_ink, endpoint_y0, endpoint_y1, _topologies = endpoint
+        (endpoint_ink, endpoint_y0, endpoint_y1, _topologies,
+         _horizontal_rail_only) = endpoint
         check([q(centre(ink)) for ink in endpoint_ink] == [10.0, 15.0, 20.0],
               "endpoint-slab topology did not add heavy/drop stale boundaries")
         check(q(endpoint_y0) == 0.5 and q(endpoint_y1) == 10.0,
               f"endpoint-slab common intersection {endpoint_y0}..{endpoint_y1}")
+
+    # Ink inside a full-width horizontal rail cannot prove that verticals from
+    # opposite rows share a comb.  Preserve the topology that exists on paper,
+    # while retaining genuine ticks and thick group separators that continue
+    # to the rail from that paper-bearing band.
+    endpoint_rail = synthetic_horizontal(9.75, 0, 30, 0.5, 20)
+    upper_tick = synthetic_vertical(15, 0, 10, 0.2, 21)
+    lower_left = synthetic_vertical(10, 9.5, 15, 0.2, 22)
+    lower_right = synthetic_vertical(20, 9.5, 15, 0.2, 23)
+    rail_paint = FinalPaint([
+        upper_tick, lower_left, lower_right, endpoint_rail,
+    ])
+    rail_endpoint = endpoint_band(
+        [upper_tick], [upper_tick, lower_left, lower_right],
+        0, 30, [(-0.5, 0.5, 1.0), (29.5, 30.5, 1.0)],
+        rail_paint)
+    check(rail_endpoint is not None,
+          "paper-bearing topology beside a horizontal rail was lost")
+    if rail_endpoint is not None:
+        check([q(centre(ink)) for ink in rail_endpoint[0]] == [15.0],
+              "opposite-row verticals were joined inside a horizontal rail")
+
+    genuine_left = synthetic_vertical(10, 0, 10, 0.2, 24)
+    genuine_right = synthetic_vertical(20, 0, 10, 0.2, 25)
+    foreign_lower = synthetic_vertical(5, 9.5, 15, 0.2, 26)
+    genuine_paint = FinalPaint([
+        genuine_left, genuine_right, foreign_lower, endpoint_rail,
+    ])
+    genuine_endpoint = endpoint_band(
+        [genuine_left, genuine_right],
+        [genuine_left, genuine_right, foreign_lower],
+        0, 30, [(-0.5, 0.5, 1.0), (29.5, 30.5, 1.0)],
+        genuine_paint)
+    check(genuine_endpoint is not None,
+          "genuine ticks reaching a horizontal rail were lost")
+    if genuine_endpoint is not None:
+        check([q(centre(ink)) for ink in genuine_endpoint[0]] == [10.0, 20.0],
+              "a rail-only foreign vertical displaced genuine ticks")
+
+    rail_heavy = synthetic_vertical(15, 0.5, 10, 2.2, 27)
+    heavy_rail_paint = FinalPaint([
+        genuine_left, genuine_right, rail_heavy, endpoint_rail,
+    ])
+    heavy_rail_endpoint = endpoint_band(
+        [genuine_left, genuine_right],
+        [genuine_left, genuine_right, rail_heavy],
+        0, 30, [(-0.5, 0.5, 1.0), (29.5, 30.5, 1.0)],
+        heavy_rail_paint)
+    check(heavy_rail_endpoint is not None,
+          "grouped topology beside a horizontal rail was lost")
+    if heavy_rail_endpoint is not None:
+        check([q(centre(ink)) for ink in heavy_rail_endpoint[0]]
+              == [10.0, 15.0, 20.0],
+              "a heavy group separator was mistaken for rail-only ink")
+
+    rail_only_tick = synthetic_vertical(10, 9.5, 10, 0.2, 28)
+    rail_only_paint = FinalPaint([rail_only_tick, endpoint_rail])
+    rail_only_bands = comb_bands(
+        [rail_only_tick], [rail_only_tick], 0, 30, (1.0, 1.0),
+        rail_only_paint)
+    check(bool(rail_only_bands)
+          and rail_only_bands[0]["resolution"]["status"] == "unresolved"
+          and "horizontal-rail-only-topology"
+          in rail_only_bands[0]["resolution"]["reason_codes"],
+          "a rail-only vertical emitted a certifying comb band")
 
     # Y coverage is not enough to prove a divider. Erase the seed, then paint
     # disjoint left/right strips in opposite half-bands: there is structural
