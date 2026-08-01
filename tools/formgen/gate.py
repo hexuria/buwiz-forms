@@ -2401,10 +2401,19 @@ def _layout_audit_owner_ids(layout_binding: Any) -> list[str]:
                 or cell.get("cell") != cell_id):
             raise CombRefereeScopeError(
                 "parsed layout-owner registry has a malformed subject")
+    # JSON object keys are intentionally serialized with sort_keys=True in
+    # both the referee report envelope and the persisted audit envelope.  Do
+    # not let that lexical reordering change the owner registry: the child
+    # report and the audit producer use the independent page/numeric-cell
+    # order.  Validate the registry above before sorting so malformed hostile
+    # entries still fail closed rather than being hidden by a fallback.
+    owner_ids = [
+        cell_id for cell_id, cell in sorted(
+            cells.items(), key=_layout_subject_sort_key)
         if (cell.get("ledger_state") in {
                 "active_resolved", "active_unresolved"}
-                and cell.get("expected_emission_geometry") is not None):
-            owner_ids.append(cell_id)
+                and cell.get("expected_emission_geometry") is not None)
+    ]
     if audit_ids != owner_ids:
         raise CombRefereeScopeError(
             "layout cell and reviewed-subject owner registries differ")
@@ -4988,6 +4997,20 @@ def _layout_subject_sort_key(
     return int(page), sys.maxsize, cell_id
 
 
+def _ordered_layout_cell_items(
+        cells: Any,
+        ) -> list[tuple[str, dict[str, Any]]]:
+    """Return layout cells in the canonical order despite JSON key sorting."""
+    if not isinstance(cells, dict):
+        return []
+    try:
+        return sorted(cells.items(), key=_layout_subject_sort_key)
+    except (TypeError, ValueError):
+        # The caller will report the malformed cell itself.  Preserve a
+        # non-crashing path so hostile evidence remains UNEVALUABLE.
+        return list(cells.items())
+
+
 def _layout_binding_projection(
         slug: str, layout: Any, guide: Any,
         lattice_record: dict[str, Any], layout_sha256: str,
@@ -5378,6 +5401,8 @@ def form_binding_errors(form: dict[str, Any],
                 or not isinstance(report_cells, list)):
             errors.append(f"form layout/report cell inventory is malformed: {slug}")
         else:
+            ordered_expected_cells = dict(
+                _ordered_layout_cell_items(expected_cells))
             report_ids = [
                 cell.get("cell") if isinstance(cell, dict) else None
                 for cell in report_cells
@@ -5388,7 +5413,7 @@ def form_binding_errors(form: dict[str, Any],
             }
             if (len(report_by_id) != len(report_cells)
                     or set(report_by_id) != set(expected_cells)
-                    or report_ids != list(expected_cells)):
+                    or report_ids != list(ordered_expected_cells)):
                 errors.append(
                     f"form report/layout subject inventory differs: {slug}")
             if layout_owner_ids is not None:
@@ -5408,7 +5433,7 @@ def form_binding_errors(form: dict[str, Any],
                 "ledger_topology_sha256", "ledger_evidence", "page", "bbox",
                 "latticed", "lattice_divider_x",
             )
-            for cell_id, expected_cell in expected_cells.items():
+            for cell_id, expected_cell in ordered_expected_cells.items():
                 actual = report_by_id.get(cell_id)
                 if not isinstance(actual, dict):
                     continue
@@ -5691,7 +5716,8 @@ def form_binding_errors(form: dict[str, Any],
             or ledger_binding.get("binding_valid") is not True
             or layout_binding is None
             or ledger_binding.get("active_subject_ids") != [
-                cell_id for cell_id, expected in layout_binding["cells"].items()
+                cell_id for cell_id, expected in _ordered_layout_cell_items(
+                    layout_binding["cells"])
                 if expected.get("ledger_state") != "retained_unresolved"]
             or ledger_binding.get("emitted_ids") != sorted(
                 cell_id for cell_id, expected in layout_binding["cells"].items()
@@ -5864,7 +5890,8 @@ def derive_application_scope_elevation(
         emission_inventory = form.get("emission_inventory")
         if layout_owner_ids is not None:
             exact_inventories = [
-                list(layout_binding.get("cells", {})),
+                [cell_id for cell_id, _expected in _ordered_layout_cell_items(
+                    layout_binding.get("cells", {}))],
                 report_ids,
                 relation.get("expected_comb_ids") if isinstance(
                     relation, dict) else None,
@@ -10549,6 +10576,39 @@ def self_test() -> int:
         failures.append(
             "OS=false with explicit host TCB and enforceable application scope "
             "must validate: " + "; ".join(envelope_errors[:3]))
+    # Persisted envelopes use sort_keys=True, so a JSON round trip must not
+    # turn the lexical object-key order into a different owner order.
+    reordered_registry = clone(snapshot["layout_bindings"]["fixture-1"])
+    first_cell = clone(reordered_registry["cells"]["p1c1"])
+    second_cell = clone(first_cell)
+    first_cell.update({
+        "cell": "p1c10", "legacy_cell_id": "p1c10", "cell_id": "p1c10",
+    })
+    second_cell.update({
+        "cell": "p1c2", "legacy_cell_id": "p1c2", "cell_id": "p1c2",
+    })
+    reordered_registry["cells"] = {"p1c10": first_cell, "p1c2": second_cell}
+    reordered_registry["audit_expected_ids"] = ["p1c2", "p1c10"]
+    reordered_registry = json.loads(
+        json.dumps(reordered_registry, sort_keys=True))
+    try:
+        reordered_owner_ids = _layout_audit_owner_ids(reordered_registry)
+    except Exception as error:  # noqa: BLE001 - self-test names the breakage
+        failures.append(
+            "sorted-key layout owner registry must remain evaluable: "
+            f"{type(error).__name__}: {error}")
+    else:
+        if reordered_owner_ids != ["p1c2", "p1c10"]:
+            failures.append(
+                "sorted-key layout owner registry changed canonical order")
+    sorted_snapshot = json.loads(json.dumps(snapshot, sort_keys=True))
+    sorted_envelope = json.loads(json.dumps(envelope, sort_keys=True))
+    sorted_envelope_errors = validate_comb_referee_envelope(
+        sorted_envelope, raw_payload, report, sorted_snapshot)
+    if sorted_envelope_errors:
+        failures.append(
+            "a persisted sorted-key comb-referee envelope must validate: "
+            + "; ".join(sorted_envelope_errors[:3]))
     if _comb_referee_outcome(
             report, report_stats, expected_forms=1,
             expected_subjects=1).verdict is not Verdict.PASS:
