@@ -2452,6 +2452,9 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 cell["combs"] = bands
 
     output_by_subject = {cell["subject_key"]: cell for cell in cells}
+    output_index_by_subject = {
+        cell["subject_key"]: index for index, cell in enumerate(cells)
+    }
 
     def boundary_rule_evidence(
             legacy_cell: dict[str, Any],
@@ -2657,6 +2660,23 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             and comb_has_cell_owner(cell, final_candidate)
             else None
         )
+        final_candidate_owner_indexes: list[int] = []
+        final_candidate_path_conflicts: list[str] = []
+        if final_candidate_owned is not None:
+            final_candidate_owner_indexes = comb_band_owners(
+                cells,
+                float(cell["x0"]), float(cell["x1"]),
+                float(final_candidate_owned["y0"]),
+                float(final_candidate_owned["y1"]),
+                xl, yl,
+            )
+            final_candidate_path_conflicts = path_endpoint_conflicts(
+                final_paint, final_candidate_owned)
+        final_candidate_has_unique_owner = (
+            cell is not None
+            and final_candidate_owner_indexes
+            == [output_index_by_subject[subject_key]]
+        )
         no_owned_band = bool(
             cell is not None
             and resolved is None
@@ -2730,8 +2750,17 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 cell["comb"]["resolution"]["final_visible_candidate_cells"] = int(
                     final_candidate["cells"])
             else:
-                cell["comb"] = mark_comb_unresolved(
-                    final_candidate, "no-final-visible-owned-band")
+                if final_candidate_has_unique_owner:
+                    cell["comb"] = final_candidate
+                    if final_candidate_path_conflicts:
+                        cell["comb"] = mark_comb_unresolved(
+                            cell["comb"],
+                            "later-nonrect-path-endpoint-paint")
+                        cell["comb"]["resolution"]["path_conflicts"] = (
+                            final_candidate_path_conflicts)
+                else:
+                    cell["comb"] = mark_comb_unresolved(
+                        final_candidate, "no-final-visible-owned-band")
         elif int(resolved["cells"]) < int(legacy_comb["cells"]):
             if legacy_owned:
                 preserved = mark_comb_unresolved(
@@ -3758,6 +3787,22 @@ def self_test(ir_path: pathlib.Path) -> int:
                     == ("resolved" if with_current_band else "unresolved"),
                     f"{direction}-cell current-band precedence is wrong",
                 )
+
+    owned_band_cells, owned_band_subjects = inherited_endpoint_case(
+        "owned-endpoint-band", (-5.0, 10.0), (5.0, 10.0), False)
+    owned_band_comb = (
+        owned_band_cells[0].get("comb")
+        if len(owned_band_cells) == 1 else None
+    )
+    check(
+        owned_band_comb is not None
+        and owned_band_comb.get("cells") == 4
+        and comb_has_cell_owner(owned_band_cells[0], owned_band_comb)
+        and "no-final-visible-owned-band" not in (
+            owned_band_comb.get("resolution") or {}).get("reason_codes", [])
+        and len(owned_band_subjects) == 1,
+        "a uniquely owned endpoint band retained a raw-anchor ownership block",
+    )
 
     # A thick group divider can paint a short horizontal endpoint cap without
     # producing an internal vertical lattice edge. That cap is safe only when
