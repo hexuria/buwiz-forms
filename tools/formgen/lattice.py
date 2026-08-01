@@ -203,6 +203,402 @@ def split_verticals(verticals: Sequence[dict[str, Any]],
     return combs, borders
 
 
+def split_final_vertical_corridors(
+        verticals: Sequence[dict[str, Any]],
+        horizontals: Sequence[dict[str, Any]],
+        final_visible_ids: set[str] | None = None,
+        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Classify final-visible composite verticals one paper row at a time.
+
+    ``extract.merge_intervals`` deliberately joins touching collinear paints.
+    A table column painted as one fragment per row can therefore arrive here as
+    one tall rectangle whose source-order range crosses several horizontal
+    rails.  Classifying only the rectangle's outer endpoints loses every
+    ordinary column corridor inside it and can turn the whole merge into a
+    character-comb divider.
+
+    Direct, single-paint rules keep the established endpoint classifier.  A
+    final-visible composite is partitioned only at horizontal ink that crosses
+    its x centre.  Paper between two rails is a border when the vertical covers
+    that complete open corridor (allowing only the existing source join
+    epsilon).  A leading fragment that hangs from the lower rail remains a comb
+    divider.  Paint wholly inside a horizontal rail owns no paper corridor and
+    supplies neither role.
+
+    Derived fragments retain the parent's source id and paint-order range.  The
+    private corridor fields are diagnostic only; generated contracts continue
+    to cite the exact source rule id and ordinals.
+    """
+    combs: list[dict[str, Any]] = []
+    borders: list[dict[str, Any]] = []
+
+    def old_role(rule: dict[str, Any]) -> None:
+        old_combs, old_borders = split_verticals([rule], horizontals)
+        combs.extend(old_combs)
+        borders.extend(old_borders)
+
+    for rule in verticals:
+        rule_id = str(rule.get("id"))
+        first = int(rule.get("paint_seq", -1))
+        last = int(rule.get("paint_seq_max", first))
+        if (first == last
+                or (final_visible_ids is not None
+                    and rule_id not in final_visible_ids)):
+            old_role(rule)
+            continue
+
+        x = centre(rule)
+        rails = union_intervals(
+            (float(horizontal["y0"]), float(horizontal["y1"]))
+            for horizontal in horizontals
+            if (float(horizontal["x0"]) - CLUSTER_TOL_PT
+                <= x
+                <= float(horizontal["x1"]) + CLUSTER_TOL_PT)
+        )
+        if not rails:
+            old_role(rule)
+            continue
+
+        y0, y1 = float(rule["y0"]), float(rule["y1"])
+        relevant_rails = [
+            (rail_y0, rail_y1) for rail_y0, rail_y1 in rails
+            if rail_y1 >= y0 - JOIN_EPSILON_PT
+            and rail_y0 <= y1 + JOIN_EPSILON_PT
+        ]
+        if not relevant_rails:
+            old_role(rule)
+            continue
+
+        parent_combs, _parent_borders = split_verticals(
+            [rule], horizontals)
+        parent_was_comb = bool(parent_combs)
+
+        breakpoints = {y0, y1}
+        for rail_y0, rail_y1 in relevant_rails:
+            if y0 < rail_y0 < y1:
+                breakpoints.add(rail_y0)
+            if y0 < rail_y1 < y1:
+                breakpoints.add(rail_y1)
+
+        def supported_near(y: float) -> bool:
+            return any(
+                rail_y0 - JOIN_EPSILON_PT
+                <= y
+                <= rail_y1 + JOIN_EPSILON_PT
+                for rail_y0, rail_y1 in relevant_rails)
+
+        def supporting_x_span(y: float) -> tuple[float, float] | None:
+            spans = union_intervals(
+                (float(horizontal["x0"]), float(horizontal["x1"]))
+                for horizontal in horizontals
+                if (float(horizontal["y0"]) - JOIN_EPSILON_PT
+                    <= y
+                    <= float(horizontal["y1"]) + JOIN_EPSILON_PT)
+                and (float(horizontal["x0"]) - CLUSTER_TOL_PT
+                     <= x
+                     <= float(horizontal["x1"]) + CLUSTER_TOL_PT)
+            )
+            matches = [
+                span for span in spans
+                if span[0] - CLUSTER_TOL_PT
+                <= x
+                <= span[1] + CLUSTER_TOL_PT
+            ]
+            if len(matches) != 1:
+                return None
+            return matches[0]
+
+        fragments: list[tuple[str, dict[str, Any]]] = []
+        ordered = sorted(breakpoints)
+        for slab_y0, slab_y1 in zip(ordered, ordered[1:]):
+            if slab_y1 - slab_y0 <= JOIN_EPSILON_PT:
+                continue
+            midpoint = (slab_y0 + slab_y1) / 2.0
+            if any(rail_y0 <= midpoint <= rail_y1
+                   for rail_y0, rail_y1 in relevant_rails):
+                continue
+            top = supported_near(slab_y0)
+            bottom = supported_near(slab_y1)
+            if top and bottom:
+                role = "border"
+            elif bottom:
+                role = "comb"
+            else:
+                # An upper-anchored or floating partial does not prove a
+                # rail-to-rail column and is not a lower-baseline comb tick.
+                continue
+            fragment = {
+                **rule,
+                "y0": q(slab_y0),
+                "y1": q(slab_y1),
+                "_corridor_parent_y": [q(y0), q(y1)],
+                "_corridor_role": role,
+            }
+            if role == "border":
+                top_span = supporting_x_span(slab_y0)
+                bottom_span = supporting_x_span(slab_y1)
+                if top_span is not None and bottom_span is not None:
+                    frame_x0 = max(top_span[0], bottom_span[0])
+                    frame_x1 = min(top_span[1], bottom_span[1])
+                    if (frame_x0 + CLUSTER_TOL_PT
+                            < x
+                            < frame_x1 - CLUSTER_TOL_PT):
+                        fragment["_corridor_frame_x"] = [
+                            q(frame_x0), q(frame_x1),
+                        ]
+            fragments.append((role, fragment))
+
+        # A composite confined to rail ink has no paper-facing geometry.  Do
+        # not revive it through the old hull classifier merely because all of
+        # its open slabs were correctly discarded above.
+        for fragment_index, (role, fragment) in enumerate(fragments):
+            fragment["_corridor_fragment_index"] = fragment_index
+            fragment["_corridor_fragment_count"] = len(fragments)
+            # The old hull remains continuity evidence for comb discovery. A
+            # repeated character tick can fully bridge each row just like a
+            # table seam; corridor geometry alone cannot revoke that role.
+            # Keep local fragments of an old comb as comb candidates, while a
+            # complete rail-to-rail fragment additionally defines a border.
+            # Once the border splits a genuine table seam, the same x lies on
+            # the child cells' edges and cannot be assigned as an interior comb.
+            if role == "comb" or parent_was_comb:
+                combs.append(fragment)
+            if role == "border":
+                borders.append(fragment)
+
+    return combs, borders
+
+
+def dense_comb_corridor(
+        fragment: dict[str, Any],
+        old_dividers: Sequence[dict[str, Any]],
+        ) -> bool:
+    """Whether a regular four-boundary comb run shares this paper slab."""
+    return bool(dense_comb_run(fragment, old_dividers))
+
+
+def dense_comb_run(
+        fragment: dict[str, Any],
+        old_dividers: Sequence[dict[str, Any]],
+        ) -> list[dict[str, Any]]:
+    """Old divider members in one regular four-position run at ``fragment``."""
+    y0, y1 = float(fragment["y0"]), float(fragment["y1"])
+    overlapping = [
+        rule for rule in old_dividers
+        if min(y1, float(rule["y1"]))
+        - max(y0, float(rule["y0"])) > JOIN_EPSILON_PT
+    ]
+    centres = sorted({q(centre(rule)) for rule in overlapping})
+    target = q(centre(fragment))
+    for start in range(max(0, len(centres) - 3)):
+        run = centres[start:start + 4]
+        gaps = [right - left for left, right in zip(run, run[1:])]
+        if (run[0] - CLUSTER_TOL_PT
+                <= target
+                <= run[-1] + CLUSTER_TOL_PT
+                and max(gaps) - min(gaps) <= PITCH_TOL_PT):
+            return [
+                rule for rule in overlapping
+                if any(abs(centre(rule) - value) <= CLUSTER_TOL_PT
+                       for value in run)
+            ]
+    return []
+
+
+def localized_comb_dividers(
+        old_dividers: Sequence[dict[str, Any]],
+        corridor_dividers: Sequence[dict[str, Any]],
+        localized_source_ids: set[str],
+        ) -> list[dict[str, Any]]:
+    """Replace certified composite hulls with uniquely local comb evidence."""
+    if not localized_source_ids:
+        return list(old_dividers)
+    fragments: list[dict[str, Any]] = []
+    for fragment in corridor_dividers:
+        if str(fragment.get("id")) not in localized_source_ids:
+            continue
+        if fragment.get("_corridor_role") == "comb":
+            fragments.append(fragment)
+            continue
+        if fragment.get("_corridor_role") != "border":
+            continue
+        dense_members = dense_comb_run(fragment, old_dividers)
+        if not dense_members:
+            continue
+        band_y0 = max(float(rule["y0"]) for rule in dense_members)
+        band_y1 = min(float(rule["y1"]) for rule in dense_members)
+        parent_y = fragment.get("_corridor_parent_y") or [
+            fragment["y0"], fragment["y1"],
+        ]
+        band_y0 = max(band_y0, float(parent_y[0]))
+        band_y1 = min(band_y1, float(parent_y[1]))
+        if band_y1 - band_y0 <= JOIN_EPSILON_PT:
+            continue
+        fragments.append({
+            **fragment,
+            "y0": q(band_y0),
+            "y1": q(band_y1),
+            "_corridor_role": "comb",
+            "_corridor_dense_clip": True,
+        })
+    selected = [
+        rule for rule in old_dividers
+        if str(rule.get("id")) not in localized_source_ids
+    ] + fragments
+    return sorted(selected, key=lambda rule: (
+        centre(rule), float(rule["y0"]), float(rule["y1"]),
+        str(rule.get("id")),
+        int(rule.get("_corridor_fragment_index", -1))))
+
+
+def corridor_border_promotions(
+        old_dividers: Sequence[dict[str, Any]],
+        old_borders: Sequence[dict[str, Any]],
+        corridor_borders: Sequence[dict[str, Any]],
+        _text_runs: Sequence[dict[str, Any]],
+        ) -> set[str]:
+    """Source ids whose repeated row corridors have geometry-only proof.
+
+    Printed text is deliberately not evidence: a fixed character in each half
+    of a sparse comb is indistinguishable from two table labels. A candidate
+    must instead own at least two complete rail-to-rail corridors, and its
+    enclosing vector frame must not be an equal-pitch comb partition. The
+    remaining proof is either a dense-comb/header relationship on the same
+    source or repeated table rows containing another independently classified
+    internal border. Equal-pitch sparse combs and isolated two-column tables
+    therefore remain unpromoted when geometry cannot distinguish them.
+
+    This certificate is independent of whether the x position already exists;
+    callers decide separately whether to add a position or merely localise its
+    coverage.
+    """
+    old_divider_ids = {str(rule.get("id")) for rule in old_dividers}
+    all_verticals = [*old_dividers, *old_borders]
+    by_source: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for fragment in corridor_borders:
+        by_source[str(fragment.get("id"))].append(fragment)
+
+    def partition_profile(
+            fragment: dict[str, Any],
+            ) -> tuple[bool, bool] | None:
+        frame = fragment.get("_corridor_frame_x")
+        if (not isinstance(frame, list) or len(frame) != 2
+                or not all(isinstance(value, (int, float))
+                           and not isinstance(value, bool)
+                           for value in frame)):
+            return None
+        frame_x0, frame_x1 = (float(value) for value in frame)
+        x = centre(fragment)
+        if not (frame_x0 < x < frame_x1):
+            return None
+        y0, y1 = float(fragment["y0"]), float(fragment["y1"])
+        corridor_spanning = [
+            rule for rule in all_verticals
+            if float(rule["y0"]) <= y0 + JOIN_EPSILON_PT
+            and float(rule["y1"]) >= y1 - JOIN_EPSILON_PT
+        ]
+        left_edges = sorted({
+            q(centre(rule)) for rule in corridor_spanning
+            if abs(float(rule["x0"]) - frame_x0) <= CLUSTER_TOL_PT
+        })
+        right_edges = sorted({
+            q(centre(rule)) for rule in corridor_spanning
+            if abs(float(rule["x1"]) - frame_x1) <= CLUSTER_TOL_PT
+        })
+        if not left_edges or not right_edges:
+            return None
+        boundary_x0, boundary_x1 = left_edges[0], right_edges[-1]
+        spanning_borders = [
+            rule for rule in old_borders
+            if float(rule["y0"]) <= y0 + JOIN_EPSILON_PT
+            and float(rule["y1"]) >= y1 - JOIN_EPSILON_PT
+            and boundary_x0 - CLUSTER_TOL_PT
+            <= centre(rule)
+            <= boundary_x1 + CLUSTER_TOL_PT
+        ]
+        border_centres = sorted({q(centre(rule))
+                                 for rule in spanning_borders})
+        left_candidates = [value for value in border_centres
+                           if value < x - CLUSTER_TOL_PT]
+        right_candidates = [value for value in border_centres
+                            if value > x + CLUSTER_TOL_PT]
+        if not left_candidates or not right_candidates:
+            return None
+        local_x0, local_x1 = max(left_candidates), min(right_candidates)
+        centres = sorted({
+            q(centre(rule)) for rule in corridor_spanning
+            if local_x0 - CLUSTER_TOL_PT
+            <= centre(rule)
+            <= local_x1 + CLUSTER_TOL_PT
+        })
+        if len(centres) < 3:
+            return None
+        gaps = [right - left for left, right in zip(centres, centres[1:])]
+        if not gaps or min(gaps) <= CLUSTER_TOL_PT:
+            return None
+        equal_pitch = max(gaps) - min(gaps) <= PITCH_TOL_PT
+        table_shaped = not equal_pitch
+        has_broader_table_border = any(
+            centre(rule) < local_x0 - CLUSTER_TOL_PT
+            or centre(rule) > local_x1 + CLUSTER_TOL_PT
+            for rule in spanning_borders
+        )
+        return table_shaped, has_broader_table_border
+
+    provisional: set[str] = set()
+    for source_id, fragments in by_source.items():
+        if source_id not in old_divider_ids or len(fragments) < 2:
+            continue
+        dense = [
+            fragment for fragment in fragments
+            if dense_comb_corridor(fragment, old_dividers)
+        ]
+        profiles = [
+            profile for fragment in fragments
+            if not dense_comb_corridor(fragment, old_dividers)
+            for profile in [partition_profile(fragment)]
+            if profile is not None
+        ]
+        table_profiles = [profile for profile in profiles if profile[0]]
+        if not table_profiles:
+            continue
+        header_over_dense_comb = bool(dense)
+        repeated_table_rows = sum(
+            broader for _table_shaped, broader in table_profiles
+        ) >= 2
+        if header_over_dense_comb or repeated_table_rows:
+            provisional.add(source_id)
+
+    # A cohort made entirely of already-defined x positions is not evidence
+    # that any old hull is wrong; it is commonly a stack of real comb fields
+    # sharing table rails.  Localise existing members only when a sibling with
+    # the exact same row-corridor signature repairs a genuinely missing x.
+    old_border_centres = [centre(rule) for rule in old_borders]
+
+    def corridor_signature(source_id: str) -> tuple[Any, ...]:
+        return tuple(sorted(
+            (q(float(fragment["y0"])), q(float(fragment["y1"])),
+             tuple(fragment.get("_corridor_frame_x") or ()))
+            for fragment in by_source[source_id]
+        ))
+
+    by_signature: dict[tuple[Any, ...], set[str]] = collections.defaultdict(set)
+    for source_id in provisional:
+        by_signature[corridor_signature(source_id)].add(source_id)
+    certified: set[str] = set()
+    for source_ids in by_signature.values():
+        has_missing_position = any(
+            not any(
+                abs(centre(fragment) - old_x) <= CLUSTER_TOL_PT
+                for old_x in old_border_centres)
+            for source_id in source_ids
+            for fragment in by_source[source_id][:1]
+        )
+        if has_missing_position:
+            certified.update(source_ids)
+    return certified
+
+
 def comb_boundary_candidates(verticals: Sequence[dict[str, Any]],
                              area_fills: Sequence[dict[str, Any]]
                              ) -> list[dict[str, Any]]:
@@ -3403,11 +3799,40 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
     geometry_verticals = sorted(
         (rule for rule in geometry_structural if rule["axis"] == "v"),
         key=lambda rule: (rule["x0"], rule["y0"]))
-    dividers, _proven_borders = split_verticals(verticals, horizontals)
-    _geometry_dividers, borders = split_verticals(
+    old_dividers, old_proven_borders = split_verticals(
+        verticals, horizontals)
+    corridor_dividers, corridor_proven_borders = (
+        split_final_vertical_corridors(verticals, horizontals))
+    # Certification is about local source ownership, not whether another rule
+    # already defines the same x.  Existing positions still need their old hull
+    # removed from coverage; only position creation is suppressed below.
+    localized_corridor_ids = corridor_border_promotions(
+        old_dividers, old_proven_borders, corridor_proven_borders,
+        page["text_runs"])
+    # The raw/legacy stream below retains the reviewed full hull. Current comb
+    # ownership uses only local lower-baseline fragments, plus a dense fragment
+    # clipped to its independently repeated comb band.
+    dividers = localized_comb_dividers(
+        old_dividers, corridor_dividers, localized_corridor_ids)
+
+    old_geometry_dividers, old_geometry_borders = split_verticals(
         geometry_verticals, horizontals)
-    support_dividers, _unsupported_verticals = split_verticals(
+    corridor_geometry_dividers, corridor_geometry_borders = (
+        split_final_vertical_corridors(
+            geometry_verticals, horizontals, proven_ids))
+    _geometry_dividers = localized_comb_dividers(
+        old_geometry_dividers, corridor_geometry_dividers,
+        localized_corridor_ids)
+
+    old_support_dividers, old_unsupported_verticals = split_verticals(
         raw_verticals, geometry_horizontals)
+    corridor_support_dividers, _corridor_unsupported_verticals = (
+        split_final_vertical_corridors(
+            raw_verticals, geometry_horizontals, proven_ids))
+    support_dividers = localized_comb_dividers(
+        old_support_dividers, corridor_support_dividers,
+        localized_corridor_ids)
+    _unsupported_verticals = old_unsupported_verticals
     final_supported_divider_ids = {
         str(divider.get("id")) for divider in support_dividers
     }
@@ -3419,7 +3844,50 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
     ]
     extra_ink = comb_boundary_candidates(verticals, final_area_fills)
 
-    xl = build_lattice(borders, geometry_verticals, "v")
+    # Once a composite vertical has been partitioned into paper corridors, a
+    # character tick in one row must not become lattice coverage merely because
+    # the same source merge is a table border in another row. Replace only
+    # those decomposed composites with their border fragments. Direct rules
+    # retain the established all-ink coverage: a thin direct segment can be the
+    # continuation of a heavier column boundary already defining this x. The
+    # raw lattice above intentionally keeps every old hull for subject
+    # continuity.
+    localized_border_fragments = [
+        rule for rule in corridor_geometry_borders
+        if str(rule.get("id")) in localized_corridor_ids
+        and rule.get("_corridor_role") == "border"
+        and not dense_comb_corridor(rule, old_dividers)
+    ]
+    border_coverage = [
+        rule for rule in geometry_verticals
+        if str(rule.get("id")) not in localized_corridor_ids
+    ] + localized_border_fragments
+    old_border_centres = [centre(rule) for rule in old_geometry_borders]
+    position_promoted_ids = {
+        source_id for source_id in localized_corridor_ids
+        if any(
+            str(fragment.get("id")) == source_id
+            and not any(abs(centre(fragment) - old_x)
+                        <= CLUSTER_TOL_PT
+                        for old_x in old_border_centres)
+            for fragment in localized_border_fragments)
+    }
+    # Existing border members remain the only defining witnesses at their x.
+    # A genuinely missing position receives one fragment, irrespective of how
+    # many row corridors that source supplied.
+    border_defining: list[dict[str, Any]] = list(old_geometry_borders)
+    seen_promoted: set[str] = set()
+    for rule in localized_border_fragments:
+        rule_id = str(rule.get("id"))
+        if rule_id not in position_promoted_ids or rule_id in seen_promoted:
+            continue
+        seen_promoted.add(rule_id)
+        border_defining.append(rule)
+    border_defining.sort(key=lambda rule: (
+        centre(rule), float(rule["y0"]), float(rule["y1"]),
+        str(rule.get("id"))))
+    borders = border_defining
+    xl = build_lattice(border_defining, border_coverage, "v")
     yl = build_lattice(
         geometry_horizontals, geometry_horizontals, "h")
 
@@ -3469,8 +3937,10 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
         # Support classification is final-visible even when the divider's own
         # merged paint range is uncertain. Keep the established ID inventory;
         # the fully final-visible subset is explicit beside it.
-        "comb_divider_ids": [d["id"] for d in support_dividers],
-        "comb_divider_final_visible_ids": [d["id"] for d in dividers],
+        "comb_divider_ids": list(dict.fromkeys(
+            d["id"] for d in support_dividers)),
+        "comb_divider_final_visible_ids": list(dict.fromkeys(
+            d["id"] for d in dividers)),
         "unassigned_text_run_ids": unassigned,
         "stats": {
             "x_lattice": len(xl),
@@ -3510,9 +3980,9 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
                       for inference in comb_inferences)
             ),
             "comb_slots": sum(c["comb"]["cells"] for c in comb_cells),
-            "comb_dividers": len(support_dividers),
-            "comb_dividers_final_visible": len(dividers),
-            "border_verticals": len(borders),
+            "comb_dividers": len({d["id"] for d in support_dividers}),
+            "comb_dividers_final_visible": len({d["id"] for d in dividers}),
+            "border_verticals": len({d["id"] for d in borders}),
             "decorative_rules": len(decorative),
             "text_runs": len(page["text_runs"]),
             "text_runs_unassigned": len(unassigned),
@@ -3818,6 +4288,308 @@ def self_test(ir_path: pathlib.Path) -> int:
         0.0, 20.0, (0.2, 0.2), support_paint)
     check(not unsupported_bands,
           "tick with no final-visible support emitted a comb")
+
+    # Collinear source fragments may be merged across several rows.  Only a
+    # final-visible composite is decomposed: its leading lower-anchored piece
+    # remains a comb, while complete rail-to-rail paper corridors become local
+    # lattice borders.  Horizontal-rail joints themselves own no paper.
+    corridor_rails = [
+        synthetic_horizontal(y, 0, 20, 0.2, sequence)
+        for sequence, y in enumerate((10.0, 20.0, 30.0), 200)
+    ]
+    composite_corridor = {
+        **synthetic_vertical(10, 0, 30, 0.2, 210),
+        "id": "v-composite",
+        "paint_seq_max": 218,
+    }
+    corridor_combs, corridor_borders = split_final_vertical_corridors(
+        [composite_corridor], corridor_rails,
+        {"v-composite"})
+    check([(item["y0"], item["y1"])
+           for item in corridor_combs]
+          == [(0.0, 9.9), (10.1, 19.9), (20.1, 29.9)],
+          "a composite parent lost its local comb continuity")
+    check([(item["y0"], item["y1"])
+           for item in corridor_borders]
+          == [(10.1, 19.9), (20.1, 29.9)],
+          "composite row corridors were not promoted to local borders")
+    corridor_fragments = [*corridor_combs, *corridor_borders]
+    check(all(
+        item["id"] == "v-composite"
+        and item["paint_seq"] == 210
+        and item["paint_seq_max"] == 218
+        and item["_corridor_parent_y"] == [0.0, 30.0]
+        and item["_corridor_fragment_count"] == 3
+        for item in corridor_fragments),
+        "corridor decomposition lost parent source provenance")
+    corridor_xl = build_lattice(
+        corridor_borders, corridor_borders, "v")
+    check(len(corridor_xl) == 1
+          and not covers(corridor_xl.spans[0], 0.0, 9.9)
+          and covers(corridor_xl.spans[0], 10.1, 19.9)
+          and covers(corridor_xl.spans[0], 20.1, 29.9),
+          "comb-only corridor leaked into lattice border coverage")
+
+    singleton_corridor = {
+        **synthetic_vertical(10, 0, 30, 0.2, 219),
+        "id": "v-singleton",
+    }
+    singleton_combs, singleton_borders = split_final_vertical_corridors(
+        [singleton_corridor], corridor_rails,
+        {"v-singleton"})
+    check(singleton_combs == [singleton_corridor]
+          and not singleton_borders,
+          "a direct singleton divider was changed by corridor decomposition")
+
+    rail_joint = {
+        **synthetic_vertical(10, 9.9, 10.1, 0.2, 220),
+        "id": "v-rail-joint",
+        "paint_seq_max": 221,
+    }
+    joint_combs, joint_borders = split_final_vertical_corridors(
+        [rail_joint], corridor_rails,
+        {"v-rail-joint"})
+    check(not joint_combs and not joint_borders,
+          "rail-joint-only composite paint invented a paper fragment")
+
+    upper_hanger = {
+        **synthetic_vertical(10, 10.1, 15.0, 0.2, 221),
+        "id": "v-upper-hanger",
+        "paint_seq_max": 222,
+    }
+    hanger_combs, hanger_borders = split_final_vertical_corridors(
+        [upper_hanger], corridor_rails, {"v-upper-hanger"})
+    check(not hanger_combs and not hanger_borders,
+          "an upper-anchored partial certified a rail-to-rail border")
+
+    unproved_composite = {
+        **composite_corridor,
+        "id": "v-unproved-composite",
+    }
+    unproved_combs, unproved_borders = split_final_vertical_corridors(
+        [unproved_composite], corridor_rails,
+        set())
+    check(unproved_combs == [unproved_composite]
+          and not unproved_borders,
+          "non-final composite geometry bypassed the legacy classifier")
+
+    promotion_outer_borders = [
+        {
+            **synthetic_vertical(x, 0, 30, 0.2, 222 + index),
+            "id": f"v-promotion-edge-{index}",
+        }
+        for index, x in enumerate((0.0, 20.0))
+    ]
+    promotion_text = [
+        {"text": "Left", "x0": 1.0, "y0": 11.0,
+         "x1": 9.0, "y1": 18.0},
+        {"text": "Right", "x0": 11.0, "y0": 11.0,
+         "x1": 19.0, "y1": 18.0},
+    ]
+    check(not corridor_border_promotions(
+        [composite_corridor], promotion_outer_borders,
+        corridor_borders, promotion_text),
+        "a printed sparse stacked comb self-promoted to table columns")
+    check(not corridor_border_promotions(
+        [composite_corridor], promotion_outer_borders,
+        corridor_borders, []),
+        "an empty stacked sparse comb self-promoted to table columns")
+    floating_old_border = {
+        **synthetic_vertical(15, 10.5, 29.5, 0.2, 223),
+        "id": "v-floating-old-border",
+    }
+    check(not corridor_border_promotions(
+        [composite_corridor],
+        [*promotion_outer_borders, floating_old_border],
+        corridor_borders, promotion_text),
+        "an unsupported floating border certified a sparse stacked comb")
+    supported_sibling = {
+        **synthetic_vertical(7.5, 0, 30, 0.2, 224),
+        "id": "v-supported-sibling-comb",
+        "paint_seq_max": 232,
+    }
+    _supported_combs, supported_borders = split_final_vertical_corridors(
+        [supported_sibling], corridor_rails,
+        {"v-supported-sibling-comb"})
+    supported_frame_borders = [
+        {
+            **synthetic_vertical(x, 0, 30, 0.2, 233 + index),
+            "id": f"v-supported-frame-{index}",
+        }
+        for index, x in enumerate((0.0, 15.0, 20.0))
+    ]
+    check(not corridor_border_promotions(
+        [supported_sibling], supported_frame_borders,
+        supported_borders, promotion_text),
+        "an adjacent narrower table column distorted a two-slot comb pitch")
+    wide_comb_rails = [
+        synthetic_horizontal(y, 0, 40, 0.2, 236 + index)
+        for index, y in enumerate((10.0, 20.0, 30.0))
+    ]
+    wide_comb = {
+        **synthetic_vertical(15, 0, 30, 0.2, 239),
+        "id": "v-wide-two-slot-comb",
+        "paint_seq_max": 247,
+    }
+    _wide_combs, wide_corridor_borders = split_final_vertical_corridors(
+        [wide_comb], wide_comb_rails, {"v-wide-two-slot-comb"})
+    wide_frame_borders = [
+        {
+            **synthetic_vertical(x, 0, 30, 0.2, 248 + index),
+            "id": f"v-wide-frame-{index}",
+        }
+        for index, x in enumerate((0.0, 30.0, 40.0))
+    ]
+    check(not corridor_border_promotions(
+        [wide_comb], wide_frame_borders,
+        wide_corridor_borders, promotion_text),
+        "an equal wide comb was inferred as a two-column table")
+
+    three_slot_rails = [
+        synthetic_horizontal(y, 0, 22, 0.2, 236 + index)
+        for index, y in enumerate((10.0, 20.0, 30.0))
+    ]
+    three_slot_dividers = [
+        {
+            **synthetic_vertical(x, 0, 30, 0.2, 239 + index),
+            "id": f"v-three-slot-{index}",
+            "paint_seq_max": 247 + index,
+        }
+        for index, x in enumerate((5.0, 10.0))
+    ]
+    three_slot_corridors = [
+        fragment
+        for divider in three_slot_dividers
+        for fragment in split_final_vertical_corridors(
+            [divider], three_slot_rails, {str(divider["id"])})[1]
+    ]
+    three_slot_frame = [
+        {
+            **synthetic_vertical(x, 0, 30, 0.2, 249 + index),
+            "id": f"v-three-slot-frame-{index}",
+        }
+        for index, x in enumerate((0.0, 15.0, 22.0))
+    ]
+    check(not corridor_border_promotions(
+        three_slot_dividers, three_slot_frame,
+        three_slot_corridors, promotion_text),
+        "an adjacent table column distorted a three-slot comb pitch")
+
+    table_rails = [
+        synthetic_horizontal(y, 0, 30, 0.2, sequence)
+        for sequence, y in enumerate((10.0, 20.0, 30.0), 223)
+    ]
+    table_composite = {
+        **synthetic_vertical(10, 0, 30, 0.2, 226),
+        "id": "v-table-composite",
+        "paint_seq_max": 234,
+    }
+    table_corridor_combs, table_corridor_borders = (
+        split_final_vertical_corridors(
+            [table_composite], table_rails, {"v-table-composite"}))
+    table_old_borders = [
+        {
+            **synthetic_vertical(x, 0, 30, 0.2, 235 + index),
+            "id": f"v-table-border-{index}",
+        }
+        for index, x in enumerate((0.0, 18.0, 30.0))
+    ]
+    check(corridor_border_promotions(
+        [table_composite], table_old_borders,
+        table_corridor_borders, []) == {"v-table-composite"},
+        "repeated irregular table corridors lacked geometry-only proof")
+    equal_comb_sibling = {
+        **synthetic_vertical(24, 0, 30, 0.2, 239),
+        "id": "v-equal-comb-sibling",
+        "paint_seq_max": 247,
+    }
+    _equal_sibling_combs, equal_sibling_borders = (
+        split_final_vertical_corridors(
+            [equal_comb_sibling], table_rails,
+            {"v-equal-comb-sibling"}))
+    check(corridor_border_promotions(
+        [table_composite, equal_comb_sibling], table_old_borders,
+        [*table_corridor_borders, *equal_sibling_borders], [])
+        == {"v-table-composite"},
+        "an equal comb inherited an unrelated table sibling's proof")
+    check(not corridor_border_promotions(
+        [{**table_composite, "id": "v-one-row"}],
+        table_old_borders,
+        [{**table_corridor_borders[0], "id": "v-one-row"}],
+        promotion_text),
+        "one ambiguous row corridor invented a lattice position")
+    existing_table_border = {
+        **synthetic_vertical(10, 10.1, 19.9, 0.2, 239),
+        "id": "v-existing-table-border",
+    }
+    missing_table_sibling = {
+        **synthetic_vertical(22, 0, 30, 0.2, 240),
+        "id": "v-missing-table-sibling",
+        "paint_seq_max": 248,
+    }
+    _sibling_combs, sibling_borders = split_final_vertical_corridors(
+        [missing_table_sibling], table_rails,
+        {"v-missing-table-sibling"})
+    check(corridor_border_promotions(
+        [table_composite, missing_table_sibling],
+        [*table_old_borders, existing_table_border],
+        [*table_corridor_borders, *sibling_borders], [])
+        == {"v-table-composite", "v-missing-table-sibling"},
+        "an existing x suppressed independent corridor localisation")
+    localized_table_coverage = [
+        *table_old_borders, existing_table_border,
+        *table_corridor_borders,
+    ]
+    existing_table_xl = build_lattice(
+        [*table_old_borders, existing_table_border],
+        localized_table_coverage, "v")
+    existing_x_index = min(
+        range(len(existing_table_xl.positions)),
+        key=lambda index: abs(existing_table_xl.positions[index] - 10.0))
+    check(not covers(existing_table_xl.spans[existing_x_index], 0.0, 9.9)
+          and covers(existing_table_xl.spans[existing_x_index], 10.1, 19.9)
+          and covers(existing_table_xl.spans[existing_x_index], 20.1, 29.9),
+          "an existing x revived the certified composite's full hull")
+    localized_leading = localized_comb_dividers(
+        [table_composite], table_corridor_combs, {"v-table-composite"})
+    check([(rule["y0"], rule["y1"]) for rule in localized_leading]
+          == [(0.0, 9.9)],
+          "a uniquely local leading comb fragment was discarded")
+    dense_old_dividers = [
+        {
+            **synthetic_vertical(x, 0, 30, 0.2, 230 + index),
+            "id": f"v-dense-{index}",
+        }
+        for index, x in enumerate((5.0, 10.0, 15.0, 20.0))
+    ]
+    dense_corridor_borders = [
+        {**item, "id": "v-dense-1"} for item in corridor_borders
+    ]
+    check(not corridor_border_promotions(
+        dense_old_dividers, promotion_outer_borders,
+        dense_corridor_borders, promotion_text),
+        "a dense equal-pitch character grid became table columns")
+
+    near_join = {
+        **synthetic_vertical(10, 10.11, 30, 0.2, 240),
+        "id": "v-near-join",
+        "paint_seq_max": 241,
+    }
+    _near_combs, near_borders = split_final_vertical_corridors(
+        [near_join], corridor_rails, {"v-near-join"})
+    check([(item["y0"], item["y1"]) for item in near_borders]
+          == [(10.11, 19.9), (20.1, 29.9)],
+          "a source join inside JOIN_EPSILON_PT lost a row border")
+    far_join = {
+        **near_join,
+        "id": "v-far-join",
+        "y0": 10.16,
+    }
+    _far_combs, far_borders = split_final_vertical_corridors(
+        [far_join], corridor_rails, {"v-far-join"})
+    check([(item["y0"], item["y1"]) for item in far_borders]
+          == [(20.1, 29.9)],
+          "a source gap beyond JOIN_EPSILON_PT certified a full row border")
 
     # Coverage/density is not source ownership. The shorter lower divider makes
     # a second plausible topology; retain both as evidence and fail closed.
