@@ -74,7 +74,7 @@ EXPECTED_FORMS = 51
 EXPECTED_COMBS = 4442
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 LATTICE_PRODUCER_SHA256 = (
-    "59ed60b23413e34b54a97aa87611a0811fac43d20b50eab313b6191c3a79b189"
+    "2152e90ab636b081ad13446d709b92d31625ca25b0bdb311d45d88bd55496e12"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
@@ -4229,24 +4229,33 @@ def classify_band(
         ):
             return False
         # Poppler normally emits text as glyph ``use`` nodes, but a few
-        # official forms carry outlined characters as broad curved paths.
-        # Neither kind is a straight compartment boundary.  A broad curved
-        # path can therefore affect topology only by covering or joining an
-        # eligible source divider; a narrow curved path remains unsupported
-        # because its bound could itself occupy a divider lane.
-        curved_overlap = (
+        # official forms carry outlined characters as broad curved paths and
+        # small arrowheads as simple closed fills.  A bound that cannot itself
+        # be a tall, narrow compartment boundary can affect topology only by
+        # covering or joining an eligible source divider.  Divider-like bounds,
+        # clipped simple fills, and structurally complex fills stay unsupported.
+        vertical_overlap = (
             min(region.y1, seed_y1) - max(region.y0, seed_y0)
         )
-        curved_can_be_divider = (
-            region.reason == "curved SVG path"
+        region_can_be_divider = (
+            region.reason in (
+                "curved SVG path",
+                "non-rectangular closed SVG fill",
+            )
             and region.x1 - region.x0 <= max_width
-            and curved_overlap > (seed_y1 - seed_y0) / 2
+            and region.y1 - region.y0 > region.x1 - region.x0
+            and vertical_overlap > (seed_y1 - seed_y0) / 2
         )
         occlusion_only = (
             "glyph use" in region.reason
             or (
                 region.reason == "curved SVG path"
-                and not curved_can_be_divider
+                and not region_can_be_divider
+            )
+            or (
+                region.reason == "non-rectangular closed SVG fill"
+                and not region.clipped
+                and not region_can_be_divider
             )
         )
         if not occlusion_only:
@@ -8250,6 +8259,46 @@ def self_test() -> int:
     assert classify_band(cell, SvgPage(
         100, 100, [paint(10), paint(20), paint(30)],
         [broad_curve_crossing], "x"))["status"] == "unevaluable"
+
+    # Poppler emits small arrowheads as simple closed path fills.  Preserve the
+    # unsupported provenance, but let a squat unclipped bound that cannot be a
+    # divider proceed through the same conservative occlusion check as an
+    # outlined glyph.  Crossing a real divider, looking divider-like, or being
+    # clipped remains unevaluable.
+    squat_fill_inside = UnsupportedRegion(
+        12, 3, 18, 5, "non-rectangular closed SVG fill",
+        "arrow-inside", 0.0, 4, False)
+    result = classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [squat_fill_inside], "x"))
+    assert result["status"] == "measured", result
+
+    squat_fill_crossing = UnsupportedRegion(
+        18, 3, 22, 5, "non-rectangular closed SVG fill",
+        "arrow-crossing", 0.0, 4, False)
+    assert classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [squat_fill_crossing], "x"))["status"] == "unevaluable"
+
+    divider_like_fill = UnsupportedRegion(
+        14.9, 2, 15.1, 8, "non-rectangular closed SVG fill",
+        "divider-like-fill", 0.0, 4, False)
+    assert classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [divider_like_fill], "x"))["status"] == "unevaluable"
+
+    clipped_squat_fill = dataclasses.replace(
+        squat_fill_inside, element="clipped-arrow", clipped=True)
+    assert classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [clipped_squat_fill], "x"))["status"] == "unevaluable"
+
+    embedded_raster = UnsupportedRegion(
+        12, 2, 28, 8, "embedded raster use: #source-test",
+        "embedded-raster", None, 4, True)
+    assert classify_band(cell, SvgPage(
+        100, 100, [paint(10), paint(20), paint(30)],
+        [embedded_raster], "x"))["status"] == "unevaluable"
 
     no_anchor = {**cell, "comb": {**cell["comb"], "cells": 1, "divider_x": []}}
     assert classify_band(no_anchor, page)["status"] == "unevaluable"
