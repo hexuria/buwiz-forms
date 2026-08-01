@@ -1944,28 +1944,89 @@ def boundary_topology_subset(left: Sequence[float],
     return True
 
 
-def comb_has_cell_owner(cell: dict[str, Any],
-                        comb: dict[str, Any]) -> bool:
-    """Whether a comb band has paper owned by this emitted rectangle.
+def comb_owner_failure_reason(cell: dict[str, Any],
+                              comb: dict[str, Any]) -> str | None:
+    """Why a comb band lacks paper owned by this emitted rectangle.
 
     Bands may legitimately straddle a shared horizontal rule, so full vertical
     containment is too strict.  They must, however, have positive vertical
     intersection with the cell and keep every physical slot boundary inside
-    its horizontal extent.  A merely touching band belongs to the adjacent
-    row and cannot be emitted with negative or entirely out-of-cell offsets.
+    its horizontal extent.  A band traversing both the cell's top and bottom
+    rails also needs one direct paint record for every divider.  A composite
+    paint-order range can be the hull of collinear fragments from adjacent
+    rows; it cannot prove that the intervening corridor belongs to this cell.
+    A merely touching or unproved multi-row band therefore cannot be emitted
+    with negative or entirely out-of-cell offsets.
     """
-    slot_x = [float(value) for value in comb.get("slot_x") or ()]
-    if len(slot_x) < 2:
-        return False
+    raw_slot_x = comb.get("slot_x")
+    if not isinstance(raw_slot_x, (list, tuple)) or len(raw_slot_x) < 2:
+        return "invalid-comb-owner-contract"
+    if not all(
+            type(value) in (int, float) and math.isfinite(float(value))
+            for value in raw_slot_x):
+        return "invalid-comb-owner-contract"
+    slot_x = [float(value) for value in raw_slot_x]
+    if any(left >= right for left, right in zip(slot_x, slot_x[1:])):
+        return "invalid-comb-owner-contract"
+    if not all(
+            type(comb.get(name)) in (int, float)
+            and math.isfinite(float(comb[name]))
+            for name in ("y0", "y1")):
+        return "invalid-comb-owner-contract"
     vertical_overlap = (
         min(float(cell["y1"]), float(comb["y1"]))
         - max(float(cell["y0"]), float(comb["y0"]))
     )
-    return (
-        vertical_overlap > 0.0
-        and slot_x[0] >= float(cell["x0"]) - CLUSTER_TOL_PT
-        and slot_x[-1] <= float(cell["x1"]) + CLUSTER_TOL_PT
+    if vertical_overlap <= 0.0:
+        return "no-vertical-cell-overlap"
+    if (slot_x[0] < float(cell["x0"]) - CLUSTER_TOL_PT
+            or slot_x[-1] > float(cell["x1"]) + CLUSTER_TOL_PT):
+        return "slot-boundary-outside-cell"
+    traverses_both_rails = (
+        float(comb["y0"]) < float(cell["y0"]) - CLUSTER_TOL_PT
+        and float(comb["y1"]) > float(cell["y1"]) + CLUSTER_TOL_PT
     )
+    if not traverses_both_rails:
+        return None
+
+    raw_divider_x = comb.get("divider_x")
+    paint_sequences = comb.get("divider_paint_seq")
+    paint_ranges = comb.get("divider_paint_ranges")
+    if (not isinstance(raw_divider_x, (list, tuple))
+            or not isinstance(paint_sequences, (list, tuple))
+            or not isinstance(paint_ranges, (list, tuple))
+            or len(raw_divider_x) != len(slot_x) - 2
+            or len(paint_sequences) != len(raw_divider_x)
+            or len(paint_ranges) != len(raw_divider_x)):
+        return "unproved-multi-row-divider-corridor"
+    if not all(
+            type(value) in (int, float)
+            and math.isfinite(float(value))
+            for value in raw_divider_x):
+        return "unproved-multi-row-divider-corridor"
+    if any(float(value) != slot_x[index + 1]
+           for index, value in enumerate(raw_divider_x)):
+        return "unproved-multi-row-divider-corridor"
+    if not all(
+            type(paint_sequence) is int
+            and paint_sequence >= 0
+            and isinstance(paint_range, (list, tuple))
+            and len(paint_range) == 2
+            and type(paint_range[0]) is int
+            and type(paint_range[1]) is int
+            and paint_range[0] >= 0
+            and paint_range[0] == paint_range[1]
+            and paint_sequence == paint_range[0]
+            for paint_sequence, paint_range in zip(
+                paint_sequences, paint_ranges)):
+        return "unproved-multi-row-divider-corridor"
+    return None
+
+
+def comb_has_cell_owner(cell: dict[str, Any],
+                        comb: dict[str, Any]) -> bool:
+    """Whether a comb band has paper owned by this emitted rectangle."""
+    return comb_owner_failure_reason(cell, comb) is None
 
 
 def source_owned_comb_frame(
@@ -2517,7 +2578,13 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         bands = comb_bands(
             members, extra_ink, cell["x0"], cell["x1"], edges, final_paint)
         retained_bands: list[dict[str, Any]] = []
+        rejected_owner_bands: list[dict[str, Any]] = []
         for band in bands:
+            owner_failure = comb_owner_failure_reason(cell, band)
+            if owner_failure is not None:
+                rejected_owner_bands.append(mark_comb_unresolved(
+                    band, owner_failure))
+                continue
             owners = comb_band_owners(
                 cells, cell["x0"], cell["x1"],
                 band["y0"], band["y1"], xl, yl)
@@ -2555,6 +2622,16 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             cell["comb"] = chosen_band
             if len(bands) > 1:
                 cell["combs"] = bands
+        elif rejected_owner_bands:
+            # A partition-only topology is not allowed to disappear merely
+            # because it cannot own this rectangle.  Keep the strongest
+            # rejected candidate until the inference ledger below publishes
+            # it as explicit, suppressed, and gate-blocking evidence.  A
+            # reviewed legacy subject uses its own retained-subject path.
+            cell["_suppressed_comb_inference"] = max(
+                rejected_owner_bands,
+                key=lambda band: (band["divider_count"], -band["y0"]),
+            )
 
     output_by_subject = {cell["subject_key"]: cell for cell in cells}
     output_index_by_subject = {
@@ -2788,6 +2865,15 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             and not legacy_owned
             and final_candidate_owned is None
         )
+        candidate_owner_failures = (
+            [] if cell is None else [
+                failure
+                for candidate in (legacy_comb, final_candidate)
+                if candidate is not None
+                for failure in [comb_owner_failure_reason(cell, candidate)]
+                if failure is not None
+            ]
+        )
         if (cell is None
                 or (cell.get("comb") is None
                     and final_candidate is None
@@ -2805,6 +2891,20 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 ]
             else:
                 mapped = [cell]
+            if cell is None:
+                retained_reason_codes = [
+                    "emission-suppressed-no-rectangular-owner",
+                    "painted-edge-partition",
+                ]
+            elif "unproved-multi-row-divider-corridor" in (
+                    candidate_owner_failures):
+                retained_reason_codes = [
+                    "emission-suppressed-unproved-multi-row-divider-corridor",
+                ]
+            else:
+                retained_reason_codes = [
+                    "emission-suppressed-no-final-visible-band",
+                ]
             retained = {
                 "subject_key": subject_key,
                 "legacy_cell_id": subject["legacy_cell_id"],
@@ -2816,12 +2916,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 ],
                 "state": "retained_unresolved",
                 "emission": "suppressed",
-                "reason_codes": ([
-                    "emission-suppressed-no-rectangular-owner",
-                    "painted-edge-partition",
-                ] if cell is None else [
-                    "emission-suppressed-no-final-visible-band",
-                ]),
+                "reason_codes": retained_reason_codes,
                 "legacy_comb": legacy_comb,
                 "requires_independent_evidence": True,
                 "permitted_transitions": [
@@ -2943,20 +3038,34 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
     # A partition-only inferred subject has no reviewed predecessor. Suppress it
     # explicitly instead of silently changing the reviewed 4,442 denominator.
     for cell in cells:
-        if "comb" not in cell or cell["subject_key"] in legacy_keys:
+        rejected_inference = cell.pop("_suppressed_comb_inference", None)
+        if cell["subject_key"] in legacy_keys:
             continue
+        inferred_comb = cell.get("comb") or rejected_inference
+        if inferred_comb is None:
+            continue
+        inference_reasons = ["no-legacy-subject"]
+        if rejected_inference is not None:
+            owner_reasons = list(
+                (rejected_inference.get("resolution") or {}).get(
+                    "reason_codes") or ())
+            inference_reasons.extend(
+                f"emission-suppressed-{reason}"
+                for reason in owner_reasons
+                if reason not in {"no-legacy-subject"}
+            )
         inference_ledger.append({
             "subject_key": cell["subject_key"],
             "cell_id": cell["id"],
             "bbox": [cell["x0"], cell["y0"], cell["x1"], cell["y1"]],
             "state": "suppressed_unreviewed_inference",
-            "reason_codes": ["no-legacy-subject"],
-            "inferred_comb": cell["comb"],
+            "reason_codes": sorted(set(inference_reasons)),
+            "inferred_comb": inferred_comb,
             "requires_independent_evidence": True,
             "permitted_transitions": ["active_reviewed"],
             "blocks_gate": True,
         })
-        cell.pop("comb")
+        cell.pop("comb", None)
         cell.pop("combs", None)
 
     for cell in cells:
@@ -3760,6 +3869,59 @@ def self_test(ir_path: pathlib.Path) -> int:
         owner_cell, {**owner_comb, "y0": -5.0, "y1": 0.1}),
         "a positively overlapping shared-edge comb lost its cell owner")
     check(not comb_has_cell_owner(
+        owner_cell, {**owner_comb, "y0": -5.0, "y1": 15.0}),
+        "an unproved multi-row comb inherited a cell owner")
+    check(comb_has_cell_owner(
+        owner_cell, {
+            **owner_comb,
+            "divider_x": [10.0, 20.0],
+            "divider_paint_seq": [1, 2],
+            "divider_paint_ranges": [[1, 1], [2, 2]],
+            "y0": -5.0,
+            "y1": 15.0,
+        }), "direct multi-row divider corridors lost their cell owner")
+    missing_sequence = {
+        **owner_comb,
+        "divider_x": [10.0, 20.0],
+        "divider_paint_ranges": [[1, 1], [2, 2]],
+        "y0": -5.0,
+        "y1": 15.0,
+    }
+    check(not comb_has_cell_owner(owner_cell, missing_sequence),
+          "a direct corridor without paint-sequence evidence gained an owner")
+    hostile_owner_contracts = [
+        {"slot_x": 1},
+        {"divider_x": 1, "divider_paint_ranges": [[1, 1], [2, 2]]},
+        {"divider_x": [10.0], "divider_paint_ranges": [[1, 1]]},
+        {"divider_paint_seq": 1},
+        {"divider_paint_seq": [101, 102]},
+        {"divider_paint_seq": [True, 2]},
+        {"divider_x": [10.0, 20.0], "divider_paint_ranges": 1},
+        {"divider_x": [10.0, 20.0],
+         "divider_paint_ranges": [[None, None], [2, 2]]},
+        {"divider_x": [10.0, 20.0],
+         "divider_paint_ranges": [["x", "x"], [2, 2]]},
+        {"divider_x": [10.0, 20.0],
+         "divider_paint_ranges": [[True, 1], [2, 2]]},
+        {"divider_x": [10.0, 20.0],
+         "divider_paint_ranges": [[-1, -1], [2, 2]]},
+        {"divider_x": [10.0, 20.0],
+         "divider_paint_ranges": [[[1], [1]], [2, 2]]},
+    ]
+    for hostile in hostile_owner_contracts:
+        candidate = {
+            **owner_comb,
+            "divider_x": [10.0, 20.0],
+            "divider_paint_seq": [1, 2],
+            "divider_paint_ranges": [[1, 1], [2, 2]],
+            "y0": -5.0,
+            "y1": 15.0,
+            **hostile,
+        }
+        check(not comb_has_cell_owner(owner_cell, candidate),
+              f"a malformed direct-corridor contract gained an owner: "
+              f"{hostile}")
+    check(not comb_has_cell_owner(
         owner_cell, {**owner_comb, "y0": -5.0, "y1": 0.0}),
         "an above-cell comb inherited the adjacent row")
     check(not comb_has_cell_owner(
@@ -3949,6 +4111,7 @@ def self_test(ir_path: pathlib.Path) -> int:
             long_y: tuple[float, float],
             extra_y: tuple[float, float],
             with_current_band: bool,
+            composite_corridor: bool = False,
             ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         legacy_lines = [
             {
@@ -3958,6 +4121,9 @@ def self_test(ir_path: pathlib.Path) -> int:
             }
             for index, x in enumerate((10.0, 20.0))
         ]
+        if composite_corridor:
+            for line in legacy_lines:
+                line["paint_seq_max"] = int(line["paint_seq"]) + 100
         adjacent_extra = {
             **synthetic_vertical(
                 15.0, extra_y[0], extra_y[1], 0.2, 52),
@@ -4020,6 +4186,80 @@ def self_test(ir_path: pathlib.Path) -> int:
                     == ("resolved" if with_current_band else "unresolved"),
                     f"{direction}-cell current-band precedence is wrong",
                 )
+
+    traversing_cells, traversing_subjects = inherited_endpoint_case(
+        "both-rails", (-5.0, 15.0), (-5.0, 15.0), False, True)
+    traversing_cell_comb = (
+        traversing_cells[0].get("comb")
+        if len(traversing_cells) == 1 else None
+    )
+    traversing_subject = (
+        traversing_subjects[0]
+        if len(traversing_subjects) == 1 else {}
+    )
+    check(
+        traversing_cell_comb is None
+        and traversing_subject.get("state") == "retained_unresolved"
+        and traversing_subject.get("emission") == "suppressed"
+        and traversing_subject.get("cell_id") is None
+        and (traversing_subject.get("legacy_comb") or {}).get("cells") == 4,
+        "a both-rails legacy subject was emitted instead of retained: "
+        f"{traversing_subjects}",
+    )
+
+    # A current-only topology rejected by the same owner proof has no reviewed
+    # legacy subject, but it is still evidence.  It must remain in the explicit
+    # suppressed-inference ledger and keep blocking the gate.
+    inference_lines = [
+        {
+            **synthetic_vertical(x, -0.5, 10.5, 0.2, 60 + index),
+            "id": f"unowned-inference-{index}",
+            "paint_seq_max": 160 + index,
+        }
+        for index, x in enumerate((10.0, 20.0))
+    ]
+    inference_top = {
+        **synthetic_horizontal(0.0, 0.0, 30.0, 2.0, 58),
+        "id": "unowned-inference-top",
+    }
+    inference_bottom = {
+        **synthetic_horizontal(10.0, 0.0, 30.0, 2.0, 59),
+        "id": "unowned-inference-bottom",
+    }
+    inference_y = Lattice(
+        [0.0, 10.0], [-1.0, 9.0], [1.0, 11.0],
+        [[(0.0, 30.0)], [(0.0, 30.0)]],
+        [[inference_top], [inference_bottom]],
+    )
+    (inference_cells, _inference_text, inference_subjects,
+     inference_ledger) = build_cells(
+        1, ledger_x, inference_y, DisjointSet(1),
+        [[True], [True]], [[True], [True]],
+        [ledger_left, ledger_right], [inference_top, inference_bottom],
+        inference_lines, inference_lines,
+        FinalPaint([
+            ledger_left, ledger_right, inference_top, inference_bottom,
+            *inference_lines,
+        ]),
+        [],
+        legacy_dividers=[],
+        legacy_extra_ink=[],
+    )
+    inference = inference_ledger[0] if len(inference_ledger) == 1 else {}
+    check(
+        len(inference_cells) == 1
+        and "comb" not in inference_cells[0]
+        and not inference_subjects
+        and inference.get("state") == "suppressed_unreviewed_inference"
+        and inference.get("blocks_gate") is True
+        and inference.get("reason_codes") == [
+            "emission-suppressed-unproved-multi-row-divider-corridor",
+            "no-legacy-subject",
+        ]
+        and (inference.get("inferred_comb") or {}).get("cells") == 3,
+        "an unowned partition-only inference vanished or became nonblocking: "
+        f"{inference_ledger}",
+    )
 
     owned_band_cells, owned_band_subjects = inherited_endpoint_case(
         "owned-endpoint-band", (-5.0, 10.0), (5.0, 10.0), False)
