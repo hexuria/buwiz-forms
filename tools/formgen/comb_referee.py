@@ -21,13 +21,25 @@ a missing boundary only when:
 2. Poppler paints every missing pitch position in one common source band; and
 3. every already-recognised anchor is also painted in that band.
 
+One fail-closed exception can prove that a lattice anchor is absent, but it is
+restricted to an already-active unresolved ledger subject and can never
+discover a new comb.  One partial-anchor source topology must occupy the
+entire open band; every observed divider must map one-to-one to a declared
+anchor; and every missing anchor must have an exact raw target-tone rail that
+one supported, unclipped, non-target final owner exhaustively erases across
+every open slab.  Clipped paint, unsupported geometry, mixed topmost owners,
+or surviving target-tone ink closes the exception.  Subject ownership comes
+only from the active ledger identity--this certificate does not claim an
+independent source enclosure--and retained subjects remain ineligible.
+
 An outward boundary must continue the measured source pitch, or be the sole
 boundary that symmetrically divides the remaining edge interval.  Cell-edge
 ink is never counted as an interior divider.  These constraints make the check
 useful for both disputed heavy group separators and truncated first/last ticks
 without turning unrelated verticals in a broad mixed cell into character
-boxes.  A partial pattern, unsupported vector geometry, a clipped candidate,
-missing provenance, or competing source bands is UNEVALUABLE -- never a pass.
+boxes.  Every other partial pattern, unsupported vector geometry, clipped
+candidate, missing provenance, or competing source band is UNEVALUABLE --
+never a pass.
 
 Raster output is not produced and cannot affect a verdict.
 
@@ -74,7 +86,7 @@ EXPECTED_FORMS = 51
 EXPECTED_COMBS = 4442
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 LATTICE_PRODUCER_SHA256 = (
-    "735dde9f5be29c627ee207c4373b929406d02a43a394f369ec85db0fcbf32a01"
+    "5950830597852b39dbb795ee8a0521821d3569ccca4e3eb188fe52e6075deb08"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
@@ -148,6 +160,9 @@ AUDIT_FAILURE_KINDS = frozenset({
 })
 AUDIT_OWNER_CERTIFICATE_CRITERION = (
     "exact-reviewed-layout-comb-subject-owner-v1"
+)
+ACTIVE_PARTIAL_ANCHOR_CRITERION = (
+    "active-full-band-partial-anchor-source-topology-v1"
 )
 AUDIT_OWNER_CERTIFICATE_VALID_KEYS = frozenset({
     "criterion", "valid", "layout_sha256", "page", "cell_id",
@@ -3969,6 +3984,7 @@ def classify_band(
         cell: dict[str, Any],
         page: SvgPage,
         *,
+        ledger_state: str | None = None,
         _evaluation_window: tuple[float, float] | None = None,
         ) -> dict[str, Any]:
     comb = cell["comb"]
@@ -4324,18 +4340,53 @@ def classify_band(
                 "reason": "no candidate divider ink",
             })
             continue
+
+        # A thick page/frame edge is sometimes a stack of two target-tone
+        # bars.  The inner bar can coincide with a stale lattice anchor, but
+        # paper narrower than the combined ink weights is not a writable
+        # compartment.  Frame evidence comes from all final components, not
+        # the width-filtered divider candidates: a broad outer bar is precisely
+        # the case that needs to disqualify its narrow neighbour.  Apply this
+        # before both complete and partial anchor matching.
+        frame_groups = [
+            component for component in composited_segments(mid, page.paints)
+            if abs(float(component["tone"]) - divider_tone) <= 1e-8
+            and ((float(component["x0"]) <= x0 + POSITION_TOL_PT
+                  and float(component["x1"]) >= x0 - POSITION_TOL_PT)
+                 or (float(component["x0"]) <= x1 + POSITION_TOL_PT
+                     and float(component["x1"])
+                     >= x1 - POSITION_TOL_PT))
+        ]
+
+        def distinct_from_frames(group: dict[str, Any]) -> bool:
+            for frame in frame_groups:
+                paper = (max(float(group["x0"]), float(frame["x0"]))
+                         - min(float(group["x1"]), float(frame["x1"])))
+                weights = ((float(group["x1"]) - float(group["x0"]))
+                           + (float(frame["x1"]) - float(frame["x0"])))
+                if paper <= weights:
+                    return False
+            return True
+
+        matchable_groups = [
+            group for group in groups
+            if distinct_from_frames(group)
+        ]
+
         # Match recognised anchors to independently painted source boundaries.
         # A referee must not silently move an anchor to the nearest plausible
         # line: source and lattice positions agree inside the repository's
         # fixed 0.25pt bound or they do not agree.
-        available = list(range(len(groups)))
+        available = list(range(len(matchable_groups)))
         anchor_matches: list[dict[str, float]] = []
         for anchor in anchors:
             choices = sorted(
-                ((abs(groups[index]["x"] - anchor), index)
+                ((abs(matchable_groups[index]["x"] - anchor), index)
                  for index in available
-                 if abs(groups[index]["x"] - anchor) <= POSITION_TOL_PT),
-                key=lambda item: (item[0], groups[item[1]]["x"]),
+                 if abs(matchable_groups[index]["x"] - anchor)
+                 <= POSITION_TOL_PT),
+                key=lambda item: (
+                    item[0], matchable_groups[item[1]]["x"]),
             )
             if not choices:
                 anchor_matches = []
@@ -4344,8 +4395,9 @@ def classify_band(
             available.remove(index)
             anchor_matches.append({
                 "layout_x": round(anchor, 6),
-                "source_x": groups[index]["x"],
-                "delta_pt": round(groups[index]["x"] - anchor, 6),
+                "source_x": matchable_groups[index]["x"],
+                "delta_pt": round(
+                    matchable_groups[index]["x"] - anchor, 6),
                 "group_index": index,
             })
         if len(anchor_matches) != len(anchors):
@@ -4357,6 +4409,7 @@ def classify_band(
                     or (group["x0"] <= x1 + POSITION_TOL_PT
                         and group["x1"] >= x1 - POSITION_TOL_PT)
                 )
+                and distinct_from_frames(group)
             ]
             record = {
                 "y0": round(a, 6), "y1": round(b, 6),
@@ -4372,7 +4425,7 @@ def classify_band(
                     for index, anchor in enumerate(available_anchors)
                     if near(float(group["x"]), anchor)
                 )
-                if not choices:
+                if len(choices) != 1:
                     partial_matches = []
                     break
                 _distance, index = choices[0]
@@ -4397,6 +4450,9 @@ def classify_band(
                 partial_x = sorted(
                     round(float(group["x"]), 6)
                     for group in interior_groups)
+                missing_anchor_x = sorted(
+                    round(float(anchor), 6)
+                    for anchor in available_anchors)
                 bands.append({
                     "status": "measured",
                     "y0": round(a, 6), "y1": round(b, 6),
@@ -4404,6 +4460,7 @@ def classify_band(
                     "extra_divider_x": [],
                     "compartments": len(partial_x) + 1,
                     "anchor_matches": partial_matches,
+                    "missing_anchor_x": missing_anchor_x,
                     "anchors_complete": False,
                     "positions_match": False,
                     "components": interior_groups,
@@ -4424,7 +4481,7 @@ def classify_band(
                     **record,
                 })
             continue
-        matched_groups = [groups[int(match["group_index"])]
+        matched_groups = [matchable_groups[int(match["group_index"])]
                           for match in anchor_matches]
         if any(group["clipped"] for group in matched_groups):
             bands.append({
@@ -4433,30 +4490,6 @@ def classify_band(
                 "y0": a, "y1": b,
             })
             continue
-
-        # A thick page/frame edge is sometimes a stack of two black bars.  The
-        # inner bar can be one pitch beyond the last real comb tick, but the
-        # paper between those bars is thinner than the ink drawing them and is
-        # therefore not a writable compartment.  Identify the source group
-        # crossing each lattice-owned cell edge, then require actual paper
-        # wider than the two bars before treating a neighbour as distinct.
-        frame_groups = [
-            group for group in groups
-            if ((group["x0"] <= x0 + POSITION_TOL_PT
-                 and group["x1"] >= x0 - POSITION_TOL_PT)
-                or (group["x0"] <= x1 + POSITION_TOL_PT
-                    and group["x1"] >= x1 - POSITION_TOL_PT))
-        ]
-
-        def distinct_from_frames(group: dict[str, Any]) -> bool:
-            for frame in frame_groups:
-                paper = (max(float(group["x0"]), float(frame["x0"]))
-                         - min(float(group["x1"]), float(frame["x1"])))
-                weights = ((float(group["x1"]) - float(group["x0"]))
-                           + (float(frame["x1"]) - float(frame["x0"])))
-                if paper <= weights:
-                    return False
-            return True
 
         eligible_groups = [
             group for group in groups
@@ -4803,7 +4836,8 @@ def classify_band(
                     "no common Poppler band contains every recognised divider")
                 and attached_external_band):
             return classify_band(
-                cell, page, _evaluation_window=(seed_y0, seed_y1))
+                cell, page, ledger_state=ledger_state,
+                _evaluation_window=(seed_y0, seed_y1))
         return result
     if seed_span <= 0 or measured_span <= seed_span / 2:
         return {
@@ -4890,6 +4924,414 @@ def classify_band(
         ),
     )
     if not bool(chosen.get("anchors_complete")):
+        # An already-active comb can use source absence as evidence against a
+        # stale lattice anchor, but only when the source proof is exhaustive.
+        # This path must never discover a new comb: retained subjects and raw
+        # table/label cells remain ineligible, and every observed divider must
+        # still map one-to-one to a declared anchor.  At every remaining anchor
+        # Poppler must expose the raw rail and one supported non-target owner
+        # must finally erase it across the whole open band.  That proves the
+        # smaller final topology without assuming the lattice count is correct.
+        partial_bands = [
+            band for band in measured
+            if not bool(band.get("anchors_complete"))
+        ]
+        missing_sets = {
+            tuple(float(value) for value in band.get("missing_anchor_x", ()))
+            for band in partial_bands
+        }
+        observed_anchor_sets = {
+            tuple(sorted(
+                float(match["layout_x"])
+                for match in band.get("anchor_matches", ())))
+            for band in partial_bands
+        }
+        partial_components_valid = all(
+            band.get("source_divider_x")
+            and len(band.get("anchor_matches", ()))
+            == len(band.get("source_divider_x", ()))
+            and len({
+                float(match["layout_x"])
+                for match in band.get("anchor_matches", ())
+            }) == len(band.get("anchor_matches", ()))
+            and all(
+                not bool(component.get("clipped"))
+                for component in band.get("components", ())
+            )
+            for band in partial_bands
+        )
+        full_partial_coverage = (
+            ledger_state == "active_unresolved"
+            and len(topologies) == 1
+            and len(partial_bands) == len(measured)
+            and bool(partial_bands)
+            and not ignored_slabs
+            and abs(measured_span - seed_span) <= 1e-6
+            and abs(topology_coverage[chosen_topology] - seed_span) <= 1e-6
+            and len(missing_sets) == 1
+            and len(observed_anchor_sets) == 1
+            and partial_components_valid
+        )
+        missing_anchor_proofs: list[dict[str, Any]] = []
+        anchor_corridor_clipped_paints: list[Paint] = []
+        anchor_corridor_unsupported_regions: list[UnsupportedRegion] = []
+        if full_partial_coverage:
+            missing_anchor_x = sorted(next(iter(missing_sets)))
+            observed_anchor_x = sorted(next(iter(observed_anchor_sets)))
+            if not missing_anchor_x:
+                full_partial_coverage = False
+            declared_anchor_x = sorted({
+                *observed_anchor_x,
+                *missing_anchor_x,
+            })
+            anchor_corridor_clipped_paints = [
+                paint for paint in page.paints
+                if paint.clipped
+                and any(
+                    paint.x1 > anchor - POSITION_TOL_PT
+                    and paint.x0 < anchor + POSITION_TOL_PT
+                    for anchor in declared_anchor_x
+                )
+                and min(paint.y1, seed_y1) - max(paint.y0, seed_y0)
+                > 1e-9
+            ]
+            anchor_corridor_unsupported_regions = [
+                region for region in page.unsupported
+                if any(
+                    region.x1 > anchor - POSITION_TOL_PT
+                    and region.x0 < anchor + POSITION_TOL_PT
+                    for anchor in declared_anchor_x
+                )
+                and min(region.y1, seed_y1) - max(region.y0, seed_y0)
+                > 1e-9
+            ]
+            if (anchor_corridor_clipped_paints
+                    or anchor_corridor_unsupported_regions):
+                full_partial_coverage = False
+            for anchor in missing_anchor_x:
+                corridor_x0 = anchor - POSITION_TOL_PT
+                corridor_x1 = anchor + POSITION_TOL_PT
+                raw_anchor_rails = [
+                    paint for paint in page.paints
+                    if abs(paint.tone - divider_tone) <= 1e-8
+                    and paint.width <= max_width
+                    and paint.height > paint.width
+                    and near(paint.cx, anchor)
+                    and sum(
+                        near(paint.cx, missing)
+                        for missing in declared_anchor_x
+                    ) == 1
+                    and paint.x1 > corridor_x0 and paint.x0 < corridor_x1
+                    and min(paint.y1, seed_y1) - max(paint.y0, seed_y0)
+                    > POSITION_TOL_PT
+                ]
+                proof_x0 = min(
+                    [corridor_x0,
+                     *(paint.x0 for paint in raw_anchor_rails)])
+                proof_x1 = max(
+                    [corridor_x1,
+                     *(paint.x1 for paint in raw_anchor_rails)])
+                clipped_paints = [
+                    paint for paint in page.paints
+                    if paint.clipped
+                    and paint.x1 > proof_x0 and paint.x0 < proof_x1
+                    and min(paint.y1, seed_y1) - max(paint.y0, seed_y0)
+                    > 1e-9
+                ]
+                unsupported_regions = [
+                    region for region in page.unsupported
+                    if region.x1 > proof_x0 and region.x0 < proof_x1
+                    and min(region.y1, seed_y1) - max(region.y0, seed_y0)
+                    > 1e-9
+                ]
+                final_target_segments: list[dict[str, float]] = []
+                erasure_slabs: list[dict[str, Any]] = []
+                erasure_roles: set[tuple[str, int, str, float]] = set()
+                proof_top_role_ambiguities: list[dict[str, Any]] = []
+                raw_rail_identity_valid = (
+                    len(raw_anchor_rails) == 1
+                    and raw_anchor_rails[0].y0 <= seed_y0 + 1e-6
+                    and raw_anchor_rails[0].y1 >= seed_y1 - 1e-6
+                )
+                erasure_valid = raw_rail_identity_valid
+                for band in measured:
+                    mid = (float(band["y0"]) + float(band["y1"])) / 2
+                    final_segments = composited_segments(mid, page.paints)
+                    for segment in final_segments:
+                        if (abs(float(segment["tone"]) - divider_tone)
+                                <= 1e-8
+                                and float(segment["x1"]) > proof_x0
+                                and float(segment["x0"]) < proof_x1):
+                            final_target_segments.append({
+                                "y": round(mid, 6),
+                                "x0": round(float(segment["x0"]), 6),
+                                "x1": round(float(segment["x1"]), 6),
+                            })
+                    proof_active_paints = [
+                        paint for paint in page.paints
+                        if paint.y0 <= mid <= paint.y1
+                        and paint.x1 > proof_x0 and paint.x0 < proof_x1
+                    ]
+                    proof_endpoints = {proof_x0, proof_x1}
+                    for paint in proof_active_paints:
+                        proof_endpoints.update((
+                            max(proof_x0, paint.x0),
+                            min(proof_x1, paint.x1),
+                        ))
+                    ordered_proof_x = sorted(proof_endpoints)
+                    for left, right in zip(
+                            ordered_proof_x, ordered_proof_x[1:]):
+                        if right - left <= 1e-9:
+                            continue
+                        sample_x = (left + right) / 2
+                        owners = [
+                            paint for paint in proof_active_paints
+                            if paint.x0 < sample_x < paint.x1
+                        ]
+                        if not owners:
+                            continue
+                        max_order = max(paint.order for paint in owners)
+                        top_roles = sorted({
+                            (
+                                paint.element,
+                                paint.order,
+                                paint.kind,
+                                round(paint.tone, 8),
+                                paint.clipped,
+                            )
+                            for paint in owners
+                            if paint.order == max_order
+                        })
+                        if len(top_roles) > 1:
+                            erasure_valid = False
+                            proof_top_role_ambiguities.append({
+                                "y": round(mid, 6),
+                                "x0": round(left, 6),
+                                "x1": round(right, 6),
+                                "roles": [
+                                    {
+                                        "element": role[0],
+                                        "order": role[1],
+                                        "kind": role[2],
+                                        "tone": role[3],
+                                        "clipped": role[4],
+                                    }
+                                    for role in top_roles
+                                ],
+                            })
+                    active_rails = [
+                        paint for paint in raw_anchor_rails
+                        if paint.y0 <= mid <= paint.y1
+                    ]
+                    raw_intervals = sorted(
+                        (paint.x0, paint.x1)
+                        for paint in active_rails
+                        if paint.x1 - paint.x0 > 1e-9
+                    )
+                    merged_raw: list[list[float]] = []
+                    for left, right in raw_intervals:
+                        if (merged_raw
+                                and left <= merged_raw[-1][1] + 1e-6):
+                            merged_raw[-1][1] = max(
+                                merged_raw[-1][1], right)
+                        else:
+                            merged_raw.append([left, right])
+                    slab_evidence: dict[str, Any] = {
+                        "y0": round(float(band["y0"]), 6),
+                        "y1": round(float(band["y1"]), 6),
+                        "sample_y": round(mid, 6),
+                        "raw_rail_elements": sorted({
+                            paint.element for paint in active_rails
+                        }),
+                        "raw_intervals": [
+                            [round(left, 6), round(right, 6)]
+                            for left, right in merged_raw
+                        ],
+                        "final_owner_segments": [],
+                        "ambiguous_top_roles": [],
+                    }
+                    slab_roles: set[tuple[str, int, str, float]] = set()
+                    if len(merged_raw) != 1:
+                        erasure_valid = False
+                    for raw_left, raw_right in merged_raw:
+                        endpoints = {raw_left, raw_right}
+                        active_paints = [
+                            paint for paint in page.paints
+                            if paint.y0 <= mid <= paint.y1
+                            and paint.x1 > raw_left and paint.x0 < raw_right
+                        ]
+                        for paint in active_paints:
+                            endpoints.update((
+                                max(raw_left, paint.x0),
+                                min(raw_right, paint.x1),
+                            ))
+                        ordered_x = sorted(endpoints)
+                        for left, right in zip(ordered_x, ordered_x[1:]):
+                            if right - left <= 1e-9:
+                                continue
+                            sample_x = (left + right) / 2
+                            owners = [
+                                paint for paint in active_paints
+                                if paint.x0 < sample_x < paint.x1
+                            ]
+                            if not owners:
+                                erasure_valid = False
+                                continue
+                            max_order = max(paint.order for paint in owners)
+                            top_owners = [
+                                paint for paint in owners
+                                if paint.order == max_order
+                            ]
+                            top_roles = sorted({
+                                (
+                                    paint.element,
+                                    paint.order,
+                                    paint.kind,
+                                    round(paint.tone, 8),
+                                    paint.clipped,
+                                )
+                                for paint in top_owners
+                            })
+                            if len(top_roles) != 1:
+                                erasure_valid = False
+                                slab_evidence["ambiguous_top_roles"].append([
+                                    {
+                                        "element": role[0],
+                                        "order": role[1],
+                                        "kind": role[2],
+                                        "tone": role[3],
+                                        "clipped": role[4],
+                                    }
+                                    for role in top_roles
+                                ])
+                                continue
+                            owner = top_owners[0]
+                            role = (
+                                owner.element,
+                                owner.order,
+                                owner.kind,
+                                round(owner.tone, 8),
+                            )
+                            slab_roles.add(role)
+                            erasure_roles.add(role)
+                            slab_evidence["final_owner_segments"].append({
+                                "x0": round(left, 6),
+                                "x1": round(right, 6),
+                                "element": owner.element,
+                                "order": owner.order,
+                                "kind": owner.kind,
+                                "tone": round(owner.tone, 8),
+                                "clipped": owner.clipped,
+                            })
+                            if (owner.clipped
+                                    or abs(owner.tone - divider_tone)
+                                    <= 1e-8):
+                                erasure_valid = False
+                    if len(slab_roles) != 1:
+                        erasure_valid = False
+                    erasure_slabs.append(slab_evidence)
+                if len(erasure_roles) != 1:
+                    erasure_valid = False
+                proof = {
+                    "layout_x": round(anchor, 6),
+                    "corridor_x0": round(corridor_x0, 6),
+                    "corridor_x1": round(corridor_x1, 6),
+                    "proof_x0": round(proof_x0, 6),
+                    "proof_x1": round(proof_x1, 6),
+                    "open_y0": round(seed_y0, 6),
+                    "open_y1": round(seed_y1, 6),
+                    "raw_anchor_rails": [
+                        {
+                            "element": paint.element,
+                            "order": paint.order,
+                            "kind": paint.kind,
+                            "x0": round(paint.x0, 6),
+                            "x1": round(paint.x1, 6),
+                            "center_x": round(paint.cx, 6),
+                            "delta_pt": round(paint.cx - anchor, 6),
+                            "y0": round(paint.y0, 6),
+                            "y1": round(paint.y1, 6),
+                            "tone": round(paint.tone, 8),
+                            "clipped": paint.clipped,
+                        }
+                        for paint in sorted(
+                            raw_anchor_rails,
+                            key=lambda item: (
+                                item.order, item.element,
+                                item.x0, item.y0, item.x1, item.y1),
+                        )
+                    ],
+                    "raw_rail_identity_valid": raw_rail_identity_valid,
+                    "proof_top_role_ambiguities": (
+                        proof_top_role_ambiguities),
+                    "erasure_slabs": erasure_slabs,
+                    "erasure_owner_roles": [
+                        {
+                            "element": role[0],
+                            "order": role[1],
+                            "kind": role[2],
+                            "tone": role[3],
+                        }
+                        for role in sorted(erasure_roles)
+                    ],
+                    "clipped_paint_elements": sorted({
+                        paint.element for paint in clipped_paints
+                    }),
+                    "final_target_tone_segments": final_target_segments,
+                    "unsupported_region_elements": sorted({
+                        region.element for region in unsupported_regions
+                    }),
+                }
+                missing_anchor_proofs.append(proof)
+                if (not erasure_valid
+                        or clipped_paints or unsupported_regions
+                        or final_target_segments):
+                    full_partial_coverage = False
+            if full_partial_coverage:
+                certificate = {
+                    "criterion": ACTIVE_PARTIAL_ANCHOR_CRITERION,
+                    "valid": True,
+                    "ledger_state": ledger_state,
+                    "subject_ownership_basis": (
+                        "active_unresolved lattice ledger"
+                    ),
+                    "independent_source_enclosure_proven": False,
+                    "divider_count_basis": (
+                        "final-composited Poppler vector topology"
+                    ),
+                    "missing_anchor_basis": (
+                        "raw target-tone rail exhaustively replaced by one "
+                        "supported unclipped non-target final owner"
+                    ),
+                    "anchor_corridor_clipped_paint_elements": sorted({
+                        paint.element
+                        for paint in anchor_corridor_clipped_paints
+                    }),
+                    "anchor_corridor_unsupported_region_elements": sorted({
+                        region.element
+                        for region in anchor_corridor_unsupported_regions
+                    }),
+                    "open_y0": round(seed_y0, 6),
+                    "open_y1": round(seed_y1, 6),
+                    "coverage_pt": round(measured_span, 6),
+                    "source_divider_x": list(chosen_topology),
+                    "observed_anchor_x": observed_anchor_x,
+                    "missing_anchor_x": missing_anchor_x,
+                    "missing_anchor_proofs": missing_anchor_proofs,
+                }
+                return {
+                    "status": "measured",
+                    "reason": (
+                        "ledger-owned active subject has full-band Poppler "
+                        "proof of erased lattice anchors"
+                    ),
+                    **{key: value for key, value in chosen.items()
+                       if key != "status"},
+                    **coverage_evidence,
+                    "chosen_topology": list(chosen_topology),
+                    "topology_superset_relations": superset_relations,
+                    "active_partial_anchor_certificate": certificate,
+                }
         return {
             "status": "unevaluable",
             "reason": "dominant source topology omits recognised anchors",
@@ -7263,7 +7705,8 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
             })
             for subject in subjects_by_page.get(page_index, ()):
                 source_cell = subject["source_cell"]
-                result = classify_band(source_cell, svg)
+                result = classify_band(
+                    source_cell, svg, ledger_state=subject["state"])
                 report_cell_id = (
                     subject["cell_id"] or subject["legacy_cell_id"])
                 emitted = slots.get(report_cell_id)
@@ -8100,6 +8543,51 @@ def self_test() -> int:
         ], [], "x"))
     assert result["compartments"] == 4 and not result["extra_divider_x"], result
 
+    # A declared anchor does not make the inner bar of a composite frame into
+    # a writable divider; anchor matching itself uses frame-distinct groups.
+    composite_anchor = {
+        **cell,
+        "comb": {
+            "cells": 2,
+            "divider_x": [1.5],
+            "pitch_pt": 3.0,
+            "divider_gray": 0.0,
+            "y0": 2.0,
+            "y1": 8.0,
+        },
+    }
+    composite_anchor_result = classify_band(
+        composite_anchor,
+        SvgPage(100, 100, [
+            *source_frame(),
+            Paint(1.0, 2, 2.0, 8, 0.0, 14,
+                  "stroke", "declared-inner-frame-bar"),
+        ], [], "x"),
+    )
+    assert composite_anchor_result["status"] == "unevaluable", (
+        composite_anchor_result)
+
+    broad_frame_result = classify_band(
+        {
+            **cell,
+            "comb": {
+                "cells": 2,
+                "divider_x": [2.5],
+                "pitch_pt": 3.0,
+                "divider_gray": 0.0,
+                "y0": 2.0,
+                "y1": 8.0,
+            },
+        },
+        SvgPage(100, 100, [
+            Paint(-1.0, 2, 1.0, 8, 0.0, 0,
+                  "stroke", "broad-outer-frame"),
+            Paint(2.0, 2, 3.0, 8, 0.0, 1,
+                  "stroke", "narrow-inner-frame"),
+        ], [], "x"),
+    )
+    assert broad_frame_result["status"] == "unevaluable", broad_frame_result
+
     shifted = classify_band(normal, SvgPage(
         100, 100, [paint(7), paint(17)], [], "x"))
     assert shifted["status"] == "unevaluable", shifted
@@ -8111,9 +8599,451 @@ def self_test() -> int:
                  "pitch_pt": 3.0, "divider_gray": 0.0,
                  "y0": 2.0, "y1": 8.0},
     }
-    result = classify_band(stale, SvgPage(
-        100, 100, [paint(0), paint(20), paint(40)], [], "x"))
+    erased_stale_page = SvgPage(100, 100, [
+        paint(20, order=0),
+        paint(23, order=1),
+        Paint(22.7, 2, 23.3, 8, 1.0, 2,
+              "fill", "supported-white-erasure"),
+    ], [], "x")
+    result = classify_band(stale, erased_stale_page)
     assert result["status"] == "unevaluable", result
+
+    # A missing lattice anchor is independently measurable only for an
+    # already-active unresolved subject whose one observed topology occupies
+    # the complete open band.  The source count comes from observed final ink;
+    # the retained path remains closed so an ordinary table rail cannot become
+    # a newly discovered comb.
+    active_partial = classify_band(
+        stale, erased_stale_page, ledger_state="active_unresolved")
+    assert active_partial["status"] == "measured", active_partial
+    assert active_partial["compartments"] == 2, active_partial
+    assert active_partial["anchors_complete"] is False, active_partial
+    assert active_partial["positions_match"] is False, active_partial
+    assert active_partial["missing_anchor_x"] == [23.0], active_partial
+    partial_certificate = active_partial.get(
+        "active_partial_anchor_certificate")
+    assert isinstance(partial_certificate, dict), active_partial
+    assert partial_certificate == {
+        "criterion": ACTIVE_PARTIAL_ANCHOR_CRITERION,
+        "valid": True,
+        "ledger_state": "active_unresolved",
+        "subject_ownership_basis": "active_unresolved lattice ledger",
+        "independent_source_enclosure_proven": False,
+        "divider_count_basis": "final-composited Poppler vector topology",
+        "missing_anchor_basis": (
+            "raw target-tone rail exhaustively replaced by one supported "
+            "unclipped non-target final owner"
+        ),
+        "anchor_corridor_clipped_paint_elements": [],
+        "anchor_corridor_unsupported_region_elements": [],
+        "open_y0": 2.0,
+        "open_y1": 8.0,
+        "coverage_pt": 6.0,
+        "source_divider_x": [20.0],
+        "observed_anchor_x": [20.0],
+        "missing_anchor_x": [23.0],
+        "missing_anchor_proofs": [{
+            "layout_x": 23.0,
+            "corridor_x0": 22.75,
+            "corridor_x1": 23.25,
+            "proof_x0": 22.75,
+            "proof_x1": 23.25,
+            "open_y0": 2.0,
+            "open_y1": 8.0,
+            "raw_anchor_rails": [{
+                "element": "x23-o1",
+                "order": 1,
+                "kind": "test",
+                "x0": 22.9,
+                "x1": 23.1,
+                "center_x": 23.0,
+                "delta_pt": 0.0,
+                "y0": 2,
+                "y1": 8,
+                "tone": 0.0,
+                "clipped": False,
+            }],
+            "raw_rail_identity_valid": True,
+            "proof_top_role_ambiguities": [],
+            "erasure_slabs": [{
+                "y0": 2.0,
+                "y1": 8.0,
+                "sample_y": 5.0,
+                "raw_rail_elements": ["x23-o1"],
+                "raw_intervals": [[22.9, 23.1]],
+                "final_owner_segments": [{
+                    "x0": 22.9,
+                    "x1": 23.1,
+                    "element": "supported-white-erasure",
+                    "order": 2,
+                    "kind": "fill",
+                    "tone": 1.0,
+                    "clipped": False,
+                }],
+                "ambiguous_top_roles": [],
+            }],
+            "erasure_owner_roles": [{
+                "element": "supported-white-erasure",
+                "order": 2,
+                "kind": "fill",
+                "tone": 1.0,
+            }],
+            "clipped_paint_elements": [],
+            "final_target_tone_segments": [],
+            "unsupported_region_elements": [],
+        }],
+    }, partial_certificate
+    for ineligible_state in (None, "active_resolved", "retained_unresolved"):
+        ineligible = classify_band(
+            stale, erased_stale_page, ledger_state=ineligible_state)
+        assert ineligible["status"] == "unevaluable", (
+            ineligible_state, ineligible)
+
+    # Ledger ownership is necessary but not sufficient: a lone active rail
+    # with no erased source rail at the declared missing anchor stays closed.
+    lone_active_rail = classify_band(
+        stale,
+        SvgPage(100, 100, [paint(20)], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert lone_active_rail["status"] == "unevaluable", lone_active_rail
+
+    # The partial path applies the same paper-versus-ink proximity test as the
+    # complete path.  An inner bar separated from a frame edge by less paper
+    # than their combined weights is not a writable compartment boundary.
+    composite_partial = {
+        **cell,
+        "comb": {
+            "cells": 3,
+            "divider_x": [1.5, 4.5],
+            "pitch_pt": 3.0,
+            "divider_gray": 0.0,
+            "y0": 2.0,
+            "y1": 8.0,
+        },
+    }
+    composite_partial_result = classify_band(
+        composite_partial,
+        SvgPage(100, 100, [
+            *source_frame(),
+            Paint(1.0, 2, 2.0, 8, 0.0, 14,
+                  "stroke", "inner-frame-bar"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert composite_partial_result["status"] == "unevaluable", (
+        composite_partial_result)
+
+    # Every certificate condition is fail closed: incomplete band coverage,
+    # competing topology, an inexact or incomplete raw rail, incomplete or
+    # mixed final erasure, clipping, unsupported/glyph/raster geometry, or
+    # surviving target-tone ink prevents the active-only exception.
+    partial_coverage = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, a=2, b=7, order=0),
+            paint(23, order=1),
+            Paint(22.7, 2, 23.3, 8, 1.0, 2,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert partial_coverage["status"] == "unevaluable", partial_coverage
+
+    competing_partial = {
+        **stale,
+        "comb": {**stale["comb"],
+                 "cells": 4, "divider_x": [20.0, 23.0, 26.0]},
+    }
+    competing_topologies = classify_band(
+        competing_partial,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            paint(26, a=4, b=8, order=1),
+            paint(23, order=2),
+            Paint(22.7, 2, 23.3, 8, 1.0, 3,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert competing_topologies["status"] == "unevaluable", (
+        competing_topologies)
+
+    clipped_observed_anchor = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            Paint(19.9, 2, 20.1, 8, 0.0, 2,
+                  "test", "observed-anchor-clip", True),
+            paint(23, order=3),
+            Paint(22.7, 2, 23.3, 8, 1.0, 4,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert clipped_observed_anchor["status"] == "unevaluable", (
+        clipped_observed_anchor)
+
+    incomplete_raw_rail = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            paint(23, a=2, b=7, order=1),
+            Paint(22.7, 2, 23.3, 8, 1.0, 2,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert incomplete_raw_rail["status"] == "unevaluable", (
+        incomplete_raw_rail)
+
+    shifted_raw_fragments = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            paint(22.9, a=2, b=5, order=1),
+            paint(23.1, a=5, b=8, order=2),
+            Paint(22.6, 2, 23.4, 8, 1.0, 3,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert shifted_raw_fragments["status"] == "unevaluable", (
+        shifted_raw_fragments)
+
+    inexact_raw_rail = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            paint(23.3, order=1),
+            Paint(22.7, 2, 23.5, 8, 1.0, 2,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert inexact_raw_rail["status"] == "unevaluable", inexact_raw_rail
+
+    overlapping_missing_anchors = {
+        **stale,
+        "comb": {
+            **stale["comb"],
+            "cells": 4,
+            "divider_x": [20.0, 23.0, 23.3],
+            "pitch_pt": 0.3,
+        },
+    }
+    shared_raw_rail = classify_band(
+        overlapping_missing_anchors,
+        SvgPage(100, 100, [
+            Paint(19.95, 2, 20.05, 8, 0.0, 0,
+                  "stroke", "observed-rail"),
+            Paint(23.1, 2, 23.2, 8, 0.0, 1,
+                  "stroke", "ambiguous-raw-rail"),
+            Paint(22.8, 2, 23.5, 8, 1.0, 2,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert shared_raw_rail["status"] == "unevaluable", shared_raw_rail
+
+    close_observed_and_missing = {
+        **stale,
+        "comb": {
+            **stale["comb"],
+            "cells": 3,
+            "divider_x": [20.0, 20.3],
+            "pitch_pt": 0.3,
+        },
+    }
+    raw_near_observed_anchor = classify_band(
+        close_observed_and_missing,
+        SvgPage(100, 100, [
+            Paint(19.95, 2, 20.05, 8, 0.0, 0,
+                  "stroke", "observed-rail"),
+            Paint(20.1, 2, 20.2, 8, 0.0, 1,
+                  "stroke", "ambiguous-raw-rail"),
+            Paint(20.075, 2, 20.225, 8, 1.0, 2,
+                  "fill", "supported-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert raw_near_observed_anchor["status"] == "unevaluable", (
+        raw_near_observed_anchor)
+
+    incomplete_erasure = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            paint(23, order=1),
+            Paint(22.7, 2, 23.3, 7, 1.0, 2,
+                  "fill", "incomplete-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert incomplete_erasure["status"] == "unevaluable", (
+        incomplete_erasure)
+
+    mixed_erasure = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            paint(23, order=1),
+            Paint(22.7, 2, 23.0, 8, 1.0, 2,
+                  "fill", "left-white-erasure"),
+            Paint(23.0, 2, 23.3, 8, 1.0, 3,
+                  "fill", "right-white-erasure"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert mixed_erasure["status"] == "unevaluable", mixed_erasure
+
+    broad_raw_rail = {
+        **stale,
+        "comb": {**stale["comb"], "pitch_pt": 4.0},
+    }
+    split_wide_erasure = classify_band(
+        broad_raw_rail,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            Paint(22.0, 2, 24.0, 8, 0.0, 1,
+                  "stroke", "wide-raw-anchor-rail"),
+            Paint(21.9, 2, 22.75, 8, 1.0, 2,
+                  "fill", "wide-erasure-left"),
+            Paint(22.75, 2, 23.25, 8, 1.0, 3,
+                  "fill", "wide-erasure-core"),
+            Paint(23.25, 2, 24.1, 8, 1.0, 4,
+                  "fill", "wide-erasure-right"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert split_wide_erasure["status"] == "unevaluable", (
+        split_wide_erasure)
+
+    ambiguous_erasure = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, order=0),
+            paint(23, order=1),
+            Paint(22.7, 2, 23.3, 8, 1.0, 2,
+                  "fill", "white-erasure-a"),
+            Paint(22.7, 2, 23.3, 8, 1.0, 2,
+                  "fill", "white-erasure-b"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert ambiguous_erasure["status"] == "unevaluable", (
+        ambiguous_erasure)
+
+    outside_raw_tie = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            *erased_stale_page.paints,
+            Paint(23.15, 2, 23.2, 8, 0.5, 3,
+                  "fill", "outside-raw-owner-a"),
+            Paint(23.15, 2, 23.2, 8, 0.75, 3,
+                  "fill", "outside-raw-owner-b"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert outside_raw_tie["status"] == "unevaluable", outside_raw_tie
+
+    clipped_missing_anchor = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20, order=0), paint(23, order=1),
+            Paint(22.7, 2, 23.3, 8, 1.0, 2,
+                  "fill", "missing-anchor-clip", True),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert clipped_missing_anchor["status"] == "unevaluable", (
+        clipped_missing_anchor)
+
+    for unsupported_reason, unsupported_element in (
+        ("glyph use may occlude geometry: #glyph-missing",
+         "missing-anchor-glyph"),
+        ("embedded raster image intersects source geometry",
+         "missing-anchor-raster"),
+        ("unsupported source overlay", "missing-anchor-unsupported"),
+    ):
+        unsupported_missing_anchor = classify_band(
+            stale,
+            SvgPage(
+                100, 100, list(erased_stale_page.paints),
+                [UnsupportedRegion(
+                    22.9, 2, 23.1, 8,
+                    unsupported_reason, unsupported_element,
+                    1.0, 3, False)],
+                "x",
+            ),
+            ledger_state="active_unresolved",
+        )
+        assert unsupported_missing_anchor["status"] == "unevaluable", (
+            unsupported_reason, unsupported_missing_anchor)
+
+    thin_unsupported = classify_band(
+        stale,
+        SvgPage(
+            100, 100, list(erased_stale_page.paints),
+            [UnsupportedRegion(
+                22.9, 5.0, 23.1, 5.1,
+                "thin unsupported source overlay",
+                "thin-missing-anchor-unsupported",
+                1.0, 3, False)],
+            "x",
+        ),
+        ledger_state="active_unresolved",
+    )
+    assert thin_unsupported["status"] == "unevaluable", thin_unsupported
+
+    thin_observed_unsupported = classify_band(
+        stale,
+        SvgPage(
+            100, 100, list(erased_stale_page.paints),
+            [UnsupportedRegion(
+                19.9, 5.0, 20.1, 5.1,
+                "thin raster over observed divider",
+                "thin-observed-anchor-raster",
+                1.0, 3, False)],
+            "x",
+        ),
+        ledger_state="active_unresolved",
+    )
+    assert thin_observed_unsupported["status"] == "unevaluable", (
+        thin_observed_unsupported)
+
+    broad_target_at_missing_anchor = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            *erased_stale_page.paints,
+            Paint(21, 2, 25, 8, 0.0, 3,
+                  "fill", "broad-missing-anchor-ink"),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert broad_target_at_missing_anchor["status"] == "unevaluable", (
+        broad_target_at_missing_anchor)
+
+    unexplained_missing_anchor = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            *erased_stale_page.paints,
+            paint(21.5, order=3),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert unexplained_missing_anchor["status"] == "unevaluable", (
+        unexplained_missing_anchor)
+
+    complete_active = classify_band(
+        stale,
+        SvgPage(100, 100, [
+            paint(20), paint(23),
+        ], [], "x"),
+        ledger_state="active_unresolved",
+    )
+    assert complete_active["status"] == "measured", complete_active
+    assert "active_partial_anchor_certificate" not in complete_active, (
+        complete_active)
 
     # A short midpoint that does not prove the lattice anchor is unevaluable.
     short_midpoint = {
