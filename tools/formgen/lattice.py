@@ -2734,8 +2734,17 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         final_candidate = final_candidate_owned
         if (resolved is not None and final_candidate is not None
                 and int(final_candidate["cells"]) > int(resolved["cells"])):
-            cell["comb"] = mark_comb_unresolved(
-                final_candidate, "anchor-ownership-disagreement")
+            if final_candidate_has_unique_owner:
+                cell["comb"] = final_candidate
+                if final_candidate_path_conflicts:
+                    cell["comb"] = mark_comb_unresolved(
+                        cell["comb"],
+                        "later-nonrect-path-endpoint-paint")
+                    cell["comb"]["resolution"]["path_conflicts"] = (
+                        final_candidate_path_conflicts)
+            else:
+                cell["comb"] = mark_comb_unresolved(
+                    resolved, "anchor-ownership-disagreement")
             resolved = cell["comb"]
         if resolved is None:
             if final_candidate is None:
@@ -3802,6 +3811,63 @@ def self_test(ir_path: pathlib.Path) -> int:
             owned_band_comb.get("resolution") or {}).get("reason_codes", [])
         and len(owned_band_subjects) == 1,
         "a uniquely owned endpoint band retained a raw-anchor ownership block",
+    )
+
+    richer_current_cells, richer_current_subjects = inherited_endpoint_case(
+        "owned-richer-current", (-5.0, 10.0), (5.0, 10.0), True)
+    richer_current_comb = (
+        richer_current_cells[0].get("comb")
+        if len(richer_current_cells) == 1 else None
+    )
+    check(
+        richer_current_comb is not None
+        and richer_current_comb.get("cells") == 4
+        and "anchor-ownership-disagreement" not in (
+            richer_current_comb.get("resolution") or {}).get(
+                "reason_codes", [])
+        and len(richer_current_subjects) == 1,
+        "a uniquely owned richer final band retained an anchor-owner block",
+    )
+
+    # Prove the clean acceptance path too: raw full extents cross the cell and
+    # are rejected as current anchors, while later white paint leaves one
+    # complete, uniquely owned four-slot band inside the cell.
+    clipped_final_lines = [
+        {
+            **synthetic_vertical(x, -5.0, 10.0, 0.2, 90 + index),
+            "id": f"clipped-final-{index}",
+        }
+        for index, x in enumerate((7.5, 15.0, 22.5))
+    ]
+    clipped_final_knockouts = [
+        {
+            **synthetic_vertical(
+                x, -5.0, 5.0, 0.4, 93 + index, role="knockout"),
+            "id": f"clipped-final-knockout-{index}",
+        }
+        for index, x in enumerate((7.5, 15.0, 22.5))
+    ]
+    clean_owner_cells, _clean_text, clean_owner_subjects, _clean_inferences = (
+        build_cells(
+            1, ledger_x, ledger_y, DisjointSet(1),
+            [[True], [True]], [[True], [True]],
+            [ledger_left, ledger_right], [ledger_top, ledger_bottom],
+            clipped_final_lines, clipped_final_lines,
+            FinalPaint([
+                ledger_left, ledger_right, ledger_top, ledger_bottom,
+                *clipped_final_lines, *clipped_final_knockouts,
+            ]),
+            [],
+            legacy_dividers=clipped_final_lines,
+            legacy_extra_ink=clipped_final_lines,
+        )
+    )
+    check(
+        len(clean_owner_cells) == 1
+        and (clean_owner_cells[0].get("comb") or {}).get("cells") == 4
+        and len(clean_owner_subjects) == 1
+        and clean_owner_subjects[0].get("state") == "active_resolved",
+        "a clean uniquely owned final band did not become active-resolved",
     )
 
     # A thick group divider can paint a short horizontal endpoint cap without
