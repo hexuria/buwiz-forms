@@ -773,6 +773,42 @@ class FinalPaint:
             for start, end in self.visible_spans(ink, axis)
         )
 
+    def structural_rect_across(self, x0: float, y0: float,
+                               x1: float, y1: float) -> bool:
+        """Whether final structural ink covers every open slab of a rectangle.
+
+        ``visible_spans(..., "h")`` proves one common y witness across x. That
+        is sufficient for a rule run, but not for proving that a horizontal
+        rail leaves no paper anywhere through its thickness. Partition the
+        thickness at every relevant paint/path boundary and require the
+        existing composited witness proof independently in every y slab. A
+        nonstructural path remains conservatively represented by its complete
+        bbox inside ``visible_spans``, so uncertainty rejects coverage.
+        """
+        if x1 <= x0 or y1 <= y0:
+            return False
+        endpoints = {y0, y1}
+        for paint in self.paints:
+            px0, py0, px1, py1 = paint_bounds(paint)
+            if px1 <= x0 or px0 >= x1 or py1 <= y0 or py0 >= y1:
+                continue
+            endpoints.update((max(y0, py0), min(y1, py1)))
+            for points, _closed in paint.get("_flattened") or ():
+                endpoints.update(
+                    point[1] for point in points
+                    if y0 < point[1] < y1)
+
+        ordered = sorted(endpoints)
+        slabs = [
+            (a, b) for a, b in zip(ordered, ordered[1:]) if b > a
+        ]
+        return bool(slabs) and all(
+            self.structural_across_axis({
+                "x0": x0, "y0": a, "x1": x1, "y1": b,
+            }, x0, x1, "h")
+            for a, b in slabs
+        )
+
     def horizontal_rail_across(self, x0: float, x1: float,
                                y0: float, y1: float) -> bool:
         """Whether a slab is wholly inked by one final-visible horizontal rail.
@@ -792,7 +828,7 @@ class FinalPaint:
             if not (px0 <= x0 and px1 >= x1
                     and py0 <= y0 and py1 >= y1):
                 continue
-            if self.structural_across_axis(paint, x0, x1, "h"):
+            if self.structural_rect_across(x0, y0, x1, y1):
                 return True
         return False
 
@@ -1228,14 +1264,14 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
         collections.defaultdict(float))
     for a, b, topology, _ in evidence_slab_records:
         evidence_coverage[topology] += b - a
-    topology_runs: dict[tuple[float, ...], list[Interval]] = {}
-    topology_evidence: list[dict[str, Any]] = []
-    for topology in sorted(evidence_coverage):
-        records = sorted(
-            (a, b) for a, b, candidate, _inks in evidence_slab_records
-            if candidate == topology)
+
+    def continuous_runs(
+            records: Sequence[tuple[float, float]],
+            topology: tuple[float, ...],
+            ) -> list[Interval]:
+        """Join adjacent slabs only while every divider has one ink witness."""
         runs: list[Interval] = []
-        for a, b in records:
+        for a, b in sorted(records):
             if not runs:
                 runs.append((a, b))
                 continue
@@ -1254,6 +1290,15 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
                 runs[-1] = (run_start, max(run_end, b))
             else:
                 runs.append((a, b))
+        return runs
+
+    topology_runs: dict[tuple[float, ...], list[Interval]] = {}
+    topology_evidence: list[dict[str, Any]] = []
+    for topology in sorted(evidence_coverage):
+        records = sorted(
+            (a, b) for a, b, candidate, _inks in evidence_slab_records
+            if candidate == topology)
+        runs = continuous_runs(records, topology)
         topology_runs[topology] = runs
         hull_start, hull_end = records[0][0], records[-1][1]
         corridors_continuous = all(any(
@@ -1285,7 +1330,13 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
         else min(coverage, key=lambda topology: (
             -coverage[topology], -len(topology), topology))
     )
-    runs = topology_runs[chosen]
+    # Selection deliberately excludes horizontal-rail-only slabs. Derive the
+    # representative run from that same selection set; evidence runs may have
+    # a longer disjoint rail segment with no selectable representative.
+    runs = continuous_runs([
+        (a, b) for a, b, topology, _inks in slab_records
+        if topology == chosen
+    ], chosen)
     chosen_y0, chosen_y1 = min(
         runs, key=lambda span: (-(span[1] - span[0]), span[0], span[1]))
 
@@ -3498,6 +3549,59 @@ def self_test(ir_path: pathlib.Path) -> int:
         check([q(centre(ink)) for ink in heavy_rail_endpoint[0]]
               == [10.0, 15.0, 20.0],
               "a heavy group separator was mistaken for rail-only ink")
+
+    # Evidence can contain a longer disjoint rail-only run of the topology
+    # chosen from paper. The reported band and its representative inks must
+    # both come from the selectable paper run, never from the evidence-only
+    # rail run.
+    mixed_rail = synthetic_horizontal(10, 0, 30, 4, 30)
+    mixed_seed = synthetic_vertical(10, 0, 12, 0.2, 31)
+    mixed_paper_extra = synthetic_vertical(20, 0, 2, 0.2, 32)
+    mixed_rail_extra = synthetic_vertical(20, 8, 12, 0.2, 33)
+    mixed_paint = FinalPaint([
+        mixed_rail, mixed_seed, mixed_paper_extra, mixed_rail_extra,
+    ])
+    check(mixed_paint.horizontal_rail_across(0, 30, 8, 12),
+          "a fully final-visible thick rail was not recognised")
+    mixed_endpoint = endpoint_band(
+        [mixed_seed],
+        [mixed_seed, mixed_paper_extra, mixed_rail_extra],
+        0, 30, [(-0.5, 0.5, 1.0), (29.5, 30.5, 1.0)],
+        mixed_paint)
+    check(mixed_endpoint is not None,
+          "mixed evidence/selection runs produced no topology")
+    if mixed_endpoint is not None:
+        check([q(centre(ink)) for ink in mixed_endpoint[0]] == [10.0, 20.0]
+              and q(mixed_endpoint[1]) == 0.0
+              and q(mixed_endpoint[2]) == 2.0,
+              "rail evidence selected a run with no paper representative")
+
+    # One common y witness across x does not prove the whole rail thickness is
+    # black. A later knockout over half the thickness leaves paper, even when
+    # later verticals repaint narrow corridors inside that half.
+    partial_rail = synthetic_horizontal(10, 0, 30, 4, 40)
+    partial_knockout = synthetic_horizontal(
+        9, 0, 30, 2, 41, role="knockout")
+    partial_seed = synthetic_vertical(10, 0, 12, 0.2, 42)
+    partial_extra = synthetic_vertical(20, 8, 12, 0.2, 43)
+    partial_paint = FinalPaint([
+        partial_rail, partial_knockout, partial_seed, partial_extra,
+    ])
+    check(not partial_paint.horizontal_rail_across(0, 30, 8, 12),
+          "a partially erased rail was mistaken for fully inked paper")
+    partial_endpoint = endpoint_band(
+        [partial_seed], [partial_seed, partial_extra],
+        0, 30, [(-0.5, 0.5, 1.0), (29.5, 30.5, 1.0)],
+        partial_paint)
+    check(partial_endpoint is not None,
+          "paper exposed by a partial rail knockout lost its topology")
+    if partial_endpoint is not None:
+        check([q(centre(ink)) for ink in partial_endpoint[0]] == [10.0, 20.0]
+              and q(partial_endpoint[1]) == 8.0
+              and q(partial_endpoint[2]) == 12.0,
+              "partial-thickness paper did not retain genuine dividers: "
+              f"{[q(centre(ink)) for ink in partial_endpoint[0]]} "
+              f"at {partial_endpoint[1]}..{partial_endpoint[2]}")
 
     rail_only_tick = synthetic_vertical(10, 9.5, 10, 0.2, 28)
     rail_only_paint = FinalPaint([rail_only_tick, endpoint_rail])
