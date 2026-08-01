@@ -1986,8 +1986,10 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
     to final-paint topology; it is the continuity denominator that prevents a
     row-run partition or a new compositor from silently deleting a published
     subject. A final-visible contract replaces it when that contract has at
-    least as many measured boundaries. A reduction remains active-unresolved,
-    or retained-unresolved when its nonrectangular owner no longer exists.
+    least as many measured boundaries. A reduction remains active-unresolved
+    unless exact source-order evidence proves that every omitted legacy
+    divider was fully erased; a nonrectangular owner remains retained and
+    unresolved.
     """
     inside = [d for d in members
               if x0 + CLUSTER_TOL_PT < centre(d) < x1 - CLUSTER_TOL_PT]
@@ -2037,6 +2039,10 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
             "divider_paint_ranges": [
                 list(paint_ordinal_range(d)) for d in ordered
             ],
+            # Private transition evidence. ``build_cells`` removes this before
+            # publishing the legacy contract and retains the exact raw paints
+            # only long enough to prove or reject a lower final-visible count.
+            "_divider_witnesses": ordered,
             "y0": q(band_y0), "y1": q(band_y1),
             "height_pt": q(band_y1 - band_y0),
             "resolution": {
@@ -2338,6 +2344,153 @@ def boundary_topology_subset(left: Sequence[float],
             return False
         candidate = next(available, None)
     return True
+
+
+def erased_legacy_divider_reduction_certificate(
+        legacy_comb: dict[str, Any],
+        final_comb: dict[str, Any],
+        legacy_witnesses: Sequence[dict[str, Any]],
+        final_paint: FinalPaint,
+        ) -> dict[str, Any] | None:
+    """Prove that a smaller final comb omitted only fully erased raw ink.
+
+    The legacy comb is a denominator, not final-paint truth.  It deliberately
+    remembers raw source marks so an algorithm change cannot silently delete a
+    reviewed subject.  That continuity becomes stale when the PDF paints a
+    black tick, covers it with a later white rectangle, then paints the actual
+    divider elsewhere.  ``FinalPaint`` already rejects the stale tick; this
+    certificate is the narrow bridge that lets the current topology replace
+    the larger historical count.
+
+    Every surviving final divider must be a one-to-one subset of the legacy
+    positions at the established clustering tolerance.  Every omitted position
+    must have its exact full-band raw witness, that witness must be covered by a
+    known-later nonstructural layer, and no final structural corridor may have
+    been repainted at the same position.  Anything partial, path-shaped,
+    source-order-ranged, multiply matched, or newly positioned fails closed.
+    """
+    raw_legacy_x = legacy_comb.get("divider_x") or ()
+    raw_final_x = final_comb.get("divider_x") or ()
+    if (not isinstance(raw_legacy_x, (list, tuple))
+            or not isinstance(raw_final_x, (list, tuple))
+            or not all(type(value) in (int, float)
+                       and math.isfinite(float(value))
+                       for value in [*raw_legacy_x, *raw_final_x])):
+        return None
+    legacy_x = sorted(float(value) for value in raw_legacy_x)
+    final_x = sorted(float(value) for value in raw_final_x)
+    legacy_cells = legacy_comb.get("cells")
+    final_cells = final_comb.get("cells")
+    if (not legacy_x
+            or len(final_x) >= len(legacy_x)
+            or type(legacy_cells) is not int
+            or type(final_cells) is not int
+            or legacy_cells != len(legacy_x) + 1
+            or final_cells != len(final_x) + 1
+            or len(legacy_witnesses) != len(legacy_x)):
+        return None
+    if (any(right - left <= CLUSTER_TOL_PT + 1e-9
+            for left, right in zip(legacy_x, legacy_x[1:]))
+            or any(right - left <= CLUSTER_TOL_PT + 1e-9
+                   for left, right in zip(final_x, final_x[1:]))):
+        return None
+
+    if not all(
+            type(comb.get(name)) in (int, float)
+            and math.isfinite(float(comb[name]))
+            for comb in (legacy_comb, final_comb)
+            for name in ("y0", "y1")):
+        return None
+    if (abs(float(legacy_comb["y0"]) - float(final_comb["y0"]))
+            > JOIN_EPSILON_PT + 1e-9
+            or abs(float(legacy_comb["y1"]) - float(final_comb["y1"]))
+            > JOIN_EPSILON_PT + 1e-9):
+        return None
+
+    if not all(
+            isinstance(witness, dict)
+            and all(type(witness.get(name)) in (int, float)
+                    and math.isfinite(float(witness[name]))
+                    for name in ("x0", "x1", "y0", "y1", "thickness_pt"))
+            for witness in legacy_witnesses):
+        return None
+    ordered_witnesses = sorted(
+        legacy_witnesses,
+        key=lambda witness: (
+            q(centre(witness)), -paint_ordinal(witness),
+            -float(witness["thickness_pt"])),
+    )
+    for position, witness in zip(legacy_x, ordered_witnesses):
+        if abs(q(centre(witness)) - q(position)) > 1e-9:
+            return None
+
+    unmatched = set(range(len(legacy_x)))
+    for position in final_x:
+        matches = [
+            index for index in sorted(unmatched)
+            if abs(legacy_x[index] - position)
+            <= CLUSTER_TOL_PT + 1e-9
+        ]
+        if len(matches) != 1:
+            return None
+        unmatched.remove(matches[0])
+    if not unmatched:
+        return None
+
+    band_y0 = float(legacy_comb.get("y0", math.nan))
+    band_y1 = float(legacy_comb.get("y1", math.nan))
+    if not (math.isfinite(band_y0) and math.isfinite(band_y1)
+            and band_y1 > band_y0):
+        return None
+
+    erased: list[dict[str, Any]] = []
+    for index in sorted(unmatched):
+        witness = ordered_witnesses[index]
+        witness_first, _witness_last = paint_ordinal_range(witness)
+        later_structural_paths = [
+            path for path in final_paint.path_paints
+            if path.get("role") == "structural"
+            and paint_ordinal_range(path)[1] > witness_first
+            and path_paint_intersects_rect(
+                path,
+                float(witness["x0"]), band_y0,
+                float(witness["x1"]), band_y1)
+        ]
+        if (float(witness["y0"]) > band_y0 + 1e-9
+                or float(witness["y1"]) < band_y1 - 1e-9
+                or later_structural_paths
+                or not final_paint.definitely_erased(witness)
+                or final_paint.structural_across_axis(
+                    witness, band_y0, band_y1, "v")):
+            return None
+        witness_id = witness.get("id")
+        if not isinstance(witness_id, str) or not witness_id:
+            return None
+        erased.append({
+            "divider_x": q(legacy_x[index]),
+            "rule_id": witness_id,
+            "paint_range": list(paint_ordinal_range(witness)),
+            "band_y": [q(band_y0), q(band_y1)],
+        })
+
+    return {
+        "criterion": "final-visible-erased-legacy-divider-reduction-v1",
+        "legacy_cells": len(legacy_x) + 1,
+        "final_cells": len(final_x) + 1,
+        "retained_divider_x": [q(value) for value in final_x],
+        "erased_dividers": erased,
+    }
+
+
+def certify_erased_legacy_reduction(
+        comb: dict[str, Any], certificate: dict[str, Any],
+        ) -> dict[str, Any]:
+    """Attach an auditable erased-divider transition to a current comb."""
+    certified = dict(comb)
+    resolution = dict(certified.get("resolution") or {})
+    resolution["legacy_count_reduction"] = certificate
+    certified["resolution"] = resolution
+    return certified
 
 
 def comb_owner_failure_reason(cell: dict[str, Any],
@@ -2927,6 +3080,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             continue
         selected = max(
             bands, key=lambda band: (band["divider_count"], -band["y0"]))
+        legacy_divider_witnesses = list(
+            selected.pop("_divider_witnesses", ()))
         supported_members = [
             member for member in members
             if str(member.get("id")) in supported_ids
@@ -2961,6 +3116,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             "legacy_rectangular": bool(cell["rectangular"]),
             "component_root": cell["_component_root"],
             "comb": selected,
+            "legacy_divider_witnesses": legacy_divider_witnesses,
             "final_candidate": final_candidate,
             "has_final_support": has_distinct_final_support,
         })
@@ -3328,6 +3484,17 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             continue
 
         final_candidate = final_candidate_owned
+        erased_reduction_certificate = None
+        if (legacy_owned
+                and final_candidate is not None
+                and final_candidate_has_unique_owner
+                and not final_candidate_path_conflicts
+                and (final_candidate.get("resolution") or {}).get("status")
+                == "resolved"):
+            erased_reduction_certificate = (
+                erased_legacy_divider_reduction_certificate(
+                    legacy_comb, final_candidate,
+                    subject["legacy_divider_witnesses"], final_paint))
         if (resolved is not None and final_candidate is not None
                 and int(final_candidate["cells"]) > int(resolved["cells"])):
             if final_candidate_has_unique_owner:
@@ -3348,12 +3515,17 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                     legacy_comb, "no-final-visible-band",
                     method="legacy-continuity")
             elif int(final_candidate["cells"]) < int(legacy_comb["cells"]):
-                cell["comb"] = mark_comb_unresolved(
-                    legacy_comb, "final-visible-count-regression",
-                    "no-final-visible-owned-band",
-                    method="legacy-continuity")
-                cell["comb"]["resolution"]["final_visible_candidate_cells"] = int(
-                    final_candidate["cells"])
+                if erased_reduction_certificate is not None:
+                    cell["comb"] = certify_erased_legacy_reduction(
+                        final_candidate, erased_reduction_certificate)
+                else:
+                    cell["comb"] = mark_comb_unresolved(
+                        legacy_comb, "final-visible-count-regression",
+                        "no-final-visible-owned-band",
+                        method="legacy-continuity")
+                    cell["comb"]["resolution"][
+                        "final_visible_candidate_cells"] = int(
+                            final_candidate["cells"])
             else:
                 if final_candidate_has_unique_owner:
                     cell["comb"] = final_candidate
@@ -3367,7 +3539,16 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                     cell["comb"] = mark_comb_unresolved(
                         final_candidate, "no-final-visible-owned-band")
         elif int(resolved["cells"]) < int(legacy_comb["cells"]):
-            if legacy_owned:
+            reduction_matches_current = (
+                erased_reduction_certificate is not None
+                and final_candidate is not None
+                and int(resolved["cells"]) == int(final_candidate["cells"])
+                and same_boundary_topology(
+                    resolved["divider_x"], final_candidate["divider_x"]))
+            if reduction_matches_current:
+                cell["comb"] = certify_erased_legacy_reduction(
+                    resolved, erased_reduction_certificate)
+            elif legacy_owned:
                 preserved = mark_comb_unresolved(
                     legacy_comb, "final-visible-count-regression",
                     method="legacy-continuity")
@@ -4257,6 +4438,164 @@ def self_test(ir_path: pathlib.Path) -> int:
         for band in ranged_bands),
         "interleaved paint range emitted a resolved two-cell comb")
 
+    # A smaller final-visible comb may replace its raw continuity count only
+    # when every omitted source mark has one exact full-band witness and a
+    # known-later complete erasure.  This is the paint/erase/repaint sequence
+    # used by the official date boxes; width, pitch and form identity are not
+    # evidence.
+    reduction_retained = {
+        **synthetic_vertical(10, 5, 10, 0.2, 3),
+        "id": "reduction-retained",
+    }
+    reduction_stale = {
+        **synthetic_vertical(20, 5, 10, 0.2, 1),
+        "id": "reduction-stale",
+    }
+    reduction_knockout = {
+        **reduction_stale,
+        "id": "reduction-knockout",
+        "role": "knockout", "gray": 1.0,
+        "paint_seq": 2, "paint_seq_max": 2,
+    }
+    reduction_legacy = {
+        "cells": 3, "divider_x": [10.0, 20.0],
+        "y0": 5.0, "y1": 10.0,
+    }
+    reduction_final = {
+        "cells": 2, "divider_x": [10.0],
+        "y0": 5.0, "y1": 10.0,
+        "resolution": {"status": "resolved"},
+    }
+    reduction_certificate = erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, reduction_knockout, reduction_retained,
+        ]))
+    check(
+        reduction_certificate == {
+            "criterion": "final-visible-erased-legacy-divider-reduction-v1",
+            "legacy_cells": 3,
+            "final_cells": 2,
+            "retained_divider_x": [10.0],
+            "erased_dividers": [{
+                "divider_x": 20.0,
+                "rule_id": "reduction-stale",
+                "paint_range": [1, 1],
+                "band_y": [5.0, 10.0],
+            }],
+        },
+        f"complete source-order erasure was not certified: "
+        f"{reduction_certificate}",
+    )
+
+    earlier_reduction_knockout = {
+        **reduction_knockout,
+        "paint_seq": 0, "paint_seq_max": 0,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            earlier_reduction_knockout, reduction_stale,
+            reduction_retained,
+        ])) is None,
+        "an earlier knockout certified a later stale divider as erased")
+
+    partial_reduction_knockout = {
+        **reduction_knockout,
+        "y1": 9.0,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, partial_reduction_knockout,
+            reduction_retained,
+        ])) is None,
+        "partial knockout coverage certified a count reduction")
+
+    partial_width_knockout = {
+        **reduction_knockout,
+        "x0": 19.95,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, partial_width_knockout,
+            reduction_retained,
+        ])) is None,
+        "partial-width knockout coverage certified a count reduction")
+
+    ranged_reduction_stale = {
+        **reduction_stale,
+        "paint_seq_max": 3,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, ranged_reduction_stale],
+        FinalPaint([
+            ranged_reduction_stale, reduction_knockout,
+            reduction_retained,
+        ])) is None,
+        "a source-order range straddling a knockout certified erasure")
+
+    reduction_repaint = {
+        **reduction_stale,
+        "id": "reduction-repaint",
+        "paint_seq": 4, "paint_seq_max": 4,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, reduction_knockout,
+            reduction_retained, reduction_repaint,
+        ])) is None,
+        "a later structural repaint at an omitted x certified erasure")
+
+    tolerance_final = {
+        **reduction_final,
+        "divider_x": [10.30],
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, tolerance_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, reduction_knockout, reduction_retained,
+        ])) is not None,
+        "the established 0.30pt boundary tolerance was narrowed")
+    outside_tolerance_final = {
+        **reduction_final,
+        "divider_x": [10.31],
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, outside_tolerance_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, reduction_knockout, reduction_retained,
+        ])) is None,
+        "a 0.31pt boundary move was accepted by the 0.30pt tolerance")
+
+    close_stale = {
+        **synthetic_vertical(10.20, 5, 10, 0.2, 1),
+        "id": "reduction-close-stale",
+    }
+    close_legacy = {
+        **reduction_legacy,
+        "cells": 4,
+        "divider_x": [10.0, 10.20, 20.0],
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        close_legacy, reduction_final,
+        [reduction_retained, close_stale, reduction_stale],
+        FinalPaint([
+            close_stale, reduction_stale, reduction_knockout,
+            reduction_retained,
+        ])) is None,
+        "two legacy anchors inside one clustering tolerance were certified")
+
     # Support and frame geometry must also be final-visible. A vertical tick
     # cannot become a comb merely because its erased raw baseline still exists
     # in the IR, and that erased baseline cannot enter the y lattice.
@@ -4875,6 +5214,84 @@ def self_test(ir_path: pathlib.Path) -> int:
         f"{ledger_subjects}",
     )
 
+    # Exercise the lower-count transition through the complete subject ledger,
+    # not only through its pure certificate.  A fully erased legacy tick is
+    # removed while the subject identity stays active; an ordinal range that
+    # straddles the knockout keeps the larger legacy count blocking.
+    def erased_reduction_ledger_case(
+            label: str, stale_range_end: int,
+            extra_paints: Sequence[dict[str, Any]] = (),
+            ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        retained = {
+            **synthetic_vertical(15.0, 5.0, 10.0, 0.2, 46),
+            "id": f"{label}-retained",
+        }
+        stale_member = {
+            **synthetic_vertical(20.0, 5.0, 10.0, 0.2, 44),
+            "id": f"{label}-stale",
+            "paint_seq_max": stale_range_end,
+        }
+        stale_knockout = {
+            **stale_member,
+            "id": f"{label}-knockout",
+            "role": "knockout", "gray": 1.0,
+            "paint_seq": 45, "paint_seq_max": 45,
+        }
+        case_cells, _case_text, case_subjects, _case_inferences = (
+            build_cells(
+                1, ledger_x, ledger_y, DisjointSet(1),
+                [[True], [True]], [[True], [True]],
+                [ledger_left, ledger_right], [ledger_top, ledger_bottom],
+                [retained], [retained],
+                FinalPaint([
+                    ledger_left, ledger_right, ledger_top, ledger_bottom,
+                    stale_member, stale_knockout, retained, *extra_paints,
+                ]),
+                [],
+                legacy_dividers=[retained, stale_member],
+                legacy_extra_ink=[retained, stale_member],
+                final_supported_divider_ids={str(retained["id"])},
+            )
+        )
+        return case_cells, case_subjects
+
+    reduced_cells, reduced_subjects = erased_reduction_ledger_case(
+        "complete-erasure", 44)
+    reduced_comb = (
+        reduced_cells[0].get("comb") if len(reduced_cells) == 1 else None)
+    reduced_certificate = (
+        (reduced_comb.get("resolution") or {}).get(
+            "legacy_count_reduction")
+        if reduced_comb is not None else None)
+    check(
+        reduced_comb is not None
+        and reduced_comb.get("cells") == 2
+        and reduced_comb.get("divider_x") == [15.0]
+        and (reduced_comb.get("resolution") or {}).get("status") == "resolved"
+        and reduced_certificate is not None
+        and len(reduced_subjects) == 1
+        and reduced_subjects[0].get("state") == "active_resolved"
+        and reduced_subjects[0].get("cells") == 2
+        and reduced_subjects[0].get("blocks_gate") is False,
+        f"fully erased legacy divider did not reduce through the ledger: "
+        f"{reduced_cells}, {reduced_subjects}",
+    )
+
+    ranged_cells, ranged_subjects = erased_reduction_ledger_case(
+        "ranged-erasure", 47)
+    ranged_comb = (
+        ranged_cells[0].get("comb") if len(ranged_cells) == 1 else None)
+    check(
+        ranged_comb is not None
+        and ranged_comb.get("cells") == 3
+        and "final-visible-count-regression"
+        in (ranged_comb.get("resolution") or {}).get("reason_codes", [])
+        and len(ranged_subjects) == 1
+        and ranged_subjects[0].get("state") == "active_unresolved"
+        and ranged_subjects[0].get("blocks_gate") is True,
+        "source-order-ranged erasure did not preserve the blocking legacy count",
+    )
+
     # Legacy reconciliation must not attach the richer endpoint topology from
     # an adjacent row merely because its long seed dividers cross this cell.
     # Exercise both directions, with and without a valid current-owned band.
@@ -5367,6 +5784,53 @@ def self_test(ir_path: pathlib.Path) -> int:
     check(not path_endpoint_conflicts(
         FinalPaint([compartment_path]), glyph_band),
         "outlined content inside a slot was mistaken for a divider continuation")
+    reduction_conflict_path = {
+        **glyph_path,
+        "id": "reduction-conflict-path",
+        "paint_seq": 47, "paint_seq_max": 47,
+    }
+    conflict_cells, conflict_subjects = erased_reduction_ledger_case(
+        "path-conflict-erasure", 44, [reduction_conflict_path])
+    conflict_comb = (
+        conflict_cells[0].get("comb") if len(conflict_cells) == 1 else None)
+    check(
+        conflict_comb is not None
+        and conflict_comb.get("cells") == 3
+        and "final-visible-count-regression"
+        in (conflict_comb.get("resolution") or {}).get("reason_codes", [])
+        and len(conflict_subjects) == 1
+        and conflict_subjects[0].get("state") == "active_unresolved",
+        "a later nonrect endpoint conflict certified a count reduction",
+    )
+    omitted_repaint_path = {
+        "id": "omitted-path-repaint",
+        "x0": 19.9, "x1": 20.1, "y0": 5.0, "y1": 10.0,
+        "fill": [0.0, 0.0, 0.0], "fill_gray": 0.0,
+        "stroke": None, "stroke_gray": None, "stroke_width_pt": 0.0,
+        "even_odd": False, "role": "structural",
+        "paint_seq": 47, "paint_seq_max": 47,
+        "subpaths": [{
+            "start": [19.9, 5.0], "closed": True,
+            "ops": [{"op": "re", "points": [19.9, 5.0, 20.1, 10.0]}],
+        }],
+    }
+    omitted_conflict_cells, omitted_conflict_subjects = (
+        erased_reduction_ledger_case(
+            "omitted-path-conflict-erasure", 44,
+            [omitted_repaint_path]))
+    omitted_conflict_comb = (
+        omitted_conflict_cells[0].get("comb")
+        if len(omitted_conflict_cells) == 1 else None)
+    check(
+        omitted_conflict_comb is not None
+        and omitted_conflict_comb.get("cells") == 3
+        and "final-visible-count-regression"
+        in (omitted_conflict_comb.get("resolution") or {}).get(
+            "reason_codes", [])
+        and len(omitted_conflict_subjects) == 1
+        and omitted_conflict_subjects[0].get("state") == "active_unresolved",
+        "a later structural path at an omitted x certified a count reduction",
+    )
     path_knockout = {
         **glyph_path,
         "id": "path-knockout",
@@ -5420,6 +5884,32 @@ def self_test(ir_path: pathlib.Path) -> int:
         hole_target, rectangular_knockout,
     ]).definitely_erased(hole_target),
         "one exact covering rectangle did not prove path erasure")
+    hole_witness = {**hole_target, "id": "hole-target"}
+    hole_retained = {
+        **synthetic_vertical(8.0, 0.0, 10.0, 0.2, 3),
+        "id": "hole-retained",
+    }
+    hole_legacy = {
+        "cells": 3, "divider_x": [5.0, 8.0],
+        "y0": 0.0, "y1": 10.0,
+    }
+    hole_final = {
+        "cells": 2, "divider_x": [8.0],
+        "y0": 0.0, "y1": 10.0,
+        "resolution": {"status": "resolved"},
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        hole_legacy, hole_final, [hole_witness, hole_retained],
+        FinalPaint([
+            hole_witness, compound_knockout, hole_retained,
+        ])) is None,
+        "a compound path bbox with a hole certified a count reduction")
+    check(erased_legacy_divider_reduction_certificate(
+        hole_legacy, hole_final, [hole_witness, hole_retained],
+        FinalPaint([
+            hole_witness, rectangular_knockout, hole_retained,
+        ])) is not None,
+        "an exact rectangular path erasure failed the count certificate")
     swept_target = {
         **synthetic_vertical(0.5, 0, 10, 1.0, 1),
         "x0": 0.0, "x1": 1.0,
