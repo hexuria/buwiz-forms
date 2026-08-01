@@ -1871,11 +1871,12 @@ def source_owned_comb_frame(
         for i in range(i0, i1)
         if h_at[j][i]
     ]
-    # A crossed edge is what makes a preservation certificate necessary. Some
-    # heavy group dividers contribute only horizontal endpoint caps; requiring
-    # a vertical crossing would partition those otherwise identical fields.
-    if not internal_verticals and not internal_horizontals:
-        return None
+    # A crossed edge makes a certificate necessary for component preservation.
+    # An ordinary four-sided cell can still need the same source-owned frame
+    # proof to resolve one uniquely maximal nested endpoint topology.  Run the
+    # proof for both cases, but avoid adding certificates to ordinary cells
+    # whose topology is already resolved or remains incomparable.
+    has_internal_edges = bool(internal_verticals or internal_horizontals)
     if not (
         all(v_at[i0][j] and v_at[i1][j] for j in range(j0, j1))
         and all(h_at[j0][i] and h_at[j1][i] for i in range(i0, i1))
@@ -1926,6 +1927,8 @@ def source_owned_comb_frame(
                 tuple(float(value) for value in band["divider_x"]),
                 maximal[0])
         )
+    if not has_internal_edges and not frame_resolves_competition:
+        return None
     if ((resolution.get("status") != "resolved"
          and not frame_resolves_competition)
             or band["y0"] < y0 - CLUSTER_TOL_PT
@@ -3424,6 +3427,89 @@ def self_test(ir_path: pathlib.Path) -> int:
     check(not same_boundary_topology(
         [10.0, 20.0], [10.31, 19.7]),
         "outside-tolerance boundary drift was treated as equal")
+
+    # A normal four-sided comb has no crossed internal lattice edge, but its
+    # final-visible frame can still prove which of two nested endpoint
+    # topologies owns the writing band.  That certificate is topology proof;
+    # it must not depend on component-preservation geometry.
+    frame_left = synthetic_vertical(0, 0, 10, 0.2, 20)
+    frame_right = synthetic_vertical(30, 0, 10, 0.2, 21)
+    frame_top = synthetic_horizontal(0, 0, 30, 0.2, 22)
+    frame_bottom = synthetic_horizontal(10, 0, 30, 0.2, 23)
+    ordinary_frame_x = Lattice(
+        [0.0, 30.0], [-0.1, 29.9], [0.1, 30.1],
+        [[(0.0, 10.0)], [(0.0, 10.0)]],
+        [[frame_left], [frame_right]],
+    )
+    ordinary_frame_y = Lattice(
+        [0.0, 10.0], [-0.1, 9.9], [0.1, 10.1],
+        [[(0.0, 30.0)], [(0.0, 30.0)]],
+        [[frame_top], [frame_bottom]],
+    )
+    ordinary_frame_box = {
+        "j0": 0, "j1": 1, "i0": 0, "i1": 1,
+        "component_root": 0, "rectangular": True,
+    }
+    ordinary_frame_v_at = [[True], [True]]
+    ordinary_frame_h_at = [[True], [True]]
+    ordinary_frame_paint = FinalPaint([
+        frame_left, frame_right, frame_top, frame_bottom,
+        topology_left, topology_right, topology_middle,
+    ])
+    ordinary_certificate = source_owned_comb_frame(
+        ordinary_frame_box, ordinary_frame_x, ordinary_frame_y,
+        ordinary_frame_v_at, ordinary_frame_h_at,
+        [topology_left, topology_right],
+        [topology_left, topology_right, topology_middle],
+        ordinary_frame_paint,
+    )
+    check(
+        ordinary_certificate is not None
+        and ordinary_certificate.get("resolved_competing_topologies") is True
+        and ordinary_certificate.get("divider_x") == [10.0, 15.0, 20.0],
+        "an ordinary framed comb did not certify its unique maximal topology",
+    )
+
+    off_baseline_middle = synthetic_vertical(15, 5, 9, 0.2, 24)
+    off_baseline_paint = FinalPaint([
+        frame_left, frame_right, frame_top, frame_bottom,
+        topology_left, topology_right, off_baseline_middle,
+    ])
+    check(source_owned_comb_frame(
+        ordinary_frame_box, ordinary_frame_x, ordinary_frame_y,
+        ordinary_frame_v_at, ordinary_frame_h_at,
+        [topology_left, topology_right],
+        [topology_left, topology_right, off_baseline_middle],
+        off_baseline_paint,
+    ) is None, "an off-baseline topology received a frame certificate")
+
+    incomparable_endpoint = synthetic_vertical(25, 0, 4, 0.2, 25)
+    incomparable_paint = FinalPaint([
+        frame_left, frame_right, frame_top, frame_bottom,
+        topology_left, topology_right, topology_middle,
+        incomparable_endpoint,
+    ])
+    check(source_owned_comb_frame(
+        ordinary_frame_box, ordinary_frame_x, ordinary_frame_y,
+        ordinary_frame_v_at, ordinary_frame_h_at,
+        [topology_left, topology_right],
+        [topology_left, topology_right, topology_middle,
+         incomparable_endpoint],
+        incomparable_paint,
+    ) is None, "incomparable endpoint topologies received a frame certificate")
+
+    incomplete_frame_y = Lattice(
+        [0.0, 10.0], [-0.1, 9.9], [0.1, 10.1],
+        [[(0.0, 29.0)], [(0.0, 30.0)]],
+        [[frame_top], [frame_bottom]],
+    )
+    check(source_owned_comb_frame(
+        ordinary_frame_box, ordinary_frame_x, incomplete_frame_y,
+        ordinary_frame_v_at, ordinary_frame_h_at,
+        [topology_left, topology_right],
+        [topology_left, topology_right, topology_middle],
+        ordinary_frame_paint,
+    ) is None, "an incomplete outer frame received a comb certificate")
 
     # Slot count alone cannot activate a changed legacy subject. Exercise the
     # exact build_cells transition path: both combs have three slots, but the
