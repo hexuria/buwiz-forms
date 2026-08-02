@@ -19,7 +19,7 @@
     "S6": "justified smear",
     "S7": "unmatched run"
   },
-  "note": "status is one of open|fixed|not-a-defect|deferred. The gate requires every blocker and major to be fixed or not-a-defect, each with a resolution naming its evidence.",
+  "note": "status is one of open|fixed|not-a-defect. The gate requires every blocker and major to be fixed or not-a-defect, each with a resolution naming its evidence.",
   "findings": [
     {
       "id": "F001",
