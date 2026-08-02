@@ -8753,17 +8753,33 @@ def check_determinism(regenerate: bool) -> Result:
     )
 
 
+def _tracked_deletions_from_porcelain(porcelain: str) -> list[str]:
+    deleted = []
+    for line in porcelain.splitlines():
+        if len(line) < 3:
+            continue
+        index_status, worktree_status = line[0], line[1]
+        if index_status == "D" or worktree_status == "D":
+            deleted.append(line[3:])
+    return deleted
+
+
+def _tracked_deletion_result(porcelain: str) -> Result:
+    deleted = _tracked_deletions_from_porcelain(porcelain)
+    if deleted:
+        return Result(
+            "tracked-files", Verdict.FAIL,
+            f"{len(deleted)} tracked file(s) deleted: "
+            f"{', '.join(deleted[:3])}")
+    return Result("tracked-files", Verdict.PASS, "no tracked deletion")
+
+
 def check_no_tracked_deletions() -> Result:
     proc = subprocess.run(["git", "status", "--porcelain", "--", "forms/"],
                           cwd=REPO, capture_output=True, text=True)
     if proc.returncode != 0:
         return Result("tracked-files", Verdict.UNEVALUABLE, "git status failed")
-    deleted = [line[3:] for line in proc.stdout.splitlines()
-               if line[:2].strip() in ("D", "AD") or line.startswith(" D")]
-    if deleted:
-        return Result("tracked-files", Verdict.FAIL,
-                      f"{len(deleted)} tracked file(s) deleted: {', '.join(deleted[:3])}")
-    return Result("tracked-files", Verdict.PASS, "no tracked deletion")
+    return _tracked_deletion_result(proc.stdout)
 
 
 CHECKS: dict[str, Callable[[], Result]] = {
@@ -9825,6 +9841,24 @@ def self_test() -> int:
         failures.append("UNEVALUABLE must not count as ok")
     if not Verdict.PASS.ok:
         failures.append("PASS must count as ok")
+
+    for status in ("D ", " D", "MD", "RD", "CD", "AD"):
+        path = f"forms/deleted-{status.replace(' ', '_')}.json"
+        result = _tracked_deletion_result(f"{status} {path}\n")
+        if result.verdict is not Verdict.FAIL or path not in result.detail:
+            failures.append(
+                f"porcelain deletion state {status!r} must fail closed")
+    non_deletion_statuses = (
+        "M ", " M", "MM", "A ", "AM", "R ", "RM", "C ", "CM",
+        "??", "!!", "UU",
+    )
+    non_deletion_fixture = "".join(
+        f"{status} forms/retained-{index}.json\n"
+        for index, status in enumerate(non_deletion_statuses))
+    if _tracked_deletion_result(
+            non_deletion_fixture).verdict is not Verdict.PASS:
+        failures.append(
+            "porcelain states without D in either XY column must not fail")
 
     scanner = GateAuditRenderDependencyScanner()
     scanner.feed(
