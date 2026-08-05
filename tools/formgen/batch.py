@@ -647,6 +647,26 @@ def collect_fonts(records: list[dict[str, Any]],
     return found
 
 
+def reroot_shared_urls(css: str, depth: str) -> str:
+    """Point a bundle's stylesheet at the shared pool it actually sits above.
+
+    base.css lives at the root of forms/, so its `url("fonts/...")` resolves to
+    forms/fonts/ and is correct. A bundle's form.css is one level down and
+    carried the identical relative URL, which resolves to
+    forms/<bundle>/fonts/ -- 404. Every @font-face that survived the hoist into
+    a bundle therefore never loaded and the browser silently substituted, which
+    on the faces declared there (Arimo italic, Tinos) quietly voids the
+    advance-metric proof those very fonts exist to satisfy.
+
+    The HTML has always been rerooted on the way out; the split stylesheets were
+    not, because the hoist happens after emit.py has finished with them.
+    """
+    for prefix in ('url("', "url('", "url("):
+        for shared in ("fonts/", "assets/"):
+            css = css.replace(f"{prefix}{shared}", f"{prefix}{depth}{shared}")
+    return css
+
+
 def link_stylesheets(html: str, depth: str, own_css: str) -> str:
     """Strip the inline <style>, link base.css plus the document's own sheet."""
     links = (f'<link rel="stylesheet" href="{depth}base.css">\n'
@@ -906,8 +926,9 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
 
         own = [r for r in per_form[record["slug"]] if r not in shared]
         (target / "form.css").write_text(
-            render_css(f"/* {record['code']} rev {record['revision']} -- form-specific rules.\n"
-                       f" * Shared scaffolding is in {depth}base.css. */\n", own),
+            reroot_shared_urls(
+                render_css(f"/* {record['code']} rev {record['revision']} -- form-specific rules.\n"
+                           f" * Shared scaffolding is in {depth}base.css. */\n", own), depth),
             encoding="utf-8")
         (target / FORM_DOCUMENT).write_text(
             link_stylesheets(pathlib.Path(record["html"]).read_text(encoding="utf-8"),
@@ -923,9 +944,11 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
             guide_own = [r for r in document_rules(pathlib.Path(guide_html))
                          if r not in shared]
             (target / "guide.css").write_text(
-                render_css(f"/* {record['code']} rev {record['revision']} -- guide-specific rules.\n"
-                           f" * Shared scaffolding is in {depth}base.css; the form's own rules\n"
-                           f" * are in form.css and are not loaded by the guide. */\n", guide_own),
+                reroot_shared_urls(
+                    render_css(f"/* {record['code']} rev {record['revision']} -- guide-specific rules.\n"
+                               f" * Shared scaffolding is in {depth}base.css; the form's own rules\n"
+                               f" * are in form.css and are not loaded by the guide. */\n", guide_own),
+                    depth),
                 encoding="utf-8")
             (target / GUIDE_DOCUMENT).write_text(
                 link_stylesheets(pathlib.Path(guide_html).read_text(encoding="utf-8"),
