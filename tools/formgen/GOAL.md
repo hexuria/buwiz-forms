@@ -96,6 +96,34 @@ Rule that keeps it honest: **a commit that changes a number updates STATUS.md
 in the same commit.** Stale-number drift across five documents is how the
 current state happened.
 
+## Route to 57 codes (execute in this order — steps collide if overlapped)
+
+1. **Fetch lands** (workflow wcvichmb0). Its verify phase hashes every download
+   against the PDFs already in ~/Downloads/forms. EXPECT REJECTIONS: early
+   evidence shows agents fetching the CURRENT revision (1600-PT, 1603Q,
+   2000-DST) where the legacy form (1600 Sep-2005, 1603 Nov-2004, 2000
+   Jan-2018 DST) was asked for. A download that duplicates an existing sha256
+   is NOT a new form. Record each such code as unavailable rather than
+   converting the same PDF twice under two names -- that would inflate the
+   count while covering nothing, which is the exact failure this whole
+   correction exists to prevent.
+2. **Gate finishes** before any batch run. batch.py and gate.py cannot run
+   together: the gate regenerates, and a concurrent batch invalidates its
+   corpus mid-measurement.
+3. **Convert the genuinely-new forms.** Run batch.py over the expanded source
+   set. Each new form goes through the same pipeline with no special-casing;
+   any that fails extraction is reported, never hand-patched.
+4. **Re-gate** the expanded corpus. New forms will surface new assertion
+   failures -- that is the pipeline working, not a regression. Triage them the
+   same way as the existing four checks.
+5. **Round-4 visual review** over ALL codes, new ones included.
+6. Only then is the corpus complete. The PR still does not merge until the
+   user has reviewed.
+
+If a BIR form is genuinely not published anywhere on bir.gov.ph, record it
+under `## Blocked` with what was tried and move on. Never substitute a mirror,
+a third-party copy, or a different revision presented as the missing one.
+
 ## Method
 
 - Work in increments; after each, run the affected self-tests, and run the
