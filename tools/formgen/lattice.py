@@ -2271,9 +2271,113 @@ def encloses_paper(lattice: Lattice, first: int, last: int) -> bool:
     return lattice.ink_lo[last] > lattice.ink_hi[first]
 
 
-def classify_cell(is_empty: bool, border_count: int, has_comb: bool) -> str:
+def min_fillable_line_metrics(ir: dict[str, Any]) -> dict[str, float] | None:
+    """Measured metrics of the smallest body line this form prints.
+
+    A ruled gap between a caption line and the next rule classifies as an
+    empty bordered cell exactly like a real writing strip does, so 120 such
+    slivers across 42 forms carried inputs nothing can be typed in (the
+    2026-08 triage's population B2).  The minimum surface a text strip must
+    offer is derived from the form's own typography -- measured quantities,
+    never tuned constants:
+
+    * ``glyph_height_pt`` -- the smallest body run's size scaled by its
+      font's descriptor cap height (the source-declared ink height of an
+      uppercase glyph), falling back to the run's measured ascender when the
+      embedded descriptor carries no cap height.  Paper shorter than this
+      cannot show one glyph of the smallest print on the sheet.
+    * ``line_width_pt`` -- two em squares of the smallest body size.  A body
+      line is at least two glyphs (the same bound that qualifies a run
+      below); paper narrower than that is a mark box -- 2551Q's 6.9pt
+      "Yes"/"No" checkboxes -- whose fillability is not a text question and
+      which the height minimum must leave alone.
+
+    A run qualifies as body text only with two or more non-whitespace
+    glyphs: the corpus hides sub-point stray glyphs ("p ", "K ", ". " at
+    0.96pt on 1606/1801/2552) and lone decoration marks (the 4pt money
+    bullet) whose sizes are not the form's typography.
+    """
+    fonts = ir.get("fonts") or {}
+    cap_ratio_by_font: dict[str, float] = {}
+    for key, descriptor in fonts.items():
+        if not isinstance(descriptor, dict):
+            continue
+        base = str(descriptor.get("basefont") or key)
+        stripped = base.split("+", 1)[-1]
+        capheight = descriptor.get("capheight")
+        if (isinstance(capheight, (int, float)) and capheight > 0
+                and stripped not in cap_ratio_by_font):
+            cap_ratio_by_font[stripped] = float(capheight) / 1000.0
+
+    glyph_height: float | None = None
+    line_width: float | None = None
+    for page in ir["pages"]:
+        for run in page["text_runs"]:
+            if sum(1 for ch in run["text"] if not ch.isspace()) < 2:
+                continue
+            size = float(run["size_pt"])
+            ratio = cap_ratio_by_font.get(
+                str(run["font"]), float(run["ascender"]))
+            height = size * ratio
+            if glyph_height is None or height < glyph_height:
+                glyph_height = height
+            if line_width is None or 2.0 * size < line_width:
+                line_width = 2.0 * size
+    if glyph_height is None or line_width is None:
+        return None
+    return {"glyph_height_pt": glyph_height, "line_width_pt": line_width}
+
+
+def cell_paper_gap(cell: dict[str, Any], xl: Lattice, yl: Lattice,
+                   ) -> tuple[float, float]:
+    """This cell's ink-to-ink paper extent, (width_pt, height_pt).
+
+    The lattice's per-line ``ink_lo``/``ink_hi`` are page-wide cluster
+    extents: a boundary fused from stacked bars elsewhere along the line
+    must not shrink this cell's paper.  Only rules actually overlapping the
+    cell's span bound its paper; a boundary with no overlapping member
+    contributes its line position.
+    """
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    j0 = int(cell["row"])
+    j1 = j0 + int(cell["row_span"])
+    i0 = int(cell["col"])
+    i1 = i0 + int(cell["col_span"])
+
+    def edge(lattice: Lattice, index: int, lo: float, hi: float,
+             span_keys: tuple[str, str], edge_keys: tuple[str, str],
+             far: bool) -> float:
+        start_key, end_key = span_keys
+        members = [
+            rule for rule in lattice.members[index]
+            if float(rule[end_key]) > lo + JOIN_EPSILON_PT
+            and float(rule[start_key]) < hi - JOIN_EPSILON_PT
+        ]
+        if not members:
+            return lattice.positions[index]
+        near_key, far_key = edge_keys
+        if far:
+            return max(float(rule[far_key]) for rule in members)
+        return min(float(rule[near_key]) for rule in members)
+
+    top = edge(yl, j0, x0, x1, ("x0", "x1"), ("y0", "y1"), True)
+    bottom = edge(yl, j1, x0, x1, ("x0", "x1"), ("y0", "y1"), False)
+    left = edge(xl, i0, y0, y1, ("y0", "y1"), ("x0", "x1"), True)
+    right = edge(xl, i1, y0, y1, ("y0", "y1"), ("x0", "x1"), False)
+    return right - left, bottom - top
+
+
+def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
+                  is_sliver_text_strip: bool = False) -> str:
     if is_empty and border_count >= 3:
-        return "field"
+        # An empty bordered strip whose paper cannot hold one glyph of the
+        # smallest body line the form prints is a ruled gap -- the leading
+        # below a caption -- not a writing surface.  Verified against the
+        # 2026-08 triage census: the 120 sliver offenders and no wide real
+        # field move.  Mark boxes (narrower than the smallest two-glyph
+        # line) and comb owners are exempt by construction.
+        return "blank" if is_sliver_text_strip else "field"
     if is_empty:
         return "blank"
     # Pre-printed text sitting in a comb -- the "%" glyph, the money decimal
@@ -3047,6 +3151,34 @@ def source_owned_comb_frame(
     ):
         return None
 
+    def separated_top_rail_stub(ink: dict[str, Any],
+                                start: float, end: float) -> bool:
+        """A frame-hung stub whose continuation into the band is knocked out.
+
+        2000-DST hangs a label separator from the outer top rail directly
+        above its date comb and then paints the corridor between that stub
+        and the band top white (the erased junction is the source's own
+        statement that the stroke terminates before the comb).  Such a stub
+        divides only the label zone of the framed field; it is not a
+        through-going cell border.  Accept it only on source proof: the ink
+        must start inside the outer top rail, stop strictly above the band,
+        and the whole remaining corridor down to the band top must be
+        definitely erased by later nonstructural paint.  A genuine column
+        separator keeps its junction painted and still refuses the frame.
+        """
+        band_top = float(band["y0"])
+        if start > yl.ink_hi[j0] + JOIN_EPSILON_PT:
+            return False
+        if end > band_top - JOIN_EPSILON_PT:
+            return False
+        first, last = paint_ordinal_range(ink)
+        probe = {
+            "x0": float(ink["x0"]), "y0": end,
+            "x1": float(ink["x1"]), "y1": band_top,
+            "paint_seq": first, "paint_seq_max": last,
+        }
+        return final_paint.definitely_erased(probe)
+
     divider_x = [float(value) for value in band["divider_x"]]
     divider_corridors: list[tuple[float, float]] = []
     for value in divider_x:
@@ -3109,11 +3241,27 @@ def source_owned_comb_frame(
             [band_y0, *(yl.ink_lo[boundary]
                         for boundary in endpoint_boundaries)])
         allowed_y1 = yl.ink_hi[j1]
+        # The band's own endpoint-slab resolution measured every competing
+        # same-band topology as continuous divider corridors.  Ink lying in a
+        # corridor of a topology that includes this divider position is comb
+        # ink of that measured topology -- the 1.08pt tick overhang above the
+        # 2000-DST band top is the losing topology's own corridor -- never a
+        # cell border.  A long separator reaches far outside every measured
+        # corridor and still refuses the frame.
+        evidence_corridors = [
+            (max(y0, float(run[0])), min(y1, float(run[1])))
+            for topology in (resolution.get("endpoint_topologies") or ())
+            if any(abs(float(value) - xl.positions[i]) <= CLUSTER_TOL_PT
+                   for value in (topology.get("divider_x") or ()))
+            for run in (topology.get("runs") or ())
+            if len(run) == 2
+        ]
         allowed_vertical_ink = union_intervals([
             # Collinear ink from the preceding field can enter the outer top
             # stroke by a rounding sliver without separating this cell's paper.
             (y0, min(y1, yl.ink_hi[j0])),
             (max(y0, allowed_y0), min(y1, allowed_y1)),
+            *evidence_corridors,
         ])
         relevant: list[dict[str, Any]] = []
         seen_relevant: set[int] = set()
@@ -3158,9 +3306,11 @@ def source_owned_comb_frame(
                 *allowed_vertical_ink,
                 (cap_floor, min(y1, band_y0)),
             ])
-            if any(not covers(ink_allowed, start, end)
-                   for start, end in visible):
-                return None
+            for start, end in visible:
+                if covers(ink_allowed, start, end):
+                    continue
+                if not separated_top_rail_stub(ink, start, end):
+                    return None
 
     return {
         "method": "final-visible-framed-comb",
@@ -3198,6 +3348,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 legacy_v_ink: Sequence[dict[str, Any]] | None = None,
                 legacy_h_ink: Sequence[dict[str, Any]] | None = None,
                 uncertain_geometry_ids: set[str] | None = None,
+                fillable_metrics: dict[str, float] | None = None,
                 ) -> tuple[list[dict[str, Any]], list[str],
                            list[dict[str, Any]], list[dict[str, Any]]]:
     nx, ny = len(xl) - 1, len(yl) - 1
@@ -3726,6 +3877,44 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 len(candidates) == 1)
         return candidates
 
+    def source_certified_replacement_owner(
+            replacements: Sequence[dict[str, Any]],
+            ) -> dict[str, Any] | None:
+        """The unique replacement cell whose activation is fully source-proven.
+
+        ``erased_edge_replacement_candidates`` collects every blocker that
+        keeps a candidate from activating; the sentinel remains alone only
+        when the source paint itself proves the whole transition: the old
+        boundary is definitely erased, the replacement rail is final-visible,
+        the candidate is geometrically one-to-one, and the current pass
+        independently RESOLVED a final-visible comb of the identical count
+        and topology inside the replacement rectangle.  That is the same
+        source-paint epistemology that already certifies erased legacy
+        divider reductions (``certify_erased_legacy_reduction``); suppressing
+        the resolved comb here would leave a printed comb with no input.  Any
+        weaker candidate -- an unresolved band, an unresolved replacement
+        rail, competing candidates -- keeps the subject retained and
+        blocking.
+        """
+        if len(replacements) != 1:
+            return None
+        candidate = replacements[0]
+        if (candidate.get("one_to_one_geometry_candidate") is not True
+                or candidate.get("activation_blockers")
+                != ["independent-evidence-not-attested"]):
+            return None
+        owner = output_by_subject.get(str(candidate["new_subject_key"]))
+        if owner is None or owner.get("id") != candidate["cell_id"]:
+            return None
+        if str(owner["subject_key"]) in legacy_keys:
+            return None
+        comb = owner.get("comb")
+        if comb is None:
+            return None
+        if (comb.get("resolution") or {}).get("status") != "resolved":
+            return None
+        return owner
+
     subject_ledger: list[dict[str, Any]] = []
     inference_ledger: list[dict[str, Any]] = []
     legacy_keys = {
@@ -3787,6 +3976,38 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                     and final_candidate is None
                     and not subject["has_final_support"])
                 or no_owned_band):
+            replacements = erased_edge_replacement_candidates(subject)
+            owner = (
+                source_certified_replacement_owner(replacements)
+                if cell is None else None)
+            if owner is not None:
+                candidate = replacements[0]
+                owner_comb = owner["comb"]
+                owner_comb["resolution"]["erased_edge_replacement"] = {
+                    "old_subject_key": candidate["old_subject_key"],
+                    "old_bbox": list(candidate["old_bbox"]),
+                    "old_slot_x": list(candidate["old_slot_x"]),
+                    "source_paint_evidence": dict(
+                        candidate["source_paint_evidence"]),
+                }
+                # The replacement rectangle is now this reviewed subject's
+                # owner; keep its resolved comb out of the unreviewed
+                # inference suppression below.
+                legacy_keys.add(str(owner["subject_key"]))
+                subject_ledger.append({
+                    "subject_key": owner["subject_key"],
+                    "legacy_cell_id": owner["id"],
+                    "legacy_bbox": [
+                        owner["x0"], owner["y0"], owner["x1"], owner["y1"],
+                    ],
+                    "cell_id": owner["id"],
+                    "mapped_partition_cell_ids": [owner["id"]],
+                    "state": "active_resolved",
+                    "reason_codes": [],
+                    "cells": int(owner_comb["cells"]),
+                    "blocks_gate": False,
+                })
+                continue
             if cell is None:
                 sx0, sy0, sx1, sy1 = (
                     float(value) for value in subject["legacy_bbox"])
@@ -3833,7 +4054,6 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 ],
                 "blocks_gate": True,
             }
-            replacements = erased_edge_replacement_candidates(subject)
             if replacements:
                 retained["erased_edge_replacement_candidates"] = replacements
             subject_ledger.append(retained)
@@ -4021,7 +4241,18 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
 
     for cell in cells:
         cell["is_empty"] = not cell["text_run_ids"]
-        cell["kind"] = classify_cell(cell["is_empty"], cell["border_count"], "comb" in cell)
+        sliver = False
+        if (fillable_metrics is not None
+                and cell["is_empty"]
+                and cell["border_count"] >= 3
+                and "comb" not in cell):
+            paper_width, paper_height = cell_paper_gap(cell, xl, yl)
+            sliver = (
+                paper_height < fillable_metrics["glyph_height_pt"]
+                and paper_width >= fillable_metrics["line_width_pt"]
+            )
+        cell["kind"] = classify_cell(
+            cell["is_empty"], cell["border_count"], "comb" in cell, sliver)
         cell.pop("_component_root")
     # The gate binds the reviewed active-owner registry to the exact order of
     # the current layout cell stream.  Legacy subjects are discovered in
@@ -4256,7 +4487,9 @@ def detect_regions(page_index: int, xl: Lattice, yl: Lattice, v_at: list[list[bo
 # ---------------------------------------------------------------------------
 
 
-def build_page(page: dict[str, Any]) -> dict[str, Any]:
+def build_page(page: dict[str, Any],
+               fillable_metrics: dict[str, float] | None = None,
+               ) -> dict[str, Any]:
     index = page["index"]
     rules = page["rules"]
     final_paint = FinalPaint([*rules, *page["area_fills"], *page["paths"]])
@@ -4465,7 +4698,8 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
             legacy_h_at=raw_h_at,
             legacy_v_ink=raw_verticals,
             legacy_h_ink=raw_horizontals,
-            uncertain_geometry_ids=uncertain_ids)
+            uncertain_geometry_ids=uncertain_ids,
+            fillable_metrics=fillable_metrics)
         growables = detect_growables(index, xl, yl, v_at, h_at, cells, page["text_runs"])
         regions = detect_regions(index, xl, yl, v_at, cells, growables)
 
@@ -4541,6 +4775,7 @@ def build_page(page: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
+    fillable_metrics = min_fillable_line_metrics(ir)
     return {
         "schema_version": SCHEMA_VERSION,
         "form": ir["form"],
@@ -4553,7 +4788,9 @@ def build_layout(ir: dict[str, Any]) -> dict[str, Any]:
             "pitch_tolerance_pt": PITCH_TOL_PT,
         },
         "paper": ir["paper"],
-        "pages": [build_page(p) for p in ir["pages"]],
+        "pages": [
+            build_page(p, fillable_metrics) for p in ir["pages"]
+        ],
     }
 
 
