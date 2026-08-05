@@ -53,9 +53,13 @@ jobs:
       # means regenerating the corpus and re-pinning in extract.py, in one
       # commit.
       PYMUPDF_VERSION: '1.27.2.3'
-      # Matched to the version the repo already drives elsewhere, so a
-      # runner and a workstation exercise the same browser.
-      PLAYWRIGHT_VERSION: '1.58.2'
+      # The PYTHON playwright version, which is NOT the npm one. The repo pins
+      # npm playwright 1.58.2, and PyPI has no 1.58.2 -- its line goes 1.58.0
+      # then 1.59.0 -- so copying the npm pin here broke the job at the install
+      # step, before anything ran. This is the version the audit self-test was
+      # proven against on the workstation; the two ecosystems version
+      # independently and must be pinned independently.
+      PLAYWRIGHT_VERSION: '1.59.0'
 
     steps:
       - uses: actions/checkout@v4
@@ -67,9 +71,9 @@ jobs:
 
       # formgen is stdlib + fitz. There is no requirements file to cache
       # against and the wheel installs in seconds, so no pip cache either.
-      # audit.py's self-test launches this. The version is pinned to the one the
-      # repo already uses elsewhere, so a runner and a workstation drive the same
-      # browser; a self-test that passes here and fails there would be worthless.
+      # audit.py's self-test launches this. Pinned to the Python playwright the
+      # workstation proved the self-test against; a self-test that passes here
+      # and fails there would be worthless.
       - name: Install Playwright and Chromium
         run: |
           set -euo pipefail
