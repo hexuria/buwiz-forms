@@ -752,7 +752,8 @@ def bundle_outputs(record: dict[str, Any],
 def planned_outputs(records: list[dict[str, Any]], out_root: pathlib.Path,
                     fonts_src: pathlib.Path) -> set[pathlib.Path]:
     """Every path this run is about to write under `out_root`."""
-    planned = {out_root / "base.css", out_root / ASSET_MANIFEST}
+    planned = {out_root / "base.css", out_root / ASSET_MANIFEST,
+               out_root / FORM_DOCUMENT}
     planned |= {out_root / "fonts" / name for name in collect_fonts(records, fonts_src)}
     for record in records:
         planned |= set(bundle_outputs(record, out_root)[1])
@@ -829,8 +830,8 @@ def drop_reason(path: pathlib.Path, out_root: pathlib.Path) -> str:
         return ("no form converted, so there were no composited assets to record; "
                 "the generic message below would be actively misleading here")
     if top == FORM_DOCUMENT:
-        return ("the landing page is written from the batch report, so a run that "
-                "wrote no bundles writes no index either")
+        return ("index_page.py did not write the landing page -- it needs the batch "
+                "report, so check whether that stage reported an error")
     return ("no converted bundle writes it -- its form failed, was excluded, or "
             "now converts under a different <code>-<revision> slug")
 
