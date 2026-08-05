@@ -10096,7 +10096,7 @@ def self_test() -> int:
             code, output = execution.code, execution.output
             lines = [line for line in output.splitlines() if line.strip()]
             isolation = json.loads(lines[-1]) if code == 0 and lines else {}
-            if (isolation != {
+            expected_isolation = {
                     "value": "source",
                     "isolated": 1,
                     "no_site": 1,
@@ -10119,18 +10119,41 @@ def self_test() -> int:
                     "blocked": [
                         "posix_spawn", "fork", "_exit",
                         "positional_popen", "executable_override", "shell"],
-                    } or marker.exists()):
+                    }
+            if isolation != expected_isolation or marker.exists():
+                # Name what diverged. This probe first failed on a hosted Linux
+                # runner where nobody could reproduce it interactively, and a
+                # bare name gave the reader nothing: which field, expected what,
+                # observed what. A failure that cannot be acted on from its own
+                # text is this project's oldest defect, and it was here too.
+                divergent = sorted(
+                    key for key in set(expected_isolation) | set(isolation)
+                    if isolation.get(key) != expected_isolation.get(key))
+                detail = "; ".join(
+                    f"{key}: expected {expected_isolation.get(key)!r}, "
+                    f"observed {isolation.get(key)!r}" for key in divergent)
+                if marker.exists():
+                    detail = (detail + "; " if detail else "") + \
+                        "inherited sitecustomize RAN (marker file exists)"
+                if code != 0:
+                    detail = (f"probe exited {code}; last output: "
+                              f"{output.strip().splitlines()[-3:]}") + \
+                        (f" -- {detail}" if detail else "")
                 failures.append(
                     "isolated Python child must ignore inherited sitecustomize "
-                    "and repository pyc, preserve argv/cwd, and bind descendants")
-            if (execution.receipt is None
-                    or isolated_launch_receipt_errors(
-                        execution.receipt,
-                        execution.receipt.get("dependency_manifest"), code,
-                        str(pathlib.Path(sys.executable).resolve()),
-                        probe_argv)):
+                    "and repository pyc, preserve argv/cwd, and bind "
+                    f"descendants -- {detail}")
+            receipt_errors = (["receipt is None"] if execution.receipt is None
+                              else isolated_launch_receipt_errors(
+                                  execution.receipt,
+                                  execution.receipt.get("dependency_manifest"),
+                                  code,
+                                  str(pathlib.Path(sys.executable).resolve()),
+                                  probe_argv))
+            if receipt_errors:
                 failures.append(
-                    "isolated Python execution must publish a valid v2 receipt")
+                    "isolated Python execution must publish a valid v2 receipt "
+                    f"-- {'; '.join(str(e) for e in receipt_errors[:4])}")
 
             dependency_source = root / "dependency.py"
             dependency_source.write_text("VALUE = 1\n", encoding="utf-8")
@@ -10301,14 +10324,18 @@ def self_test() -> int:
                 ["-c", "import time; time.sleep(60)"], 1)
             timeout_elapsed = time.monotonic() - timeout_started
             timeout_receipt = timeout_execution.receipt or {}
+            timeout_budget = 1 + COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS + 10
             if (timeout_execution.code != 124
                     or timeout_receipt.get("timed_out") is not True
                     or timeout_receipt.get("cleanup_complete") is not True
-                    or timeout_elapsed
-                    > 1 + COMB_REFEREE_CLEANUP_TIMEOUT_SECONDS + 10):
+                    or timeout_elapsed > timeout_budget):
                 failures.append(
                     "isolated Python hard timeout must clean up within its "
-                    "bounded allowance")
+                    f"bounded allowance -- code={timeout_execution.code} "
+                    f"(want 124), timed_out="
+                    f"{timeout_receipt.get('timed_out')!r}, cleanup_complete="
+                    f"{timeout_receipt.get('cleanup_complete')!r}, elapsed "
+                    f"{timeout_elapsed:.1f}s of {timeout_budget:.0f}s allowed")
 
             lingering_execution = run_isolated_python_attested([
                 "-c",
@@ -10333,7 +10360,12 @@ def self_test() -> int:
                     or lingering_execution.receipt is not None):
                 failures.append(
                     "a descendant that outlives the root must be killed and "
-                    "must invalidate the success receipt")
+                    "must invalidate the success receipt -- "
+                    f"code={lingering_execution.code} (want nonzero), "
+                    f"marker_seen={lingering_match is not None}, "
+                    f"descendant_alive={lingering_alive}, "
+                    f"receipt_suppressed={lingering_execution.receipt is None}; "
+                    f"output tail: {lingering_execution.output.strip().splitlines()[-2:]}")
     except Exception as error:  # noqa: BLE001 - self-test must report failure
         failures.append(
             "isolated Python child probe failed: "

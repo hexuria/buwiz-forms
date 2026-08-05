@@ -60,6 +60,15 @@ jobs:
       # proven against on the workstation; the two ecosystems version
       # independently and must be pinned independently.
       PLAYWRIGHT_VERSION: '1.59.0'
+      # audit.py seals the browser inside the Playwright package tree: it
+      # SHA-256s the whole tree around every render and requires the resolved
+      # Chromium to live under it. The default install puts browsers in
+      # ~/.cache/ms-playwright -- outside the closure -- which failed the first
+      # real runner execution with "resolved Chromium executable is outside
+      # Playwright closure". PLAYWRIGHT_BROWSERS_PATH=0 installs and resolves
+      # browsers inside the package, which is where the workstation (whose
+      # numbers the self-test was proven against) has them.
+      PLAYWRIGHT_BROWSERS_PATH: '0'
 
     steps:
       - uses: actions/checkout@v4
