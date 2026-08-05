@@ -8231,11 +8231,23 @@ def self_test() -> int:
             "pages": [],
         }
 
-    _extract_retained_candidate(
-        canonical_pdf, "TEST", "0000",
-        extractor=mutating_candidate_probe)
-    check("unlinked read-only candidate descriptor prevents path mutation",
-          mutation_attempt["prevented"])
+    # The invariant is "a candidate mutated during extraction is never
+    # silently used" -- and the two platforms enforce it differently. On
+    # macOS a write through the unlinked read-only descriptor path raises
+    # PermissionError: prevention. On Linux, /proc/self/fd re-opens the
+    # inode, the write LANDS, and the before/after digest guard raises
+    # instead: detection. Demanding prevention specifically made the first
+    # real Linux run die on a guard doing exactly its job. Either outcome
+    # satisfies the invariant; a mutation that lands undetected fails.
+    mutation_detected = False
+    try:
+        _extract_retained_candidate(
+            canonical_pdf, "TEST", "0000",
+            extractor=mutating_candidate_probe)
+    except RuntimeError as exc:
+        mutation_detected = "changed during extraction" in str(exc)
+    check("a candidate mutated during extraction is prevented or detected",
+          mutation_attempt["prevented"] or mutation_detected)
 
     # The clean side: the same page with the input moved off the ink, the comb
     # filled, the cut below everything, the colour right and the row complete.

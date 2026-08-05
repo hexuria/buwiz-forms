@@ -1213,6 +1213,14 @@ def install_recursive_launcher(spec):
         return process
 
     subprocess.Popen = bounded_popen
+    # On Linux CPython's Popen calls os.posix_spawn INTERNALLY when it can;
+    # macOS always takes the fork_exec path. Blocking os.posix_spawn below
+    # therefore made every supervised Popen self-destruct on Linux only --
+    # the first real runner execution died inside its own probes with
+    # "process detachment is forbidden". Forcing the fork path makes both
+    # platforms behave identically, while a DIRECT os.posix_spawn call (the
+    # actual escape hatch being guarded) stays blocked.
+    subprocess._USE_POSIX_SPAWN = False
     if os.name == "posix":
         def refuse_detachment(*_args, **_kwargs):
             fail("process detachment is forbidden in isolated execution")
