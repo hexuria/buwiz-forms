@@ -16,11 +16,24 @@ python3 tools/formgen/gate.py     # exits 0 — all 12 checks
 gh pr checks 13                   # every check green
 ```
 
-**Coverage is part of done.** The corpus must carry every form on BIR's
-official 51-form eBIRForms list (verified 2026-08-06 at bir.gov.ph/ebirforms),
-not merely 51 forms. Our 51 and BIR's 51 are NOT the same set: we hold ~6 the
-official list does not cover (0620, 1621, 1709, 2316, 2550-DS and the
-DST-variant naming), and we were missing 9 it does. The user has authorised
+**Coverage is part of done, and it counts CODES, not bundles.** Measured
+2026-08-06 against bir.gov.ph/ebirforms:
+
+    51 bundles on the index  -3 extra bundles (1701 ships main + attachment +
+    conso, 1702MX ships main + attachment)  =  48 unique form codes
+
+Those 48 overlap BIR's 51 by only **42**. We are missing **9** BIR forms
+(1600, 1601-E, 1601-F, 1602, 1603, 1604-CF, 1704, 2000, 2200AN) and carry
+**6** BIR does not list (0620, 1621, 1709, 2000-DST, 2316, 2550-DS), which the
+user has asked to keep. 42+9=51 official, 42+6=48 ours.
+
+Target: **BIR's 51 + the 6 extras = 57 codes.**
+
+Three coincidences made this invisible for weeks: 51 bundles happens to equal
+BIR's 51 forms, every count in the tooling counted bundles, and the 6 extras
+exactly masked part of the 9-form hole. "51/51 converted, 100%" was true about
+bundles and false about coverage. Any count that reports coverage must
+therefore report unique codes and name its denominator. The user has authorised
 downloading them. Any that BIR does not publish is recorded under `## Blocked`
 with what was tried -- never substituted from a mirror or a third party.
 
