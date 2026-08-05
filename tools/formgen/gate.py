@@ -6593,11 +6593,11 @@ BASIC_ASSERTION_COUNT_FIELDS = {
         ("cells_checked",), ("emitted_cell_binding_issues",)),
     "money_boxes_have_inputs": (
         ("boxes_checked", "combs_fully_inked"),
-        ("emitted_cell_binding_issues",)),
+        ("boxes_preprinted", "emitted_cell_binding_issues")),
     "rules_below_guide_cut": (("cuts",), ("area_fills_below_cut",)),
     "run_colour_matches_ir": (("runs_checked",), ()),
     "reflow_rate_without_description": (("rate_tables",), ("rows_checked",)),
-    "image_transform_applied": (("placements",), ()),
+    "image_transform_applied": (("placements",), ("relocated_placements",)),
     "no_invented_codepoints": (("characters_examined",), ()),
 }
 BASIC_ASSERTION_PUBLICATION_KEYS = {
@@ -9572,13 +9572,15 @@ def _synthetic_audit_record(
             "cells_checked": 0, "emitted_cell_binding_issues": 0},
         "money_boxes_have_inputs": {
             "boxes_checked": 0, "combs_fully_inked": 0,
+            "boxes_preprinted": 0,
             "emitted_cell_binding_issues": 0},
         "rules_below_guide_cut": {
             "cuts": 0, "area_fills_below_cut": 0},
         "run_colour_matches_ir": {"runs_checked": 0},
         "reflow_rate_without_description": {
             "rate_tables": 0, "rows_checked": 0},
-        "image_transform_applied": {"placements": 0},
+        "image_transform_applied": {
+            "placements": 0, "relocated_placements": 0},
         "no_invented_codepoints": {"characters_examined": 0},
     }
     assertions = {

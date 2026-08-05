@@ -303,6 +303,25 @@ EMITTED_GEOMETRY_EPS_PT = 0.0002
 # PyMuPDF source coordinates carry float noise at roughly the same scale. A
 # smaller paper seam is not promoted into a visible source corridor.
 SOURCE_COORD_EPS_PT = 0.0002
+# This is verify.py's fixed position tolerance.  It is copied as a bound, not
+# exposed as a CLI knob: changing it here would make this assertion an
+# independently tunable answer rather than one aligned with the comb
+# referee's adjudicated derivation (comb_referee.py carries the same bound
+# under the same name).  It applies only to comparisons that cross
+# representations into raw source geometry, whose floats are not the
+# four-decimal emitted serialisation; every same-representation
+# emitted/layout comparison keeps EMITTED_GEOMETRY_EPS_PT.
+POSITION_TOL_PT = 0.25
+# emit.py's field_verdict threshold, mirrored (emit.py PREPRINTED_COVERAGE): a
+# cell whose own width is mostly pre-printed glyph ink is not a blank the
+# taxpayer can write in, and the emitter refuses it an input.  The audit's
+# money-box predicate must apply the same measured-ink rule -- half of the
+# run's own height inside the cell, coverage as a fraction of the cell's
+# width -- or it demands inputs exactly where the emitter is right to refuse
+# them (1601EQ's ATC rows, 2200P's "XP010 Lubricating Oils").  Copied as a
+# bound: tuning it here would split the two producers' definitions of
+# "pre-printed".
+PREPRINTED_COVERAGE = 0.5
 
 # Default offender preview limit. Assertions that need exhaustive evidence may
 # opt out explicitly; the comb assertion does because its full disagreement set
@@ -432,6 +451,13 @@ SECTION_RE = re.compile(r'<section class="gl-page"([^>]*)>(.*?)</section>', re.S
 ROW_RE = re.compile(r'<tr>(.*?)</tr>', re.S)
 TD_RE = re.compile(r'<td[^>]*>(.*?)</td>', re.S)
 TAG_RE = re.compile(r'<[^>]*>')
+GL_TABLE_RE = re.compile(r'<table class="gl-table"[^>]*>(.*?)</table>', re.S)
+# The reflow hazard is content-shaped, not column-shaped: a bare rate value
+# ("3%", "0.5 %") or a bare alphanumeric tax code ("WB 050", "PT 060") with
+# nothing descriptive beside it on the row.  A continuation row of a
+# multi-line description has descriptive text and passes.
+RATE_VALUE_RE = re.compile(r'\d+(?:\.\d+)?\s*%')
+ATC_CODE_VALUE_RE = re.compile(r'[A-Z]{1,3}\s?\d{2,4}')
 
 
 @dataclasses.dataclass
@@ -808,10 +834,36 @@ def live_comb_inventory_issues(
 
 
 def emitted_cell_binding_issues(b: Any) -> list[dict[str, Any]]:
-    """Bind every live canonical cell to one layout owner and actual DOM page."""
+    """Bind every live canonical cell to one layout owner and actual DOM page.
+
+    A cell the guide plan records as a clipped straddler is deliberately
+    emitted at its clipped extent, so its expected rectangle is the
+    straddler record's ``form`` rect, not the unclipped layout rect.  The
+    substitution demands the exact ``disposition == "clipped"`` record and
+    is published as ``clipped_by_guide_cut`` -- any other geometry drift on
+    such a cell still fails at the same tolerance.
+    """
     if getattr(b, "layout", None) is None:
         return []
     relocated = set(getattr(b, "relocated_cells", set()))
+    clipped_cell_rects: dict[str, Rect] = {}
+    for region in getattr(b, "regions", None) or ():
+        for straddler in region.get("straddlers") or ():
+            if (not isinstance(straddler, dict)
+                    or straddler.get("kind") != "cell"
+                    or straddler.get("disposition") != "clipped"):
+                continue
+            ref = straddler.get("ref")
+            form_rect = straddler.get("form")
+            if not isinstance(ref, str) or not isinstance(form_rect, dict):
+                continue
+            try:
+                clipped_cell_rects[ref] = (
+                    float(form_rect["x0"]), float(form_rect["y0"]),
+                    float(form_rect["x1"]), float(form_rect["y1"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
     layout_subjects: dict[
         str, list[tuple[int, dict[str, Any]]]
     ] = collections.defaultdict(list)
@@ -858,10 +910,14 @@ def emitted_cell_binding_issues(b: Any) -> list[dict[str, Any]]:
                 kinds.append("emitted-cell-page-mismatch")
                 reasons.append(
                     "cell id page, enclosing DOM page, and layout page differ")
-            expected_rect = (
+            layout_rect = (
                 float(layout_cell["x0"]), float(layout_cell["y0"]),
                 float(layout_cell["x1"]), float(layout_cell["y1"]),
             )
+            clipped_rect = clipped_cell_rects.get(cell_id)
+            clipped_by_guide_cut = clipped_rect is not None
+            expected_rect = (
+                clipped_rect if clipped_rect is not None else layout_rect)
             deltas = [
                 actual - expected
                 for actual, expected in zip(emitted_cell.rect, expected_rect)
@@ -870,6 +926,9 @@ def emitted_cell_binding_issues(b: Any) -> list[dict[str, Any]]:
                    for delta in deltas):
                 kinds.append("emitted-cell-geometry-mismatch")
                 reasons.append(
+                    "emitted cell rectangle differs from its guide-cut "
+                    "clipped extent"
+                    if clipped_by_guide_cut else
                     "emitted cell rectangle differs from its layout owner")
             evidence = {
                 "cell": cell_id,
@@ -880,6 +939,10 @@ def emitted_cell_binding_issues(b: Any) -> list[dict[str, Any]]:
                 "layout_page": page_index,
                 "actual_rect": list(emitted_cell.rect),
                 "expected_rect": list(expected_rect),
+                "clipped_by_guide_cut": clipped_by_guide_cut,
+                **({
+                    "unclipped_layout_rect": list(layout_rect),
+                } if clipped_by_guide_cut else {}),
                 "rect_deltas_pt": [
                     round(delta, 6) for delta in deltas],
                 "tolerance_pt": EMITTED_GEOMETRY_EPS_PT,
@@ -1204,6 +1267,7 @@ def _position_evidence(
         *,
         comparable: bool,
         unavailable_reason: str | None = None,
+        tolerance_pt: float = EMITTED_GEOMETRY_EPS_PT,
         ) -> dict[str, Any]:
     """Publish one fixed-tolerance physical-edge comparison."""
     actual_values = (
@@ -1212,7 +1276,7 @@ def _position_evidence(
         [float(value) for value in expected] if expected is not None else None)
     evidence: dict[str, Any] = {
         "comparable": comparable,
-        "tolerance_pt": EMITTED_GEOMETRY_EPS_PT,
+        "tolerance_pt": tolerance_pt,
         "actual_internal_edges_x": (
             [round(value, 6) for value in actual_values]
             if actual_values is not None else None),
@@ -1252,7 +1316,7 @@ def _position_evidence(
             if deltas is not None else None),
         "matches": (
             count_matches
-            and all(abs(delta) <= EMITTED_GEOMETRY_EPS_PT
+            and all(abs(delta) <= tolerance_pt
                     for delta in deltas or ())
         ),
     })
@@ -1291,12 +1355,14 @@ def _outer_position_evidence(
         *,
         comparable: bool,
         unavailable_reason: str | None = None,
+        tolerance_pt: float = EMITTED_GEOMETRY_EPS_PT,
         ) -> dict[str, Any]:
     evidence = _position_evidence(
         actual,
         expected,
         comparable=comparable,
         unavailable_reason=unavailable_reason,
+        tolerance_pt=tolerance_pt,
     )
     evidence["actual_outer_edges_x"] = evidence.pop(
         "actual_internal_edges_x")
@@ -4108,6 +4174,96 @@ def _source_u_frame(
     }
 
 
+def _union_span(intervals: Sequence[tuple[float, float]]) -> float:
+    """Total length of a union of possibly-overlapping y intervals."""
+    total = 0.0
+    covered_to: float | None = None
+    for y0, y1 in sorted(intervals):
+        if covered_to is None or y0 > covered_to:
+            total += max(0.0, y1 - y0)
+            covered_to = max(covered_to or y1, y1)
+        elif y1 > covered_to:
+            total += y1 - covered_to
+            covered_to = y1
+    return total
+
+
+def _dominant_certified_topology(
+        results: Sequence[tuple[
+            float, float, float, tuple[float, ...], dict[str, Any] | None]],
+        topology_groups: Sequence[tuple[float, ...]],
+        ) -> tuple[tuple[float, ...] | None, list[dict[str, Any]]]:
+    """The comb referee's proven slab-disambiguation rule, mirrored.
+
+    A thick group separator can be slightly shorter than the hairline seeds
+    beside it.  The y partition then has a narrow seed-only cap and a much
+    taller slab with the complete compartment topology.  That is not
+    competing evidence: the longer separator still visibly divides the comb.
+    Admit the richer topology only when it contains every divider of every
+    other slab (within the referee's fixed position bound) and its slabs
+    occupy a strict majority of the measured vertical band.  A short
+    midpoint or two genuinely competing slabs yields no dominant topology.
+    (comb_referee.py proves and applies this same rule; POSITION_TOL_PT is
+    the same copied bound in both files.)
+    """
+
+    def contains(superset: tuple[float, ...],
+                 subset: tuple[float, ...]) -> bool:
+        available = [float(value) for value in superset]
+        for value in subset:
+            choices = sorted(
+                (abs(candidate - float(value)), index)
+                for index, candidate in enumerate(available)
+                if abs(candidate - float(value)) <= POSITION_TOL_PT
+            )
+            if not choices:
+                return False
+            _distance, index = choices[0]
+            available.pop(index)
+        return True
+
+    group_intervals: list[list[tuple[float, float]]] = [
+        [] for _group in topology_groups]
+    all_intervals: list[tuple[float, float]] = []
+    for band_y0, band_y1, _tone, topology, _frame in results:
+        all_intervals.append((band_y0, band_y1))
+        for index, group in enumerate(topology_groups):
+            if _same_topology(topology, group):
+                group_intervals[index].append((band_y0, band_y1))
+                break
+    total_span = _union_span(all_intervals)
+    coverage = [_union_span(intervals) for intervals in group_intervals]
+    relations: list[dict[str, Any]] = []
+    for index, candidate in enumerate(topology_groups):
+        for other_index, other in enumerate(topology_groups):
+            if index == other_index:
+                continue
+            relations.append({
+                "candidate": [round(value, 6) for value in candidate],
+                "other": [round(value, 6) for value in other],
+                "contains": contains(candidate, other),
+                "proper": (
+                    len(candidate) > len(other)
+                    and contains(candidate, other)
+                ),
+                "candidate_coverage_pt": round(coverage[index], 6),
+                "measured_band_span_pt": round(total_span, 6),
+            })
+    dominant = [
+        index for index, candidate in enumerate(topology_groups)
+        if all(
+            other_index == index
+            or (len(candidate) > len(topology_groups[other_index])
+                and contains(candidate, topology_groups[other_index]))
+            for other_index in range(len(topology_groups))
+        )
+        and coverage[index] * 2 > total_span
+    ]
+    if len(dominant) != 1:
+        return None, relations
+    return topology_groups[dominant[0]], relations
+
+
 def printed_compartments(
         page: VectorPage,
         cell: dict[str, Any],
@@ -4124,7 +4280,10 @@ def printed_compartments(
     object or subject topology is read.  A complete source U-frame owns its
     interior directly.  Without one, the reviewed certificate may establish
     only *whose* rectangle this is, and only one unanimous source-derived
-    topology can be used.  Competing topology stays unevaluable.
+    topology -- or the comb referee's proven dominant, a richer topology
+    containing every other slab that occupies a strict majority of the
+    measured band -- can be used.  Genuinely competing topology stays
+    unevaluable.
     """
     try:
         x0, y0 = float(cell["x0"]), float(cell["y0"])
@@ -4329,14 +4488,28 @@ def printed_compartments(
         raise ValueError(
             "multiple complete source U-frames compete "
             f"(compartment counts {counts}; U-frames {framed_counts})")
+    # Certified ownership admits the comb referee's proven disambiguation:
+    # one richer topology that contains every other slab within the fixed
+    # position bound and occupies a strict majority of the measured band.
+    # Everything short of that stays competing, i.e. unevaluable.
+    dominant_topology: tuple[float, ...] | None = None
+    superset_relations: list[dict[str, Any]] = []
+    if owner_certificate is not None and len(topology_groups) > 1:
+        dominant_topology, superset_relations = _dominant_certified_topology(
+            results, topology_groups)
     if len(frame_groups) != 1:
         counts = sorted({len(topology) + 1 for topology in topology_groups})
-        if len(topology_groups) == 1 and owner_certificate is not None:
-            chosen = topology_groups[0]
-            result = (len(chosen) + 1, [float(value) for value in chosen])
-            if not include_frame:
-                return result
-            return (*result, None)
+        if owner_certificate is not None:
+            chosen_unframed = (
+                topology_groups[0] if len(topology_groups) == 1
+                else dominant_topology
+            )
+            if chosen_unframed is not None:
+                result = (len(chosen_unframed) + 1,
+                          [float(value) for value in chosen_unframed])
+                if not include_frame:
+                    return result
+                return (*result, None)
         criterion = (
             "unanimous-source-derived-topology-required"
             if owner_certificate is not None
@@ -4359,11 +4532,22 @@ def printed_compartments(
                 ],
                 "unframed_compartment_counts": counts,
                 **({
+                    "topology_superset_relations": superset_relations,
+                } if superset_relations else {}),
+                **({
                     "owner_certificate": owner_certificate.evidence(),
                 } if owner_certificate is not None else {}),
             },
         )
     frame_key, chosen = frame_groups[0]
+    if (dominant_topology is not None
+            and not _same_topology(chosen, dominant_topology)):
+        # Dominance required containing every other slab, the framed one
+        # included: the U-frame proves the rails while the richer
+        # strict-majority slab supplies the interior dividers.  This is the
+        # referee's thick-group-separator case, where the complete topology
+        # lives in a slab the frame's seed band does not reach.
+        chosen = dominant_topology
     result = (len(chosen) + 1, [float(value) for value in chosen])
     if not include_frame:
         return result
@@ -5804,6 +5988,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 if slots != printed else
                 "emitted slot geometry is invalid"
             ),
+            tolerance_pt=POSITION_TOL_PT,
         )
         evidence["emission_source_position"] = source_position
         source_outer_edges = (
@@ -5832,6 +6017,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 if slots != printed else
                 "emitted slot geometry is invalid"
             ),
+            tolerance_pt=POSITION_TOL_PT,
         )
         layout_source_outer_position = _outer_position_evidence(
             (
@@ -5851,6 +6037,7 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
                 if latticed != printed else
                 layout_position_reason
             ),
+            tolerance_pt=POSITION_TOL_PT,
         )
         evidence.update({
             "source_frame_geometry": source_frame,
@@ -5894,21 +6081,21 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             reasons.append(
                 "emitted internal slot edges do not match independently "
                 "measured source dividers within "
-                f"{EMITTED_GEOMETRY_EPS_PT}pt")
+                f"{POSITION_TOL_PT}pt")
         if (emission_source_outer_position["comparable"]
                 and not emission_source_outer_position["matches"]):
             binding_invalid = True
             failure_kinds.append("emission-source-outer-position-mismatch")
             reasons.append(
                 "emitted physical outer slot edges do not match source "
-                f"U-frame rails within {EMITTED_GEOMETRY_EPS_PT}pt")
+                f"U-frame rails within {POSITION_TOL_PT}pt")
         if (layout_source_outer_position["comparable"]
                 and not layout_source_outer_position["matches"]):
             binding_invalid = True
             failure_kinds.append("layout-source-outer-position-mismatch")
             reasons.append(
                 "layout comb.slot_x outer edges do not match source U-frame "
-                f"rails within {EMITTED_GEOMETRY_EPS_PT}pt")
+                f"rails within {POSITION_TOL_PT}pt")
         evidence["effective_emission_state"] = (
             "container-binding-invalid"
             if any(kind.startswith("emission-container-")
@@ -6113,6 +6300,51 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
+def preprinted_width_coverage(index: InkIndex | None,
+                              runs: Sequence[dict[str, Any]],
+                              cell: dict[str, Any]) -> float:
+    """Fraction of the cell's width covered by pre-printed glyph ink.
+
+    emit.py's PrePrintedInk.coverage, mirrored over the audit's own glyph
+    index: a run counts against the cell only when at least half of the run's
+    own height lies inside it (the line above dipping 0.4pt into a box is not
+    text printed in that box), and coverage is the union of the qualifying
+    glyphs' x extents clipped to the cell, as a fraction of the cell's width.
+    """
+    if index is None:
+        return 0.0
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    width = x1 - x0
+    if width <= 0:
+        return 0.0
+    spans: list[tuple[float, float]] = []
+    for box, run_index in index.hits((x0, y0, x1, y1)):
+        if not isinstance(run_index, int) or not 0 <= run_index < len(runs):
+            continue
+        run = runs[run_index]
+        run_y0, run_y1 = float(run["y0"]), float(run["y1"])
+        overlap = min(y1, run_y1) - max(y0, run_y0)
+        if run_y1 <= run_y0 or overlap < 0.5 * (run_y1 - run_y0):
+            continue
+        low, high = max(x0, float(box[0])), min(x1, float(box[2]))
+        if high > low:
+            spans.append((low, high))
+    if not spans:
+        return 0.0
+    spans.sort()
+    covered = 0.0
+    low, high = spans[0]
+    for span_x0, span_x1 in spans[1:]:
+        if span_x0 > high:
+            covered += high - low
+            low, high = span_x0, span_x1
+        else:
+            high = max(high, span_x1)
+    covered += high - low
+    return covered / width
+
+
 def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
     """C4: 2000-DST's entire page-1 money grid was unfillable.
 
@@ -6126,6 +6358,16 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
     across a run of ticks, and demanding inputs there would put a field over the
     heading. 49 cells in this corpus are excluded that way, and the count is
     reported so the exclusion cannot hide anything.
+
+    A plain enclosed box the layout calls empty but whose width is mostly
+    covered by printed glyph ink is excluded the same way: the layout says
+    empty because the straddling run was assigned to a neighbour, while the
+    ink is measurably in the box, and the emitter's field_verdict is right to
+    refuse an input there -- typing over a printed ATC code is the exact C6
+    hazard. The same measured rule the emitter applies (half the run's own
+    height inside the cell, ink coverage above half the cell's width) is used
+    here, and the exclusion is published as ``boxes_preprinted`` so it cannot
+    hide anything.
     """
     if b.form_html is None:
         return broken("no emitted form document to check")
@@ -6139,9 +6381,10 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
             offender_limit=None,
             boxes_checked=0,
             combs_fully_inked=0,
+            boxes_preprinted=0,
             emitted_cell_binding_issues=len(binding_issues),
         )
-    offenders, checked, fully_inked = [], 0, 0
+    offenders, checked, fully_inked, preprinted = [], 0, 0, 0
     by_id = {cell.id: cell for cell in b.cells}
     for cell_id, layout_cell in b.layout_cells.items():
         if cell_id in b.relocated_cells:
@@ -6175,16 +6418,23 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
         border = layout_cell.get("border") or {}
         enclosed = all(border.get(side) for side in ("top", "bottom", "left", "right"))
         if enclosed and layout_cell.get("is_empty") and layout_cell.get("rectangular"):
+            runs = b.pages.get(cell.page, {}).get("text_runs") or ()
+            if (preprinted_width_coverage(index, runs, layout_cell)
+                    > PREPRINTED_COVERAGE):
+                preprinted += 1
+                continue
             checked += 1
             if not input_boxes(cell):
                 offenders.append({"cell": cell_id, "page": cell.page,
                                   "why": "enclosed empty box, no input"})
     if offenders:
         return broken(f"{len(offenders)} of {checked} printed boxes are not fillable",
-                      offenders, boxes_checked=checked, combs_fully_inked=fully_inked)
+                      offenders, boxes_checked=checked, combs_fully_inked=fully_inked,
+                      boxes_preprinted=preprinted)
     return held(
         boxes_checked=checked,
         combs_fully_inked=fully_inked,
+        boxes_preprinted=preprinted,
         emitted_cell_binding_issues=0,
     )
 
@@ -6314,12 +6564,18 @@ def check_reflow_rate_without_description(b: Bundle) -> dict[str, Any]:
     1600-PT's guide shows a two-line ATC description, then a row holding only
     "3% | WB 050". A reader can attach that rate to the wrong nature of payment,
     which on a withholding return is a wrong remittance. The signature is
-    machine-checkable: an empty description cell beside a non-empty rate.
+    machine-checkable and content-shaped: a row whose only non-empty cells are
+    bare rate/code values, with no descriptive text anywhere on the row. A
+    continuation row of a two-line description carries descriptive text and is
+    not that hazard.
 
-    A rate table reflowed as prose fails too. 2551M's table is flattened into
-    running text, which destroys the column relationship outright -- there are no
-    rows left to check, and reporting that as "no bad rows found" is exactly the
-    blindness this file exists to remove.
+    A rate table reflowed as prose fails too: flattening into running text
+    destroys the column relationship outright -- there are no rows left to
+    check, and reporting that as "no bad rows found" is exactly the blindness
+    this file exists to remove. A page may legitimately hold the rate table
+    *and* trailing prose (2551M's ATC band is followed by its Guidelines), so
+    the section's data-flow is a comma-separated list and the requirement is
+    that a table section exists and its gl-table rows are checked.
     """
     tables = [r for r in b.regions if r.get("marker_pattern") in RATE_TABLE_MARKERS]
     if not tables:
@@ -6339,20 +6595,40 @@ def check_reflow_rate_without_description(b: Bundle) -> dict[str, Any]:
             offenders.append({"page": page_index, "why": "no guide section for page"})
             continue
         flow, body = section
-        if flow != "table":
+        flows = tuple(
+            item.strip() for item in (flow or "").split(",") if item.strip())
+        if not any(item in {"table", "lattice"} for item in flows):
             offenders.append({"page": page_index, "why": f"rate table reflowed as {flow}; "
                                                          "row structure not recoverable",
                               "marker": region.get("marker", "")[:50]})
             continue
-        for row in ROW_RE.finditer(body):
-            cells = [TAG_RE.sub("", c).replace("&amp;", "&").strip()
-                     for c in TD_RE.findall(row.group(1))]
-            if len(cells) < 2:
-                continue
-            rows_checked += 1
-            if not cells[0] and any(cells[1:]):
-                offenders.append({"page": page_index, "why": "rate without description",
-                                  "row": [c[:24] for c in cells]})
+        table_bodies = GL_TABLE_RE.findall(body)
+        if not table_bodies:
+            offenders.append({"page": page_index,
+                              "why": f"section flow declares {flow} but the guide "
+                                     "emits no table markup; rows unverifiable",
+                              "marker": region.get("marker", "")[:50]})
+            continue
+        for table_body in table_bodies:
+            for row in ROW_RE.finditer(table_body):
+                cells = [TAG_RE.sub("", c).replace("&amp;", "&").strip()
+                         for c in TD_RE.findall(row.group(1))]
+                if len(cells) < 2:
+                    continue
+                rows_checked += 1
+                filled = [c for c in cells if c]
+                if not filled:
+                    continue
+                bare_values = [
+                    c for c in filled
+                    if RATE_VALUE_RE.fullmatch(c)
+                    or ATC_CODE_VALUE_RE.fullmatch(c)
+                ]
+                if (len(bare_values) == len(filled)
+                        and any(RATE_VALUE_RE.fullmatch(c) for c in filled)):
+                    offenders.append({"page": page_index,
+                                      "why": "rate without description",
+                                      "row": [c[:24] for c in cells]})
     if offenders:
         return broken(f"{len(offenders)} relocated rate row(s)/table(s) lost their "
                       f"description", offenders, rate_tables=len(tables),
@@ -6374,19 +6650,46 @@ def check_image_transform_applied(b: Bundle) -> dict[str, Any]:
     individual placements would need a hash the emitter is free to change, while
     "this page draws one y-flipped image and the SVG flips none" is decidable
     from either document alone.
+
+    A placement the guide plan relocated is subtracted from the source's
+    expectation before the comparison: the reflowed guide drops images by
+    documented design (emit.py says so with a warning), so the form document
+    legitimately emits nothing for it, and demanding it there fails 1702Q for
+    following the plan. The subtraction is keyed to the plan's own
+    ``image_indices`` claims -- never to "page absent from the form document",
+    which would blind the assertion to a genuinely dropped page -- decrements
+    only a signature the source actually places, and is published as
+    ``relocated_placements`` so a flipped-then-relocated image is recorded,
+    never silently skipped.
     """
     if b.doc is None:
         return broken("source PDF not resolved; placement matrices unknown")
     if b.form_html is None:
         return broken("no emitted form document to check")
+    claimed: dict[int, list[tuple[int, int, bool]]] = {}
+    for region in b.regions:
+        page_index = region.get("page")
+        images = b.pages.get(page_index, {}).get("images") or ()
+        for index in region.get("image_indices") or ():
+            if isinstance(index, int) and 0 <= index < len(images):
+                claimed.setdefault(page_index, []).append(
+                    transform_signature(images[index]["transform"]))
     chunks = page_chunks(b.form_html)
     offenders = []
     placements = 0
+    relocated = 0
     for page_index in sorted(b.pages):
         want: collections.Counter = collections.Counter()
         for info in b.doc[page_index - 1].get_image_info(xrefs=True):
             placements += 1
             want[transform_signature(info["transform"])] += 1
+        for signature in claimed.get(page_index, ()):
+            # A claim without a matching source placement stays in `want`
+            # and fails the comparison: fail closed on a plan/source split.
+            if want[signature] > 0:
+                want[signature] -= 1
+                relocated += 1
+        want = +want  # drop zeroed signatures; Counter equality below is exact
         got: collections.Counter = collections.Counter()
         for match in SVG_IMAGE_RE.finditer(chunks.get(page_index, "")):
             got[svg_signature(attrs_of(match.group(1)).get("transform"))] += 1
@@ -6403,8 +6706,9 @@ def check_image_transform_applied(b: Bundle) -> dict[str, Any]:
                               "emitted": got[signature]})
     if offenders:
         return broken("emitted image orientation differs from the source's",
-                      offenders, placements=placements)
-    return held(placements=placements)
+                      offenders, placements=placements,
+                      relocated_placements=relocated)
+    return held(placements=placements, relocated_placements=relocated)
 
 
 # --------------------------------------------------------------------------
@@ -7665,6 +7969,121 @@ def self_test() -> int:
           all(results["assertions"][k]["reason"] or results["assertions"][k]["offenders"]
               for k in ASSERTION_KEYS if not results[k]))
 
+    # A guide-cut clipped straddler is emitted at the straddler record's form
+    # rect; the binding comparison must expect that rect, not the unclipped
+    # layout rect -- and must still fail any other drift on the same cell.
+    def clipped_straddler_fixture(y1: float) -> Any:
+        return types.SimpleNamespace(
+            layout={"pages": [{"index": 1, "cells": []}]},
+            layout_pages={1: {"index": 1, "cells": [
+                {"id": "p1c0", "x0": 0.0, "y0": 0.0, "x1": 10.0, "y1": 20.0},
+            ]}},
+            cells=[Cell(
+                id="p1c0", page=1, classes="c f",
+                attrs=(f' style="left:0pt;top:0pt;width:10pt;height:{y1}pt"'),
+                rect=(0.0, 0.0, 10.0, y1), inner="")],
+            relocated_cells=set(),
+            form_html=None,
+            regions=[{
+                "page": 1, "cut_y_pt": 12.0,
+                "straddlers": [{
+                    "kind": "cell", "ref": "p1c0",
+                    "disposition": "clipped",
+                    "form": {"x0": 0.0, "y0": 0.0, "x1": 10.0, "y1": 12.0},
+                    "guide": {"x0": 0.0, "y0": 12.0, "x1": 10.0, "y1": 20.0},
+                }],
+            }],
+        )
+
+    clipped_ok = emitted_cell_binding_issues(clipped_straddler_fixture(12.0))
+    check(
+        "a clipped straddler emitted at its guide-cut extent binds cleanly",
+        clipped_ok == [],
+    )
+    unclipped_emission = emitted_cell_binding_issues(
+        clipped_straddler_fixture(20.0))
+    check(
+        "a clipped straddler emitted at the unclipped layout rect still fails",
+        len(unclipped_emission) == 1
+        and unclipped_emission[0].get("clipped_by_guide_cut") is True
+        and unclipped_emission[0].get("expected_rect")
+        == [0.0, 0.0, 10.0, 12.0]
+        and unclipped_emission[0].get("unclipped_layout_rect")
+        == [0.0, 0.0, 10.0, 20.0]
+        and "emitted-cell-geometry-mismatch"
+        in unclipped_emission[0]["failure_kinds"],
+    )
+    unrecorded_clip = clipped_straddler_fixture(12.0)
+    unrecorded_clip.regions[0]["straddlers"][0]["disposition"] = "relocated"
+    unrecorded_short = emitted_cell_binding_issues(unrecorded_clip)
+    check(
+        "a short emission without a clipped straddler record still fails",
+        len(unrecorded_short) == 1
+        and unrecorded_short[0].get("clipped_by_guide_cut") is False
+        and "emitted-cell-geometry-mismatch"
+        in unrecorded_short[0]["failure_kinds"],
+    )
+
+    # The reflow assertion reads data-flow as a comma-separated list: a rate
+    # table followed by prose on the same guide page is intact when its
+    # gl-table rows pair codes and rates with descriptive text.
+    paired_guide = (
+        '<section class="gl-page" data-page="1" data-flow="table,prose">'
+        '<table class="gl-table">'
+        "<tr><td>PT 060</td><td>Franchises on electric utilities</td>"
+        "<td>5%</td></tr>"
+        "<tr><td></td><td>and gas utilities, two-line continuation</td>"
+        "<td></td></tr>"
+        "</table><p>Guidelines prose</p></section>")
+    paired_bundle = Bundle(
+        slug="test-reflow", ir=ir, layout=layout, plan=plan,
+        form_html=html, guide_html=paired_guide, pdf=None)
+    paired_result = check_reflow_rate_without_description(paired_bundle)
+    check(
+        "a table-plus-prose guide page with paired rate rows holds",
+        paired_result["holds"] is True
+        and paired_result["rows_checked"] == 2,
+    )
+    orphan_guide = paired_guide.replace(
+        "<td>PT 060</td><td>Franchises on electric utilities</td>",
+        "<td>PT 060</td><td></td>")
+    orphan_bundle = Bundle(
+        slug="test-reflow-orphan", ir=ir, layout=layout, plan=plan,
+        form_html=html, guide_html=orphan_guide, pdf=None)
+    orphan_result = check_reflow_rate_without_description(orphan_bundle)
+    check(
+        "a bare code-and-rate row with no description still fails",
+        orphan_result["holds"] is False
+        and any(offender.get("why") == "rate without description"
+                for offender in orphan_result["offenders"]),
+    )
+    prose_guide = (
+        '<section class="gl-page" data-page="1" data-flow="prose">'
+        "<p>PT 060 Franchises 5% flattened prose</p></section>")
+    prose_bundle = Bundle(
+        slug="test-reflow-prose", ir=ir, layout=layout, plan=plan,
+        form_html=html, guide_html=prose_guide, pdf=None)
+    prose_result = check_reflow_rate_without_description(prose_bundle)
+    check(
+        "a rate table flattened into prose still fails",
+        prose_result["holds"] is False
+        and any("reflowed as prose" in str(offender.get("why"))
+                for offender in prose_result["offenders"]),
+    )
+    tableless_guide = (
+        '<section class="gl-page" data-page="1" data-flow="table">'
+        "<p>no table markup at all</p></section>")
+    tableless_bundle = Bundle(
+        slug="test-reflow-tableless", ir=ir, layout=layout, plan=plan,
+        form_html=html, guide_html=tableless_guide, pdf=None)
+    tableless_result = check_reflow_rate_without_description(tableless_bundle)
+    check(
+        "a declared table flow with no table markup fails closed",
+        tableless_result["holds"] is False
+        and any("emits no table markup" in str(offender.get("why"))
+                for offender in tableless_result["offenders"]),
+    )
+
     # Every record binds the exact bytes it evaluated. Hashes are content-based
     # (not path- or timestamp-based), and a missing required guide plan prevents
     # the form from becoming an `ok` record.
@@ -8390,6 +8809,105 @@ def self_test() -> int:
         in moved_plain_overlap["offenders"][0]["failure_kinds"],
     )
 
+    # A plain enclosed "empty" box whose width is mostly covered by printed
+    # glyph ink is the emitter's pre-printed refusal, not a missing input.
+    # The exclusion demands measured coverage -- half the run's own height
+    # inside the cell, over half the cell's width -- and is published, so a
+    # box a neighbouring line merely grazes keeps its fillability check.
+    def preprinted_box_fixture(run_y0: float, run_y1: float) -> Bundle:
+        covered_ir = copy.deepcopy(ir)
+        covered_ir["pages"][0]["text_runs"] = [{
+            "text": "XP010", "font": "Arial", "size_pt": 8.0, "color": 0,
+            "x0": 9.0, "y0": run_y0, "x1": 34.0, "y1": run_y1,
+            "origin_x": 9.0, "baseline_y": run_y1 - 2.0,
+            "char_origin_offsets_pt": [0.0, 5.0, 10.0, 15.0, 20.0],
+            "char_widths_pt": [5.0, 5.0, 5.0, 5.0, 5.0],
+        }]
+        covered_html = (
+            '<div class="page page-1" id="page-1" '
+            'style="width:100pt;height:100pt">'
+            f'<div class="t" id="p1t0" style="left:9pt;top:{run_y0}pt;'
+            'color:#000000">XP010</div>'
+            '<div id="p1c0" class="c f" data-cell-kind="field" '
+            'style="left:8pt;top:8pt;width:30pt;height:12pt"></div></div>')
+        return Bundle(
+            slug="preprinted-box", ir=covered_ir,
+            layout=enclosed_plain_layout, plan=None,
+            form_html=covered_html, guide_html=None, pdf=None)
+
+    covered_money = check_money_boxes_have_inputs(
+        preprinted_box_fixture(8.0, 18.0))
+    check(
+        "a mostly-inked empty box is excluded and the exclusion published",
+        covered_money["holds"] is True
+        and covered_money["boxes_preprinted"] == 1
+        and covered_money["boxes_checked"] == 0,
+    )
+    grazed_money = check_money_boxes_have_inputs(
+        preprinted_box_fixture(2.0, 10.0))
+    check(
+        "a box a neighbouring line grazes keeps its fillability check",
+        grazed_money["holds"] is False
+        and grazed_money["boxes_preprinted"] == 0
+        and grazed_money["offenders"][0]["why"]
+        == "enclosed empty box, no input",
+    )
+
+    # A placement the guide plan relocated is subtracted from the source's
+    # expectation -- the reflowed guide drops images by documented design --
+    # and the subtraction is published.  Without the plan's claim, or with a
+    # claim whose signature the source never places, the assertion fails.
+    import fitz as _fitz_images
+    image_doc = _fitz_images.open()
+    image_page = image_doc.new_page(width=100.0, height=100.0)
+    seal = _fitz_images.Pixmap(_fitz_images.csRGB, _fitz_images.IRect(0, 0, 2, 2))
+    seal.clear_with(255)
+    image_page.insert_image(_fitz_images.Rect(10, 10, 40, 30), pixmap=seal)
+    image_pdf = image_doc.tobytes()
+    image_doc.close()
+    image_ir = copy.deepcopy(ir)
+    image_ir["pages"][0]["images"] = [{
+        "transform": [30.0, 0.0, 0.0, 20.0, 10.0, 10.0]}]
+    imageless_html = (
+        '<div class="page page-1" id="page-1" '
+        'style="width:100pt;height:100pt"></div>')
+    relocated_plan = {"inline": [{
+        "page": 1, "cut_y_pt": 0.0, "rule_ids": [], "text_run_indices": [],
+        "cell_ids": [], "image_indices": [0],
+        "marker_pattern": "unfillable-page", "marker": ""}]}
+    relocated_result = check_image_transform_applied(Bundle(
+        slug="relocated-image", ir=image_ir, layout=None,
+        plan=relocated_plan, form_html=imageless_html, guide_html=None,
+        pdf=image_pdf))
+    check(
+        "a guide-relocated placement is subtracted and published",
+        relocated_result["holds"] is True
+        and relocated_result["placements"] == 1
+        and relocated_result["relocated_placements"] == 1,
+    )
+    unclaimed_result = check_image_transform_applied(Bundle(
+        slug="dropped-image", ir=image_ir, layout=None, plan=None,
+        form_html=imageless_html, guide_html=None, pdf=image_pdf))
+    check(
+        "an unclaimed dropped placement still fails",
+        unclaimed_result["holds"] is False
+        and unclaimed_result["relocated_placements"] == 0
+        and unclaimed_result["offenders"][0]["source_placements"] == 1
+        and unclaimed_result["offenders"][0]["emitted"] == 0,
+    )
+    flipped_claim_ir = copy.deepcopy(image_ir)
+    flipped_claim_ir["pages"][0]["images"][0]["transform"] = [
+        30.0, 0.0, 0.0, -20.0, 10.0, 30.0]
+    mismatched_claim = check_image_transform_applied(Bundle(
+        slug="mismatched-claim", ir=flipped_claim_ir, layout=None,
+        plan=relocated_plan, form_html=imageless_html, guide_html=None,
+        pdf=image_pdf))
+    check(
+        "a plan claim whose signature the source never places fails closed",
+        mismatched_claim["holds"] is False
+        and mismatched_claim["relocated_placements"] == 0,
+    )
+
     # A malformed comb can put a slot outside its parent. The real `.f` clips
     # that slot, so glyph ink in the clipped-away area is not under an input.
     off_cell_html = (
@@ -8668,34 +9186,53 @@ def self_test() -> int:
         in uneven_offender["failure_kinds"],
     )
 
-    precision_fixture = CombEmissionFixture(
-        [emitted_comb_cell(slot_indexes=(0, 1))], count=2)
-    precision_fixture.vector_pages = {1: VectorPage((
-        VectorPaint(
-            -0.12, 2.0, 0.12, 8.0,
-            0.0, 1.0, 0, "precision-left-rail"),
-        VectorPaint(
-            9.884, 2.0, 10.124, 8.0,
-            0.0, 1.0, 1, "precision-adversary"),
-        VectorPaint(
-            19.88, 2.0, 20.12, 8.0,
-            0.0, 1.0, 2, "precision-right-rail"),
-        VectorPaint(
-            0.0, 7.88, 20.0, 8.12,
-            0.0, 1.0, 3, "precision-baseline"),
-    ), ())}
-    precision_result = check_comb_slots_match_printed(precision_fixture)
-    precision_offender = precision_result["offenders"][0]
+    def precision_fixture_with_divider(
+            center_x: float) -> CombEmissionFixture:
+        fixture = CombEmissionFixture(
+            [emitted_comb_cell(slot_indexes=(0, 1))], count=2)
+        fixture.vector_pages = {1: VectorPage((
+            VectorPaint(
+                -0.12, 2.0, 0.12, 8.0,
+                0.0, 1.0, 0, "precision-left-rail"),
+            VectorPaint(
+                center_x - 0.12, 2.0, center_x + 0.12, 8.0,
+                0.0, 1.0, 1, "precision-adversary"),
+            VectorPaint(
+                19.88, 2.0, 20.12, 8.0,
+                0.0, 1.0, 2, "precision-right-rail"),
+            VectorPaint(
+                0.0, 7.88, 20.0, 8.12,
+                0.0, 1.0, 3, "precision-baseline"),
+        ), ())}
+        return fixture
+
+    # Cross-representation source comparisons are bound by the comb referee's
+    # adjudicated POSITION_TOL_PT, not the emitted four-decimal epsilon: a
+    # sub-centipoint float-noise delta between raw source coordinates and
+    # 0.01pt-quantised emitted geometry is not a displacement.
+    rounding_noise = check_comb_slots_match_printed(
+        precision_fixture_with_divider(10.004))
     check(
-        "source position binding retains sub-centipoint divider precision",
-        precision_result["holds"] is False
-        and precision_offender["emission_layout_position"]["matches"] is True
-        and precision_offender["emission_source_position"]
-        ["expected_internal_edges_x"] == [10.004]
-        and precision_offender["emission_source_position"]["deltas_pt"]
-        == [-0.004]
+        "sub-centipoint source rounding noise is inside the referee bound",
+        rounding_noise["holds"] is True,
+    )
+    displaced_result = check_comb_slots_match_printed(
+        precision_fixture_with_divider(10.30))
+    displaced_offender = (
+        displaced_result["offenders"][0]
+        if displaced_result["offenders"] else {})
+    displaced_position = displaced_offender.get(
+        "emission_source_position", {})
+    check(
+        "a source divider displaced past the referee bound still fails",
+        displaced_result["holds"] is False
+        and displaced_position.get("tolerance_pt") == POSITION_TOL_PT
+        and displaced_offender.get("emission_layout_position", {})
+        .get("matches") is True
+        and displaced_position.get("expected_internal_edges_x") == [10.3]
+        and displaced_position.get("deltas_pt") == [-0.3]
         and "emission-source-position-mismatch"
-        in precision_offender["failure_kinds"],
+        in displaced_offender.get("failure_kinds", ()),
     )
 
     def source_frame_binding_fixture(
@@ -9942,6 +10479,59 @@ def self_test() -> int:
         check(
             "reviewed ownership never chooses between competing source topology",
             certified_competition_failed,
+        )
+
+        # The comb referee's proven thick-group-separator rule: a richer
+        # topology that contains every other slab within POSITION_TOL_PT and
+        # occupies a strict majority of the measured band is dominant, not
+        # competing.  Divider 10 spans y 2..8; divider 20 only y 3.2..8, so
+        # the bands are (2,8) with (10,) and (3.2,8) with (10,20): the richer
+        # slab covers 4.8pt of the 6pt union.
+        dominant_page = source_page(
+            source_paint(10, a=2.0, b=8.0, order=0),
+            source_paint(20, a=3.2, b=8.0, order=1),
+            framed=False,
+        )
+        dominant_result = printed_compartments(
+            dominant_page,
+            valid_owner_cell,
+            include_frame=True,
+            owner_certificate=valid_owner,
+        )
+        check(
+            "a richer strict-majority slab is dominant, not competing",
+            dominant_result == (3, [10.0, 20.0], None),
+        )
+        # The same richer topology confined to a minority cap (y 6.5..8,
+        # 1.5pt of the 6pt union) stays competing: coverage, not richness
+        # alone, is what the referee proved.
+        minority_page = source_page(
+            source_paint(10, a=2.0, b=8.0, order=0),
+            source_paint(20, a=6.5, b=8.0, order=1),
+            framed=False,
+        )
+        try:
+            printed_compartments(
+                minority_page,
+                valid_owner_cell,
+                owner_certificate=valid_owner,
+            )
+        except CombTopologyError as exc:
+            minority_failed = (
+                exc.evidence.get("criterion")
+                == "unanimous-source-derived-topology-required"
+                and exc.evidence.get("unframed_compartment_counts") == [2, 3]
+                and any(
+                    relation.get("proper")
+                    for relation in exc.evidence.get(
+                        "topology_superset_relations", ())
+                )
+            )
+        else:
+            minority_failed = False
+        check(
+            "a minority richer slab stays competing and publishes relations",
+            minority_failed,
         )
 
         unsupported_owner_page = source_page(
