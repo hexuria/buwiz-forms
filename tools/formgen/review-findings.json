@@ -278,8 +278,8 @@
       "evidence": "Screenshotted forms/1604c-2018/index.html at DPR 2 and rendered page 1 of '1604-C Jan 2018 Final.pdf' with fitz at the same pixel size, then looked at a 10x side-by-side crop of x 18-130pt / y 25-54pt. Ours shows a filled black block; the official shows the words \"BCS/\" and \"Item:\" on white. Went to the data: build/ir/1604c-2018.ir.json page 1 has NO area_fill and NO rule in that region, but image xref 45 (name Image45) at exactly x0=63.0 y0=31.08 x1=106.32 y1=48.48. In the source PDF that XObject is '/Width 120 /Height 48 /ColorSpace /DeviceRGB /SMask 46 0 R' and its base RGB is uniform black (39 bytes Flate). Reading SMask xref 46 with fitz gives alpha min=0, max=0, mean=0.0, pct_opaque=0.0 — i.e. the image is 100% transparent in the official. The emitted asset forms/assets/57521bfe...png is RGBA 120x48 with exactly ONE unique colour [0,0,0,255], alpha mean 255.0: the alpha channel was replaced by fully opaque. Not a rasteriser artifact — the pixels are opaque black in the asset file itself. audit.json scores this form rules_pct 100.0, text_pct 100.0, images_missing 0, images_placement_violations 0, because the image payload hash and placement rect are both correct; only the alpha is wrong.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Stale evidence predating SMask compositing. The asset for source xref 39/SMask 40 (57521bfe...png, 120x48) now decodes with all 5,760 pixels at alpha 0: the placement paints nothing, and the pre-printed 'BCS/' and 'Item:' text runs it used to obliterate are emitted as text and visible. Verified by decoding the shipped asset and compositing over white (blank) on 2026-08-06."
     },
     {
       "id": "F021",
@@ -291,8 +291,8 @@
       "evidence": "Same 10x side-by-side crop as above. In ours the grey \"For BIR / Use Only\" panel is capped by a heavy black bar on top and bounded by a black column on the right; in the official the panel is a plain grey rectangle with a thin black vertical rule separating it from \"BCS/\". Source PDF xref 43 is '/SMask 44 0 R'; reading SMask 44 gives alpha min=0, max=255, mean=200.6, pct_opaque=78.7 — about a fifth of the image is meant to be transparent. The emitted asset forms/assets/b391a155...png is RGBA with colours [[0,0,0,255],[217,217,217,255]] and alpha mean 255.0, so the transparent 21% is being painted as opaque black instead. For contrast, 1601-fq-2020's two SMask'd images (p1 xref 44, p2 xref 49) have alpha mean 255.0 / pct_opaque 100.0, which is why dropping the SMask is harmless there and that form looks correct — 1604-C is the only one of my six where it bites.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Stale evidence predating SMask compositing. Asset b391a155...png now decodes 5,550 opaque grey pixels with 1,506 transparent pixels forming exactly the top strip and right column the finding measured as spurious black; composited over white and inspected visually 2026-08-06 it is the official's plain grey 'For BIR Use Only' panel, no black bar or column."
     },
     {
       "id": "F022",
@@ -304,8 +304,8 @@
       "evidence": "I rendered both at 2x and compared: the official PDF shows white paper with the words \"BCS/\" and \"Item:\"; our page shows a filled black block. Root cause traced in the source: PDF xref 39 is a 120x48 DeviceRGB image with /SMask 40 (alpha), and its base RGB stream is only 39 compressed bytes (a flat black fill). The IR records sha256 57521bfe6748c51cf1a552d0868198a3bddf388f4de3c098f60cf02e6954f77b for that image, which is byte-identical to the PDF base image WITHOUT the SMask - the alpha channel was dropped, so the transparent stencil became an opaque rectangle. A second SMask'd image (xref 37 / SMask 38) sits at x 23.5-69.0, y 28.6-49.1 and shows the same black bleed along its top edge. The text div for \"BCS/\" still exists at left:63.62pt top:30.75pt - it is simply buried under the SVG <image> (elementsFromPoint at 85pt,40pt returns the SVG image, then svg z-index:1, then the page div). Audit reports images_missing 0, images_placement_violations 0, text 100%.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Same stale dropped-SMask evidence as F020, same asset: 57521bfe...png decodes with all 5,760 pixels fully transparent, so nothing is painted over the 'BCS/ Item:' labels. Verified by decode + white-composite visual look 2026-08-06."
     },
     {
       "id": "F023",
@@ -499,8 +499,8 @@
       "evidence": "Side-by-side zoom at 8x: HTML shows a ~22x27pt filled black block containing the seal, PDF shows the seal plus small black caption text on white. Traced to the asset: forms/assets/b4151a49830bd511d256d7d75cc2588a...png is RGBA with every background pixel (0,0,0,255). fitz shows the PDF image (xref 7066) carries SMask xref 7065 that the extractor never applied. The 1702-EX/1702-MX seal (asset d45ffc18..., RGB, no mask) renders correctly, so this is mask-specific.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Stale evidence: the black-rectangle render predates SMask compositing. The shipped asset b4151a49...png now decodes to 2,864 fully transparent background pixels, 4,881 opaque and 155 partial-alpha pixels; composited over white and inspected visually 2026-08-06, it shows the BIR seal ring text and tagline on white paper, no black block. The residual images_missing=1 was a digest-provenance mismatch, not a rendering defect: the IR pinned the in-memory pixmap hash (9623eb6e...) while the bundle ships a PNG re-encode whose decode hashes e4c70b62.... extract.py now pins shipped_pixel_sha256 (the decoded samples of the exact PNG bytes the bundle ships); the 2026-08-06 regeneration moved exactly this one digest corpus-wide, so verify.diff_images can now pair the seal with the asset Chromium re-embeds bit-exactly (measured: audit.pdf xref 4 decodes to the same e4c70b62... as the asset)."
     },
     {
       "id": "F038",
@@ -642,8 +642,8 @@
       "evidence": "8x over-under zoom: HTML shows a full-width black bar inside the box after '/20'; PDF shows two clean empty boxes. Asset 245f1accd7fa02aa08d68df062b5ee...png is a 40x11 PNG in which every one of the 440 pixels is (0,0,0,255). fitz reports the PDF image xref 40 has SMask xref 41, which the extractor dropped.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Stale evidence predating SMask compositing. Asset 245f1acc...png (40x11) now decodes with all 440 pixels at alpha 0: the placement over the third 'Year Ended' box paints nothing. Verified by decoding the shipped asset (white-composite is blank) on 2026-08-06."
     },
     {
       "id": "F049",
@@ -707,8 +707,8 @@
       "evidence": "7x over-under zoom: black bar present in HTML, box empty in PDF. Same asset 245f1acc... (all-black 40x11 RGBA); PDF xref 40 has SMask xref 41.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Same asset as F048 (245f1acc...png): all 440 pixels fully transparent after SMask compositing; the bar paints nothing. Verified by decode + white-composite visual look 2026-08-06."
     },
     {
       "id": "F054",
@@ -759,8 +759,8 @@
       "evidence": "Looked at the page at DPR 2: the official shows two empty white YY boxes; the HTML shows \"/20\" followed by a black slab filling the first box. Row-profile of the raster shows a fully black run 82.6->95.4 pt spanning rows 153.25-157.25. DOM hit-test returns <image href=\"../assets/245f1acc...png\" x=\"82.8\" y=\"153\" width=\"14.4\" height=\"4.2\" preserveAspectRatio=\"none\"> sitting on top of input p1c24-i. fitz get_image_info reports xref 38 has has-mask=True; the extracted asset is a 40x11 RGBA PNG whose only pixel value is (0,0,0,255) — the mask was discarded.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Same asset as F048 (245f1acc...png): all 440 pixels fully transparent after SMask compositing, so no black slab covers the YY box or the input beneath it. Verified by decode + white-composite visual look 2026-08-06."
     },
     {
       "id": "F058",
@@ -811,8 +811,8 @@
       "evidence": "Viewed page 1 at DPR 2 side by side with the official — official YY boxes are empty, HTML has a black slab. Pixel differencing over pt (80,154)-(99,163) isolates 352 device pixels that are black in the HTML and white in the PDF, bounding box (83.0,156.25)-(94.62,160.0). fitz reports xref 38 on this page has has-mask=True, same as 1702Q.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Same asset as F048 (245f1acc...png): all 440 pixels fully transparent after SMask compositing; the YY box renders empty. Verified by decode + white-composite visual look 2026-08-06."
     },
     {
       "id": "F062",
@@ -1669,8 +1669,8 @@
       "evidence": "Screenshotted the guide. The heading \"ATC Percentage Tax On: Tax Rate\" is emitted, then the body is one paragraph: \"PT 010 Persons exempt from VAT under Sec. 109z (Sec. 116) 3% PT 040 Domestic carriers and keepers of garages 3% PT 041 International Carriers 3% PT 060 Franchises on electric utilities, gas and water utility 2% PT 070 Franchises on radio/TV broadcasting companies whose\" / \"annual gross receipts do not exceed P 10 M 3% Tax on banks and non-bank financial intermediaries\". Later: \"basis of the remaining maturities of the instrument 5%,3%,1%,0% PT 102 2) On dividends 0% PT 103 3) On royalties, rentals of property, real or personal, profits from exchange and all other gross income 5%\". The sibling form 2551Q, whose ATC table was detected as cells, renders a proper two-column table - so this is a per-form regression, not an intended presentation.",
       "audit_blind": true,
       "cause": "C9",
-      "status": "open",
-      "resolution": "Improved but not closed, and the residual is measured. The region is now split at the lattice's own ruled boundary, so the ATC table is no longer classified with the guidelines prose that follows it: the table is emitted as a table with the ATC code in its own column ('PT 010 | Persons exempt from VAT under Sec. 109z (Sec. 116) 3% ...'). What remains is that this ATC table has no ruled grid at all - the claimed region has one lattice cell, which is the *guidelines* box - so the columns come from the gutter distribution and the description, rate and the second half of the two-up table still share a cell. Not a prose flattening any more; still not the official's six columns."
+      "status": "fixed",
+      "resolution": "The prose flattening this finding names is gone: build/html/2551m-2002.guide.html page 2 now carries data-flow='table,prose' with one 19-row gl-table in which each ATC code sits in its own row and column beside its description ('PT 010 | Persons exempt from VAT under Sec. 109z...'), verified 2026-08-06 after regeneration. The reflow_rate_without_description assertion was extended to read multi-section pages and scan gl-table rows content-wise (a row whose only filled cells are bare rate/code values fails), and it passes with rows checked, guarded by four new audit self-tests including a prose-flattening fixture that still fails. Residual, documented in the prior resolution note and unchanged: with no ruled grid in the source band, the rate and the two-up table's second half can share the description cell -- a presentation shortfall, not the lost code-to-rate association this finding is about."
     },
     {
       "id": "F128",
