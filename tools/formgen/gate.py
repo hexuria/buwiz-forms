@@ -2409,12 +2409,23 @@ def _layout_audit_owner_ids(layout_binding: Any) -> list[str]:
                 or cell.get("cell") != cell_id):
             raise CombRefereeScopeError(
                 "parsed layout-owner registry has a malformed subject")
+        page = cell.get("page")
+        stream_index = cell.get("stream_index")
+        if (not isinstance(page, int) or isinstance(page, bool) or page < 1
+                or not isinstance(stream_index, int)
+                or isinstance(stream_index, bool) or stream_index < 0):
+            raise CombRefereeScopeError(
+                "parsed layout-owner registry subject has no stream position")
     # JSON object keys are intentionally serialized with sort_keys=True in
     # both the referee report envelope and the persisted audit envelope.  Do
-    # not let that lexical reordering change the owner registry: the child
-    # report and the audit producer use the independent page/numeric-cell
-    # order.  Validate the registry above before sorting so malformed hostile
-    # entries still fail closed rather than being hidden by a fallback.
+    # not let that lexical reordering change the owner registry: order it by
+    # the stream position each subject recorded when the layout was parsed.
+    # ``audit_expected_ids`` is appended during that same stream walk, so both
+    # sides of the equality below are the layout cell stream and neither is a
+    # re-derivation from the cell numerals -- an id is a continuity
+    # identifier, not a geometric one.  Validate the registry above before
+    # sorting so malformed hostile entries still fail closed rather than being
+    # hidden by a fallback.
     owner_ids = [
         cell_id for cell_id, cell in sorted(
             cells.items(), key=_layout_subject_sort_key)
@@ -4996,13 +5007,38 @@ def _emission_geometry_from_layout(
 def _layout_subject_sort_key(
         item: tuple[str, dict[str, Any]],
         ) -> tuple[int, int, str]:
-    """Match the referee's canonical page/cell ordering independently."""
+    """Order projected subjects by the layout's own cell stream.
+
+    A cell id is a CONTINUITY identifier, not a geometric one.  lattice.py
+    keeps a cell's legacy id when its ``subject_key`` still matches a legacy
+    box and otherwise draws a fresh id starting at ``len(legacy_boxes)``, so a
+    cell created after a partition repair carries a number far above its
+    neighbours while sitting geometrically among them (2550M's restored comb
+    owner ``p1c193`` is emitted between ``p1c97`` and ``p1c103``).  Parsing
+    ``p<page>c<n>`` therefore reads discovery history, not document order, and
+    is only ever right by luck: two reconciliations three days apart -- the
+    producer aligned to the cell stream, this projection aligned to the
+    referee's numeric key -- picked opposite canonical orders and agreed on
+    every form only because no form had yet grown a late-created owner.
+
+    The canonical order is the layout cell stream, which every producer
+    already declares (lattice.py's ledger note, audit.py's offender
+    publication, audit.py's retained-partition check).  ``stream_index`` is
+    recorded by ``_layout_binding_projection`` while it walks ``page["cells"]``
+    and is a plain int in the persisted binding, so this key survives the
+    ``sort_keys=True`` JSON round trip that both the referee envelope and the
+    audit envelope apply to the registry.
+    """
     cell_id, cell = item
-    match = re.fullmatch(r"p(\d+)c(\d+)", cell_id)
-    if match:
-        return int(match.group(1)), int(match.group(2)), cell_id
-    page = cell.get("page", 0) if isinstance(cell, dict) else 0
-    return int(page), sys.maxsize, cell_id
+    page = cell.get("page") if isinstance(cell, dict) else None
+    stream_index = cell.get("stream_index") if isinstance(cell, dict) else None
+    return (
+        page if isinstance(page, int) and not isinstance(page, bool)
+        else sys.maxsize,
+        stream_index if isinstance(stream_index, int)
+        and not isinstance(stream_index, bool) else sys.maxsize,
+        cell_id,
+    )
 
 
 def _ordered_layout_cell_items(
@@ -5069,7 +5105,15 @@ def _layout_binding_projection(
             raise CombRefereeScopeError(
                 f"layout ledger page is incomplete: {slug}/p{expected_page}")
         cells_by_id: dict[str, dict[str, Any]] = {}
-        for raw_cell in page["cells"]:
+        # The position of a cell in page["cells"] is the only geometric order
+        # the layout carries; the cell's id is a continuity identifier that
+        # survives across regenerations and says nothing about where the cell
+        # sits (see _layout_subject_sort_key).  Capture the stream position
+        # here, on the single walk that already establishes cells_by_id, so
+        # every consumer of this projection can order subjects the way the
+        # layout, the audit and the emission all publish them.
+        stream_index_by_id: dict[str, int] = {}
+        for stream_index, raw_cell in enumerate(page["cells"]):
             if not isinstance(raw_cell, dict) or not isinstance(
                     raw_cell.get("id"), str):
                 raise CombRefereeScopeError(
@@ -5079,8 +5123,15 @@ def _layout_binding_projection(
                 raise CombRefereeScopeError(
                     f"layout cell is duplicated: {slug}/{cell_id}")
             cells_by_id[cell_id] = raw_cell
+            stream_index_by_id[cell_id] = stream_index
             if isinstance(raw_cell.get("comb"), dict) and cell_id not in relocated:
                 audit_expected_ids.append(cell_id)
+        # A retained legacy box has no cell in the current stream -- that is
+        # what "retained_unresolved" means -- so it has no document position.
+        # Rank those after every streamed cell on their page, in the order the
+        # reviewed ledger lists them, which is where lattice.py already emits
+        # them.  Nothing is derived from their legacy number.
+        retained_stream_index = len(page["cells"])
 
         for subject in page["comb_subjects"]:
             if not isinstance(subject, dict):
@@ -5113,6 +5164,8 @@ def _layout_binding_projection(
                 report_id = legacy_id
                 comb = subject.get("legacy_comb")
                 emission_geometry = None
+                subject_stream_index = retained_stream_index
+                retained_stream_index += 1
             else:
                 if not isinstance(active_id, str) or active_id not in cells_by_id:
                     raise CombRefereeScopeError(
@@ -5124,6 +5177,7 @@ def _layout_binding_projection(
                     raise CombRefereeScopeError(
                         f"active subject owner relation is false: {slug}/{active_id}")
                 report_id = active_id
+                subject_stream_index = stream_index_by_id[active_id]
                 comb = owner.get("comb")
                 form_box = clipped.get(active_id, {
                     name: float(owner[name])
@@ -5149,6 +5203,7 @@ def _layout_binding_projection(
                 "ledger_topology_sha256": topology["sha256"],
                 "ledger_evidence": subject,
                 "page": expected_page,
+                "stream_index": subject_stream_index,
                 "bbox": bbox,
                 "latticed": topology["cells"],
                 "lattice_divider_x": topology["divider_x"],
@@ -9157,6 +9212,7 @@ def _synthetic_comb_fixture(
                         "ledger_topology_sha256": fixture_topology["sha256"],
                         "ledger_evidence": fixture_subject,
                         "page": 1,
+                        "stream_index": 0,
                         "bbox": [0.0, 0.0, 10.0, 10.0],
                         "latticed": 2,
                         "lattice_divider_x": [5.0],
@@ -10654,30 +10710,56 @@ def self_test() -> int:
             "OS=false with explicit host TCB and enforceable application scope "
             "must validate: " + "; ".join(envelope_errors[:3]))
     # Persisted envelopes use sort_keys=True, so a JSON round trip must not
-    # turn the lexical object-key order into a different owner order.
-    reordered_registry = clone(snapshot["layout_bindings"]["fixture-1"])
-    first_cell = clone(reordered_registry["cells"]["p1c1"])
-    second_cell = clone(first_cell)
-    first_cell.update({
-        "cell": "p1c10", "legacy_cell_id": "p1c10", "cell_id": "p1c10",
-    })
-    second_cell.update({
-        "cell": "p1c2", "legacy_cell_id": "p1c2", "cell_id": "p1c2",
-    })
-    reordered_registry["cells"] = {"p1c10": first_cell, "p1c2": second_cell}
-    reordered_registry["audit_expected_ids"] = ["p1c2", "p1c10"]
-    reordered_registry = json.loads(
-        json.dumps(reordered_registry, sort_keys=True))
-    try:
-        reordered_owner_ids = _layout_audit_owner_ids(reordered_registry)
-    except Exception as error:  # noqa: BLE001 - self-test names the breakage
-        failures.append(
-            "sorted-key layout owner registry must remain evaluable: "
-            f"{type(error).__name__}: {error}")
-    else:
-        if reordered_owner_ids != ["p1c2", "p1c10"]:
+    # turn the lexical object-key order into a different owner order.  The
+    # canonical order is the recorded layout cell-stream position, so both
+    # cases below have to survive: one where the stream agrees with the cell
+    # numerals and one where it does not.  A cell id is a continuity
+    # identifier -- lattice.py hands a cell created by a partition repair a
+    # fresh high number while it sits mid-page -- so a key that re-derives the
+    # order from p<page>c<n> is right only by luck, and the second case is the
+    # one that catches it.
+    def _round_tripped_owner_ids(
+            stream_positions: dict[str, int]) -> list[str] | None:
+        registry = clone(snapshot["layout_bindings"]["fixture-1"])
+        cells = {}
+        for cell_id, stream_index in stream_positions.items():
+            projected = clone(registry["cells"]["p1c1"])
+            projected.update({
+                "cell": cell_id, "legacy_cell_id": cell_id,
+                "cell_id": cell_id, "stream_index": stream_index,
+            })
+            cells[cell_id] = projected
+        registry["cells"] = cells
+        registry["audit_expected_ids"] = sorted(
+            stream_positions, key=lambda cell_id: stream_positions[cell_id])
+        registry = json.loads(json.dumps(registry, sort_keys=True))
+        try:
+            return _layout_audit_owner_ids(registry)
+        except Exception as error:  # noqa: BLE001 - self-test names breakage
             failures.append(
-                "sorted-key layout owner registry changed canonical order")
+                "sorted-key layout owner registry must remain evaluable: "
+                f"{type(error).__name__}: {error}")
+            return None
+
+    lexical_case = _round_tripped_owner_ids({"p1c2": 0, "p1c10": 1})
+    if lexical_case is not None and lexical_case != ["p1c2", "p1c10"]:
+        failures.append(
+            "sorted-key layout owner registry changed canonical order")
+    numeral_case = _round_tripped_owner_ids({"p1c10": 0, "p1c2": 1})
+    if numeral_case is not None and numeral_case != ["p1c10", "p1c2"]:
+        failures.append(
+            "layout owner registry re-derived its order from the cell "
+            "numerals instead of the recorded cell-stream position")
+    missing_stream_position = clone(snapshot["layout_bindings"]["fixture-1"])
+    missing_stream_position["cells"]["p1c1"].pop("stream_index")
+    try:
+        _layout_audit_owner_ids(missing_stream_position)
+    except CombRefereeScopeError:
+        pass
+    else:
+        failures.append(
+            "a layout owner registry without a recorded stream position must "
+            "fail closed rather than fall back to the cell numerals")
     sorted_snapshot = json.loads(json.dumps(snapshot, sort_keys=True))
     sorted_envelope = json.loads(json.dumps(envelope, sort_keys=True))
     sorted_envelope_errors = validate_comb_referee_envelope(

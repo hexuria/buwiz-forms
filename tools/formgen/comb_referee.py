@@ -90,7 +90,7 @@ LATTICE_PRODUCER_SHA256 = (
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
-    "ef59b02647933c362f629e0a28a0d33cfdaee3a09f7b9fa3a9135ecdaeaa365a"
+    "7c902be970404e43ca54e61f572dcfd2d3edc8ac8a0336342db1d43faec24ac2"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     "tools/formgen/extract.py": (
@@ -3491,6 +3491,7 @@ def validate_comb_ledger(
         page_subject_keys: set[str] = set()
         page_legacy_ids: set[str] = set()
         page_active_ids: set[str] = set()
+        page_active_order: list[str] = []
         for index, subject in enumerate(subjects):
             label = f"{slug} page {page_index} subject {index}"
             if not isinstance(subject, dict):
@@ -3595,6 +3596,7 @@ def validate_comb_ledger(
                         raise RefereeError(
                             f"{label} boundary topology transition is invalid")
                 page_active_ids.add(cell_id)
+                page_active_order.append(cell_id)
                 active_cell_ids.add(cell_id)
                 published_subjects.append({
                     "page": page_index,
@@ -3681,6 +3683,26 @@ def validate_comb_ledger(
                    if missing else "")
                 + (f"; unknown active: {', '.join(extra[:8])}"
                    if extra else ""))
+        # Canonical order is the LAYOUT CELL STREAM, never the numeric cell id:
+        # `lattice.py` hands a cell its LEGACY CONTINUITY id when the rectangle
+        # matches a legacy box and otherwise draws a fresh id from the end of
+        # the legacy range, so a repaired partition can seat a high-numbered
+        # cell mid-page (2550M's restored p1c193 sits above p1c103-105).  Cell
+        # ids identify continuity, not position.  Prove -- do not assume --
+        # that the subject ledger walks the stream in stream order, so that
+        # every consumer of this report can treat ledger order and document
+        # order as the same order.
+        comb_cell_order = [str(cell["id"]) for cell in comb_cells]
+        if page_active_order != comb_cell_order:
+            divergence = next(
+                position for position, (ledger_id, stream_id)
+                in enumerate(zip(page_active_order, comb_cell_order))
+                if ledger_id != stream_id)
+            raise RefereeError(
+                f"{slug} page {page_index}: active subject ledger order "
+                "disagrees with the layout cell stream at index "
+                f"{divergence}: ledger {page_active_order[divergence]} vs "
+                f"stream {comb_cell_order[divergence]}")
 
         page_inference_keys: set[str] = set()
         page_inference_ids: set[str] = set()
@@ -7190,6 +7212,8 @@ def bind_audit_assertion(
         ) -> dict[str, Any]:
     """Bind legacy-cell audit identities to the canonical subject ledger."""
     errors: list[str] = []
+    # Ledger order, which `validate_comb_ledger` proves is the layout cell-stream
+    # order -- the same canonical order the published `cells` list carries.
     active_order = [
         subject["cell_id"] for subject in ledger["subjects"]
         if subject["state"] in {"active_resolved", "active_unresolved"}
@@ -7482,13 +7506,6 @@ def transition_decision(
         "blocked",
         "unknown ledger state cannot be transitioned",
     )
-
-
-def cell_sort_key(cell: dict[str, Any]) -> tuple[int, int, str]:
-    match = re.fullmatch(r"p(\d+)c(\d+)", str(cell.get("cell", "")))
-    if match:
-        return int(match.group(1)), int(match.group(2)), str(cell["cell"])
-    return int(cell.get("page", 0)), sys.maxsize, str(cell.get("cell", ""))
 
 
 def changed_snapshot_inputs(form: dict[str, Any],
@@ -7875,7 +7892,39 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
             }
             for inference in ledger["inferences"]
         ],
-        "cells": sorted(cells, key=cell_sort_key),
+        # Published in LAYOUT CELL-STREAM order: pages ascending; within a page
+        # the active subjects in the order the layout's own cell stream lists
+        # them, which `validate_comb_ledger` PROVES equals the subject ledger
+        # order rather than assuming it; then the retained subjects, which have
+        # no cell in the current stream and therefore no document position, in
+        # ledger order after every streamed cell on their page.
+        #
+        # This list used to be re-sorted by numeric cell id, and that was the
+        # odd one out.  A cell id is a CONTINUITY identifier: lattice.py keeps
+        # a cell's legacy id while its subject_key still matches a legacy box
+        # and otherwise draws a fresh id from the end of the legacy range, so a
+        # repaired partition seats a high-numbered owner mid-page (2550M's
+        # restored p1c193 sits above p1c103-105).  Numeric order reads
+        # discovery history, not geometry, and was right only by luck.  Every
+        # other producer already declares the stream canonical -- lattice.py
+        # binds the owner registry to "the exact order of the current layout
+        # cell stream" and audit.py publishes offenders in page/cell document
+        # order.
+        #
+        # This referee is the ADJUDICATOR: its derivation is the proven one,
+        # which is exactly why its ordering must not be the one that disagrees.
+        # The gate aligned its projection to the numeric key published here and
+        # so canonicalised discovery order for every downstream consumer; the
+        # ordering had to be corrected at the source, not compensated for
+        # downstream.  A stable sort is used deliberately: it moves nothing
+        # except the retained subjects, so the proven stream order survives.
+        "cells": sorted(
+            cells,
+            key=lambda cell: (
+                int(cell["page"]),
+                cell["ledger_state"] == "retained_unresolved",
+            ),
+        ),
     }
 
 

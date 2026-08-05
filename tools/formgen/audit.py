@@ -6417,7 +6417,15 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
             continue
         border = layout_cell.get("border") or {}
         enclosed = all(border.get(side) for side in ("top", "bottom", "left", "right"))
-        if enclosed and layout_cell.get("is_empty") and layout_cell.get("rectangular"):
+        # kind used to be redundant here: an enclosed empty cell always
+        # classified as a field.  It no longer is -- the lattice demotes an
+        # empty bordered strip whose paper cannot hold one glyph of the
+        # form's smallest printed line to "blank" (a ruled gap, not a
+        # writing surface), and demanding an input inside a 0.79pt gap
+        # would re-create the sliver inputs that fix removed.
+        if (layout_cell.get("kind") == "field" and enclosed
+                and layout_cell.get("is_empty")
+                and layout_cell.get("rectangular")):
             runs = b.pages.get(cell.page, {}).get("text_runs") or ()
             if (preprinted_width_coverage(index, runs, layout_cell)
                     > PREPRINTED_COVERAGE):
