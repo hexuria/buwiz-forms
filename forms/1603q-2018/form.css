@@ -4,23 +4,17 @@
 @font-face { font-family:"eBIRForms Arimo";font-style:italic;font-weight:100 900;font-display:block;src:url("../fonts/arimo-latin-wght-italic.woff2") format("woff2") }
 @font-face { font-family:"eBIRForms Tinos";font-style:normal;font-weight:400;font-display:block;src:url("../fonts/tinos-latin-400-normal.woff2") format("woff2") }
 .fi { position:absolute;inset:0;appearance:none;-webkit-appearance:none;border:0;margin:0;padding:0;background:transparent;box-shadow:none;outline:0;border-radius:0;caret-color:#000000;text-rendering:geometricPrecision;font-family:"eBIRForms Tinos", Tinos, "Times New Roman", Times, serif;font-weight:400;font-style:normal;font-kerning:none;font-variant-ligatures:none;font-feature-settings:normal;color:#000000 }
-.fh0 { font-size:2.34pt;line-height:2.6pt }
-.fh1 { font-size:3.07pt;line-height:3.41pt }
-.fh10 { font-size:6pt;line-height:7.44pt;letter-spacing:-0.0142pt }
-.fh11 { font-size:6pt;line-height:7.56pt;letter-spacing:-0.0142pt }
-.fh12 { font-size:6pt;line-height:7.8pt;letter-spacing:-0.0142pt }
-.fh13 { font-size:6pt;line-height:7.92pt;letter-spacing:-0.0142pt }
-.fh14 { font-size:6pt;line-height:8.04pt;letter-spacing:-0.0142pt }
-.fh15 { font-size:6pt;line-height:10.08pt;letter-spacing:-0.0142pt }
-.fh16 { font-size:6pt;line-height:19.38pt;letter-spacing:-0.0142pt }
-.fh17 { font-size:6pt;line-height:22.14pt;letter-spacing:-0.0142pt }
-.fh2 { font-size:3.13pt;line-height:3.47pt }
-.fh3 { font-size:3.2pt;line-height:3.55pt }
-.fh4 { font-size:3.47pt;line-height:3.85pt }
-.fh5 { font-size:3.62pt;line-height:4.01pt }
-.fh6 { font-size:5.3pt;line-height:5.88pt;letter-spacing:-0.0125pt }
-.fh7 { font-size:6pt;line-height:6.84pt;letter-spacing:-0.0142pt }
-.fh8 { font-size:6pt;line-height:6.96pt;letter-spacing:-0.0142pt }
-.fh9 { font-size:6pt;line-height:7.32pt;letter-spacing:-0.0142pt }
+.fh0 { font-size:5.3pt;line-height:5.88pt;letter-spacing:-0.0125pt }
+.fh1 { font-size:6pt;line-height:6.84pt;letter-spacing:-0.0142pt }
+.fh10 { font-size:6pt;line-height:19.38pt;letter-spacing:-0.0142pt }
+.fh11 { font-size:6pt;line-height:22.14pt;letter-spacing:-0.0142pt }
+.fh2 { font-size:6pt;line-height:6.96pt;letter-spacing:-0.0142pt }
+.fh3 { font-size:6pt;line-height:7.32pt;letter-spacing:-0.0142pt }
+.fh4 { font-size:6pt;line-height:7.44pt;letter-spacing:-0.0142pt }
+.fh5 { font-size:6pt;line-height:7.56pt;letter-spacing:-0.0142pt }
+.fh6 { font-size:6pt;line-height:7.8pt;letter-spacing:-0.0142pt }
+.fh7 { font-size:6pt;line-height:7.92pt;letter-spacing:-0.0142pt }
+.fh8 { font-size:6pt;line-height:8.04pt;letter-spacing:-0.0142pt }
+.fh9 { font-size:6pt;line-height:10.08pt;letter-spacing:-0.0142pt }
 .doc-link { position:absolute;left:0;top:0;z-index:9;font:12px/1.5 system-ui,-apple-system,sans-serif;padding:2px 8px;background:#fff;color:#0645ad;text-decoration:underline }
 @media print { .doc-link{display:none} }
