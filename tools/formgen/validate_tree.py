@@ -56,7 +56,8 @@ REQUIRED_BUNDLE_FILES = ("index.html", "form.css", "provenance.json")
 GUIDE_FILES = ("guide.html", "guide.css")
 GUIDE_PDF_DIR = "guides"
 # forms/index.html is written by index_page.py, not by a bundle.
-ROOT_ENTRIES = {"base.css", "index.html", "fonts", "assets", "extra"}
+ASSET_MANIFEST = "assets-manifest.json"
+ROOT_ENTRIES = {"base.css", "index.html", ASSET_MANIFEST, "fonts", "assets", "extra"}
 EXTRA_DIR = "extra"
 FONT_DIR = "fonts"
 ASSET_DIR = "assets"
@@ -698,6 +699,28 @@ def check_css_split(tree: Tree) -> Result:
 # ---------------------------------------------------------------------------
 
 
+def _load_asset_manifest(tree: "Tree", result: "Result") -> dict[str, str] | None:
+    """filename -> the sha256 of that file's own bytes, or None if absent.
+
+    Absent is a failure, not a fallback: without it the soft-masked assets go
+    back to being unverifiable, and reporting them as merely "not checked" is how
+    27% of the pool sat unexamined. None is returned only so the caller can name
+    each one, having already recorded the missing manifest.
+    """
+    path = tree.root / ASSET_MANIFEST
+    if not path.is_file():
+        result.failures.append(
+            f"{ASSET_MANIFEST} is missing, so no soft-masked asset can be verified")
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        entries = payload["assets"]
+        return {name: entry["sha256"] for name, entry in entries.items()}
+    except (ValueError, KeyError, TypeError) as exc:
+        result.failures.append(f"{ASSET_MANIFEST} is unreadable: {exc}")
+        return None
+
+
 def check_shared_pool(tree: Tree) -> Result:
     result = Result("shared-pool", "")
     for name in SHARED_DIRS:
@@ -710,7 +733,17 @@ def check_shared_pool(tree: Tree) -> Result:
     assets = sorted(p for p in (tree.root / ASSET_DIR).iterdir() if p.is_file())
     fonts = sorted(p for p in (tree.root / FONT_DIR).iterdir() if p.is_file())
 
+    # The composite digests batch.py records. An asset is named for the sha256 of
+    # the base image stream in its source PDF; when that source declares a soft
+    # mask the file on disk is the composite painted over white, so the name
+    # cannot verify the bytes and recomputing them needs a PDF this check does
+    # not have. The manifest carries the file's own digest, which is the
+    # independent fact that closes the gap: 32 of 119 assets used to be
+    # unverifiable, i.e. indistinguishable from corrupted.
+    manifest = _load_asset_manifest(tree, result)
+
     content_verified = 0
+    manifest_verified = 0
     unverifiable: list[str] = []
     for asset in assets:
         match = ASSET_NAME_RE.match(asset.name)
@@ -721,15 +754,27 @@ def check_shared_pool(tree: Tree) -> Result:
             continue
         payload = asset.read_bytes()
         _check_magic(asset, match.group(2), payload, tree, result)
-        if hashlib.sha256(payload).hexdigest() == match.group(1):
+        digest = hashlib.sha256(payload).hexdigest()
+        if digest == match.group(1):
             content_verified += 1
-        else:
-            # extract.py names an asset after the sha256 of the base image stream
-            # in the PDF; when the source declares a soft mask the file is the
-            # composite painted over white. Same name, different bytes, by
-            # design -- and nothing tracked records the composite's own hash, so
-            # this file cannot be told from a corrupted one without the PDF.
+        elif manifest is None:
             unverifiable.append(tree.rel(asset))
+        elif asset.name not in manifest:
+            result.failures.append(
+                f"{tree.rel(asset)}: bytes do not hash to its name and "
+                f"{ASSET_MANIFEST} does not record it, so nothing can tell it from "
+                f"a corrupted file")
+        elif manifest[asset.name] != digest:
+            result.failures.append(
+                f"{tree.rel(asset)}: hashes to {digest[:12]} but {ASSET_MANIFEST} "
+                f"records {manifest[asset.name][:12]}")
+        else:
+            manifest_verified += 1
+
+    if manifest is not None:
+        for name in sorted(set(manifest) - {asset.name for asset in assets}):
+            result.failures.append(
+                f"{ASSET_MANIFEST} records {name}, which is not in the pool")
 
     for font in fonts:
         _check_magic(font, font.suffix.lstrip("."), font.read_bytes(), tree, result)
@@ -758,14 +803,14 @@ def check_shared_pool(tree: Tree) -> Result:
 
     sealed = _check_artwork_seals(tree, result)
 
-    result.headline = (f"{len(assets)} assets ({content_verified} hash-verified, "
+    result.headline = (f"{len(assets)} assets ({content_verified} name-verified, "
+                       f"{manifest_verified} manifest-verified, "
                        f"{sealed} seal-matched), {len(fonts)} fonts, "
                        f"{len(referenced)} referenced")
     if unverifiable:
         result.notes.append(
-            f"{len(unverifiable)} asset(s) do not hash to their own name -- expected for "
-            f"soft-masked artwork, whose name is the PDF base-stream hash; verifying it "
-            f"needs the source PDF, so their bytes were NOT CHECKED: "
+            f"{len(unverifiable)} asset(s) could be verified against neither their name "
+            f"nor {ASSET_MANIFEST}, so their bytes were NOT CHECKED: "
             + ", ".join(sorted(unverifiable)))
     return result
 
@@ -1020,6 +1065,7 @@ INDEX_HTML = """\
 <body>
 {guide_link}<div class="page page-1" id="page-1" style="width:612pt;height:936pt">
 <img class="img" src="{depth}assets/{asset}" alt="" data-sha256="{seal}">
+<img class="img" src="{depth}assets/{masked}" alt="" data-sha256="{masked_seal}">
 <span class="t">{code}</span>
 </div>
 </body>
@@ -1084,6 +1130,22 @@ def build_fixture(root: pathlib.Path) -> pathlib.Path:
     asset = f"{hashlib.sha256(asset_bytes).hexdigest()}.png"
     (forms / ASSET_DIR / asset).write_bytes(asset_bytes)
 
+    # A soft-masked asset: named for a base stream it no longer contains, so its
+    # name cannot verify it and only the manifest can. The fixture carries one
+    # because it is the case that used to be unverifiable, and a fixture without
+    # it would let that regress unnoticed.
+    masked_bytes = _png(b"fixture composite")
+    masked = f"{'e' * 64}.png"
+    (forms / ASSET_DIR / masked).write_bytes(masked_bytes)
+    (forms / ASSET_MANIFEST).write_text(json.dumps({
+        "schema_version": 1,
+        "assets": {
+            asset: {"sha256": hashlib.sha256(asset_bytes).hexdigest(),
+                    "sources": ["alpha-2018"]},
+            masked: {"sha256": hashlib.sha256(masked_bytes).hexdigest(),
+                     "sources": ["alpha-2018"]},
+        }}, indent=2) + "\n", encoding="utf-8")
+
     guide_pdf = b"%PDF-1.4 fixture guide"
     guide_name = "Alpha Guide 2018.pdf"
     guide_digest = hashlib.sha256(guide_pdf).hexdigest()
@@ -1100,6 +1162,8 @@ def build_fixture(root: pathlib.Path) -> pathlib.Path:
                       if has_guide else "")
         (path / "index.html").write_text(
             INDEX_HTML.format(code=code, depth=depth, asset=asset, guide_link=guide_link,
+                              masked=masked,
+                              masked_seal=masked.split('.')[0],
                               seal=asset.split(".")[0]),
             encoding="utf-8")
         if has_guide:
@@ -1307,19 +1371,43 @@ def self_test() -> int:
         print(f"  {'PASS' if ok else 'FAIL'}  an untracked pinned PDF is reported "
               f"NOT-RUN, not passed")
 
-        # The limit of a tree-only check, stated as a test so it cannot be
-        # mistaken for coverage: rename an asset consistently and its bytes no
-        # longer hash to its name -- which is also true of 32 legitimate
-        # soft-masked assets, so this can only be reported, never failed.
+        # This used to be the documented limit of a tree-only check: a
+        # consistently renamed asset is indistinguishable from the 32 legitimate
+        # soft-masked ones, so it could only be reported. The manifest records
+        # each file's own digest, so it is now caught, and the assertion is
+        # inverted rather than deleted -- a limitation that has been fixed should
+        # leave behind a test that it stays fixed.
         renamed = pathlib.Path(tmp) / "renamed"
         shutil.copytree(pristine, renamed)
         _rename_asset(renamed, reseal=True)
         pool = {r.name: r for r in run_checks(renamed / "forms",
                                               renamed / "review-findings.json")}["shared-pool"]
-        ok = pool.ok and any("NOT CHECKED" in note for note in pool.notes)
-        failures += not ok
-        print(f"  {'PASS' if ok else 'FAIL'}  an asset whose bytes do not hash to its "
-              f"name is reported NOT-RUN, not passed")
+        failures += pool.ok
+        print(f"  {'PASS' if not pool.ok else 'FAIL'}  a consistently renamed asset is "
+              f"caught by the manifest, not reported as unverifiable")
+
+        # The prove-phase fault that used to slip through: corrupt a composited
+        # asset's bytes without touching its name. Nothing about the name changes,
+        # so only the manifest can see it.
+        corrupted = pathlib.Path(tmp) / "corrupted"
+        shutil.copytree(pristine, corrupted)
+        masked_file = corrupted / "forms" / ASSET_DIR / f"{'e' * 64}.png"
+        masked_file.write_bytes(_png(b"tampered composite"))
+        pool = {r.name: r for r in run_checks(corrupted / "forms",
+                                              corrupted / "review-findings.json")}["shared-pool"]
+        failures += pool.ok
+        print(f"  {'PASS' if not pool.ok else 'FAIL'}  a corrupted soft-masked asset is "
+              f"caught by its recorded digest")
+
+        # And the manifest itself must be required, not optional.
+        nomanifest = pathlib.Path(tmp) / "nomanifest"
+        shutil.copytree(pristine, nomanifest)
+        (nomanifest / "forms" / ASSET_MANIFEST).unlink()
+        pool = {r.name: r for r in run_checks(nomanifest / "forms",
+                                              nomanifest / "review-findings.json")}["shared-pool"]
+        failures += pool.ok
+        print(f"  {'PASS' if not pool.ok else 'FAIL'}  a missing {ASSET_MANIFEST} fails "
+              f"rather than silently disabling verification")
 
         for label, mutate, expected in MUTATIONS:
             case = pathlib.Path(tmp) / f"case-{abs(hash(label)):x}"

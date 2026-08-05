@@ -114,6 +114,7 @@ STAGES = ("extract", "lattice", "guides", "fonts", "emit")
 # than left to match its defaults: the two documents link to each other and the
 # guide embeds PDFs by relative path, so the names have to be one fact, not two
 # that happen to agree.
+ASSET_MANIFEST = "assets-manifest.json"
 FORM_DOCUMENT = "index.html"
 GUIDE_DOCUMENT = "guide.html"
 GUIDE_PDF_DIR = "guides"
@@ -201,7 +202,7 @@ def sha256_file(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
-def extract_images(pdf: pathlib.Path, assets: pathlib.Path) -> int:
+def extract_images(pdf: pathlib.Path, assets: pathlib.Path) -> dict[str, str]:
     """Write every embedded XObject to <sha256>.<ext> beside the bundles.
 
     emit.py resolves images by content hash, so this has to run before it or the
@@ -263,11 +264,22 @@ def extract_images(pdf: pathlib.Path, assets: pathlib.Path) -> int:
                       f"{name} with different bytes", file=sys.stderr)
                 continue
             needed[name] = data
+    digests: dict[str, str] = {}
     for name, data in needed.items():
         target = assets / name
         if not target.is_file() or target.read_bytes() != data:
             target.write_bytes(data)
-    return len(needed)
+        # The file's own digest, which its NAME cannot carry. A name is the
+        # sha256 of the source PDF's base image stream -- provenance identity,
+        # and the right thing to key the shared pool on. But for a soft-masked
+        # placement the bytes written here are the COMPOSITE, so the name can
+        # never verify them, and recomputing the composite needs the source PDF,
+        # which CI does not have. 32 of 119 assets were therefore unverifiable:
+        # indistinguishable from corrupted ones. Recording the composite's own
+        # digest separates the two jobs -- the name says where it came from, the
+        # digest says whether it is intact.
+        digests[name] = hashlib.sha256(data).hexdigest()
+    return digests
 
 
 def run_stage(args: list[str]) -> tuple[bool, str]:
@@ -464,7 +476,9 @@ def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib
     }
 
     assets = work / "html" / "assets"
-    record["images_extracted"] = extract_images(source.pdf, assets)
+    asset_digests = extract_images(source.pdf, assets)
+    record["images_extracted"] = len(asset_digests)
+    record["asset_digests"] = asset_digests
 
     steps = [
         ("extract", [str(HERE / "extract.py"), "--pdf", str(source.pdf),
@@ -738,14 +752,19 @@ def bundle_outputs(record: dict[str, Any],
 def planned_outputs(records: list[dict[str, Any]], out_root: pathlib.Path,
                     fonts_src: pathlib.Path) -> set[pathlib.Path]:
     """Every path this run is about to write under `out_root`."""
-    planned = {out_root / "base.css"}
+    planned = {out_root / "base.css", out_root / ASSET_MANIFEST}
     planned |= {out_root / "fonts" / name for name in collect_fonts(records, fonts_src)}
     for record in records:
         planned |= set(bundle_outputs(record, out_root)[1])
         assets = pathlib.Path(record["html"]).parent / "assets"
         if assets.is_dir():
+            # Mirrors package()'s staging: an asset no document loads is not an
+            # output, so the guard reports it as an orphan rather than
+            # certifying a file the run will not write.
+            keep = referenced_assets(records)
             planned |= {out_root / "assets" / path.relative_to(assets)
-                        for path in assets.rglob("*") if path.is_file()}
+                        for path in assets.rglob("*")
+                        if path.is_file() and path.name in keep}
     return {path.resolve() for path in planned}
 
 
@@ -806,6 +825,12 @@ def drop_reason(path: pathlib.Path, out_root: pathlib.Path) -> str:
         return "no converted page referenced this artwork, so no bundle would stage it"
     if top == "base.css":
         return "no form converted, so there were no shared rules to hoist"
+    if top == ASSET_MANIFEST:
+        return ("no form converted, so there were no composited assets to record; "
+                "the generic message below would be actively misleading here")
+    if top == FORM_DOCUMENT:
+        return ("the landing page is written from the batch report, so a run that "
+                "wrote no bundles writes no index either")
     return ("no converted bundle writes it -- its form failed, was excluded, or "
             "now converts under a different <code>-<revision> slug")
 
@@ -865,6 +890,19 @@ def check_tracked_files(records: list[dict[str, Any]], out_root: pathlib.Path,
     raise TrackedFileLoss("\n".join(lines))
 
 
+class _AllNames:
+    """Stands in for the referenced set when a run cannot judge it.
+
+    A partial run (`--only`) legitimately lacks the documents that reference
+    most of the pool, so pruning against it would delete artwork that is merely
+    out of scope. Saying so as a type is clearer than threading a None through
+    the staging loop and re-deciding there.
+    """
+
+    def __contains__(self, _name: object) -> bool:
+        return True
+
+
 def package(records: list[dict[str, Any]], out_root: pathlib.Path,
             fonts_src: pathlib.Path, generator_version: str, *,
             complete_run: bool = True, allow_removals: bool = False) -> dict[str, Any]:
@@ -884,6 +922,15 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
     if complete_run and len(ok) == len(records):
         report_unreferenced_assets(ok)
 
+    # What the emitted documents actually load. Read back out of the HTML rather
+    # than derived from the IR, because the document is the only authority on
+    # what it draws. A partial run cannot judge this -- another form's artwork is
+    # legitimately absent from the slice -- so it stages everything as before.
+    referenced = (referenced_assets(ok) if complete_run and len(ok) == len(records)
+                  else None)
+    if referenced is None:
+        referenced = _AllNames()
+
     # A declaration shared by every form belongs in base.css. Anything else is
     # form-specific. This is computed, not curated, so it cannot drift. Only the
     # *form* documents vote: a guide document is present in 29 bundles of 51, so
@@ -897,6 +944,34 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
     shared = {rule for rule, n in counts.items() if n == len(per_form)}
 
     out_root.mkdir(parents=True, exist_ok=True)
+    # The composite digests, which the filenames cannot carry. An asset is named
+    # for its source PDF's base image stream -- that is its provenance, and the
+    # right key for a shared pool -- but a soft-masked placement's bytes on disk
+    # are the composite, so 32 of 119 assets could not be told from corrupted
+    # ones without re-reading a PDF that CI does not have. Two facts, two fields:
+    # the name says where it came from, the digest says whether it is intact.
+    manifest = {}
+    for record in ok:
+        for name, digest in sorted((record.get("asset_digests") or {}).items()):
+            if name not in referenced:
+                continue
+            entry = manifest.setdefault(name, {"sha256": digest, "sources": []})
+            if entry["sha256"] != digest:
+                raise TrackedFileLoss(
+                    f"{name}: two forms composite it to different bytes "
+                    f"({entry['sha256'][:12]} vs {digest[:12]}); one picture would "
+                    f"be served for both")
+            entry["sources"].append(record["slug"])
+    for entry in manifest.values():
+        entry["sources"].sort()
+    (out_root / ASSET_MANIFEST).write_text(
+        json.dumps({"schema_version": 1,
+                    "note": ("sha256 is of the file's own bytes, which for a "
+                             "soft-masked asset differ from its name. The name is "
+                             "the source PDF's base stream; this is the composite."),
+                    "assets": dict(sorted(manifest.items()))}, indent=2) + "\n",
+        encoding="utf-8")
+
     (out_root / "base.css").write_text(
         render_css("/* Shared scaffolding for every generated form.\n"
                    " * Computed as the declarations common to all forms, so editing here\n"
@@ -968,9 +1043,18 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
         # 6,069 files. Beyond the wasted space, a hand-edit to a seal in one
         # bundle would silently diverge from the fifty other bundles drawing the
         # same seal. Names are content hashes, so sharing cannot collide.
+        #
+        # Only what a document actually loads. Copying the whole build pool
+        # staged every image any form ever extracted, so an asset kept being
+        # re-shipped 95 commits after the page that drew it stopped being
+        # emitted -- present, tracked, and referenced by nothing.
         source_assets = pathlib.Path(record["html"]).parent / "assets"
         if source_assets.is_dir():
-            shutil.copytree(source_assets, out_root / "assets", dirs_exist_ok=True)
+            destination = out_root / "assets"
+            destination.mkdir(parents=True, exist_ok=True)
+            for asset in sorted(source_assets.iterdir()):
+                if asset.is_file() and asset.name in referenced:
+                    shutil.copy2(asset, destination / asset.name)
 
         provenance = {k: v for k, v in record.items() if k not in BUILD_ONLY_KEYS}
         provenance["generator"] = generator_version
@@ -981,7 +1065,30 @@ def package(records: list[dict[str, Any]], out_root: pathlib.Path,
         (target / "provenance.json").write_text(
             json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
 
+    # The landing page, written here rather than by hand. It used to be produced
+    # only by running index_page.py directly, so every `rm -rf forms` regenerate
+    # silently removed it and left the tree serving a raw directory listing --
+    # which reads exactly like a broken server. A tracked output of this driver
+    # has to be written by this driver.
+    write_index_page(out_root)
+
     return {"shared_rules": len(shared), "bundles": len(ok), "guides": guides_written}
+
+
+def write_index_page(out_root: pathlib.Path) -> None:
+    """Render forms/index.html, tolerating an absent audit.
+
+    index_page.py already reports an unaudited form honestly, so a run with no
+    build/audit.json produces a page whose status column says so rather than one
+    carrying the last run's numbers as if they were fresh.
+    """
+    ok, output = run_stage([str(HERE / "index_page.py"),
+                            "--batch-report", str(REPO / "build/batch-report.json"),
+                            "--audit", str(REPO / "build/audit.json"),
+                            "--out", str(out_root / FORM_DOCUMENT)])
+    if not ok:
+        print(f"  index page not written: {output.strip().splitlines()[-1:]}",
+              file=sys.stderr)
 
 
 def guide_totals(records: list[dict[str, Any]]) -> dict[str, int]:

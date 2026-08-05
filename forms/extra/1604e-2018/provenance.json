@@ -9,6 +9,13 @@
   "stage_failed": null,
   "error": null,
   "images_extracted": 5,
+  "asset_digests": {
+    "42ae5078c6c4ebb180bcdc7a18194c4b0de163ac953af4f72431657bbf1103c7.png": "42ae5078c6c4ebb180bcdc7a18194c4b0de163ac953af4f72431657bbf1103c7",
+    "b391a155e47808dfa7184209020a8e63429a70de6b38a19e19883c3bc2e99714.png": "9384cf2e3b473c0ef8f17bb4ac1e2b4b872560b2441776949da2de092541dafa",
+    "57521bfe6748c51cf1a552d0868198a3bddf388f4de3c098f60cf02e6954f77b.png": "fe18613a91e9286932aa1e3bd8edd452c15bdaf850fd8b06ebbfe22689e15529",
+    "77ba649c49cbf12e605b0a1eb67a0e62aaf80e55c9a0e19c54e1e3e6c03620cb.png": "77ba649c49cbf12e605b0a1eb67a0e62aaf80e55c9a0e19c54e1e3e6c03620cb",
+    "bdd5052fd3cbafd7a38ce4e62a90a41adb841070ff03be3052f73283e6e91951.png": "bdd5052fd3cbafd7a38ce4e62a90a41adb841070ff03be3052f73283e6e91951"
+  },
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
