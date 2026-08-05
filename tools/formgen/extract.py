@@ -17,7 +17,8 @@ Usage:
         --expected-sha256 <64 hex> \
         --out build/ir/2551q-2018.ir.json
 
-    python3 tools/formgen/extract.py --self-test
+    python3 tools/formgen/extract.py --self-test              # the official pins
+    python3 tools/formgen/extract.py --self-test --fixtures   # the tracked corpus
 """
 
 from __future__ import annotations
@@ -1162,11 +1163,16 @@ SELF_TEST_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
 
 # code -> (path under the source root, revision, sha256 of the pinned bytes).
 #
-# The assertions below are measured against the real corpus, never a synthetic
-# fixture: a fixture would encode what this module already believes, and every
-# property here was established by reading these exact files. Each is pinned by
-# hash, because a self-test that silently scored a different revision of a form
-# would be worse than none.
+# These assertions are measured against the real corpus, and that is what makes
+# them evidence: every property below was established by reading these exact
+# files, whereas a synthetic fixture can only encode what this module already
+# believes. Each is pinned by hash, because a self-test that silently scored a
+# different revision of a form would be worse than none.
+#
+# The files are official BIR documents and are deliberately untracked, so this
+# table cannot run anywhere but a machine that holds them. FIXTURE_PROFILE below
+# is the second, weaker corpus that can -- it does not replace this one, and
+# `--self-test` with no flag still means this one.
 #
 # Naming forms here is not the per-form special-casing the constraints forbid.
 # No extraction behaviour keys on a code; these are the *subjects* of the
@@ -1236,6 +1242,167 @@ SELF_TEST_RETEXTED_RAWDICT_CODEPOINT = 0x00A7
 # must stay in `rules` where lattice.py can find a box side.
 SELF_TEST_BAR_LIKE_FORM = "2316"
 SELF_TEST_LEANING_BARS = 12
+
+# The three literal tones the BIR generator paints with, and the band each one
+# has to land in. Black ink is structure; 0.8509 is the decorative grey that
+# measures tone ~217 on paper and is near-invisible, and CLAUDE.md records
+# painting it black as a shipped failure; 1.0 is a knockout, white paper
+# deliberately punched through a tint band. The corpus must contain ink of all
+# three, so this pins the classifier's answer about real ink rather than
+# restating a lookup table.
+SELF_TEST_TONES: tuple[tuple[float, str], ...] = (
+    (0.0, "structural"),
+    (0.8509, "decorative"),
+    (1.0, "knockout"),
+)
+
+
+class SelfTestProfile:
+    """One corpus, and every number pinned against it.
+
+    The checks below used to read these as module constants, which tied them to
+    the six official PDFs. Those files are untracked -- they are official
+    documents, and gitignored on purpose -- so on any machine without them the
+    entire self-test could only report "cannot run". In CI that is the failure
+    this project has already shipped once: a green tick that evaluated nothing.
+
+    Grouping the pins into a profile lets the *same* eleven checks, and the same
+    eleven mutation probes, run over a second corpus that is small enough to
+    track. Only the subjects move; no check, threshold or assertion is relaxed
+    for the synthetic run, and none of them is skipped.
+    """
+
+    __slots__ = ("name", "source_root", "fixtures", "paper", "determinism_form",
+                 "masked", "flipped", "paths_form", "triangles",
+                 "decimal_points", "tones", "retexted_glyphs",
+                 "retexted_glyph_id", "retexted_rawdict_codepoint",
+                 "bar_like_form", "leaning_bars", "is_evidence")
+
+    def __init__(self, *, name: str, source_root: pathlib.Path,
+                 fixtures: dict[str, tuple[str, str, str]],
+                 paper: tuple[str, float, float, int], determinism_form: str,
+                 masked: tuple[str, int, int], flipped: tuple[str, int],
+                 paths_form: str, triangles: int, decimal_points: int,
+                 tones: tuple[tuple[float, str], ...],
+                 retexted_glyphs: dict[str, int], retexted_glyph_id: int,
+                 retexted_rawdict_codepoint: int, bar_like_form: str,
+                 leaning_bars: int, is_evidence: bool) -> None:
+        self.name = name
+        self.source_root = source_root
+        self.fixtures = fixtures
+        self.paper = paper
+        self.determinism_form = determinism_form
+        self.masked = masked
+        self.flipped = flipped
+        self.paths_form = paths_form
+        self.triangles = triangles
+        self.decimal_points = decimal_points
+        self.tones = tones
+        self.retexted_glyphs = retexted_glyphs
+        self.retexted_glyph_id = retexted_glyph_id
+        self.retexted_rawdict_codepoint = retexted_rawdict_codepoint
+        self.bar_like_form = bar_like_form
+        self.leaning_bars = leaning_bars
+        # Whether this corpus is evidence about the world or a restatement of
+        # this module's own beliefs. Printed with the result so a passing
+        # synthetic run can never be read as the real one.
+        self.is_evidence = is_evidence
+
+
+REAL_PROFILE = SelfTestProfile(
+    name="pinned BIR PDFs",
+    source_root=SELF_TEST_SOURCE_ROOT,
+    fixtures=SELF_TEST_FIXTURES,
+    paper=SELF_TEST_PAPER,
+    determinism_form=SELF_TEST_DETERMINISM_FORM,
+    masked=SELF_TEST_MASKED,
+    flipped=SELF_TEST_FLIPPED,
+    paths_form=SELF_TEST_PATHS_FORM,
+    triangles=SELF_TEST_TRIANGLES,
+    decimal_points=SELF_TEST_DECIMAL_POINTS,
+    tones=SELF_TEST_TONES,
+    retexted_glyphs=SELF_TEST_RETEXTED_GLYPHS,
+    retexted_glyph_id=SELF_TEST_RETEXTED_GLYPH_ID,
+    retexted_rawdict_codepoint=SELF_TEST_RETEXTED_RAWDICT_CODEPOINT,
+    bar_like_form=SELF_TEST_BAR_LIKE_FORM,
+    leaning_bars=SELF_TEST_LEANING_BARS,
+    is_evidence=True,
+)
+
+# ---------------------------------------------------------------------------
+# The synthetic corpus
+# ---------------------------------------------------------------------------
+
+# Built by tools/formgen/fixtures/make_fixtures.py, tracked, and pinned by the
+# same sha256 mechanism as the real corpus -- a rebuild that moved one byte
+# fails extraction here rather than quietly scoring different files. Each
+# builder's docstring names the real form it stands in for and the defect that
+# form taught us about.
+#
+# This corpus is weaker than the real one, on purpose and unavoidably: it can
+# only reproduce structures we already know how to describe. It exists so that
+# every check, and every mutation probe, actually *runs* somewhere other than
+# one laptop. It is not a substitute for the pinned officials, and the summary
+# line says so on every run.
+FIXTURE_SOURCE_ROOT = pathlib.Path(__file__).resolve().parent / "fixtures"
+
+FIXTURE_FIXTURES: dict[str, tuple[str, str, str]] = {
+    # Paper, determinism, merged runs drawn as short bars plus corner squares,
+    # all four thicknesses, both decorative greys, a white knockout, a
+    # fill+stroke drawing and a comb band.
+    "FIXTURE-RULES": (
+        "rules.pdf", "0001",
+        "42b7bf64491e53d5afec01e1876530268b1e4611c950acd76ebfdeae9fef29f5"),
+    # Non-rectilinear ink: filled triangles and filled Bezier marks.
+    "FIXTURE-PATHS": (
+        "paths.pdf", "0001",
+        "b771d06e7919c10e769a0b6cc3c51304ab5764fa715386082db0392a0533b4bf"),
+    # One partly transparent soft mask and one that is fully opaque.
+    "FIXTURE-MASKS": (
+        "masks.pdf", "0001",
+        "4fe33a46370e9b5c483e0f4ec9188c095c15c95ba9f61079ec675edc17a80795"),
+    # A placement matrix with a negative `d`: the vertical flip.
+    "FIXTURE-FLIP": (
+        "flip.pdf", "0001",
+        "cf0dd9aae1686a5bef15b12a429dd4c8ed8b0f0aa053f6b19a4833650345cdf0"),
+    # A glyph with no Unicode meaning, beside a question mark that has one.
+    "FIXTURE-GLYPHS": (
+        "glyphs.pdf", "0001",
+        "fff3c4e2b8dea5ccb7d4eca709b6c287706c19a53d4a5ce9586fa523fbb88b1d"),
+    # Twelve stroked separators leaning less than their own stroke width.
+    "FIXTURE-LEAN": (
+        "lean.pdf", "0001",
+        "ef4165fb57e736f187910103be99ade15aa1a7ca3547470980fa6f43e17811ac"),
+}
+
+FIXTURE_PROFILE = SelfTestProfile(
+    name="synthetic fixtures",
+    source_root=FIXTURE_SOURCE_ROOT,
+    fixtures=FIXTURE_FIXTURES,
+    paper=("FIXTURE-RULES", 612.0, 936.0, 2),
+    determinism_form="FIXTURE-RULES",
+    # xref 5 is the base image, xref 8 its soft mask. Both are functions of the
+    # pinned bytes, so a rebuild that renumbered them fails the pin first.
+    masked=("FIXTURE-MASKS", 5, 8),
+    flipped=("FIXTURE-FLIP", 5),
+    paths_form="FIXTURE-PATHS",
+    # 30 lone markers plus 3 that share their path with a rect, mirroring 0605.
+    triangles=33,
+    decimal_points=10,
+    # The same three literal tones, on the same three kinds of ink: black bars,
+    # a 0.8509 tint band with grey rules over it, and a white knockout box.
+    tones=SELF_TEST_TONES,
+    retexted_glyphs={"FIXTURE-GLYPHS": 1},
+    # A Type3 glyph is addressed by its code, so the id and the code byte
+    # rawdict falls back to are the same number here; on 2550M they are 131 and
+    # 0xA7. What both corpora share is the substitution itself: the file states
+    # no meaning, and rawdict offers a section sign that reads as content.
+    retexted_glyph_id=0xA7,
+    retexted_rawdict_codepoint=0xA7,
+    bar_like_form="FIXTURE-LEAN",
+    leaning_bars=12,
+    is_evidence=False,
+)
 
 # Synthetic merge contract. The input is intentionally out of geometry order.
 # Cluster one contains two distinct full repaints, an exact duplicate contributor,
@@ -1369,20 +1536,26 @@ def paint_order_desync_probes(page: fitz.Page,
     return probes
 
 
-def gather_evidence(source_root: pathlib.Path) -> dict[str, Any]:
+def gather_evidence(profile: SelfTestProfile,
+                    source_root: pathlib.Path) -> dict[str, Any]:
     """Extract every fixture once, plus the source facts the checks compare to.
 
     Everything a check reads lives in this bundle, and nothing in it is a live
     fitz object. That is what lets mutation_probes deep-copy it, break one
     property, and watch exactly one check trip.
+
+    The profile travels inside the bundle so that a check reads its subjects
+    from the corpus it was handed, rather than from a module constant naming a
+    form the corpus may not contain.
     """
     evidence: dict[str, Any] = {
+        "profile": profile,
         "ir": {}, "serialisations": [], "base_pixel_sha256": {},
         "mask_is_opaque": {},
         "codepoints": {}, "leaning_bars": {}, "desync": {},
         "merged_intervals": merge_intervals(list(SELF_TEST_MERGE_INTERVALS)),
     }
-    for code, (relative, revision, digest) in SELF_TEST_FIXTURES.items():
+    for code, (relative, revision, digest) in profile.fixtures.items():
         path = source_root / relative
         # extract() verifies the pin, so a swapped file fails here by name.
         evidence["ir"][code] = extract(path, code, revision, digest)
@@ -1406,8 +1579,8 @@ def gather_evidence(source_root: pathlib.Path) -> dict[str, Any]:
             for page in evidence["ir"][code]["pages"] for image in page["images"]}
         doc.close()
 
-    code = SELF_TEST_DETERMINISM_FORM
-    relative, revision, digest = SELF_TEST_FIXTURES[code]
+    code = profile.determinism_form
+    relative, revision, digest = profile.fixtures[code]
     again = extract(source_root / relative, code, revision, digest)
     evidence["serialisations"] = [
         json.dumps(evidence["ir"][code], ensure_ascii=False),
@@ -1422,14 +1595,14 @@ def check_determinism(evidence: dict[str, Any]) -> list[str]:
     if len(payloads) != 2:
         return [f"determinism needs two extractions, got {len(payloads)}"]
     if payloads[0] != payloads[1]:
-        return [f"two extractions of {SELF_TEST_DETERMINISM_FORM} differ: "
-                f"{len(payloads[0])} vs {len(payloads[1])} chars"]
+        return [f"two extractions of {evidence['profile'].determinism_form} "
+                f"differ: {len(payloads[0])} vs {len(payloads[1])} chars"]
     return []
 
 
 def check_paper(evidence: dict[str, Any]) -> list[str]:
     """Paper is the PDF's own MediaBox, per page, exactly."""
-    code, width, height, page_count = SELF_TEST_PAPER
+    code, width, height, page_count = evidence["profile"].paper
     ir = evidence["ir"][code]
     paper = ir["paper"]
     failures: list[str] = []
@@ -1633,7 +1806,7 @@ def check_paint_order_reconciliation(evidence: dict[str, Any]) -> list[str]:
 def check_soft_masks(evidence: dict[str, Any]) -> list[str]:
     """A masked placement reports its mask, and its digest is the composite's."""
     failures: list[str] = []
-    code, xref, mask_xref = SELF_TEST_MASKED
+    code, xref, mask_xref = evidence["profile"].masked
     named = [image for page in evidence["ir"][code]["pages"]
              for image in page["images"] if image["xref"] == xref]
     if not named:
@@ -1691,7 +1864,7 @@ def check_transforms(evidence: dict[str, Any]) -> list[str]:
                     failures.append(f"{code} p{page['index']} xref {image['xref']} "
                                     f"transform is {matrix!r}, expected 6 elements")
 
-    code, xref = SELF_TEST_FLIPPED
+    code, xref = evidence["profile"].flipped
     matrices = [image["transform"] for page in evidence["ir"][code]["pages"]
                 for image in page["images"] if image["xref"] == xref]
     if not matrices:
@@ -1728,26 +1901,80 @@ def is_filled_curve_mark(path: dict[str, Any]) -> bool:
 
 def check_paths(evidence: dict[str, Any]) -> list[str]:
     """Non-rectilinear ink survives whole, and invents no hairlines on the way."""
-    ir = evidence["ir"][SELF_TEST_PATHS_FORM]
+    profile = evidence["profile"]
+    code = profile.paths_form
+    ir = evidence["ir"][code]
     page = ir["pages"][0]
     failures: list[str] = []
 
     triangles = [path["id"] for path in page["paths"] if is_filled_triangle(path)]
-    if len(triangles) != SELF_TEST_TRIANGLES:
-        failures.append(f"{SELF_TEST_PATHS_FORM} page 1 has {len(triangles)} filled "
-                        f"triangle paths, expected {SELF_TEST_TRIANGLES}")
+    if len(triangles) != profile.triangles:
+        failures.append(f"{code} page 1 has {len(triangles)} filled "
+                        f"triangle paths, expected {profile.triangles}")
     marks = [path["id"] for path in page["paths"] if is_filled_curve_mark(path)]
-    if len(marks) != SELF_TEST_DECIMAL_POINTS:
-        failures.append(f"{SELF_TEST_PATHS_FORM} page 1 has {len(marks)} filled "
-                        f"decimal-point marks, expected {SELF_TEST_DECIMAL_POINTS}")
+    if len(marks) != profile.decimal_points:
+        failures.append(f"{code} page 1 has {len(marks)} filled "
+                        f"decimal-point marks, expected {profile.decimal_points}")
 
     phantom = [f"p{page['index']}:{rule['id']}" for page in ir["pages"]
                for rule in page["rules"]
                if rule["thickness_pt"] == SELF_TEST_PHANTOM_THICKNESS_PT]
     if phantom:
-        failures.append(f"{SELF_TEST_PATHS_FORM} carries {len(phantom)} rule(s) at "
+        failures.append(f"{code} carries {len(phantom)} rule(s) at "
                         f"the invented {SELF_TEST_PHANTOM_THICKNESS_PT}pt default "
                         f"({', '.join(phantom[:5])})")
+    return failures
+
+
+def ink_tones(page: dict[str, Any]) -> list[tuple[str, float | None, str]]:
+    """Every piece of ink on a page as (label, its grey, the role it claims).
+
+    A path's tone is its fill's when it has one and its outline's otherwise --
+    the same reading extract_paths made -- because a filled mark is the colour
+    it is filled with whatever it is outlined in.
+    """
+    items: list[tuple[str, float | None, str]] = []
+    for kind in ("rules", "area_fills"):
+        for position, item in enumerate(page[kind]):
+            items.append((f"{kind}[{position}]", item["gray"], item["role"]))
+    for position, path in enumerate(page["paths"]):
+        tone = path["fill_gray"] if path["fill"] is not None else path["stroke_gray"]
+        items.append((f"paths[{position}]", tone, path["role"]))
+    return items
+
+
+def check_tone(evidence: dict[str, Any]) -> list[str]:
+    """Ink is classified by its literal grey, and all three bands are populated.
+
+    Tone is the one thing separating a black rule from decoration a reader can
+    barely see, and the project has already shipped the failure this guards:
+    acting on ink *presence* painted 0.8509 grey black, which improved a
+    structural-recall metric while putting black over near-invisible
+    decoration. So the band boundaries are pinned against literal values the
+    generator really uses, and the corpus is required to carry ink of each --
+    a threshold that moved would either misname existing ink or empty a band,
+    and both are caught here.
+    """
+    profile = evidence["profile"]
+    failures: list[str] = []
+    census: collections.Counter[str] = collections.Counter()
+    for code, ir in evidence["ir"].items():
+        for page in ir["pages"]:
+            for label, tone, claimed in ink_tones(page):
+                derived = classify_tone(tone)
+                census[derived] += 1
+                if claimed != derived:
+                    failures.append(f"{code} p{page['index']} {label} is grey "
+                                    f"{tone!r} but claims role {claimed!r}, "
+                                    f"not {derived!r}")
+    for value, expected in profile.tones:
+        actual = classify_tone(value)
+        if actual != expected:
+            failures.append(f"grey {value} classifies as {actual!r}, "
+                            f"expected {expected!r} -- a tone band moved")
+        if not census[expected]:
+            failures.append(f"the corpus carries no {expected!r} ink, so the "
+                            f"{expected!r} band is pinned against nothing")
     return failures
 
 
@@ -1783,8 +2010,9 @@ def check_codepoints(evidence: dict[str, Any]) -> list[str]:
                         failures.append(f"{label} where the source drew "
                                         f"{sorted(hex(c) for c in drawn)}")
 
+    profile = evidence["profile"]
     for code, ir in evidence["ir"].items():
-        expected = SELF_TEST_RETEXTED_GLYPHS.get(code, 0)
+        expected = profile.retexted_glyphs.get(code, 0)
         carried = [(page["index"], run) for page in ir["pages"]
                    for run in page["text_runs"] if run["unmapped_glyphs"]]
         total = sum(len(run["unmapped_glyphs"]) for _, run in carried)
@@ -1794,18 +2022,18 @@ def check_codepoints(evidence: dict[str, Any]) -> list[str]:
         for index, run in carried:
             for glyph in run["unmapped_glyphs"]:
                 label = f"{code} p{index} glyph {glyph['index']}"
-                if glyph["glyph_id"] != SELF_TEST_RETEXTED_GLYPH_ID:
+                if glyph["glyph_id"] != profile.retexted_glyph_id:
                     failures.append(f"{label} is glyph id {glyph['glyph_id']}, "
-                                    f"expected {SELF_TEST_RETEXTED_GLYPH_ID}")
+                                    f"expected {profile.retexted_glyph_id}")
                 if run["text"][glyph["index"]] != UNMAPPED_CODEPOINT:
                     failures.append(f"{label} reads "
                                     f"{run['text'][glyph['index']]!r}, expected "
                                     f"{UNMAPPED_CODEPOINT!r}")
-                if glyph["rawdict_codepoint"] != SELF_TEST_RETEXTED_RAWDICT_CODEPOINT:
+                if glyph["rawdict_codepoint"] != profile.retexted_rawdict_codepoint:
                     failures.append(
                         f"{label} records rawdict codepoint "
                         f"{hex(glyph['rawdict_codepoint'])}, expected "
-                        f"{hex(SELF_TEST_RETEXTED_RAWDICT_CODEPOINT)} -- the "
+                        f"{hex(profile.retexted_rawdict_codepoint)} -- the "
                         f"substitution this field exists to record")
     return failures
 
@@ -1839,14 +2067,15 @@ def check_bar_like(evidence: dict[str, Any]) -> list[str]:
     gain, so this asserts they are still rules -- and that the form gained no
     paths at all.
     """
-    code = SELF_TEST_BAR_LIKE_FORM
+    profile = evidence["profile"]
+    code = profile.bar_like_form
     ir = evidence["ir"][code]
     bars = evidence["leaning_bars"][code]
     failures: list[str] = []
 
-    if len(bars) != SELF_TEST_LEANING_BARS:
+    if len(bars) != profile.leaning_bars:
         failures.append(f"{code} draws {len(bars)} leaning segment(s), expected "
-                        f"{SELF_TEST_LEANING_BARS}")
+                        f"{profile.leaning_bars}")
 
     pages = {page["index"]: page for page in ir["pages"]}
     for bar in bars:
@@ -1885,6 +2114,7 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("soft-masks", check_soft_masks),
     ("transforms", check_transforms),
     ("paths", check_paths),
+    ("tone", check_tone),
     ("codepoints", check_codepoints),
     ("is-bar-like", check_bar_like),
 )
@@ -1895,7 +2125,7 @@ def mutate_determinism(evidence: dict[str, Any]) -> None:
 
 
 def mutate_paper(evidence: dict[str, Any]) -> None:
-    evidence["ir"][SELF_TEST_PAPER[0]]["paper"]["height_pt"] = 792.0
+    evidence["ir"][evidence["profile"].paper[0]]["paper"]["height_pt"] = 792.0
 
 
 def mutate_paint_seq(evidence: dict[str, Any]) -> None:
@@ -1911,7 +2141,13 @@ def mutate_paint_seq(evidence: dict[str, Any]) -> None:
 
 
 def mutate_paint_spans(evidence: dict[str, Any]) -> None:
-    del evidence["ir"]["2551Q"]["pages"][0]["rules"][0]["paint_spans"]
+    """Strip one rule's contributor list, wherever the corpus keeps its rules."""
+    for ir in evidence["ir"].values():
+        for page in ir["pages"]:
+            if page["rules"]:
+                del page["rules"][0]["paint_spans"]
+                return
+    raise AssertionError("paint-spans mutation found no rule")
 
 
 def mutate_interval_provenance(evidence: dict[str, Any]) -> None:
@@ -1924,12 +2160,13 @@ def mutate_interval_provenance(evidence: dict[str, Any]) -> None:
 
 
 def mutate_paint_order_reconciliation(evidence: dict[str, Any]) -> None:
-    evidence["desync"]["2551Q"]["fewer_drawings_than_ops"] = False
+    code = next(iter(evidence["desync"]))
+    evidence["desync"][code]["fewer_drawings_than_ops"] = False
 
 
 def mutate_soft_masks(evidence: dict[str, Any]) -> None:
     """Restore the pre-compositing digest: the mask silently dropped again."""
-    code, xref, _ = SELF_TEST_MASKED
+    code, xref, _ = evidence["profile"].masked
     for page in evidence["ir"][code]["pages"]:
         for image in page["images"]:
             if image["xref"] == xref:
@@ -1938,7 +2175,7 @@ def mutate_soft_masks(evidence: dict[str, Any]) -> None:
 
 def mutate_transforms(evidence: dict[str, Any]) -> None:
     """Flip the flip back, as a bounding box would have."""
-    code, xref = SELF_TEST_FLIPPED
+    code, xref = evidence["profile"].flipped
     for page in evidence["ir"][code]["pages"]:
         for image in page["images"]:
             if image["xref"] == xref and image["transform"]:
@@ -1947,26 +2184,41 @@ def mutate_transforms(evidence: dict[str, Any]) -> None:
 
 def mutate_paths(evidence: dict[str, Any]) -> None:
     """Drop one marker, as the rule classifier used to."""
-    page = evidence["ir"][SELF_TEST_PATHS_FORM]["pages"][0]
+    page = evidence["ir"][evidence["profile"].paths_form]["pages"][0]
     for position, path in enumerate(page["paths"]):
         if is_filled_triangle(path):
             del page["paths"][position]
             return
+    raise AssertionError("paths mutation found no filled triangle")
+
+
+def mutate_tone(evidence: dict[str, Any]) -> None:
+    """Report a decorative grey as structure, which is how it gets painted black."""
+    for ir in evidence["ir"].values():
+        for page in ir["pages"]:
+            for rule in page["rules"]:
+                if rule["role"] == "decorative":
+                    rule["role"] = "structural"
+                    return
+    raise AssertionError("tone mutation found no decorative rule")
 
 
 def mutate_codepoints(evidence: dict[str, Any]) -> None:
     """Print the section sign rawdict offered, where the file states nothing."""
-    for page in evidence["ir"]["2550M"]["pages"]:
-        for run in page["text_runs"]:
-            if run["unmapped_glyphs"]:
-                index = run["unmapped_glyphs"][0]["index"]
-                run["text"] = (run["text"][:index] + "§" + run["text"][index + 1:])
-                return
+    for ir in evidence["ir"].values():
+        for page in ir["pages"]:
+            for run in page["text_runs"]:
+                if run["unmapped_glyphs"]:
+                    index = run["unmapped_glyphs"][0]["index"]
+                    run["text"] = (run["text"][:index] + "§"
+                                   + run["text"][index + 1:])
+                    return
+    raise AssertionError("codepoints mutation found no unmapped glyph")
 
 
 def mutate_bar_like(evidence: dict[str, Any]) -> None:
     """Divert one leaning separator to paths, as exact alignment would have."""
-    code = SELF_TEST_BAR_LIKE_FORM
+    code = evidence["profile"].bar_like_form
     bar = evidence["leaning_bars"][code][0]
     for page in evidence["ir"][code]["pages"]:
         if page["index"] != bar["page"]:
@@ -1977,7 +2229,7 @@ def mutate_bar_like(evidence: dict[str, Any]) -> None:
 
 SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ...] = (
     ("determinism", "one serialisation gains a byte", mutate_determinism),
-    ("paper", "2551Q's height becomes Letter", mutate_paper),
+    ("paper", "the paper subject's height becomes Letter", mutate_paper),
     ("paint-seq", "a rule loses its paint_seq", mutate_paint_seq),
     ("paint-spans", "a rule loses its contributor list", mutate_paint_spans),
     ("interval-provenance", "an exact duplicate contributor is deduplicated",
@@ -1985,8 +2237,10 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
     ("paint-order-reconciliation", "a desync is accepted instead of raising",
      mutate_paint_order_reconciliation),
     ("soft-masks", "a masked image reports its unmasked pixels", mutate_soft_masks),
-    ("transforms", "2550M's seal loses its vertical flip", mutate_transforms),
+    ("transforms", "the flipped placement loses its negative d",
+     mutate_transforms),
     ("paths", "one filled triangle is dropped", mutate_paths),
+    ("tone", "a decorative grey rule is reported as structural", mutate_tone),
     ("codepoints", "an unmappable glyph prints as a section sign", mutate_codepoints),
     ("is-bar-like", "a leaning separator loses its rule", mutate_bar_like),
 )
@@ -2103,25 +2357,28 @@ def paint_span_contract_probes(stream: Any) -> list[str]:
     return failures
 
 
-def self_test(source_root: pathlib.Path) -> int:
-    """Assert Round 1's properties against the real PDFs, then prove they can fail.
+def self_test(profile: SelfTestProfile, source_root: pathlib.Path) -> int:
+    """Assert Round 1's properties against a pinned corpus, then prove they can fail.
 
     Absence is a failure, not a skip: a self-test that quietly passes because it
     could not find its sources is the same green tick this project has already
-    been burned by.
+    been burned by. That is also why the synthetic corpus exists -- so that CI,
+    which can never hold the official PDFs, runs every one of these checks
+    instead of reporting that it could not.
     """
     missing = [f"{code}: {source_root / relative}"
-               for code, (relative, _, _) in SELF_TEST_FIXTURES.items()
+               for code, (relative, _, _) in profile.fixtures.items()
                if not (source_root / relative).is_file()]
     if missing:
-        print(f"self-test cannot run -- {len(missing)} source PDF(s) absent under "
-              f"{source_root}:", file=sys.stderr)
+        print(f"self-test cannot run -- {len(missing)} {profile.name} source "
+              f"PDF(s) absent under {source_root}:", file=sys.stderr)
         for entry in missing:
             print(f"  {entry}", file=sys.stderr)
-        print("Pass --source-root if the pinned PDFs live elsewhere.", file=sys.stderr)
+        print("Pass --source-root if the pinned PDFs live elsewhere, or "
+              "--fixtures to run the tracked synthetic corpus.", file=sys.stderr)
         return 2
 
-    evidence = gather_evidence(source_root)
+    evidence = gather_evidence(profile, source_root)
     failures: list[str] = []
     for name, check in SELF_TEST_CHECKS:
         found = check(evidence)
@@ -2141,9 +2398,36 @@ def self_test(source_root: pathlib.Path) -> int:
     for message in contract_failures:
         print(f"    FAIL {message}", file=sys.stderr)
 
-    print(f"self-test: {'PASS' if not failures else f'{len(failures)} FAILURE(S)'} "
-          f"over {len(SELF_TEST_FIXTURES)} pinned PDFs", file=sys.stderr)
+    # The corpus is named in the result line, and a synthetic pass says outright
+    # that it is not evidence about the official forms. A reader who sees only
+    # "self-test: PASS" must not be able to mistake one for the other.
+    caveat = "" if profile.is_evidence else (
+        " -- synthetic corpus, weaker than the official pins: it proves every "
+        "check runs and can fail, not that the real forms extract correctly")
+    verdict = "PASS" if not failures else f"{len(failures)} FAILURE(S)"
+    print(f"self-test: {verdict} over {len(profile.fixtures)} pinned PDFs "
+          f"({profile.name}){caveat}", file=sys.stderr)
     return 1 if failures else 0
+
+
+def select_profile(use_fixtures: bool,
+                   source_root: pathlib.Path | None) -> tuple[SelfTestProfile,
+                                                              pathlib.Path]:
+    """Decide which corpus --self-test measures, and where it lives.
+
+    --fixtures is explicit. A --source-root pointing at the tracked fixture
+    directory selects the same profile, because the alternative -- looking for
+    2551Q under tools/formgen/fixtures and failing -- would be an obviously
+    useless reading of that argument. Everything else means the official pins,
+    including the no-argument case gate.py uses.
+    """
+    if use_fixtures:
+        return FIXTURE_PROFILE, source_root or FIXTURE_PROFILE.source_root
+    if source_root is not None:
+        if source_root.resolve() == FIXTURE_PROFILE.source_root:
+            return FIXTURE_PROFILE, source_root
+        return REAL_PROFILE, source_root
+    return REAL_PROFILE, REAL_PROFILE.source_root
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2164,13 +2448,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--self-test", action="store_true",
                         help="Assert this module's properties against the pinned "
                              "source PDFs and exit non-zero on failure.")
-    parser.add_argument("--source-root", type=pathlib.Path,
-                        default=SELF_TEST_SOURCE_ROOT,
-                        help="Where --self-test looks for the pinned PDFs.")
+    parser.add_argument("--fixtures", action="store_true",
+                        help="Run --self-test over the tracked synthetic corpus "
+                             "instead of the official PDFs. Same checks, same "
+                             "mutation probes, weaker subjects -- this is what "
+                             "CI runs, because the officials cannot be tracked.")
+    # No default, so select_profile can tell "not given" from "given, and it
+    # happens to be the fixture directory".
+    parser.add_argument("--source-root", type=pathlib.Path, default=None,
+                        help="Where --self-test looks for the pinned PDFs "
+                             f"(default: {SELF_TEST_SOURCE_ROOT}).")
     args = parser.parse_args(argv)
 
     if args.self_test:
-        return self_test(args.source_root)
+        return self_test(*select_profile(args.fixtures, args.source_root))
 
     absent = [name for name, value in (("--pdf", args.pdf),
                                        ("--form-code", args.form_code),
