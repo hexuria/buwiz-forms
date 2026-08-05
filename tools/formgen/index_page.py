@@ -23,6 +23,15 @@ when batch.py actually wrote one, and reports the page area that leaving the
 form freed -- the reason the split is worth doing. A bundle with no guide gets
 an em dash, never a dead link.
 
+The leading ordinal and the count beside the heading answer the one question a
+reader cannot answer by looking: is anything missing? Fifty-one rows of
+thirteen columns do not count themselves, so the heading states the total and
+the last row states its own position; a dropped bundle shows up as those two
+disagreeing. The numbers come from the batch report's order, which batch.py
+sorts (corpus first, then code, revision, variant) before writing it, so they
+are a property of that sorted list and never of the order a directory scan
+happened to return.
+
 Usage:
     python3 tools/formgen/index_page.py            # writes forms/index.html
 """
@@ -59,6 +68,8 @@ table{border-collapse:collapse;width:100%} th,td{padding:4px 8px;border-bottom:1
 th{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#666;border-bottom:2px solid #bbb}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums} td.p{font-variant-numeric:tabular-nums;color:#555}
 td.f{color:#888;font-size:11px} .r{color:#888;font-size:11px}
+td.i,th.i{text-align:right;color:#888;font-variant-numeric:tabular-nums;width:2.4em}
+.ct{font-size:.75em;font-weight:600;background:#eee;color:#555;padding:1px 8px;border-radius:9px;vertical-align:middle}
 .v{background:#eee;padding:0 4px;border-radius:3px;font-size:10px;color:#555}
 .b{padding:1px 7px;border-radius:9px;font-size:11px;font-weight:600;white-space:nowrap}
 .g{background:#d7f5dd;color:#0a5528} .y{background:#fdf0c8;color:#6b4b04}
@@ -67,7 +78,8 @@ a{color:#0a6;text-decoration:none;font-weight:600} a:hover{text-decoration:under
 .k{margin:0 0 1.2rem;font-size:12px;color:#555} .k span{margin-right:1rem}
 @media(prefers-color-scheme:dark){body{background:#111;color:#eee}th,td{border-color:#333}
 .g{background:#123d22;color:#7ee2a0}.y{background:#3d3312;color:#e8cf7a}.o{background:#3d2412;color:#e8a56f}
-.r2{background:#3d1616;color:#e88f8f}.u{background:#2a2a2a;color:#aaa}.v{background:#2a2a2a;color:#aaa}}
+.r2{background:#3d1616;color:#e88f8f}.u{background:#2a2a2a;color:#aaa}
+.v,.ct{background:#2a2a2a;color:#aaa}}
 """
 
 
@@ -150,11 +162,11 @@ def form_link(record: dict[str, Any]) -> str:
             f' <span class=r>{html.escape(record["revision"])}</span>{tags}')
 
 
-def row(record: dict[str, Any], entry: dict[str, Any]) -> str:
+def row(record: dict[str, Any], entry: dict[str, Any], number: int) -> str:
     art = entry["images_missing"] + entry["images_placement_violations"]
     grow = len(record["growables"])
     return (
-        f'<tr><td>{form_link(record)}</td>\n'
+        f'<tr><td class=i>{number}.</td><td>{form_link(record)}</td>\n'
         f'<td>{badge(classify(entry))}</td>'
         f'<td class=n>{entry["rules_pct"]:g}%</td>'
         f'<td class=n>{entry["text_pct"]:.1f}%</td>\n'
@@ -211,14 +223,19 @@ def render(batch: list[dict[str, Any]], audit: list[dict[str, Any]]) -> str:
     text_ok = sum(1 for v in text if v >= TEXT_CLEAN_PCT)
     guides = guide_summary(batch)
 
-    rows = "".join(row(r, scored[r["slug"]]) for r in batch)
+    # Enumerate `batch` itself and nothing else. batch.py writes the report
+    # already sorted -- corpus first, then code, revision, variant -- so the
+    # ordinals are a property of that sorted list, and re-deriving an order here
+    # would be a second, drifting opinion about what row 17 is.
+    rows = "".join(row(r, scored[r["slug"]], i) for i, r in enumerate(batch, 1))
     return (
         "<!doctype html><meta charset=utf-8><title>Generated BIR forms</title><style>\n"
         + STYLE +
         "</style>\n"
-        "<h1>Generated BIR forms</h1>\n"
-        f"<p>{n} forms, {pages} pages. Status is <b>measured</b>: each bundle is printed to PDF"
-        " with Chromium, re-extracted, and diffed against the source PDF&rsquo;s own geometry.</p>\n"
+        f"<h1>Generated BIR forms <span class=ct>{n} forms</span></h1>\n"
+        f"<p>{n} forms, {pages} pages, numbered 1&ndash;{n} below. Status is <b>measured</b>:"
+        " each bundle is printed to PDF with Chromium, re-extracted, and diffed against the"
+        " source PDF&rsquo;s own geometry.</p>\n"
         f'<p class=k><span>{badge("clean")} rules 100%, text &ge;{TEXT_CLEAN_PCT:g}%, artwork byte-identical</span>\n'
         f'<span>{badge("text")} geometry exact, some strings unmatched</span>\n'
         f'<span>{badge("art")} geometry and pixels exact, image stream re-encoded</span>\n'
@@ -233,7 +250,8 @@ def render(batch: list[dict[str, Any]], audit: list[dict[str, Any]]) -> str:
         f"{guides['both']} both) &middot;\n"
         f"reclaiming a mean <b>{guides['pct_mean']}%</b> of the <b>{guides['pages']}</b> pages"
         f" it cut (min {guides['pct_min']}%, max {guides['pct_max']}%)</p>\n"
-        "<table><tr><th>form<th>status<th class=n>rules<th class=n>text<th class=n>art?"
+        "<table><tr><th class=i>#<th>form<th>status<th class=n>rules<th class=n>text"
+        "<th class=n>art?"
         "<th class=n>pp<th>paper<th class=n>rules<th class=n>cells<th class=n>grow"
         "<th>guide<th class=n>reclaim<th>fonts</tr>\n"
         + rows + "</table>\n"
@@ -243,6 +261,13 @@ def render(batch: list[dict[str, Any]], audit: list[dict[str, Any]]) -> str:
 def _entry(**over: Any) -> dict[str, Any]:
     base = {"slug": "x", "status": "ok", "paper_ok": True, "rules_pct": 100.0,
             "text_pct": 100.0, "images_missing": 0, "images_placement_violations": 0}
+    return base | over
+
+
+def _record(slug: str, code: str, **over: Any) -> dict[str, Any]:
+    base = {"slug": slug, "code": code, "revision": "2018", "variant": "",
+            "in_corpus": True, "pages": 1, "paper": "612x792", "rules": 0,
+            "cells": 0, "growables": [], "fonts": [], "guide": None}
     return base | over
 
 
@@ -304,6 +329,31 @@ def self_test() -> int:
     failures += not ok
     print(f"  {'PASS' if ok else 'FAIL'}  guide totals count bundles and cut pages"
           f"{'' if ok else f': {totals}'}")
+
+    # The ordinal and the heading total are the two numbers a reader counts
+    # against each other to see whether a bundle is missing, so the ordinals have
+    # to follow the batch report's order. The audit is a lookup table here, and
+    # passing it in reverse proves its order cannot leak onto the page.
+    batch = [_record("a-2018", "AAA"), _record("b-2018", "BBB"),
+             _record("c-2018", "CCC")]
+    page = render(batch, [_entry(slug=r["slug"]) for r in reversed(batch)])
+    fragments = page.split("<tr>")[2:]   # [0] is the preamble, [1] the header row
+    ordinals = [f.split("</td>")[0] for f in fragments]
+    heading = page[page.index("<h1>"):page.index("</h1>") + 5]
+    number_cases = [
+        ("every row is numbered, in the batch report's order",
+         len(fragments) == len(batch)
+         and all(fragment.startswith(f'<td class=i>{i}.</td>')
+                 and f'"{record["slug"]}/index.html"' in fragment
+                 for i, (record, fragment) in enumerate(zip(batch, fragments), 1)),
+         ordinals),
+        ("the heading states the total",
+         f'<span class=ct>{len(batch)} forms</span>' in heading, heading),
+        ("the ordinal column is headed", "<th class=i>#" in page, "no # header cell"),
+    ]
+    for name, ok, detail in number_cases:
+        failures += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  {name}{'' if ok else f': {detail}'}")
 
     # A form the audit never scored must stop the render, not render blank.
     try:
