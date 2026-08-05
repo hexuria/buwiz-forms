@@ -36,6 +36,7 @@ pinned PDF ──extract.py──► form IR (geometry + typography, exact pt)
                               │
                               ├──lattice.py──► box model: cells, regions, growable bands, combs
                               ├──fonts.py────► font plan: CSS face per run + advance-metric proof
+                              ├──guides.py──► guide plan: where the sheet stops being form
                               │
                               └──emit.py─────► HTML + CSS (absolute pt layout, @page = MediaBox)
                                                   │
@@ -45,6 +46,15 @@ pinned PDF ──extract.py──► form IR (geometry + typography, exact pt)
                                                   │
                                              verify.py ──► IR-vs-IR numeric diff
 ```
+
+`batch.py` drives that loop over all 51 source PDFs and packages the result as
+the hand-maintainable tree under `forms/`. Above the per-form loop sits a
+verification stack that came later and is documented in the module map below:
+`audit.py` round-trips and scores every generated form and asserts the eight
+properties scoring cannot see, `comb_referee.py` re-measures every comb with a
+deliberately independent implementation, `validate_tree.py` checks the
+committed `forms/` tree using nothing else, and `gate.py` runs all of it as the
+single done-condition.
 
 The last step is the important one. **We compare extraction to extraction, not
 raster to raster.** Our HTML is printed to PDF by Chromium, that PDF is parsed
@@ -96,11 +106,13 @@ substitution, not a font, and are deliberately left unresolved.
 
 ## Paper size
 
-`@page` is set from the PDF's own MediaBox, per form. 2551Q is 612×936pt
-(Folio); 0619E is 612×792 (Letter); others are 612×1008 (Legal). None of them
-are A4. Forcing a single paper size would distort every form off its official
-dimensions, so paper is per-form data — which is also what lets one script
-handle all 35 without a table of special cases.
+`@page` is set from the PDF's own MediaBox, per form. Across the 51-form
+corpus: 42 forms are 612×936pt (Folio), one — the 1701 consolidation sheet —
+is Folio turned landscape at 936×612, four are 612×1008 (Legal: 2550M, 2550Q,
+2551M, 2553) and four are 612×792 (Letter: 0619E, 0619F, 0620, the 1701
+attachment). None of them are A4. Forcing a single paper size would distort
+every form off its official dimensions, so paper is per-form data — which is
+also what lets one script handle all 51 without a table of special cases.
 
 ## Growable fields
 
@@ -292,9 +304,11 @@ above would have been applied to the screen the same way.
 ## Determinism
 
 Same PDF in, byte-identical HTML out. No timestamps, no randomness, no
-dict-order dependence, no hand tuning per form. That is the property that makes
-"convert the other 34 forms" a matter of running the script, and it is the thing
-to protect above any individual form's score.
+dict-order dependence, no hand tuning per form. That is the property that made
+converting the rest of the corpus a matter of running the script, and it is the
+thing to protect above any individual form's score. The gate does not take it
+on faith: a full run regenerates the corpus twice and compares the two
+generations byte for byte.
 
 ## Usage
 
@@ -308,6 +322,137 @@ python3 tools/formgen/extract.py \
 
 `--expected-sha256` is not optional in real runs. Every downstream artefact is
 only meaningful relative to an exactly pinned source.
+
+The corpus driver is one command — `python3 tools/formgen/batch.py` — which
+reads the source PDFs from `--source-root` (default `~/Downloads/forms`),
+stages intermediates under `build/` and packages bundles under `forms/`. Note
+`ARCHIVED.md`: `forms/` is hand-maintained since the one-shot generation on
+2026-07-29, so re-running batch over an edited bundle regenerates it from
+source. The gate re-runs batch deliberately, as its determinism proof; a hand
+edit that a regeneration would destroy does not belong in `forms/`.
+
+## Module map
+
+Everything lives flat in `tools/formgen/`. One line each; the sections above
+explain the why.
+
+- `extract.py` — pinned PDF → IR: geometry, typography, images, paint order,
+  all in exact pt. Its `--self-test` asserts against six pinned official PDFs;
+  `--self-test --fixtures` runs the same checks over the committed synthetic
+  corpus instead, which is what CI can evaluate.
+- `lattice.py` — the IR's flat rule list → box model: cells, regions, growable
+  bands, comb slots.
+- `fonts.py` — font plan: a shipped CSS face per run, with the advance-metric
+  proof and letter-spacing recovery described above.
+- `guides.py` — decides where a sheet stops being form and becomes reference
+  material; writes the guide plan `emit.py` splits on.
+- `emit.py` — IR + box model + font plan (+ guide plan) → self-contained
+  HTML/CSS; `--document form|guide` picks which half.
+- `batch.py` — drives the whole pipeline over every source PDF and packages
+  `forms/`: shared `base.css`, fonts once under `forms/fonts/`, composited
+  artwork under `forms/assets/` with every digest recorded in
+  `forms/assets-manifest.json`.
+- `verify.py` — the round-trip differ: print our HTML to PDF via Chromium,
+  re-extract with the same extractor, diff IR against IR numerically.
+- `audit.py` — round-trips every generated form, scores it, and asserts the
+  eight properties scoring cannot see; writes `build/audit.json` with
+  per-assertion offender detail per form.
+- `comb_referee.py` — independent vector referee for printed comb
+  compartments: parses Poppler's `pdftocairo -svg` output with the stdlib,
+  never imports the producers it judges, and pins them by sha256 (editing
+  `audit.py`, `extract.py` or `lattice.py` requires re-pinning in the same
+  commit). Writes its ledger to `build/comb-referee.json` and its attestation
+  to `build/comb-referee-attested.json`.
+- `fill_check.py` — fills every field in a browser, types one comb by
+  keystroke, prints, re-extracts, and compares each glyph centre to the
+  layout's measured slot centre.
+- `band_drive.py` — drives every growable band at 1, capacity and capacity+4
+  rows.
+- `index_page.py` — renders `forms/index.html` from the machine-produced
+  reports.
+- `validate_tree.py` — validates the committed `forms/` tree using nothing but
+  the committed tree (no PDFs, no `build/`); verifies every staged asset
+  against `forms/assets-manifest.json`. This is the part of the work a fresh
+  clone can evaluate, so it is the backbone of CI.
+- `gate.py` — the done-condition. See below.
+- `fixtures/make_fixtures.py` — builds the committed synthetic PDF corpus
+  (`flip`, `glyphs`, `lean`, `masks`, `paths`, `rules`); `--verify` proves the
+  committed bytes rebuild exactly.
+- `fixtures/prove_fixtures_fail.py` — the check that reads the checkers: it
+  mutates the fixture corpus, re-pins to the mutated digests so a hash mismatch
+  cannot stand in for the result, and requires each mutation to trip exactly
+  its own check. A neutered assertion trips nothing and fails this.
+
+`ARCHIVED.md` records that the one-shot generation of `forms/` happened on
+2026-07-29 and why the tree is hand-maintained from that point.
+`local-runners/` holds machine-local full-gate launchers and their reports;
+only its README is tracked.
+
+## How to verify
+
+```sh
+python3 tools/formgen/gate.py                     # the done-condition, ~60 min
+python3 tools/formgen/gate.py --skip-regenerate   # score forms/ as it stands
+python3 tools/formgen/gate.py --only assertions   # one check while iterating
+python3 tools/formgen/gate.py --list              # the check names
+python3 tools/formgen/validate_tree.py --verbose  # the committed tree alone
+python3 tools/formgen/<module>.py --self-test     # any of the ten self-testing modules
+python3 tools/formgen/fixtures/make_fixtures.py --verify
+python3 tools/formgen/fixtures/prove_fixtures_fail.py
+python3 tools/formgen/extract.py --self-test --fixtures
+```
+
+**The gate.** `gate.py` runs twelve checks and exits 0 only when all pass:
+self-tests, conversion, rules, paper, artwork, text, assertions, findings,
+tracked-files, audit-refresh, determinism, comb-referee. A full run first
+regenerates the corpus twice and byte-compares the generations (determinism),
+audits the final bytes (audit-refresh feeds rules/paper/artwork/text/
+assertions), and runs the comb referee exactly last so nothing can stale its
+evidence. The rule that matters most: **a check that cannot be evaluated is a
+failure, never a pass** — `UNEVALUABLE` counts with the failures. Two
+mechanical notes: `audit-refresh` exists only in full runs, so it is not an
+`--only` choice; and a full run's `--json` target must be outside the
+repository, or the write would stale the gate's own final snapshot.
+
+**Self-tests.** `gate.py` declares `SELF_TEST_MODULES` — ten modules expose
+`--self-test`: extract, lattice, fonts, guides, emit, verify, index_page,
+audit, comb_referee, gate. Five of them (lattice, fonts, guides, emit, verify)
+assert against the real pinned corpus by construction and cannot run on a
+fresh clone; extract defaults to its official pins but accepts `--fixtures`;
+the remaining four (index_page, comb_referee, audit, gate) need no external
+input beyond a Chromium for audit.
+
+**CI** (`.github/workflows/formgen.yml`) runs the no-external-input subset on
+every push: the tree validator and its own self-test, fixture-corpus
+determinism (two generations, byte-compared) and committed-bytes verification,
+`prove_fixtures_fail.py`, the four no-input module self-tests (index_page,
+comb_referee, audit, gate — audit drives a real Chromium), and extract's
+fixture profile. **CI is not the gate and says so in its job summary every
+run**: the gate needs the official source PDFs — deliberately untracked
+(`*.pdf` is gitignored), pinned by sha256 so a swapped file fails loudly — and
+the regenerable `build/` tree, neither of which exists on a hosted runner. The
+workflow asserts its own coverage table against `SELF_TEST_MODULES` so a new
+module cannot be quietly uncovered, and nothing in it is skipped or
+`continue-on-error`. The gate stays operator-run; `local-runners/` is where
+its launchers and reports land.
+
+## Documentation map
+
+Each fact lives in exactly one document (the table is owned by `GOAL.md`;
+this is the working copy):
+
+| Document | Owns | Updated |
+| --- | --- | --- |
+| `README.md` (this file) | the process end-to-end: method, module map, how to verify | when the process changes |
+| `STATUS.md` | **all measured numbers**: gate verdicts, assertion counts, findings tally, CI state | in the same commit as any change that moves a number |
+| `GOAL.md` | objective, method, constraints, judgement calls | when the objective changes |
+| `review-findings.json` | the defect ledger — scope of record | as findings resolve |
+| `BLOCKER-PLAN.md`, `HANDOFF.md` | frozen historical records | never |
+
+The rule that keeps this honest: **a commit that changes a number updates
+`STATUS.md` in the same commit**, and no measured status number appears
+anywhere else — including here. Stale-number drift across five documents is
+how the previous state happened.
 
 ## Non-goals
 

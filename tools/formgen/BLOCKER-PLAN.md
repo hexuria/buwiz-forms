@@ -1,5 +1,10 @@
 # Blocker remediation plan
 
+> **Frozen historical record as of 2026-07-30.** Kept as written; every number
+> below is stale by design. Current measured state lives in `STATUS.md`, the
+> process in `README.md`, the objective in `GOAL.md`; findings resolve in
+> `review-findings.json`.
+
 Derived from the 51-form visual review (138 findings, 137 of them invisible to
 the numeric audit). Every mechanism below was verified directly against the
 source PDFs and the generated artefacts, not taken from a report.

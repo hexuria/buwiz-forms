@@ -1,5 +1,9 @@
 # Handoff — formgen, PDF-native BIR form conversion
 
+> **Frozen historical record as of 2026-07-30.** Kept as written; every number
+> below is stale by design. Current measured state lives in `STATUS.md`, the
+> process in `README.md`, the objective in `GOAL.md`.
+
 Written 2026-07-30. Everything below was measured, not recalled. Where something
 is unverified, it says so.
 
