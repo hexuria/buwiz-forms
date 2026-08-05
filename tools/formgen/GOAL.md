@@ -16,6 +16,17 @@ python3 tools/formgen/gate.py     # exits 0 — all 12 checks
 gh pr checks 13                   # every check green
 ```
 
+**Coverage is part of done.** The corpus must carry every form on BIR's
+official 51-form eBIRForms list (verified 2026-08-06 at bir.gov.ph/ebirforms),
+not merely 51 forms. Our 51 and BIR's 51 are NOT the same set: we hold ~6 the
+official list does not cover (0620, 1621, 1709, 2316, 2550-DS and the
+DST-variant naming), and we were missing 9 it does. The user has authorised
+downloading them. Any that BIR does not publish is recorded under `## Blocked`
+with what was tried -- never substituted from a mirror or a third party.
+
+Do NOT merge the PR. The user has said explicitly: land every form first,
+then they review.
+
 A check that cannot be evaluated is a failure. Never edit either command to
 make it pass. The gate regenerates twice, audits, and runs the comb referee;
 ~60 min. CI runs the no-external-input subset on every push.
@@ -108,6 +119,12 @@ overturns them.
 
 ## Blocked
 
-Nothing. The 9 official forms with no source PDF (1600, 1601-E, 1601-F,
-1602, 1603, 1604-CF, 1704, 2000, 2200AN) stay out of scope — do not download
-them; ask the user.
+Nothing.
+
+Note for whoever reads this next: the 9 forms below were once recorded here as
+"superseded by the quarterly versions". That was wrong, and checking the
+official list is what corrected it -- BIR's coverage table numbers 1600, 1601-E,
+1601-F, 1602, 1603 and 1604-CF as their own entries ALONGSIDE 1600PT/VT,
+1601EQ, 1601-FQ, 1602Q, 1603Q and 1604-C/F. A legacy monthly return is a
+separate form, not an old name for the quarterly one. 1704, 2000 and 2200AN
+were absent outright. Fetch workflow: wcvichmb0.
