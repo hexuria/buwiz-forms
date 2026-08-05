@@ -7935,11 +7935,29 @@ def self_test() -> int:
             "<style>@page{size:72pt 72pt;margin:0}"
             "html,body{margin:0;width:72pt;height:72pt}</style>"
         )
-        browser_test_deadline = 8.0
+        # Two budgets, because the fixtures below assert opposite things. The
+        # hang fixtures must exceed their deadline, so theirs stays tight. The
+        # control must finish inside its own, and it was sharing the tight one.
+        #
+        # That mattered because _bound_playwright_runtime SHA-256s the entire
+        # ~873 MiB Playwright tree before and after every render -- roughly
+        # 1.75 GiB of hashing inside the budget. Warm, it is CPU-bound off the
+        # page cache and fits; cold, it is I/O-bound and does not. So on a cold
+        # runner the control died with an uncaught RenderDeadlineExceeded while
+        # the three hang fixtures passed VACUOUSLY: the closure hashing alone
+        # exhausted the deadline they exist to prove is enforced. Three real
+        # assertions quietly became no-ops, which is worse than the red one.
+        hang_deadline = 8.0
+        control_deadline = 60.0
+
+        # Prime the page cache once, outside any timed section, so the first
+        # render is not paying for the whole tree's first read.
+        _snapshot_tree(_playwright_package_root())
 
         def run_browser_fixture(
                 label: str,
                 body: str,
+                deadline: float = hang_deadline,
                 ) -> tuple[bytes, dict[str, Any], dict[str, Any]]:
             fixture_root = adversarial_root / f"browser-{label}"
             fixture_root.mkdir()
@@ -7954,15 +7972,24 @@ def self_test() -> int:
             )
             return _render_snapshotted_tree(
                 tree, 72.0, 72.0,
-                deadline_seconds=browser_test_deadline)
+                deadline_seconds=deadline)
 
-        control_pdf, control_runtime, control_requests = (
-            run_browser_fixture(
-                "control", "<body>bounded control</body>"))
+        # A deadline the control blows is a finding, not a traceback: it must
+        # land in the failure count like every other assertion, or a cold runner
+        # reports a crash where it should report a result.
+        try:
+            control_pdf, control_runtime, control_requests = (
+                run_browser_fixture(
+                    "control", "<body>bounded control</body>",
+                    deadline=control_deadline))
+        except RenderDeadlineExceeded as exc:
+            check(f"actual-browser control completes inside its hard deadline "
+                  f"({exc})", False)
+            control_pdf, control_runtime, control_requests = b"", {}, {}
         check("actual-browser control completes inside its hard deadline",
               control_pdf.startswith(b"%PDF-")
               and control_runtime["hard_deadline_seconds"]
-              == browser_test_deadline
+              == control_deadline
               and control_runtime["hard_deadline_enforced_by"]
               == "isolated-render-worker-process-v1"
               and control_requests["fulfilled"] == ["form.html"]
@@ -7991,7 +8018,7 @@ def self_test() -> int:
                 run_browser_fixture(label, body)
             except RenderDeadlineExceeded as exc:
                 deadline_held = (
-                    exc.deadline_seconds == browser_test_deadline
+                    exc.deadline_seconds == hang_deadline
                     and "deterministic hard deadline" in str(exc))
             else:
                 deadline_held = False
@@ -8023,7 +8050,7 @@ def self_test() -> int:
             "<body>blocked page script probe</body>",
         )
         deadline_evidence = _render_deadline_evidence(
-            RenderDeadlineExceeded(browser_test_deadline))
+            RenderDeadlineExceeded(hang_deadline))
         check("render deadline publishes explicit unevaluable evidence",
               deadline_evidence == {
                   "measured": False,
@@ -8031,7 +8058,7 @@ def self_test() -> int:
                   "roundtrip_liveness": {
                       "status": "unevaluable",
                       "hard_failure": "render-hard-deadline-exceeded",
-                      "hard_deadline_seconds": browser_test_deadline,
+                      "hard_deadline_seconds": hang_deadline,
                       "cleanup_policy": (
                           "kill-worker-and-chromium-process-group"),
                   },

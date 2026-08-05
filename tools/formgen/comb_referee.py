@@ -90,11 +90,11 @@ LATTICE_PRODUCER_SHA256 = (
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
-    "65583c82255b637a1ae09428577c42c96556f03e56c3951e25fa17ddce78ea22"
+    "6b8b326cd617cf1fa2dc6e35b1209bff2df0f2d2f37720992121f859556d3186"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     "tools/formgen/extract.py": (
-        "e9ad12269f802874964f4b4115b4156256d2b55276e916a873be8589579989eb"
+        "85ccfe328f9be6ef02ef06486194fe02d09484e4ef2c33daabac542e08707019"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"

@@ -19,9 +19,12 @@
 # forms it never measured, and 137 real defects sat behind a numeric audit
 # reporting "100% on 51/51".
 #
-# No Node, and no Playwright browsers. Nothing here drives Chromium — the one
-# check that would (verify.py's IR-vs-IR differ over a printed PDF) is in the
-# not-covered list, so installing a browser would buy nothing but eight minutes.
+# No Node. Chromium IS installed: audit.py's self-test drives a real browser to
+# prove its render deadline is enforced by an isolated worker, and that is the
+# engine behind the eight correctness assertions, so running it without a
+# browser would be a red job or -- worse -- a skipped one. verify.py's IR-vs-IR
+# differ still needs a pinned BIR PDF to print, so it stays in the not-covered
+# list; the browser does not change that.
 
 name: formgen
 
@@ -50,6 +53,9 @@ jobs:
       # means regenerating the corpus and re-pinning in extract.py, in one
       # commit.
       PYMUPDF_VERSION: '1.27.2.3'
+      # Matched to the version the repo already drives elsewhere, so a
+      # runner and a workstation exercise the same browser.
+      PLAYWRIGHT_VERSION: '1.58.2'
 
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +67,15 @@ jobs:
 
       # formgen is stdlib + fitz. There is no requirements file to cache
       # against and the wheel installs in seconds, so no pip cache either.
+      # audit.py's self-test launches this. The version is pinned to the one the
+      # repo already uses elsewhere, so a runner and a workstation drive the same
+      # browser; a self-test that passes here and fails there would be worthless.
+      - name: Install Playwright and Chromium
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check "playwright==${PLAYWRIGHT_VERSION}"
+          python3 -m playwright install --with-deps chromium
+
       - name: Install PyMuPDF
         run: |
           set -euo pipefail
@@ -144,8 +159,9 @@ jobs:
       # class this pipeline exists to make impossible. So the split is asserted
       # against gate.py's own tuple, read without importing it.
       #
-      # RUNS_IN_CI: proven to pass on a clean checkout with no build/ tree, no
-      # source PDFs and no browser.
+      # RUNS_IN_CI: proven to pass on a clean checkout with no build/ tree and
+      # no source PDFs. audit.py additionally needs the Chromium installed
+      # above -- it is the only one of the four that does.
       # NEEDS_PINNED_CORPUS: asserts against the real 51-form corpus by
       # construction (a named form's IR, layout, font plan, or the pinned PDF
       # itself). Not skipped quietly — named in the job summary as NOT COVERED.
@@ -184,7 +200,7 @@ jobs:
       # Four modules whose self-tests read nothing but their own source and the
       # committed tree. Measured on a clean `git archive` checkout with no
       # build/ and no ~/Downloads/forms: index_page <1s, comb_referee 1s,
-      # audit 32s, gate 29s (gate needs the .git directory that actions/checkout
+      # audit ~35s incl. the browser fixtures, gate 29s (gate needs the .git directory that actions/checkout
       # provides — it re-derives the tracked corpus from HEAD).
       #
       # Each module is run and reported by name so a failure says which. The
