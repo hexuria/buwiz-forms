@@ -9,14 +9,6 @@
   "stage_failed": null,
   "error": null,
   "images_extracted": 6,
-  "asset_digests": {
-    "245f1accd7fa02aa08d68df062b5ee0747c9c57bc4fa27860b27d260cd400671.png": "fbc92c56740c20d0e74324b7f0344da5766aa8ee1d733bfcafde7fd749e46d10",
-    "d45ffc186bd614e0c891408a94fa74a77646fe9c460d2c7d7d0bbfab42e66612.png": "d45ffc186bd614e0c891408a94fa74a77646fe9c460d2c7d7d0bbfab42e66612",
-    "c477b22e06cecca64a3f0653c3cbff3ddfbf6c17b0438f09e94ce08e576fb67b.png": "c477b22e06cecca64a3f0653c3cbff3ddfbf6c17b0438f09e94ce08e576fb67b",
-    "0ef16e059f0b4cd159e4fe99359e2b086358bdb2e2237f121ab753ebf06b46bb.png": "0ef16e059f0b4cd159e4fe99359e2b086358bdb2e2237f121ab753ebf06b46bb",
-    "f6df2349aec002c75de48d6a070fb4969b3b17e2ce6701658b8f5f9bb0a7ae59.png": "f6df2349aec002c75de48d6a070fb4969b3b17e2ce6701658b8f5f9bb0a7ae59",
-    "fde37392fa8c33f3de0a887f97b0fffcab1a2cf3341bc418efd985c577f8e174.png": "fde37392fa8c33f3de0a887f97b0fffcab1a2cf3341bc418efd985c577f8e174"
-  },
   "pages": 4,
   "paper": "612.0x936.0",
   "uniform_paper": true,

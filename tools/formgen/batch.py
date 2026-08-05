@@ -587,7 +587,11 @@ COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 
 # Keys that name the build tree, not the source. They are machine-dependent and
 # stay out of the committed bundle.
-BUILD_ONLY_KEYS = ("html", "font_plans", "guide_build", "guide_source_irs")
+# asset_digests is the manifest's raw material and belongs to the run, not to
+# a bundle: forms/assets-manifest.json already records every digest once, and
+# repeating them per bundle would be the same fact in 51 places, free to drift.
+BUILD_ONLY_KEYS = ("html", "font_plans", "guide_build", "guide_source_irs",
+                   "asset_digests")
 
 
 def split_rules(css: str) -> list[tuple[str, str]]:

@@ -9,9 +9,6 @@
   "stage_failed": null,
   "error": null,
   "images_extracted": 1,
-  "asset_digests": {
-    "901068e52df93e92b7e6a962cdffc289579bf9fb78ff884a1f2e5b98b178f032.png": "901068e52df93e92b7e6a962cdffc289579bf9fb78ff884a1f2e5b98b178f032"
-  },
   "pages": 4,
   "paper": "612.0x1008.0",
   "uniform_paper": true,

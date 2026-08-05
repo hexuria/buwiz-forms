@@ -6567,7 +6567,7 @@ BATCH_RECORD_KEYS = {
     "paper", "uniform_paper", "fonts", "rules", "text_runs", "images",
     "cells", "comb_cells", "growables", "sources", "guide",
     "guide_detected", "html_bytes", "html", "guide_build",
-    "guide_source_irs", "font_plans",
+    "guide_source_irs", "font_plans", "asset_digests",
 }
 AUDIT_ATTESTATION_KEYS = {
     "inputs_complete", "producer_execution_bound",
@@ -9528,6 +9528,7 @@ def _synthetic_batch_record(slug: str) -> dict[str, Any]:
                         "html": None, "pdfs": []},
         "guide_source_irs": [],
         "font_plans": [f"build/fonts/{slug}.fontplan.json"],
+        "asset_digests": {},
     }
 
 
@@ -11894,7 +11895,7 @@ def self_test() -> int:
             "sources": [*incomplete_batch[0]["sources"], None],
             "pages": 0, "html_bytes": 0, "html": None, "paper": "",
             "guide_detected": {}, "guide_build": {}, "fonts": [None],
-            "font_plans": [],
+            "font_plans": [], "asset_digests": {},
         })
         try:
             incomplete_batch_errors = batch_report_errors(

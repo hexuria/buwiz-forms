@@ -9,11 +9,6 @@
   "stage_failed": null,
   "error": null,
   "images_extracted": 3,
-  "asset_digests": {
-    "1d3a104de60f8114bedb744276d1200291d59fd45987b540e4700b9d1798430e.png": "1d3a104de60f8114bedb744276d1200291d59fd45987b540e4700b9d1798430e",
-    "e832b3bdc5a0806c2647fcf198418dca7a23887b237e7b1e4e88740379c7ce90.png": "e832b3bdc5a0806c2647fcf198418dca7a23887b237e7b1e4e88740379c7ce90",
-    "b928ed1cf497392bce70aa7cf7dad21b855ab8387c22ecc0e6a6aea4d912b044.png": "b928ed1cf497392bce70aa7cf7dad21b855ab8387c22ecc0e6a6aea4d912b044"
-  },
   "pages": 2,
   "paper": "612.0x936.0",
   "uniform_paper": true,
