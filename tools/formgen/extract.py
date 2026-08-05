@@ -917,9 +917,59 @@ def decoded_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
     -- would report a black block and the label it hides as the same picture.
     Returns None when the XObject cannot be decoded, which the caller must treat
     as "unknown", never "equal".
+
+    This is the *measurement* digest: what a reader of THIS PDF sees. It is the
+    right formula for a candidate -- verify.py and audit.py extract our own
+    Chromium-printed PDF with it -- and the wrong one for a reference IR whose
+    masked images ship as re-encoded PNG assets; those pin
+    shipped_pixel_sha256() instead, and the distinction is load-bearing (see
+    that function for the measured proof).
     """
     try:
         return pixmap_sha256(painted_pixmap(doc, xref))
+    except Exception:  # noqa: BLE001 - undecodable is a real answer, not a failure
+        return None
+
+
+def masked_asset_png(doc: fitz.Document, xref: int) -> bytes:
+    """The exact PNG bytes an offline bundle ships for a soft-masked XObject.
+
+    The single encode site, shared by asset_for_xref() (which writes these bytes
+    to disk) and shipped_pixel_sha256() (which pins their decoded samples). Two
+    call sites each doing their own tobytes("png") would invite the exact bug
+    this factoring closes: a digest computed over bytes nobody ships.
+    """
+    return painted_pixmap(doc, xref).tobytes("png")
+
+
+def shipped_pixel_sha256(doc: fitz.Document, xref: int) -> str | None:
+    """Hash the samples a consumer of the shipped bytes will decode.
+
+    For an unmasked image the bundle ships the source's own compressed stream,
+    so this is decoded_pixel_sha256 exactly. For a soft-masked image the bundle
+    ships the composited pixmap re-encoded as PNG (see asset_for_xref), and
+    MuPDF's PNG encode/decode round trip is not bit-faithful for that pixmap:
+    on 1701MS's seal, 3 of 7,900 pixels -- all partial-alpha edge pixels, alpha
+    236-245 -- come back with the red channel lower by exactly one step, and
+    the drift repeats on every further round trip (measured: five successive
+    re-encodes produced five distinct digests), so there is no fixed point to
+    pin instead. Hashing the in-memory pixmap therefore pinned a picture nobody
+    ships: Chromium re-embeds the asset bit-exactly, the candidate extraction
+    decoded exactly the asset's samples, and verify.diff_images -- which pairs
+    images by digest identity -- reported the seal missing while every pixel on
+    paper was right.
+
+    So: encode once, via the same masked_asset_png() the asset writer uses,
+    decode those exact bytes back, and hash the decoded samples with the one
+    digest formula. Still an exact SHA-256 over white-composited samples --
+    nothing is tolerated, the subject is simply the shipped artifact instead of
+    an intermediate buffer. Returns None when the XObject cannot be decoded,
+    which the caller must treat as "unknown", never "equal".
+    """
+    try:
+        if not smask_xref(doc, xref):
+            return decoded_pixel_sha256(doc, xref)
+        return pixmap_sha256(fitz.Pixmap(masked_asset_png(doc, xref)))
     except Exception:  # noqa: BLE001 - undecodable is a real answer, not a failure
         return None
 
@@ -956,7 +1006,7 @@ def asset_for_xref(doc: fitz.Document, xref: int) -> tuple[str, bytes] | None:
     name = asset_file_name(doc, xref, payload)
     if not smask_xref(doc, xref):
         return name, payload["image"]
-    return name, painted_pixmap(doc, xref).tobytes("png")
+    return name, masked_asset_png(doc, xref)
 
 
 class Placements:
@@ -993,8 +1043,8 @@ class Placements:
         return None
 
 
-def extract_images(page: fitz.Page, doc: fitz.Document,
-                   order: PaintOrder) -> list[dict[str, Any]]:
+def extract_images(page: fitz.Page, doc: fitz.Document, order: PaintOrder,
+                   shipped_pixels: bool = False) -> list[dict[str, Any]]:
     """Embedded XObjects with their placement, content hash and paint order.
 
     Hashing here is what lets emit.py carry the exact official bytes through and
@@ -1008,6 +1058,12 @@ def extract_images(page: fitz.Page, doc: fitz.Document,
     reported nine forms with missing artwork that was demonstrably present.
     Compare pixels to ask "is this the same picture"; compare streams to ask
     "is this the same file".
+
+    `shipped_pixels` selects which decoded samples `pixel_sha256` is over: the
+    ones embedded in this PDF (a candidate being measured), or the ones in the
+    asset a bundle ships for it (a reference IR). The two differ only for
+    soft-masked images, whose asset is a re-encode; see shipped_pixel_sha256
+    for why one digest cannot serve both sides.
 
     `transform` is the full 6-element placement matrix, not the bounding box the
     other four fields give. Four forms place an image with a negative `d` --
@@ -1043,7 +1099,8 @@ def extract_images(page: fitz.Page, doc: fitz.Document,
             payload = doc.extract_image(xref)
         except Exception:  # noqa: BLE001
             continue
-        pixel_digest = decoded_pixel_sha256(doc, xref)
+        pixel_digest = (shipped_pixel_sha256 if shipped_pixels
+                        else decoded_pixel_sha256)(doc, xref)
         mask_xref = smask_xref(doc, xref)
         asset_file = asset_file_name(doc, xref, payload)
         for rect in page.get_image_rects(xref):
@@ -1079,7 +1136,8 @@ def extract_images(page: fitz.Page, doc: fitz.Document,
 # ---------------------------------------------------------------------------
 
 
-def extract_page(page: fitz.Page, doc: fitz.Document, index: int) -> dict[str, Any]:
+def extract_page(page: fitz.Page, doc: fitz.Document, index: int,
+                 shipped_pixels: bool = False) -> dict[str, Any]:
     drawings = list(page.get_drawings())
     order = paint_order(page, drawings)
     segments = extract_segments(drawings, order)
@@ -1097,7 +1155,7 @@ def extract_page(page: fitz.Page, doc: fitz.Document, index: int) -> dict[str, A
         "area_fills": extract_area_fills(drawings, order),
         "paths": paths,
         "text_runs": extract_text_runs(page),
-        "images": extract_images(page, doc, order),
+        "images": extract_images(page, doc, order, shipped_pixels),
         "stats": {
             "rules_total": len(rules),
             "paths_total": len(paths),
@@ -1113,14 +1171,26 @@ def extract_page(page: fitz.Page, doc: fitz.Document, index: int) -> dict[str, A
 
 
 def extract(pdf_path: pathlib.Path, form_code: str, revision: str,
-            expected_sha256: str | None) -> dict[str, Any]:
+            expected_sha256: str | None, *,
+            shipped_pixels: bool = False) -> dict[str, Any]:
+    """The IR of one PDF. `shipped_pixels` picks the masked-image digest side.
+
+    False (the default) measures the PDF as embedded -- what every in-process
+    caller wants: audit.py and fill_check.py extract Chromium-printed
+    candidates, verify.py's self-tests extract synthetic PDFs, and this
+    module's own self-test reads source fixtures directly. True pins the digest
+    of the asset a bundle ships instead, which only the reference IR wants; the
+    CLI -- batch.py's route to build/ir/ and the staged guides -- is the only
+    producer of shipping IRs, so it is the only caller that passes it.
+    """
     digest = sha256_file(pdf_path)
     if expected_sha256 and digest != expected_sha256.lower():
         raise SystemExit(
             f"PDF hash mismatch\n  expected {expected_sha256.lower()}\n  actual   {digest}")
 
     doc = fitz.open(pdf_path)
-    pages = [extract_page(page, doc, i + 1) for i, page in enumerate(doc)]
+    pages = [extract_page(page, doc, i + 1, shipped_pixels)
+             for i, page in enumerate(doc)]
 
     fonts: dict[str, dict[str, Any]] = {}
     for page in doc:
@@ -2489,7 +2559,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.pdf.is_file():
         return print(f"no such PDF: {args.pdf}", file=sys.stderr) or 2
 
-    ir = extract(args.pdf, args.form_code, args.revision, args.expected_sha256)
+    # The CLI is the shipping side: batch.py produces build/ir/ and the staged
+    # guide IRs through it, and nothing measures a candidate through it. So the
+    # masked-image pixel digest pins the shipped asset's decoded samples here,
+    # while library callers keep the embedded-samples measurement default.
+    ir = extract(args.pdf, args.form_code, args.revision, args.expected_sha256,
+                 shipped_pixels=True)
     payload = json.dumps(ir, indent=2, sort_keys=False, ensure_ascii=False) + "\n"
 
     if args.out:

@@ -94,7 +94,7 @@ AUDIT_PRODUCER_SHA256 = (
 )
 AUDIT_DEPENDENCY_SHA256 = {
     "tools/formgen/extract.py": (
-        "85ccfe328f9be6ef02ef06486194fe02d09484e4ef2c33daabac542e08707019"
+        "5f75f191624624b5625a2c08b0d75c4790884fda6dc84768fde2cd354bc32b03"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
