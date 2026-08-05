@@ -118,12 +118,21 @@ jobs:
       # must not reach the self-test below and produce a confusing pin failure.
       #
       # The fixtures have to be COMMITTED, and `*.pdf` is gitignored at
-      # .gitignore:55. A negation (`!tools/formgen/fixtures/*.pdf`) is what makes
-      # that possible; without it this step reports "not present" on every
-      # fixture and the job is red. That negation is deliberately narrow — the
-      # six official BIR PDFs stay ignored and stay out of the repo.
+      # .gitignore:55. A nested tools/formgen/fixtures/.gitignore negates the six
+      # BY NAME; without it this step reports "not present" on every fixture and
+      # the job is red. Naming them one by one is deliberate — an unqualified
+      # `!*.pdf` would re-admit any official BIR PDF a future hand dropped there.
       - name: Fixture corpus matches its committed bytes
         run: python3 tools/formgen/fixtures/make_fixtures.py --verify
+
+      # The one check that reads the checkers. It rebuilds the corpus per
+      # mutation, RE-PINS it to its own new digests so a hash mismatch cannot
+      # stand in for the result, and requires each mutation to trip exactly its
+      # own check -- so a neutered assertion trips nothing and the step is red.
+      # Every other module here prints a count of FAILURES, and zero failures is
+      # indistinguishable from zero checks; this is what tells them apart.
+      - name: Every fixture check can actually fail
+        run: python3 tools/formgen/fixtures/prove_fixtures_fail.py
 
       # ---------------------------------------------------------------------
       # Module self-tests
@@ -210,7 +219,7 @@ jobs:
       # deleted and why this is not called equivalent coverage.
       #
       # `--fixtures` is the whole interface: it swaps REAL_PROFILE for
-      # FIXTURE_PROFILE and the same eleven checks and the same mutation probes
+      # FIXTURE_PROFILE and the same checks and the same mutation probes
       # run over the synthetic subjects. Never replace it with a bare
       # `--self-test` to make this step green — that selects the official pins,
       # which are not in the repo, and the run would be measuring nothing.

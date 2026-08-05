@@ -1266,8 +1266,8 @@ class SelfTestProfile:
     entire self-test could only report "cannot run". In CI that is the failure
     this project has already shipped once: a green tick that evaluated nothing.
 
-    Grouping the pins into a profile lets the *same* eleven checks, and the same
-    eleven mutation probes, run over a second corpus that is small enough to
+    Grouping the pins into a profile lets the *same* checks, and the same
+    mutation probes, run over a second corpus that is small enough to
     track. Only the subjects move; no check, threshold or assertion is relaxed
     for the synthetic run, and none of them is skipped.
     """
@@ -2246,7 +2246,7 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
 )
 
 
-def mutation_probes(evidence: dict[str, Any], stream: Any) -> list[str]:
+def mutation_probes(evidence: dict[str, Any], stream: Any) -> tuple[list[str], int]:
     """Confirm every check can fail, by breaking its subject and re-running it.
 
     A self-test that cannot fail is worthless, and every assertion above is of
@@ -2257,6 +2257,7 @@ def mutation_probes(evidence: dict[str, Any], stream: Any) -> list[str]:
     """
     checks = dict(SELF_TEST_CHECKS)
     failures: list[str] = []
+    ran = 0
     if set(name for name, _, _ in SELF_TEST_MUTATIONS) != set(checks):
         failures.append("every check needs a mutation that trips it; "
                         f"{sorted(set(checks) - {n for n, _, _ in SELF_TEST_MUTATIONS})} "
@@ -2272,10 +2273,11 @@ def mutation_probes(evidence: dict[str, Any], stream: Any) -> list[str]:
             failures.append(f"mutation '{description}' also tripped {extra}")
         print(f"  probe {name:<27} {'OK' if not extra and name in tripped else 'WEAK'}"
               f"  ({description})", file=stream)
-    return failures
+        ran += 1
+    return failures, ran
 
 
-def paint_span_contract_probes(stream: Any) -> list[str]:
+def paint_span_contract_probes(stream: Any) -> tuple[list[str], int]:
     """Prove malformed contributor contracts are rejected, case by case."""
     start, end, first, last, spans = SELF_TEST_MERGED_INTERVALS[0]
     valid = Segment(
@@ -2344,6 +2346,7 @@ def paint_span_contract_probes(stream: Any) -> list[str]:
         ("wrong-max", "contributor max",
          lambda rule: rule.__setitem__("paint_seq_max", 98)),
     )
+    ran = 0
     for name, expected, mutate in cases:
         broken = copy.deepcopy(valid)
         mutate(broken)
@@ -2354,7 +2357,8 @@ def paint_span_contract_probes(stream: Any) -> list[str]:
                             f"{expected!r}: {found}")
         print(f"  probe paint-spans:{name:<19} "
               f"{'OK' if rejected else 'WEAK'}", file=stream)
-    return failures
+        ran += 1
+    return failures, ran
 
 
 def self_test(profile: SelfTestProfile, source_root: pathlib.Path) -> int:
@@ -2388,15 +2392,27 @@ def self_test(profile: SelfTestProfile, source_root: pathlib.Path) -> int:
         for message in found:
             print(f"    FAIL {message}", file=sys.stderr)
 
-    weak = mutation_probes(evidence, sys.stderr)
+    weak, mutations_ran = mutation_probes(evidence, sys.stderr)
     failures.extend(weak)
     for message in weak:
         print(f"    FAIL {message}", file=sys.stderr)
 
-    contract_failures = paint_span_contract_probes(sys.stderr)
+    contract_failures, contracts_ran = paint_span_contract_probes(sys.stderr)
     failures.extend(contract_failures)
     for message in contract_failures:
         print(f"    FAIL {message}", file=sys.stderr)
+
+    # How many probes ran, asserted rather than assumed. Deleting an assertion
+    # leaves a self-test that still prints PASS, because every module here
+    # reports a count of *failures* and zero failures is indistinguishable from
+    # zero checks. A CI prove-phase fault did exactly that and went undetected.
+    expected_mutations = len(SELF_TEST_MUTATIONS)
+    expected_contracts = len(SELF_TEST_CHECKS)
+    if mutations_ran != expected_mutations:
+        failures.append(f"{mutations_ran} mutation probes ran, {expected_mutations} "
+                        f"declared -- a probe was removed or skipped")
+    if contracts_ran < expected_contracts:
+        failures.append(f"only {contracts_ran} paint-span contract probes ran")
 
     # The corpus is named in the result line, and a synthetic pass says outright
     # that it is not evidence about the official forms. A reader who sees only
@@ -2405,7 +2421,8 @@ def self_test(profile: SelfTestProfile, source_root: pathlib.Path) -> int:
         " -- synthetic corpus, weaker than the official pins: it proves every "
         "check runs and can fail, not that the real forms extract correctly")
     verdict = "PASS" if not failures else f"{len(failures)} FAILURE(S)"
-    print(f"self-test: {verdict} over {len(profile.fixtures)} pinned PDFs "
+    print(f"self-test: {verdict} over {len(profile.fixtures)} pinned PDFs, "
+          f"{len(SELF_TEST_CHECKS)} checks, {mutations_ran}+{contracts_ran} probes "
           f"({profile.name}){caveat}", file=sys.stderr)
     return 1 if failures else 0
 
