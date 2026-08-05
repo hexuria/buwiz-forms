@@ -91,19 +91,32 @@ def gray(value: float) -> tuple[float, float, float]:
 # ---------------------------------------------------------------------------
 
 
-def save(doc: fitz.Document, path: pathlib.Path) -> bytes:
-    """Serialise one fixture with nothing time- or run-dependent in it.
+def serialize(doc: fitz.Document) -> bytes:
+    """Turn one built document into the exact bytes a fixture file holds.
 
     Clearing the metadata removes the creation and modification dates MuPDF
     would otherwise stamp, and `no_new_id` suppresses the /ID array, which is
     seeded from the clock. `garbage=4` also makes object numbering a function of
     the content rather than of the order the builder happened to allocate xrefs
     in, so an edit to one builder cannot renumber another fixture's objects.
+
+    This exists as one function because it used to exist as two. `save()` wrote
+    the files and `verify()` re-implemented the identical call, so `--verify`
+    compared the committed bytes against bytes produced by a code path those
+    bytes had not come from. Changing `no_new_id=True` to `False` in the writer
+    alone left `--verify` reporting "identical and pinned" for all six fixtures
+    while every real run emitted bytes that matched no pin. A checker that does
+    not share the writer's code path is not checking the writer.
     """
     doc.set_metadata({})
     doc.del_xml_metadata()
-    payload = doc.tobytes(garbage=4, deflate=True, no_new_id=True,
-                          preserve_metadata=0)
+    return doc.tobytes(garbage=4, deflate=True, no_new_id=True,
+                       preserve_metadata=0)
+
+
+def save(doc: fitz.Document, path: pathlib.Path) -> bytes:
+    """Write one fixture to disk, and return exactly what was written."""
+    payload = serialize(doc)
     path.write_bytes(payload)
     return payload
 
@@ -490,10 +503,8 @@ def verify(out_dir: pathlib.Path) -> int:
     for name, builder, _why in BUILDERS:
         path = out_dir / name
         doc = builder()
-        doc.set_metadata({})
-        doc.del_xml_metadata()
-        rebuilt = doc.tobytes(garbage=4, deflate=True, no_new_id=True,
-                              preserve_metadata=0)
+        # serialize(), not a copy of it: this is the whole point of --verify.
+        rebuilt = serialize(doc)
         doc.close()
         if not path.is_file():
             failures.append(f"{name}: not present under {out_dir}")
