@@ -72,7 +72,12 @@ COMB_REFEREE_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
 EXPECTED_FORMS = 53
 EXPECTED_IN_CORPUS_FORMS = 38
 EXPECTED_EXTRA_FORMS = 15
-EXPECTED_COMB_SUBJECTS = 4442
+# The same quantity comb_referee.EXPECTED_COMBS pins, in a second file. It went
+# stale at 4442 while the referee's moved to 4540 -- 98 comb subjects created by
+# the comb writing-surface and painted-wall fixes -- and nothing noticed, because
+# only a FULL gate run reads this one. Two files pinning one number is the
+# defect; until they are unified, changing either means changing both.
+EXPECTED_COMB_SUBJECTS = 4540
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
 COMB_REFEREE_SCOPE = "formgen-comb-referee-application-v1"
