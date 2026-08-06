@@ -77,7 +77,11 @@ EXPECTED_EXTRA_FORMS = 15
 # the comb writing-surface and painted-wall fixes -- and nothing noticed, because
 # only a FULL gate run reads this one. Two files pinning one number is the
 # defect; until they are unified, changing either means changing both.
-EXPECTED_COMB_SUBJECTS = 4540
+# 4540 -> 4521 (2026-08-07, r14), moved together with comb_referee.EXPECTED_COMBS
+# and its 13 per-slug values. The cause is 21e0630's shaded-paper fix, which was
+# committed without its census: the HEAD lattice already produced 4,521 before
+# this session touched anything. See the note on comb_referee.EXPECTED_COMBS.
+EXPECTED_COMB_SUBJECTS = 4521
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
 COMB_REFEREE_SCOPE = "formgen-comb-referee-application-v1"

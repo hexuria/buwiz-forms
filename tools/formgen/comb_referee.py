@@ -83,10 +83,25 @@ REPO = HERE.parent.parent
 
 REPORT_VERSION = 2
 EXPECTED_FORMS = 53
-EXPECTED_COMBS = 4540
+# 4540 -> 4521 (2026-08-07, r14). NOT this session's change: re-running the
+# HEAD (21e0630) lattice over the unchanged IR yields 4,521 as well, so the pin
+# went stale in 21e0630 itself -- "shaded paper is not a writing surface" made
+# 19 cells across 13 forms stop being writing surface, and therefore stop being
+# combs, without the census moving with it. This is the G01 landmine repeating
+# one commit later, and it would have failed r14 on its own constants. The 13
+# slugs that moved: 0605-1999 -3; 1604cf-2008, 1700-2018, 1707a-2021,
+# 2000-ot-2018 -2 each; 1600wp-2010, 1604f-2018, 1707-2021, 1800-2018,
+# 2200c-2018, 2550m-2007, 2551m-2002, 2553-1999 -1 each.
+EXPECTED_COMBS = 4521
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
+# Re-pinned 2026-08-07 (r14): `topmost_covering_fill` became
+# `covering_shading_band`, so `on_shaded_paper` asks whether ONE connected,
+# same-tone band of decorative fill still reaches SHADED_PAPER_MIN_COVERAGE of
+# the cell after occlusion is resolved, instead of asking a single fill's own
+# rectangle. Neither SHADED_PAPER_MAX_GRAY (0.87) nor
+# SHADED_PAPER_MIN_COVERAGE (0.70) moved.
 LATTICE_PRODUCER_SHA256 = (
-    "5ce291ae8b781e9b2284c861a0b174e34776b4ec1210454fe4da7adf85b470d4"
+    "37ba7e1bdf6e385ef737916155f5c0029a94d5c822e31ba72733c8881f9b8866"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
@@ -196,25 +211,25 @@ COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
 # parser and decision rules. A substituted/missing form must not pass merely
 # because the replacement keeps the two aggregate counts unchanged.
 EXPECTED_COMBS_BY_SLUG = {
-    "0605-1999": 21,
+    "0605-1999": 18,
     "0619e-2018": 60,
     "0619f-2018": 64,
     "0620-2019": 60,
     "1600-pt-2018": 95,
     "1600-vt-2018": 95,
-    "1600wp-2010": 16,
+    "1600wp-2010": 15,
     "1601-fq-2020": 106,
     "1601c-2018": 132,
     "1601eq-2019": 99,
     "1602q-2019": 175,
     "1603q-2018": 78,
     "1604c-2018": 19,
-    "1604cf-2008": 12,
+    "1604cf-2008": 10,
     "1604e-2018": 15,
-    "1604f-2018": 16,
+    "1604f-2018": 15,
     "1606-2018": 76,
     "1621-2019": 69,
-    "1700-2018": 143,
+    "1700-2018": 141,
     "1701-2018": 283,
     "1701-2018-attachment": 123,
     "1701-2018-conso": 40,
@@ -227,28 +242,28 @@ EXPECTED_COMBS_BY_SLUG = {
     "1702q-2018": 106,
     "1702rt-2018c": 205,
     "1706-2018": 81,
-    "1707-2021": 113,
-    "1707a-2021": 97,
+    "1707-2021": 112,
+    "1707a-2021": 95,
     "1709-2020": 19,
-    "1800-2018": 108,
+    "1800-2018": 107,
     "1801-2018": 102,
     "2000-dst-2018": 131,
-    "2000-ot-2018": 75,
+    "2000-ot-2018": 73,
     "2200a-2020": 42,
     "2200an-2018": 87,
-    "2200c-2018": 40,
+    "2200c-2018": 39,
     "2200m-2018": 86,
     "2200p-2020": 42,
     "2200s-2018": 66,
     "2200t-2022": 90,
     "2316-2021": 28,
     "2550-ds-2025": 77,
-    "2550m-2007": 23,
+    "2550m-2007": 22,
     "2550q-2024": 144,
-    "2551m-2002": 15,
+    "2551m-2002": 14,
     "2551q-2018": 105,
     "2552-2018": 73,
-    "2553-1999": 16,
+    "2553-1999": 15,
 }
 if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
         or sum(EXPECTED_COMBS_BY_SLUG.values()) != EXPECTED_COMBS):
@@ -594,60 +609,84 @@ HTML_ALLOWED_TAGS = frozenset({
     "template",
     "title",
 })
+# All 53 refreshed 2026-08-07 (r14). They had been stale on all 53 since the
+# GOAL.md §Blocked entry, so the referee had been UNEVALUABLE -- a red verdict,
+# not a pass -- for every run since. What was reviewed before refreshing them is
+# recorded here, because "the producer just wrote these bytes" is not a review:
+#
+#   Every one of the 53 emitted documents was diffed against its HEAD (21e0630)
+#   committed self at the level of tags, ids and attributes. Across the whole
+#   corpus the tag inventory changes in exactly ONE direction -- 332 <input>
+#   elements deleted, zero elements of any kind added -- and the attribute-level
+#   changes are 6,384 input[class] renumberings (the field-metric CSS buckets
+#   shift when the field population does), and 46 divs whose data-cell-kind goes
+#   `field` -> `shaded`. Nothing else moved in any document.
+#
+#   Both directions were then checked against the official PDFs by eye, not only
+#   by count: 281 of the 332 are comb compartments the source itself printed a
+#   constant into (`II 011`, `XC 010`, the century `2 0`, the TIN branch code
+#   `0 0 0 0 0`) and 51 are cells sitting on official grey "no entry applies"
+#   shading -- 2200T page 2's Part V header band was rasterised from the pinned
+#   PDF to confirm the band really is grey and the P2.50 row below it really is
+#   white. Rasters in the session scratchpad under preprinted/.
+#
+# This pin still hashes every emitted byte, so it still invalidates on every
+# legitimate producer change; the design tension recorded in GOAL.md §Blocked is
+# unresolved and this refresh does not resolve it.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "d0c049f33216d0ac5c866439adeaeaf360a6b69e4c5b998978707236467e4cc2",
-    "0619e-2018": "07f1e4d874a7de212cb00cd8e2bacba486d7d58720c8c80acb42f34851572654",
-    "0619f-2018": "6d6f53bb6df9da1185e025e5fd855a1fa4f711fcf9b572f3e03b72f1ddab3de2",
-    "0620-2019": "f559cc00f73591b172710babbbddf8ca9324f2b139c2dd2b0bfd4b746872c48a",
-    "1600-pt-2018": "a61d0b03cd07eaf7d095d34bae24fd82aab1189484e2669c670615321cab8c22",
-    "1600-vt-2018": "d86905c83345edda96cfa518f9d57eb6c65dd5102d01c89effc0dd121581cff2",
-    "1600wp-2010": "108f5d0778d1c7ca4102beff2dc176046112d6ad851b6d759016d9fad42ea87f",
-    "1601-fq-2020": "a0a1a163377bbb0e983a649e5da26f32c9f5981861a5b80fb3f86819e0a904b9",
-    "1601c-2018": "feec7171562529c51bde38c6ceb54832e526b64460b27e27d4758e03eb2571b4",
-    "1601eq-2019": "f2c7066c9e12a8cc346079d31f993e677e3ed027e3e0d6e73a43247ddf92a01a",
-    "1602q-2019": "7078d44d89ec4b45ce3edeb684a445d24c267e6cfed61cffae1f86a0c619516c",
-    "1603q-2018": "41a796182a44c47d701e2bfeaf5a7369dc33b2e9428becabc973587bf6072c90",
-    "1604c-2018": "0bf6f74562fee966d6971d2bdc390e3a99f224c947a1bfe5cf20f1fdf94aff31",
-    "1604cf-2008": "33477af89702122a7b53aa808e6dc05ec595be4adfecb6b46e0a39c7779bbd03",
-    "1604e-2018": "36cbda664fee08284f34bce289ad2328fa12cdad9f858cfdbd7166544425ed79",
-    "1604f-2018": "b693afb76ea1614dc6fc055aab1e9ff35c0effbd377c37646f848ee0ea1dec1e",
-    "1606-2018": "2a49e01ce5ecf50f90c116c1ec46a8d6d1615a6c8161d5fa3926d359f9ff7bc4",
-    "1621-2019": "851f30fdeb06eb5d4be8ebe5bb20c1f4a6febb180e37f9f615e0d33999ab6dc3",
-    "1700-2018": "d0118cda792bc618001b5b45dec154814bad4f28bf7afbed5ecdd33661eb2da8",
-    "1701-2018": "84b8533400392b8046e4a7d1eb7eead721e4043df3b772d00d2ada799e637a9f",
-    "1701-2018-attachment": "e935ee5153a17ae7366d2c91686bc0aaeb116d619f893e02a0db7b3e9663d048",
-    "1701-2018-conso": "a3101d998289f5acbea99a56b0305bd7ce7574ed7aa194c638369cacf32a2acd",
-    "1701a-2018": "dce64929f2bd105c963dcd4a259632f94ab6f85f5c5c830fad5b53668d63f22d",
-    "1701ms-2024": "3a6c79706dffa2819c680d9e2ca686bfa08c0322973fe48bd99a6bbbf1b193ec",
-    "1701q-2018": "de0c5e5966cb27d211d02fa40afb5969204815b68a0b9fcae64a71257dbe2924",
-    "1702ex-2018": "e48a8dd42b7e4b6738fc443b5231701d196df8914d5fcc4ab9b375c293c35c65",
-    "1702mx-2018c": "bb58e4014c2427096e3a537e4fc22921457534fd0053952b86cd0c979f01e02e",
-    "1702mx-2018c-attachment": "c89c560ec0bc681c8cadcb1bc86f137bdbd0dd97b0299d9cc8ba0e9106d5d7d0",
-    "1702q-2018": "b7fbb265dcfd9ee95ab2e6c6f157d6e94779c866195a508a6902306a563fe990",
-    "1702rt-2018c": "37929d11d5fe85e23d5750f0ed38d8841850ef99af54f5da1d93b81a009696c5",
-    "1706-2018": "632c9076c3d3efc82f677854887d310a3cc68d5f55beed8a4f5bf6f5e81a5b6a",
-    "1707-2021": "f44cff90bb611b7823120059b22d4c5de6fff245aac62e661c6e6cb00641ac72",
-    "1707a-2021": "f4b485b0799eaab7ae34113f40edfce776ec88116e46fb1a4eab11fc045a1e21",
-    "1709-2020": "07be557def0f4e10cd0dabee03d889884e8b4d8cfe0020f834c6d4c36eb9baf6",
-    "1800-2018": "fbc019b37e1404288f64d3e77127a25128678e51e53d368b794c71f91824cfc8",
-    "1801-2018": "4979d3ce15e57ed7768ee9b65bb2171a9e22026b4f22ecf3093995f04958bb8d",
-    "2000-dst-2018": "173c6f75e40fd032941c9eb4328d3f458338fbb2d14e9e98c785d679c09a3a26",
-    "2000-ot-2018": "bd7a377c76ac1b5241a629545dbb8cb8da6600a653f430f9dff097b9b1a57fe0",
-    "2200a-2020": "5ea037349832a3671ca84997301291e64cb70dd1ca744a2d26c91ac4d1b3bb49",
-    "2200an-2018": "84e31d71bb805b1a5d9b02823445f21ffffd5931acab20d16d17e36c023b3214",
-    "2200c-2018": "980a9106cde93ba7968be5cc6e8d6c3be26eeef23800086fa1a5e47691d6ec23",
-    "2200m-2018": "f6ea22fdca55cde673fa216913cfd8419950107011567e14d119663594128ae1",
-    "2200p-2020": "d29732e1ab8d349b677dd90eb70afa04466e861c8b284313c50a55b937624105",
-    "2200s-2018": "80636c03ac7265a54c2922e868f6fd58d6536b34d43773296097ca2ed819b92a",
-    "2200t-2022": "29f3cc5d8753233adf179b2191c5723c201b4871de67d4c83dc2a4f5fc04b2d8",
-    "2316-2021": "4c7521577129f9bcb1b9ce0accb1e78628ff18698a8835cdd65c9dedcd462cb6",
-    "2550-ds-2025": "4ba457f10ef52381bf15228fddc495a9c0519b592b1fe3075c94e1a03393738d",
-    "2550m-2007": "314bcacc03ae91a417be4d27511b77f572932c64fcda2f3d9e6128c3ca17e7bf",
-    "2550q-2024": "8fd965b1a366366f5ac7964753dca9bfb8032ac723e96dcc82e3bcd508e8b5a6",
-    "2551m-2002": "0365905f6eb555bdc475c95332c6e93ca084ec8b82b5d937bcdfe41f1556733e",
-    "2551q-2018": "d8ae641e3213295d7047f6211313576475b214d0f5d5d39fe38d441fe8166ef9",
-    "2552-2018": "e4100185e8c83652efd4706eb78aae6d189b62d0773751b5aeca8a56d44eda52",
-    "2553-1999": "57bad7aefc182c212964a3fd6442e670e190a7ddfcdeb971284758441d986677",
+    "0605-1999": "51cc167124c11590708af794d43d75723250067763406ceb30d0f572d3f88110",
+    "0619e-2018": "6e312c4e097e5fd4af459f86f097d214cbe09472a7b1e81d928183a78131ceb5",
+    "0619f-2018": "1d73c117c370ba2635a790fffb24fcc5ca5ed731921eda37525750fd6880c8c1",
+    "0620-2019": "a95c25d8def33d01c4fdcdb4f71ad61fea1e1c455d426d32f105c51cd25b5c1c",
+    "1600-pt-2018": "f8f3e28b8120aba3c7456f6ea665d67d7b6f5ea7fa8d230c58aba07ea39d69bd",
+    "1600-vt-2018": "dae7516503767ae9b4d8bc87135e054274cced91e7ddcad3fd28ec5163b7c1ae",
+    "1600wp-2010": "7621b6555396953663bb272f83eb3e23164fea72e13c60302425e12b8caf866c",
+    "1601-fq-2020": "54f581b0874e6da686806221bf1c29a46055e823164c656d3dc952508838b6b4",
+    "1601c-2018": "c87d24ba52b43feec3f1e8cac9ca3f35f559e04d5db28ecfdd67cb65234efc13",
+    "1601eq-2019": "74886837c796ec19ac56514ffa3b5ace429a4fffb31c8c68ef1d0f49416eeefe",
+    "1602q-2019": "25fe05a1a7189f6a7c6f2e5cbe30fe516b1b888995edcf31669973640ed7e694",
+    "1603q-2018": "95d6b18dd21b2463d7637724452ae56669371ee655cfa0e5ddc3d9526092c79b",
+    "1604c-2018": "bd857edf50ff0822d9920eeed1d702564dc9429f2285a8c8f6cbdb45c494a39d",
+    "1604cf-2008": "052b5a19db9ba7d9f3981dc9d76dd53c1756e50ab2280b2e643c2b6c5e8b524e",
+    "1604e-2018": "8960362c0cba23e6edce5751a78f8a1ce2e416b8e453d3ac88faabf33cce61f2",
+    "1604f-2018": "aa6a8869cc7893886cc1548f07a8d9db5cffbd6e066bc2013acd39b1fbd04e98",
+    "1606-2018": "14ea5824bcfccd2ecf39ca0c66ded941f16bc5745ac8294c1219fa0083d507d3",
+    "1621-2019": "a5efb8ad61225676537865d22458a55cbed83ce87716fb6cbc04a77bc6bdb9a4",
+    "1700-2018": "7ab3f172dbad486ade7525a796ce3cf03fa62125cb13e1f7be488d7c090945aa",
+    "1701-2018": "2f4accb6825e2caa6047c348d4d916ab6b39d98f760b6c0954525ab8c9510aa2",
+    "1701-2018-attachment": "51c3cc5471d9996bb32571300d7e8e9aa9d1a78630f686485fc44668d545f1e7",
+    "1701-2018-conso": "ee6460b88319fca960bc6a6d696f43115b3eeace6c858ef3b139f3b648928d3b",
+    "1701a-2018": "1787b1eb21c5269ca6c547419cec8f0f04656f0d1c0fa812034eedef939029ad",
+    "1701ms-2024": "21a0172c06ba0ffc1f3b5bf0614acab38734ae9d5ca10da7ab657c190f3fdd58",
+    "1701q-2018": "2ab2da4b39f4cea77ad1a6baa96ee8a1b73115ad174541f98456d21af3414f21",
+    "1702ex-2018": "edea6c841cc22ac29628a27221b9e1fab3ed2ca5f9d6e4b5195393d297bd047d",
+    "1702mx-2018c": "e38855f7d3ddb061580bd4ddf447bacf5f81f128e4291789d86f9d9e25fe057e",
+    "1702mx-2018c-attachment": "fa94174dfe4c8bee14085e0cda823461b95ff50bbf280da00379dc5818424f96",
+    "1702q-2018": "327acf54dd86035a4efea583672cf54733755f3de6acb9ceb3074f1bb8def0a8",
+    "1702rt-2018c": "520aeabe42a4fee94148b2a27ebba3ec1dca22e168362abacbd45a35a82b82ab",
+    "1706-2018": "7431a2ddc413f33fc32cb70551103cff8570f40f5c00aef30582915683fba55c",
+    "1707-2021": "37fcb98d14bd78ed114a612b2ad161aed580ed80d222d5b037def2ae640c9ef6",
+    "1707a-2021": "8268bde7581c4261fcb040b03ff7b2e4eecd979f80471159b0788d48ea91e134",
+    "1709-2020": "206b9b87a260e18ae7cc1ebdf062d6626a4facbdc52bf01097034f411e635ae3",
+    "1800-2018": "733f9a14da504cc7120b227d6a2e8d78b7e94293377fcaf71f3a0ce5cd9b0ef2",
+    "1801-2018": "9d5d739dc3835341f286d653c9e8d3fa229f778926344191234c4dc56123d1ea",
+    "2000-dst-2018": "0833c3f222a8da9e8c6bfad5de47d049659a0d6a53ef2d96d6da4984a1e8a021",
+    "2000-ot-2018": "7da7f3a3ed0a29c6df2b3c9bccfe9c5b58113bc472f7070a24428da245922b5c",
+    "2200a-2020": "f6d6354240e94b9bb5a6befb8fcb4ab3f733929cfcc7700df2dc87f983e775ef",
+    "2200an-2018": "6e581aa4919a370e3aa43b91a09740bae97d6de2ac45c3cbeb610872410a3ec3",
+    "2200c-2018": "210312c0168cdac356e31f1eeddb00b693732ab059c6270256dbfaa8f8dc58f7",
+    "2200m-2018": "c2b4eed26336c444476e4b5642dbc73cf205576fbc200277082e66dc82467384",
+    "2200p-2020": "6acc10faca9eee26e31942d30f041ccd5976984895425e80281326cecae44590",
+    "2200s-2018": "7fe8db666992a706561c6d7252dac0b10f69a2a9ed7476146177f3bcad25dc8f",
+    "2200t-2022": "1c70914d0f42d5f6f4ea9b4f7e568c225dc77d42d85f9bb3ded6d99b77add9fc",
+    "2316-2021": "951097d6e9004d39010fbdf03e1b3d84cf7857f941c0b788fab4c70b4bf45211",
+    "2550-ds-2025": "6429458bdb76c2afc1dc1b79d3fb9fb41e121d3fc308123579e540d69c847579",
+    "2550m-2007": "d76301c506bc110d9e5dfa9240cfdad439159c25cde6fc65978d01ffba121f13",
+    "2550q-2024": "f347e598f8b840736aca42d043a17e136345c93b856cfbbc2570d64b4b9d5743",
+    "2551m-2002": "393d7bcc0b489ecf5546bf76387fbb1cd3252fa13e8f32c8703eae6e175b6170",
+    "2551q-2018": "cafd4edab3ae185d8ec0b2e21958ba82afe816725cdaacb0816365df025b82f4",
+    "2552-2018": "6b4cac3a60f59f88176a76d31aaf18a4ba836c040f221837bf2e6e28033be2d9",
+    "2553-1999": "3057ddea16ef39ae69f9ecfbfdde659a48cf70d8cff292eafa8ecbc7e7e6f8b1",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
@@ -9750,10 +9789,16 @@ def self_test() -> int:
     ledger_fixture = synthetic_ledger_layout()
     ledger_result = validate_comb_ledger(
         "0605-1999", ledger_fixture, lattice_producer_bytes)
+    # Derived from the corpus pin, never restated as a literal. The fixture is
+    # built by looping `range(EXPECTED_COMBS_BY_SLUG["0605-1999"])` above, so a
+    # literal here is a second copy of one number in one file -- the shape that
+    # made 4442 and 4540 disagree, and that made this very assertion the last
+    # thing standing between r14 and a 60-minute gate run on stale constants.
+    fixture_subjects = EXPECTED_COMBS_BY_SLUG["0605-1999"]
     assert ledger_result["counts"] == {
-        "subjects": 21,
-        "active": 21,
-        "active_resolved": 21,
+        "subjects": fixture_subjects,
+        "active": fixture_subjects,
+        "active_resolved": fixture_subjects,
         "active_unresolved": 0,
         "retained_unresolved": 0,
         "inferences_suppressed": 0,

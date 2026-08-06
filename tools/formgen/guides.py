@@ -1315,7 +1315,19 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         # two-row-tall cell and the source paints that block as two 7.8pt strips,
         # neither of which covers 70% of it on its own. 0605 p2 keeps all 8 -- its
         # blanks are white. Cut, runs, reclaim and detector are again unchanged.
-        ("2550m-2007", 3): (0.0, 1, 125, 100, UNFILLABLE_PATTERN),
+        #
+        # 1 -> 0 (2026-08-07, r14) is the rest of that same sentence arriving.
+        # `lattice.on_shaded_paper` no longer asks a single fill's own rectangle;
+        # `covering_shading_band` clips every overlapping fill to the cell,
+        # resolves each atom to the TOPMOST fill, then measures the largest
+        # CONNECTED region of one exact tone. The two 7.8pt 0.7529 strips over
+        # "9. Real Estate, Renting & Business Activity" touch, so they are one
+        # band and do reach 70% -- the cell is `shaded`, which is what the
+        # paragraph above says the paper actually is. Neither threshold moved
+        # (SHADED_PAPER_MAX_GRAY 0.87, SHADED_PAPER_MIN_COVERAGE 0.70). Cut,
+        # runs, reclaim and detector are again unchanged, and 0605 p2 still
+        # keeps all 8.
+        ("2550m-2007", 3): (0.0, 0, 125, 100, UNFILLABLE_PATTERN),
         ("2550m-2007", 4): (0.0, 0, 143, 100, UNFILLABLE_PATTERN),
         ("2553-1999", 2): (0.0, 0, 94, 100, UNFILLABLE_PATTERN),
         ("0605-1999", 2): (0.0, 8, 281, 100, UNFILLABLE_PATTERN),
