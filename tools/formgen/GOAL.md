@@ -124,6 +124,27 @@ If a BIR form is genuinely not published anywhere on bir.gov.ph, record it
 under `## Blocked` with what was tried and move on. Never substitute a mirror,
 a third-party copy, or a different revision presented as the missing one.
 
+## User decisions (2026-08-06) -- binding
+
+1. **A producer may not certify its own promotion.**
+   `source_certified_replacement_owner` (lattice.py:3979-4006) promotes a
+   gate-blocking `retained_unresolved` comb to `active_resolved` on the
+   producer's own evidence, and substitutes the subject's identity (2550M's
+   `p1c99` disappears from the ledger, replaced by `p1c193`). The restored comb
+   is REAL -- a printed comb that had no input now has one -- so the outcome
+   stands; the mechanism does not. Promotion must require the COMB REFEREE's
+   independent agreement: it derives comb geometry from raw PDF ops and already
+   proved this subject's 4 slots at exact 11.04pt pitch. The referee is the
+   adjudicator everywhere else; this is the one promotion path that bypassed it.
+
+2. **An exclusion must publish what it excluded.** The gate's assertion-detail
+   schema accepts only counts, which blocked two correct fixes
+   (`image_transform_applied`'s guide-relocated placements,
+   `money_boxes_have_inputs`' pre-printed boxes). Extend the schema to carry
+   lists, so an exclusion is inspectable rather than trusted. Shipping the
+   exclusion while reporting only a number would be a hidden weakening -- the
+   agent that stopped rather than do that was right.
+
 ## Method
 
 - Work in increments; after each, run the affected self-tests, and run the
