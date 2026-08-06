@@ -1257,10 +1257,25 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         ("2552-2018", 2): (801.52, 2, 23, 14, BAND_PATTERN),
         # Whole pages: 2550M p3 is nothing but its ATC table, so the marker cut at
         # 72.52 that left the running head behind is superseded by cutting at 0.
-        ("2550m-2007", 3): (0.0, 4, 125, 100, UNFILLABLE_PATTERN),
+        #
+        # 2550M p3 4 -> 6 and 0605 p2 6 -> 8 is lattice.wall_boundaries -- "let a
+        # painted wall bound a cell, not only a rule". Both pages end their ATC
+        # table at a black painted rectangle rather than a rule (2550M p3 at
+        # x 590.04-591.96, 1.92pt; 0605 p2 at x 21.24-23.04, 1.8pt), both are over
+        # MAX_RULE_THICKNESS_PT so neither was ever a column, and the outermost
+        # table column therefore stopped short of it. Reaching the wall closes that
+        # column, and the two cells it gains on each page are the blanks a group
+        # heading leaves there: 2550M's ATC column beside "9. Real Estate, Renting
+        # & Business Activity" and "12. Others:", 0605's code column beside "Excise
+        # Tax on Goods" and "Alcohol Products". Every one is empty, carries no run,
+        # classifies `whitespace` against the printed code in its own column, and is
+        # claimed by a cut at 0 -- so the count grew where the census counts, inside
+        # the reclaimed region, while the corpus-wide non-fillable assertion below
+        # is unmoved. The cut, runs, reclaim and detector are all unchanged.
+        ("2550m-2007", 3): (0.0, 6, 125, 100, UNFILLABLE_PATTERN),
         ("2550m-2007", 4): (0.0, 0, 143, 100, UNFILLABLE_PATTERN),
         ("2553-1999", 2): (0.0, 0, 94, 100, UNFILLABLE_PATTERN),
-        ("0605-1999", 2): (0.0, 6, 281, 100, UNFILLABLE_PATTERN),
+        ("0605-1999", 2): (0.0, 8, 281, 100, UNFILLABLE_PATTERN),
     }
     for (slug, page), (cut, fields, runs, pct, detector) in expected.items():
         entry = next((e for e in plans[slug]["inline"] if e["page"] == page), None)
