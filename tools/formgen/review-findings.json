@@ -1820,104 +1820,104 @@
       "form": "1701-2018",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "Item 4's pre-printed TIN branch code '0 0 0 0 0' is taxpayer-editable: the lattice classifies the cell 'mixed' (it knows pre-printed glyph ink is inside) and emit still gives it a full set of 5 editable comb slots, one squarely on each printed zero.",
       "where": "p1c19, a comb cell cap=5 slots=5 inputs=5 at (371.59, 133.94) 76.32 x 17.64 pt; the printed run '0 0 0 0 0' starts at (374.83, 135.75). The same cell recurs on every page of this bundle: p2c5, p2c15, p3c5, p4c5 - 25 editable slots on printed branch-code zeros in this form alone.",
       "evidence": "Slot rectangles read from the emitted DOM, printed run positions read from the emitted text layer, and confirmed against the official raster side by side in /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018/EVIDENCE-p1-tin-branch-zeros-overprinted.png, where the fill test strikes an X through each printed 0. Corpus sweep of every cell the lattice itself marks data-cell-kind=\"mixed\": 180 of 180 such cells are emitted with editable inputs (2,187 inputs total, 34 of 53 forms); 278 individual slots overlap a printed run; 175 of those sit on a short pre-printed constant, across 24 of 53 forms. emit.py's PrePrintedInk guard recorded in F028's resolution protects plain text cells only - it has no effect on comb slots.",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 1701 now emits the item 4 TIN comb as nine editable digit boxes followed by five refused ones: p2c5, p3c5 and p4c5 all read '#########.....' (# = input, . = none), and the standalone branch-code cells p1c19 and p2c15 are refused in all five compartments. Confirmed by eye at 3x on a rendered page 2 with every input pre-filled 'X': the first nine boxes show a red X on yellow, the last five show BIR's printed '0 0 0 0 0' on white with no box. Raster: scratchpad preprinted/1701-p2c5-TIN-branch.png. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F140",
       "form": "1700-2018",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "The pre-printed statutory ATC constant 'II 011' in the Alphanumeric Tax Code box is taxpayer-editable: five editable comb slots sit on the five printed characters, so a filer can retype the ATC that determines which tax the return is assessed under.",
       "where": "p1c7, a 'mixed' comb cell cap=5 slots=5 inputs=5 at (524.02, 106.10) 72.50 x ~18 pt; printed run 'I I 0 1 1' inside it. Same form also emits editable slots over the item 4 TIN branch-code zeros (p1c20, p1c67).",
       "evidence": "Slot geometry from the DOM against the emitted text layer; the printed constant is visible in the official raster at /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1700-2018/official-1.png and the TIN case is shown filled at /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1700-2018/EVIDENCE-p1-tin-branch-zeros-overprinted.png. 2200-C carries the identical defect on 'XC 010' (p1c7).",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 1700 p1c7 now emits 5 slot divs and 0 inputs over the printed 'I I 0 1 1'; the same form's branch-code cells p1c20 and p1c67 are likewise refused in all five compartments. Confirmed by eye at 3x with every input pre-filled 'X' -- the ATC boxes carry no yellow. Raster: scratchpad preprinted/1700-p1c7-ATC-II011.png. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F141",
       "form": "2200c-2018",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "The pre-printed statutory ATC constant 'XC 010' is taxpayer-editable - five editable comb slots on the five printed characters, same mechanism as 1700's 'II 011'.",
       "where": "p1c7, a 'mixed' comb cell, 5 slots on the printed run 'X C 0 1 0'. This form has 23 'mixed' cells and every one of them is emitted with inputs.",
       "evidence": "DOM slot rectangles against the emitted text layer; 6 of this form's slots land on a short pre-printed constant. Measured by the same corpus sweep that found 175 such slots across 24 forms.",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 2200C p1c7 now emits 5 slot divs and 0 inputs over the printed 'X C 0 1 0'. Confirmed by eye at 3x with every input pre-filled 'X'; the same raster also shows the TIN comb below it keeping its digit boxes while the grey group-separator compartment printing '-' is correctly refused. Raster: scratchpad preprinted/2200c-p1c7-ATC-XC010.png. The form's remaining 'mixed' cells keep their inputs, which is correct -- they are money combs whose printed ink is the decimal decoration. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F142",
       "form": "1600-pt-2018",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "The pre-printed century '20' in item 1 'For the month (MM/20YY)' is taxpayer-editable, so a filer can overtype the century and produce a return for the wrong year, or blank it and leave the period unreadable.",
       "where": "p1c5, a 'mixed' comb cell cap=4 at (129.74, 110.30) 57.84 pt wide; slots at x=129.74 and x=144.26 sit on the printed '2' and '0'. Only MM and YY should be writable.",
       "evidence": "Reported by the batch-1 reviewer from an independent measurement: those two slots are the only inputs on either 1600-PT page whose official-raster interior (2pt inset) is substantially inked - 16.6% and 16.4% dark, against 0 for all 745 other inputs. Re-derived here from the DOM: the cell is data-cell-kind=\"mixed\" and carries 4 slots. Evidence /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1600-pt-2018/EVIDENCE-item1-preprinted-20-overtypable.png.",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 1600-PT p1c5 now reads '..##': the two compartments carrying the printed century '2' and '0' are refused and the two YY compartments stay editable, which is the case a whole-cell rule cannot express and is why the verdict is per slot. Confirmed by eye at 3x with every input pre-filled 'X': item 1 renders as [X][X] 2 0 [X][X]. Raster: scratchpad preprinted/1600pt-p1c5-century.png. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F143",
       "form": "1600-vt-2018",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "Same defect as 1600-PT: the pre-printed century '20' in item 1 is taxpayer-editable.",
       "where": "p1c5, a 'mixed' comb cell cap=4 at (129.74, 105.68); slots at x=129.74 and x=144.26 on the printed '2' and '0'.",
       "evidence": "Official-raster interior ink under those two slots measured 22.1% and 22.0% dark, 0 for every other input on the form. Evidence /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1600-vt-2018/EVIDENCE-item1-preprinted-20-overtypable.png.",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 1600-VT p1c5 reads '..##' exactly as 1600-PT's does -- 2 refused compartments on the printed century, 2 editable YY compartments -- measured on the r14 corpus by parsing the emitted slot divs. Same cell, same producer path, no form-code special case anywhere in the rule. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F144",
       "form": "2550q-2024",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Editable comb slots sit on the pre-printed TIN branch-code zeros '0 0 0 0 0'.",
       "where": "The item 4 TIN comb on page 1; the ?debug=fields outlines fall across the printed zeros. p1c34 is a 'mixed' comb cell cap=5 with 5 inputs at (404.35, 168.67).",
       "evidence": "Confirmed by eye on /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2550q-2024/EVIDENCE-TIN-branchcode-inputs-over-printed-00000.png (official vs ours, dashed input outlines squarely on the printed zeros). NOT caught by the DOM sweep that found the 1701 family, because this form draws the zeros in a way that sweep does not match - so that sweep's 175 is a lower bound, not a ceiling.",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 2550Q p1c34 now emits 5 slot divs and 0 inputs over the printed '0 0 0 0 0'; the bundle's 10 refused compartments are p1c34's five plus the trailing five of the page-1 TIN comb. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F145",
       "form": "1701a-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Editable comb slots on the pre-printed TIN branch-code zeros, same mechanism as 1701.",
       "where": "p1c22 (page 1) and p2c124 (page 2), 'mixed' comb cells, 5 editable slots each on the printed '0 0 0 0 0'. 10 slots on this form.",
       "evidence": "DOM slot rectangles against the emitted text layer, from the corpus sweep of lattice-'mixed' cells.",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 1701A p1c22 and p2c124 now emit 5 slot divs and 0 inputs each over the printed '0 0 0 0 0'. The bundle's refused-compartment total is 15: those 10 plus the trailing five of a 14-slot TIN comb. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F146",
       "form": "1702ex-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Editable comb slots on pre-printed constants: 21 slots in this bundle overlap a printed run, 21 of them on a short pre-printed constant (the TIN branch-code zeros in the header comb of every page).",
       "where": "p1c31, p1c75, p2c5, p2c38, p3c5 - all 'mixed' comb cells emitted with a full slot set. Sister bundles carry the same: 1702MX 20 slots, 1702RT 20, 1702Q 14, 1702MX-attachment 10.",
       "evidence": "Corpus sweep of lattice-'mixed' cells against the emitted text layer; 5 of this form's 5 mixed cells are emitted with inputs.",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed in emit.py by `comb_slot_verdicts`, which answers per COMPARTMENT instead of per cell: `field_verdict`'s first rule (comb -> fillable) still settles the cell, and each slot's own rectangle (comb.slot_x[i]..slot_x[i+1] x the measured writing band) is then asked whether the SOURCE printed a constant into it (`slot_constant`: exactly one glyph, alphanumeric, wholly inside the slot's walls) or shaded it (DecorativeShading.blocks at the unchanged 0.87 threshold). 1702EX now refuses exactly 21 comb compartments -- the finding's own number -- across p1c31 (5), p1c75 (trailing 3 of 12), p2c5 (trailing 5 of 14), p2c38 (trailing 3 of 12) and p3c5 (trailing 5 of 14), every one of them a printed branch-code zero. The sister bundles moved with it and by the same rule: 1702MX 20, 1702RT 20, 1702Q 15, 1702MX-attachment 10. Corpus effect, measured on the r14 regeneration: 332 inputs removed across 35 of 53 bundles, of which 281 are comb compartments and 51 are cells the lattice's shading fix reclassified. A tag-level diff of all 53 emitted documents against their HEAD (21e0630) selves shows inputs deleted and NOTHING added or otherwise changed. The 281 refused compartments spell only pre-printed constants: '00000' x42, '20' x4, '000' x3, '0' x3, '00', 'II011', 'XC010', 'VN010', 'WI165', '039', '250000', and 13 grey separator/caption compartments. 2000-DST's page-1 money grid still emits all 14 compartments of every money comb including the one carrying the printed decimal bullet, so the C4 population is intact."
     },
     {
       "id": "F147",
@@ -2249,13 +2249,13 @@
       "form": "0605-1999",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "The ?debug=fields overlay shipped in every forms/ bundle is the OLD self-referential one, not the fixed overlay. The fixed overlay (fits/small/over/unboxed/vacant, with blue meaning 'printed box with NO input') exists only in tools/formgen/emit.py and has never been regenerated into the corpus. In the shipped overlay blue dashed means the opposite - 'this input is fine' - so a reviewer reading the shipped legend reads every verdict backwards.",
       "where": "grep -l 'printed box with no input' forms/*/index.html returns 0; grep -l 'no usable box' forms/*/index.html returns 38. The shipped CSS carries [data-fg-field=\"ok\"]{outline:1px dashed rgba(21,101,192,.9)}. A 2551M screenshot taken this round shows the shipped legend verbatim: '128 as drawn, 0 fitted under, 0 clipped by, 0 covered by, 1 no usable box'.",
       "evidence": "Recorded against 0605 as the first bundle alphabetically; it is a corpus-wide condition of every bundle, not a per-form defect. Evidence /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2551m-2002/EVIDENCE-sched1-period-and-name-merged.png (legend visible at the right edge). PLAN.md's Stage-1 definition of done requires the user to review through a FIXED overlay; that step cannot be performed against the shipped corpus today.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Fixed by regenerating the corpus at r14, which is all this ever needed -- the corrected overlay already existed in emit.py and had simply never been written out. Measured on the r14 tree: `grep -l 'printed box with no input' forms/*/index.html forms/extra/*/index.html` returns 53 of 53 bundles (it returned 0 when the finding was raised), and `grep -l 'no usable box' ...` returns 0 (it returned 38). Every shipped bundle now carries the overlay in which a blue dashed outline means 'printed box with NO input' rather than 'this input is fine'."
     }
   ]
 }

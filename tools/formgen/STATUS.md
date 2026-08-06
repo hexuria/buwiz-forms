@@ -4,14 +4,27 @@
 same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
-Measured 2026-08-06 over the 53-form corpus. Gate verdicts are from run
-**r10**, a complete clean-tree run at these exact producer bytes.
-Assertion counts are from a corpus-wide `audit.py --assertions-only`; the
-findings tally is recomputed from `review-findings.json`.
+Measured 2026-08-07 over the 53-form corpus, on branch `gol/form-correction`,
+regenerated at the r14 producer bytes. Assertion counts are from a corpus-wide
+`audit.py` run over that regeneration; the findings tally is recomputed from
+`review-findings.json`.
 
-## Gate — r10
+## Corpus census — r14
 
-| Check | r10 | r8 | Detail |
+| Quantity | r14 | previous | Note |
+| --- | --- | --- | --- |
+| Bundles / unique codes | 53 / 50 | 53 / 50 | 38 direct + 15 under `forms/extra` |
+| Pages | 116 | 116 | |
+| Lattice cells | 20,688 (10,002 `field`) | 20,797 (10,401) | 51 cells `field` → `shaded` |
+| Comb cells | **4,521** | 4,540 (pinned) / 4,521 (actual) | the pin was stale AT HEAD; see below |
+| Emitted inputs | **45,583** | 45,915 | −332 |
+| Comb slot divs | 40,008 | 40,008 | unchanged — slots stay, inputs go |
+| Comb slots with no input | **281** | 0 | the compartments the source already filled in |
+| Findings | 172 | 172 | **49 blocker+major open of 116** (was 58 of 116) |
+
+## Gate — r14
+
+| Check | r14 | r13 | Detail |
 | --- | --- | --- | --- |
 | self-tests | PENDING | PASS | 10 modules |
 | conversion | PENDING | PASS | 53/53 unique tracked forms |
@@ -19,16 +32,56 @@ findings tally is recomputed from `review-findings.json`.
 | paper | PENDING | PASS | exact on 53/53 |
 | artwork | PENDING | PASS | clean on 53/53 |
 | text | PENDING | PASS | clean on 53/53 |
-| assertions | PENDING | **FAIL** | `inputs_over_printed_text` 40 forms / 258 offenders; `comb_slots_match_printed` 22 forms / 186 offenders |
-| findings | PENDING | **FAIL** | 26/84 blocker+major unresolved |
+| assertions | PENDING | **FAIL** | see the two moves below |
+| findings | PENDING | **FAIL** | 49/116 blocker+major open (was 58/116) |
 | tracked-files | PENDING | PASS | no tracked deletion |
 | audit-refresh | PENDING | PASS | fresh audit atomically published for 53 forms |
-| determinism | PENDING | PASS | byte-identical (`5867ca1f9d5a`) |
-| comb-referee | PENDING | UNEVALUABLE | report partial 0/53; corpus identity incomplete — the blocked HTML pins |
+| determinism | PENDING | PASS | byte-identical |
+| comb-referee | PENDING | UNEVALUABLE | the 53 HTML pins were stale; refreshed at r14 |
 
-r10 is in flight at these bytes; this table is completed in the same commit
-before push. r9 was never run (the comb-divider increment it was to measure
-applied no producer change, so it could only have reproduced r8).
+r14 is the first full gate run on this branch. This table is completed in the
+same commit that records its verdict.
+
+## The two assertions, and one of them got worse
+
+Measured over the r14 corpus with the full `audit.py`:
+
+| Assertion | r14 | r13 | Move |
+| --- | --- | --- | --- |
+| `inputs_over_printed_text` | **20 forms / 149 offenders** | 40 / 258 | **−20 forms, −109 offenders** |
+| `comb_slots_match_printed` | **36 forms / 247 offenders** | 22 / 186 | **+14 forms, +61 offenders** |
+
+The second move is a regression in the number and is **not** a regression in
+the emitted forms. Splitting the 247 by the state the audit itself reports:
+
+| `emission_state` | offenders | what it is |
+| --- | --- | --- |
+| `physical-slots` + `source-topology-unevaluable` | 167 | pre-existing; the audit could not evaluate the source's own comb topology. 2000-DST 30, 2200A 25, 2200P 25, 2200C 24 — none of these bundles lost an input at r14 |
+| `slot-input-index-mismatch` + `invalid-emission` | **76** | **new, and caused by the G11 fix**: the audit requires a comb's input indexes to run 0..N−1 with no gap, and a refused compartment is exactly such a gap |
+
+`audit.py` was **not** changed to accommodate this, and must not be. The
+assertion is asserting an emission contract that the G11 fix deliberately and
+correctly broke — a compartment the source already filled in must not carry an
+input — and the fix for the number is to teach `audit.py` the new contract by
+re-deriving the constant from the SOURCE PDF's own text operators, which is
+where that assertion already reads from. That work is **not done**; it is
+recorded as **G16** in PLAN.md. Until it is, 76 of the 247 offenders are the
+check disagreeing with a change it has not been told about, and 167 are the
+pre-existing population.
+
+## Census pins were stale at HEAD, again (fixed at r14)
+
+`comb_referee.EXPECTED_COMBS` and `gate.EXPECTED_COMB_SUBJECTS` both read 4540.
+Re-running the **HEAD (21e0630)** lattice over the unchanged IR produces
+**4,521**, so the pins went stale in 21e0630 itself — its shaded-paper fix
+stopped 19 cells across 13 forms from being writing surface, and therefore from
+being combs, without the census moving with it. This is the G01 landmine
+repeating one commit later and it would have failed r14 on its own constants
+after 60 minutes. Both pins, the 13 per-slug values, and `guides.py`'s
+`("2550m-2007", 3)` field-cells-below expectation (1 → 0) moved at r14, each
+with a comment naming its cause. `comb_referee`'s own self-test had the same
+number as a **literal**; it now derives it from the pin, so that copy cannot
+drift again.
 
 ## Painted walls now bound cells (this increment)
 
