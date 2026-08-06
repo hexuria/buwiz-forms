@@ -3036,6 +3036,71 @@ def comb_has_cell_owner(cell: dict[str, Any],
     return comb_owner_failure_reason(cell, comb) is None
 
 
+def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
+    """The vertical paper a comb's compartments are written on.
+
+    A divider tick is a GUIDE MARK, not a wall.  `comb_bands` measures the band
+    the ticks span -- deliberately the shortest of them, because that is the one
+    every listed boundary really crosses -- and that band is the right answer to
+    "where are the compartment boundaries".  It is the wrong answer to "how tall
+    is the writing box", and the official artwork says so directly: on 2550M the
+    item-4 TIN cell is walled top and bottom at y 118.80-134.40 (15.60pt) at
+    x = 65.64, 99.48, 104.28, 137.40, 141.96, 175.08, 179.88 and 212.76, while
+    the digit separators between those walls are 3.12pt stubs at y 131.28-134.40.
+    The stubs sit at the FOOT of a full-height box.  Reporting the stub as the
+    band left a 3.12pt slot in a 15.60pt cell -- a 2.81pt face, unusable -- and
+    the same reading put every comb in the corpus under `FIELD_MIN_SIZE_PT`.
+
+    So the box is the cell's own printed walls, inset by the horizontal borders
+    exactly as `emit.field_box` insets a plain text field, so that a comb and a
+    plain field in the same row are written at the same height.  The inset is
+    the cell's own measured thickness, not a constant, and it is surrendered
+    whole when the cell is no taller than its own two borders -- the same
+    concession `emit.field_box` makes, for the same reason: clearance is the
+    optional part, the box is not.
+
+    `slot_x`, the compartment count and the pitch are untouched by this: they
+    are what the ticks measured, and the ticks measured them correctly.
+
+    None when the cell has no positive vertical extent at all.  Callers fail
+    closed on that rather than inventing a height.
+    """
+    y0 = float(cell["y0"])
+    y1 = float(cell["y1"])
+    border = cell.get("border") or {}
+    top_border = border.get("top") or {}
+    bottom_border = border.get("bottom") or {}
+    top = float(top_border.get("thickness_pt") or 0.0)
+    bottom = float(bottom_border.get("thickness_pt") or 0.0)
+    if top + bottom >= y1 - y0:
+        top = bottom = 0.0
+    surface_y0, surface_y1 = q(y0 + top), q(y1 - bottom)
+    if surface_y1 - surface_y0 <= 0.0:
+        return None
+    return surface_y0, surface_y1
+
+
+def comb_on_writing_surface(comb: dict[str, Any],
+                            surface: tuple[float, float]) -> dict[str, Any]:
+    """Restate one comb contract's vertical extent as its writing surface.
+
+    The tick band stays published as `divider_band_y0`/`divider_band_y1`: it is
+    the measurement the boundaries came from and the provenance any independent
+    re-derivation of those boundaries needs.  What changes is only which extent
+    the contract calls its own -- the box, not the guide.
+    """
+    surface_y0, surface_y1 = surface
+    resolved = dict(comb)
+    resolved["divider_band_y0"] = q(float(comb["y0"]))
+    resolved["divider_band_y1"] = q(float(comb["y1"]))
+    resolved["divider_band_height_pt"] = q(
+        float(comb["y1"]) - float(comb["y0"]))
+    resolved["y0"] = surface_y0
+    resolved["y1"] = surface_y1
+    resolved["height_pt"] = q(surface_y1 - surface_y0)
+    return resolved
+
+
 def source_owned_comb_frame(
         box: dict[str, Any],
         xl: Lattice, yl: Lattice,
@@ -4226,11 +4291,34 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         cell.pop("comb", None)
         cell.pop("combs", None)
 
+    # Ownership is proved against the band the ticks measured -- that is the
+    # evidence that this rectangle owns those boundaries.  Only once it holds
+    # does the contract get to state the writing surface, so that widening the
+    # extent can never be what makes a comb look owned.
     for cell in cells:
         comb = cell.get("comb")
-        if comb is not None and not comb_has_cell_owner(cell, comb):
+        if comb is None:
+            continue
+        if not comb_has_cell_owner(cell, comb):
             raise ValueError(
                 f"{cell['id']}: active comb has no owning cell paper")
+        surface = comb_writing_surface(cell)
+        if surface is None:
+            raise ValueError(
+                f"{cell['id']}: comb owner has no writing surface")
+        # The ledger can replace the selected band after the inventory was
+        # taken, so the selection is not always one of `combs`.  Restate the
+        # inventory once and reuse the same object for the selection when it
+        # is there, so the two keys never disagree about one physical band.
+        restated = {
+            id(band): comb_on_writing_surface(band, surface)
+            for band in cell.get("combs") or ()
+        }
+        selected = restated.get(id(comb))
+        cell["comb"] = (comb_on_writing_surface(comb, surface)
+                        if selected is None else selected)
+        if "combs" in cell:
+            cell["combs"] = [restated[id(band)] for band in cell["combs"]]
 
     assigned, unplaced = assign_points(
         cells, [((r["x0"] + r["x1"]) / 2.0, (r["y0"] + r["y1"]) / 2.0, index)
