@@ -243,3 +243,22 @@ yet been through a CI cycle.
 | Comb dividers filed as borders (2550M `p1c2` = 1 input where 4 print) | diagnosed, not fixed | extract.py ignores `lineCap`, so a round-capped tick's ink (which reaches its baseline exactly) is recorded 0.36pt short and `supported_at` correctly finds no support. Widening the tolerance was measured, refuted and refused. | `extract.py` stroke-to-rect (382, 1571) |
 | comb-referee UNEVALUABLE | user-blocked | 53 reviewed HTML structure pins stale; plus the `classify_band` source/emission key collision above. | user review, then `comb_referee.py` |
 | findings: 26 blocker+major open | unchanged | comb capacity (referee track), inputs-over-text populations, guide-cut orphan policy, text mis-position, individual re-verifications | per-cause owners |
+
+## Gate r13 (2026-08-06, HEAD d74771e) — 9/12 PASS
+
+    PASS  self-tests · conversion 53/53 · rules 53/53 · paper 53/53
+    PASS  artwork 53/53 · text 53/53 · tracked-files
+    PASS  audit-refresh (53 forms) · determinism byte-identical 5103254450db
+    FAIL  assertions   inputs_over_printed_text 40 forms; comb_slots_match_printed 22 forms
+    FAIL  findings     26/84 blocker+major
+    UNEV  comb-referee 0/53 — the 51 reviewed HTML pins are stale (USER-BLOCKED)
+
+Same three failures as r8, with the painted-wall boundaries landed. No
+regression from a change that widened 131 cells and created 95.
+
+**The result that needs explaining:** neither assertion moved. 95 new field
+cells and 43 field->label conversions produced zero change in
+inputs_over_printed_text (40 forms) or comb_slots_match_printed (22 forms).
+A number that does not move when it should is worth as much suspicion as one
+that moves wrongly — either the assertions do not measure what the fix changed,
+or the fix's cells are landing outside their scope. Not yet diagnosed.
