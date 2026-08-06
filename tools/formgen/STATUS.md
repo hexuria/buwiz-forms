@@ -4,100 +4,137 @@
 same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
-Measured 2026-08-06 at HEAD `9d44e2a`, over the 51-form corpus regenerated at
-`768dacc`. Assertion counts are from a corpus-wide `audit.py
---assertions-only` run at these exact producer bytes; the findings tally is
-recomputed from `review-findings.json`; per-check gate verdicts are from the
-three full gate runs described below, none of which ran to a complete
-verdict at this HEAD. Corpus-expansion work (1604-CF, 2200AN; see `8161a82`)
-was in flight in this worktree when these numbers were taken and will move
-them; per the update rule, that work updates this file when it lands.
+Measured 2026-08-06 at HEAD `d37462e`, over the 53-form corpus regenerated on
+the comb writing-surface fix (`d37462e`). Gate verdicts are from run **r7**,
+a complete clean-tree run at these exact producer bytes. Assertion counts are
+from a corpus-wide `audit.py --assertions-only` at the same bytes; the findings
+tally is recomputed from `review-findings.json`.
 
-## Gate — no complete clean-tree verdict at this HEAD yet
+## Gate — r7
 
-Three full runs on 2026-08-06, each stopped by a different, real thing:
-
-1. **r1 (dirty tree)** — the audit application scope demands a clean
-   worktree; the fix-phase edits were uncommitted. Committed as
-   `125cf7e`..`768dacc` and re-run.
-2. **r2 (clean tree at `768dacc`)** — audit-refresh failed with "layout cell
-   and reviewed-subject owner registries differ": the gate's owner-registry
-   projection re-derived subject order from cell numerals while the
-   restored 2550M comb owner `p1c193` sits mid-stream. A real integration
-   fault, fixed in `19d4460` (canonical order is the layout cell stream;
-   the referee now proves ledger order instead of assuming it).
-3. **r3** — invalidated mid-run by concurrent commits (`13b4cbd`,
-   `19d4460`, `9d44e2a` landed between its two generations), so generation
-   attestation correctly refused to score it. Not a defect: the attestation
-   exists precisely to catch a moving tree.
-
-Checks that did evaluate, at the run that evaluated them:
-
-| Check | Verdict | Run | Detail |
+| Check | r7 | r6 (baseline) | Detail |
 | --- | --- | --- | --- |
-| self-tests | PASS | r2 | all 10 modules at `768dacc`; at `9d44e2a` + in-flight corpus expansion, `guides` fails under the concurrently rewritten `build/` — re-measure once the expansion lands |
-| conversion | PASS | r2 | 51/51 unique tracked forms converted |
-| findings | FAIL | r3 | 43/84 blocker+major unresolved (worst: 1801-2018 6, 1707-2021 5, 1800-2018 4, 2316-2021 3) |
-| tracked-files | PASS | r1–r3 | no tracked deletion |
-| determinism | PASS | r1, r2 | two regenerations byte-identical (`c928b792f9d8`) |
-| rules/paper/artwork/text/assertions/audit-refresh/comb-referee | UNEVALUABLE | all | blocked by the per-run causes above; next quiescent clean-tree run scores them |
+| self-tests | PASS | PASS | 10 modules |
+| conversion | PASS | PASS | 53/53 unique tracked forms |
+| rules | PASS | PASS | clean on 53/53 |
+| paper | PASS | PASS | exact on 53/53 |
+| artwork | PASS | PASS | clean on 53/53 |
+| text | PASS | PASS | clean on 53/53 |
+| assertions | **FAIL** | FAIL | `inputs_over_printed_text` 40 forms; `comb_slots_match_printed` 22 forms |
+| findings | **FAIL** | FAIL | 26/84 blocker+major unresolved (worst: 1707-2021 3, 1702q-2018 2, 2200a-2020 2, 2316-2021 2) |
+| tracked-files | PASS | PASS | no tracked deletion |
+| audit-refresh | PASS | PASS | fresh audit atomically published for 53 forms |
+| determinism | PASS | PASS | byte-identical (`5061598cbb20`) |
+| comb-referee | UNEVALUABLE | UNEVALUABLE | report partial 0/53; corpus identity incomplete — the blocked HTML pins |
 
-## Failing assertions (corpus-wide `--assertions-only` at `9d44e2a` bytes)
+**9 of 12 PASS. Identical to the r6 baseline, check for check and count for
+count: no check changed verdict and neither failing assertion changed the
+number of forms it fails on.** The determinism digest moved (`c928b792f9d8` →
+`5061598cbb20`) because the corpus itself changed, which is the intended
+result, and both regenerations agreed.
 
-| Assertion | Forms | Offenders | Movement from `5072249` |
+## The comb writing surface (this increment)
+
+`lattice.comb_bands` published the divider **tick** band as the comb's own
+vertical extent. The tick is a guide mark under the writing box, not the box:
+on 2550M's item-4 TIN row the cell walls span the full 15.60pt of the row
+while the digit separators are 3.12pt stubs along its bottom edge.
+`comb_writing_surface` now reports the owning cell's printed walls inset by the
+cell's own border thicknesses, the same inset `emit.field_box` gives a plain
+text field. The tick band stays published as `divider_band_y0`/`y1`/
+`height_pt`.
+
+| Measured over `build/layout` | before | after |
+| --- | --- | --- |
+| comb cells with a writing box under half their own cell | 4,474 of 4,522 | **0** |
+| comb cells with a writing box outside their own cell | 225 | **0** |
+| 2550M `p1c9` (item-4 TIN) slot height, in a 15.60pt cell | 3.12pt | **14.16pt** |
+| 2550M `p1c9` fitted face | 2.81pt | **8.25pt** (the sheet's modal body size) |
+
+The change is vertical only, and the regenerated bytes prove it: 0 slot counts,
+0 pitches and 0 slot X positions moved anywhere in the corpus, and no comb count
+moved on any bundle, so `EXPECTED_COMBS_BY_SLUG` needed no re-pin.
+
+## Failing assertions (corpus-wide `--assertions-only`)
+
+| Assertion | r6 forms / offenders | r7 forms / offenders | Movement |
 | --- | --- | --- | --- |
-| `inputs_over_printed_text` | 38 | 232 | was 48 forms / 336 audit-visible (sliver B2 fix + binding false positives cleared; populations A, B1, C1, C2 remain per the 2026-08 triage) |
-| `comb_slots_match_printed` | 21 | 181 | was 51 forms / 825 (POSITION_TOL_PT alignment + dominant-topology rule; residual is genuine defects plus the still-refused U-frame-crop / corridor-absorb topologies) |
-| `money_boxes_have_inputs` | 0 | 0 | was 6 forms / 9 (measured-ink `boxes_preprinted` exclusion + clipped-straddler binding fix) |
-| `reflow_rate_without_description` | 0 | 0 | was 1 (2551m-2002; multi-section `data-flow` + content-shaped row hazard scan, rows now actually checked) |
-| `image_transform_applied` | 0 | 0 | was 1 (1702q-2018; guide-plan `relocated_placements` subtraction, published) |
+| `inputs_over_printed_text` | 40 / 239 | 40 / **258** | **worse by 19 offenders**, same 40 forms |
+| `comb_slots_match_printed` | 22 / 186 | 22 / 186 | unchanged, identical form set |
+| `money_boxes_have_inputs` | 0 / 0 | 0 / 0 | holds |
+| `rules_below_guide_cut` | 0 / 0 | 0 / 0 | holds |
+| `run_colour_matches_ir` | 0 / 0 | 0 / 0 | holds |
+| `reflow_rate_without_description` | 0 / 0 | 0 / 0 | holds |
+| `image_transform_applied` | 0 / 0 | 0 / 0 | holds |
+| `no_invented_codepoints` | 0 / 0 | 0 / 0 | holds |
 
-Artwork: the 1701MS digest-provenance fix landed (`125cf7e`); regeneration
-moved exactly one pixel digest corpus-wide (the page-1 seal, `9623eb6e…` →
-`e4c70b62…`, asset bytes unchanged), so `verify.diff_images` can pair the
-seal. `images_missing=0` still needs a completed audit refresh to be a gate
-verdict.
+**`inputs_over_printed_text` got worse, and it is the writing-surface fix that
+did it.** 17 comb cells newly overlap a printed run and 1 stopped; every one of
+the 24 new offender records is a comb cell, and the overlapped runs are the
+captions those cells carry in their upper half (`2316-2021` p1c27-30 "Date of
+Birth"/"(MM/DD/YYYY)", `2551m-2002` p1c76/81/88 "28C"/"29B"/"30C",
+`2553-1999` p1c71/76/83, `2550m-2007` p1c91-93 "Debit Memo",
+`1604cf-2008` p1c16/21 "Telephone No."/"Zip Code", `1600wp-2010` p1c24,
+`1701ms-2024` p1c183).
 
-Comb referee: the last complete ledger (pre-fix, 2026-08-06 00:22) carried
-19 `emission_layout_mismatches`; the lattice restoration of the two
-source-proven suppressed combs (2000-DST p1c4, 2550M p1c99-era subject) and
-the referee's new stream-order proof await the next complete run for a
-measured count.
+The cause is real and is named rather than absorbed: in those cells the lattice
+rectangle spans caption **and** comb (e.g. `2551m-2002` p1c76 is 18.65pt tall
+with its ticks in the bottom 2.88pt), so "the whole cell inset by its borders"
+reaches text that the 3.12pt band never touched. Both readings are wrong for
+these cells; the new one is wrong in the direction where a taxpayer can
+actually type. No gate verdict changed on it — the check failed on 40 forms
+before and after — but the offender count is a debt, and the fix belongs in
+lattice.py's cell segmentation, not in relaxing the assertion.
 
 ## Findings ledger (`review-findings.json`, 138 findings)
 
-| Severity | Open | Fixed |
+| Severity | Open | Resolved |
 | --- | --- | --- |
-| blocker | 14 | 7 |
-| major | 29 | 34 |
+| blocker | 5 | 16 |
+| major | 21 | 42 |
 | minor | 36 | 4 |
 | cosmetic | 12 | 2 |
 
-The gate counts blocker+major only: 43 open of 84 (was 52). Nine resolved at
-`9d44e2a` with measured evidence: eight stale dropped-SMask findings (F020,
-F021, F022, F037, F048, F053, F057, F061 — shipped assets decode with the
-masked pixels transparent, re-inspected visually over white) and F127 (the
-2551M guide is a 19-row paired gl-table, no prose flattening). Worst forms:
-1801-2018 (6), 1707-2021 (5), 1800-2018 (4), 2316-2021 (3).
+The gate counts blocker+major only: **26 open of 84**, unchanged this
+increment.
+
+## Comb referee — still UNEVALUABLE, still user-blocked
+
+`EXPECTED_HTML_STRUCTURE_SHA256`'s 53 reviewed pins remain stale and were **not**
+touched: re-pinning them is a user-review action (see `GOAL.md` `## Blocked`).
+The producer pins that *are* an agent's to maintain were refreshed in `8df82e7`:
+`LATTICE_PRODUCER_SHA256` for the writing-surface change, and
+`HTML_RUNTIME_SCRIPT_SHA256` from a 2-tuple to a 3-tuple for the appended
+`?debug=fields` overlay — the first two hashes byte-identical, which is the
+evidence the overlay changed no shipped behaviour.
+
+### Open integration question for the referee (not acted on)
+
+`comb_referee.classify_band` reads `comb["y0"]/["y1"]` as the **source divider
+band** — it seeds the open-compartment search and the attached-external-band
+retry from them. `emitted_geometry_contract` reads the same two keys as the
+**emitted writing box**, which is what emit.py lays out. One field now answers
+two different questions. The emission side stays correct automatically; the
+source side should read `divider_band_y0`/`divider_band_y1`, which lattice.py
+publishes for exactly this purpose.
+
+This was deliberately **not** changed here: the referee is the adjudicator, and
+editing its derivation in the same increment as the producer change it
+adjudicates is the pattern `GOAL.md`'s user decision 1 forbids. It is inert
+today because the check is already UNEVALUABLE on the blocked HTML pins, but it
+must be settled before the referee can score again.
 
 ## CI
 
-The formgen job went green for the first time on 2026-08-05 (run 31040386488,
-2m10s), after `210044a` + `99b63ed` + `5072249`. The commits above have not
-yet been pushed through a full CI cycle at the time of this measurement.
+Unchanged since the last measurement: the formgen job went green for the first
+time on 2026-08-05 (run 31040386488). The commits in this increment have not
+yet been through a CI cycle.
 
 ## Open issues, diagnosed
 
-One row per issue; root causes from the 2026-08 triage, updated for what
-landed. "Owner" is the file the fix belongs in.
-
 | Issue | State | Root cause / residual | Owner |
 | --- | --- | --- | --- |
-| artwork: 1701ms-2024 seal reported missing | fix landed (`125cf7e`), verdict pending a completed audit refresh | digest-provenance: IR pinned the in-memory pixmap hash; the bundle ships a non-bit-faithful PNG re-encode. `shipped_pixel_sha256` now hashes the decoded samples of the exact shipped bytes. | `extract.py` (done) |
-| `image_transform_applied` 1702q-2018 | fixed, assertion holds corpus-wide | assertion never subtracted guide-plan-claimed placements; now subtracts by the plan's `image_indices`, publishes `relocated_placements`, fails closed on a plan/source split | `audit.py` (done) |
-| `inputs_over_printed_text`: 38 forms, 232 offenders | partially fixed (48→38 forms) | B2 slivers demoted in lattice; binding false positives cleared. Remaining: A-populations (own-field decoration, needs the lattice-ownership export + assertion exemption), B1 (glyph ascent/descent boxes), C1/C2 (genuine comb/caption overlaps) | `lattice.py` + `audit.py` + `emit.py`, per the triage plan |
-| `comb_slots_match_printed`: 21 forms, 181 offenders | partially fixed (51→21) | tolerance + dominant-topology landed; residual: `crops a wider source U-frame` / `absorbs unframed corridors` / `competing band-tone` refusals not yet covered by the referee-aligned chooser, plus genuine geometry defects (2550m p1c103 3.12pt, p1c193 rails) | `audit.py` topology chooser / `emit.py`-`lattice.py` per subject |
-| `money_boxes_have_inputs` | fixed, assertion holds corpus-wide | measured-ink exclusion (`boxes_preprinted`), clipped-straddler binding, and the sliver/kind conflict all landed | `audit.py` (done) |
-| `reflow_rate_without_description` | fixed, assertion holds corpus-wide | checker now reads multi-section `data-flow` and scans gl-table rows content-wise | `audit.py` (done) |
-| findings: 43 blocker+major open | in progress (52→43) | remaining families: comb capacity (referee track), inputs-over-text populations, guide-cut orphan policy (F004/F007/F090), text mis-position (F024/F070/F102), individual re-verifications | per-cause owners |
-| comb-referee ledger | await next complete run | two source-proven combs restored via `source_certified_replacement_owner`; referee now proves stream order; expected 19→17 or fewer, needs the measured run | `comb_referee.py` run |
+| `inputs_over_printed_text`: 40 forms / 258 offenders | worse by 19 this increment | 17 new offenders are comb cells whose lattice rectangle spans caption + comb, so the full-height writing surface reaches the caption. Residual populations A/B1/C1/C2 per the 2026-08 triage are unchanged. | `lattice.py` cell segmentation |
+| `comb_slots_match_printed`: 22 forms / 186 offenders | unchanged | `printed_compartments` reads only the cell rectangle and no member of the lattice `comb` object, which is why a vertical-only change cannot move it. Residual: the still-refused U-frame-crop / corridor-absorb topologies plus genuine geometry defects. | `audit.py` topology chooser |
+| comb-referee UNEVALUABLE | user-blocked | 53 reviewed HTML structure pins stale; plus the `classify_band` source/emission key collision above. | user review, then `comb_referee.py` |
+| findings: 26 blocker+major open | unchanged | comb capacity (referee track), inputs-over-text populations, guide-cut orphan policy, text mis-position, individual re-verifications | per-cause owners |

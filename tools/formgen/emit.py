@@ -1187,10 +1187,14 @@ def _floor2(value: float) -> float:
 class FieldBox:
     """One field's writing box and the text metrics fitted into it.
 
-    The writing box is what the source drew, not the cell rect. A comb's is the
-    comb's own sub-band -- the extent of the dividers, 7.44pt inside an 18.90pt
-    cell on 2551Q -- and a plain field's is the cell inset by the thickness of
-    the rule bounding each side. A cell rect runs along its rules' *centres*
+    The writing box is what the source drew, not the cell rect -- and for both
+    kinds it is now the same measurement: the cell inset by the thickness of the
+    rule bounding each side. A comb's used to be the extent of its own dividers
+    (7.44pt inside an 18.90pt cell on 2551Q), which mistook a guide tick for a
+    wall; `lattice.comb_writing_surface` carries the artwork that settles it and
+    applies the identical inset there, so a comb arrives with `y0`/`height_pt`
+    already inset and only the plain-field branch below computes one.
+    A cell rect runs along its rules' *centres*
     (rule v173 spans x 136.10-136.58 and the cell edge is 136.34), so half a
     thickness already clears the ink; using the whole one clears it and leaves
     the same distance again as clearance. It is the cell's own measurement
