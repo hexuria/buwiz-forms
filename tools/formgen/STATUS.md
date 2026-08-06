@@ -26,23 +26,42 @@ regenerated at the r14 producer bytes. Assertion counts are from a corpus-wide
 
 ## Gate — r14
 
+Run r14, 2026-08-07 04:22, clean tree at commit `8defe23`. **9 of 12 PASS.**
+
 | Check | r14 | r13 | Detail |
 | --- | --- | --- | --- |
-| self-tests | PENDING | PASS | 10 modules |
-| conversion | PENDING | PASS | 53/53 unique tracked forms |
-| rules | PENDING | PASS | clean on 53/53 |
-| paper | PENDING | PASS | exact on 53/53 |
-| artwork | PENDING | PASS | clean on 53/53 |
-| text | PENDING | PASS | clean on 53/53 |
-| assertions | PENDING | **FAIL** | see the two moves below |
-| findings | PENDING | **FAIL** | 49/116 blocker+major open (was 58/116) |
-| tracked-files | PENDING | PASS | no tracked deletion |
-| audit-refresh | PENDING | PASS | fresh audit atomically published for 53 forms |
-| determinism | PENDING | PASS | byte-identical |
-| comb-referee | PENDING | UNEVALUABLE | the 53 HTML pins were stale; refreshed at r14 |
+| self-tests | PASS | PASS | 10 modules |
+| conversion | PASS | PASS | 53/53 unique tracked forms |
+| rules | PASS | PASS | clean on 53/53 |
+| paper | PASS | PASS | exact on 53/53 |
+| artwork | PASS | PASS | clean on 53/53 |
+| text | PASS | PASS | clean on 53/53 |
+| assertions | **FAIL** | **FAIL** | `inputs_over_printed_text` 20 forms (was 40); `comb_slots_match_printed` 36 forms (was 22) — see below |
+| findings | **FAIL** | **FAIL** | 49/116 blocker+major open (was 58/116) |
+| tracked-files | PASS | PASS | no tracked deletion |
+| audit-refresh | PASS | PASS | fresh audit atomically published for 53 forms |
+| determinism | PASS | PASS | byte-identical (`8ceeab9e506d`) |
+| comb-referee | **UNEVALUABLE** | UNEVALUABLE | 40/53; `HTML_RUNTIME_SCRIPT_SHA256` was a THIRD stale pin — see below |
 
-r14 is the first full gate run on this branch. This table is completed in the
-same commit that records its verdict.
+The verdict shape is unchanged from r13: the same three checks are red, for
+reasons that moved in the intended direction on two of them. r14 is the first
+full gate run on this branch.
+
+### The referee's UNEVALUABLE, and the pin nobody had counted
+
+r14 reported `form emission binding has errors` on 0619E, 0619F, 0620, 1600-PT
+and 1600-VT, with the payload reason **"HTML runtime scripts disagree with the
+reviewed emitter"**. That is `comb_referee.HTML_RUNTIME_SCRIPT_SHA256`, a
+**third** reviewed emitter pin — separate from `EXPECTED_HTML_STRUCTURE_SHA256`
+and from the producer SHAs, read **only by the referee, which runs last**. Two
+of its three hashes moved, and exactly the two the G11 fix claims to touch: the
+field runtime (`positionOf` replacing attribute-indexed comb navigation, which
+would otherwise stop advancing at the first printed compartment) and the field
+debug overlay (F172). The band-data runtime is byte-identical, which is the
+standing evidence that none of this reached page scaffolding. Re-pinned after
+r14 with that reasoning recorded at the constant; **the re-pin is NOT covered by
+an r14 verdict** and needs the next full gate run to settle. Cost of finding it
+this way: one 60-minute run.
 
 ## The two assertions, and one of them got worse
 

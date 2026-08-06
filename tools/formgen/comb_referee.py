@@ -528,14 +528,33 @@ HTML_STYLESHEET_FIXED_VALUES: dict[tuple[str, str], frozenset[str]] = {
     ("@page", "margin"): frozenset({"0"}),
 }
 # In document order: the band data runtime, the field runtime, and the field
-# debug overlay. The first two are byte-identical to the values reviewed before
-# the overlay existed -- the overlay is appended, it does not modify them, and
-# that is the evidence that adding it changed no shipped behaviour. All 53
-# bundles emit this exact tuple.
+# debug overlay. All 53 bundles emit this exact tuple -- measured, not assumed.
+#
+# The FIRST hash has never moved. It is the band data runtime, and its being
+# byte-identical across every re-pin is the standing evidence that none of the
+# field-layer work has reached into page scaffolding.
+#
+# The SECOND and THIRD moved at r14, and only those two, which is exactly the
+# claim the G11 fix makes about itself:
+#   * field runtime (e2b0b779 -> 1ed88b99). A comb compartment the source
+#     already filled in now emits its slot div with no <input> in it, so the
+#     NodeList a taxpayer tabs through is shorter than the compartment count.
+#     `move` and the paste handler used to index that list with the
+#     `data-slot-index` ATTRIBUTE, which would have stopped advancing at the
+#     first printed box; they now find the element's position in the list with
+#     `positionOf`. `data-slot-index` still means the compartment's number.
+#   * field debug overlay (877c6c01 -> 96754a6a). F172/G15: the corrected
+#     overlay had existed in emit.py and had simply never been regenerated into
+#     the corpus. `printed box with no input` now appears in 53 of 53 bundles
+#     and `no usable box` in none.
+# Re-pinned 2026-08-07 (r14). This pin is the reason r14's first full gate run
+# reported the comb referee UNEVALUABLE on five forms: it is a THIRD reviewed
+# emitter pin, separate from EXPECTED_HTML_STRUCTURE_SHA256 and from the
+# producer SHAs, and it is read only by the referee, which runs last.
 HTML_RUNTIME_SCRIPT_SHA256 = (
     "8822f0d4efe00ffbf32e2e0fe2922139419f08184143699b789a0aa5050e649d",
-    "e2b0b7794d0b72c3d5ab818c290ffca183f3b1fff9797e487450a3ca4b0f4049",
-    "877c6c01ce3d39819c27cc902ca1ddb6eb9f18aeeb298e875a9b88898f0bc03c",
+    "1ed88b99506a819cacf86e3020a2c73c6bac3e12c3d739327b385145d2d13147",
+    "96754a6ab1c7d406d040768c6f13d5da47da75d820ba8a04fe773f683504c004",
 )
 HTML_ROOT_ATTRIBUTES = frozenset({
     "data-form",
