@@ -181,7 +181,33 @@ overturns them.
 
 ## Blocked
 
-Nothing.
+**The comb referee's 53 reviewed HTML pins are stale, and re-pinning them is a
+user-review action, not an agent action.**
+
+`comb_referee.EXPECTED_HTML_STRUCTURE_SHA256` hashes every emitted byte per
+form; its docstring says "any change requires an explicit pin review". All 53
+now mismatch, because today's three producer fixes (extract digest, lattice
+slivers + comb ownership, audit assertions) plus the two new forms changed
+every bundle's HTML. The referee therefore reports 53 errors and the gate's
+comb-referee check is UNEVALUABLE -- which is a FAILURE, not a pass.
+
+The pin did its job. The question it asks -- "were these changes reviewed?" --
+is exactly the question the user's decision 1 says a producer may not answer
+about itself. I re-pinned the two NEW forms (they had no prior reviewed value
+to overwrite: 1604cf-2008 621ddec5, 2200an-2018 c794b756) and the corpus
+census (EXPECTED_FORMS 51->53, EXPECTED_COMBS 4442->4539, plus per-slug counts
+1604cf-2008: 10, 2200an-2018: 87). I did NOT touch the 51 existing hashes.
+
+Evidence that the changes are sound, for whoever reviews: gate r4 scored
+rules, paper, artwork, text and conversion PASS on 53/53, determinism
+byte-identical, audit-refresh PASS.
+
+DESIGN TENSION worth deciding at the same time: a whole-file hash over 53
+generated documents means EVERY legitimate producer change invalidates all 53
+and needs a fresh review round. That is either deliberate maximum conservatism
+or unworkable friction -- if the latter, the pin should hash the STRUCTURE it
+claims to (the tag/attribute skeleton it already enumerates) rather than every
+byte, so that a geometry fix does not read as a structural change.
 
 Note for whoever reads this next: the 9 forms below were once recorded here as
 "superseded by the quarterly versions". That was wrong, and checking the
