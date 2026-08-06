@@ -70,8 +70,8 @@
       "evidence": "In the HTML page 2 I see an empty grey strip under \"Total Taxes Withheld and Remitted\" and two long vertical rules running to y~746 pt with nothing between them; the official has the full Table 1 ATC table there. Confirmed in the emitted SVG: two #d9d9d9 rects at the cut line plus the two 461.33pt-tall black rules. provenance.json records cut_y_pt 286.02 and \"straddlers_kept_by_form\": 5.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Re-measured on the current bundle. forms/1600-pt-2018/provenance.json now records cut_y_pt 283.91 with straddlers_kept_by_form 0 (the finding cited 286.02 and 5). Nothing is emitted below that cut: in forms/1600-pt-2018/index.html the page-2 rule SVG's lowest painted edge is y=283.37pt, 0 of its 148 rects fall below the cut, no cell extends past y1=283.91 and the lowest page-2 text div sits at top=270.0. The two #d9d9d9 rects at (29.5,286.0)/(34.2,286.0) and the 461.33pt rules v85 and v148 (y 284.45-745.78), still present in build/ir/1600-pt-2018.ir.json, are dropped by the emitter. build/audit.json for 1600-pt-2018 reports rules_below_guide_cut holds with area_fills_below_cut 0, and the relocated Table 1 ATC content is in guide.html (the string 'Table 1' occurs in guide.html and not in index.html)."
     },
     {
       "id": "F005",
@@ -109,8 +109,8 @@
       "evidence": "HTML page 2 shows the empty grey strip plus two vertical rules enclosing blank paper from y~278 to y~558 pt; official has Table 1 (WV010...WV024) there. Emitted SVG confirms the two #d9d9d9 rects and the two 281.3pt-tall rules. provenance.json cut_y_pt 280.75, straddlers_kept_by_form 5.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Same re-measurement as F004 on the sister form. forms/1600-vt-2018/provenance.json records cut_y_pt 275.81 with straddlers_kept_by_form 0 (was 280.75 and 5). forms/1600-vt-2018/index.html emits nothing below the cut: page-2 SVG lowest painted edge 275.21pt, 0 of 135 rects below the cut, no cell past y1=275.81, lowest page-2 text div at top=261.75. The #d9d9d9 bands at (30.36,277.97)/(34.92,280.73) and rules v48/v114 (y 276.41-557.71) survive in build/ir/1600-vt-2018.ir.json but are not emitted. build/audit.json reports rules_below_guide_cut holds with area_fills_below_cut 0; guide.html carries Table 1 including WV010."
     },
     {
       "id": "F008",
@@ -330,8 +330,8 @@
       "evidence": "SAW it at full-page view and confirmed at 7x zoom: the digits hug the left divider of each cell instead of sitting centred as in the official. Measured rendered glyph columns (HTML vs official): \"I\" 51.75-53.25 vs 54.38-55.50 (2.63pt left); \"6\" 79.88-84.00 vs 81.38-85.50 (1.50pt left); \"5\" 92.62-96.75 vs 96.00-99.75 (3.38pt left). The \"5\" ends up 2.1pt from its left divider where the official leaves 5.5pt clear. Cause: the IR run is Arial Narrow with non-uniform char advances (4.56/9.72/4.56/9.60/4.56/2.27), but emit.py substitutes Arimo and fakes the metrics with a single uniform `letter-spacing:3.6181pt` plus `scaleX(0.820047)` — uniform spacing cannot reproduce non-uniform advances, so error accumulates along the run.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The emitter no longer fakes non-uniform advances with one uniform letter-spacing. forms/1621-2019/index.html p1t72 ('1 6 5 ') now carries letter-spacing:0.0214pt together with word-spacing:8.9912pt under transform:translate(66.98pt,0.29pt) scaleX(0.820047); the finding's single letter-spacing:3.6181pt is gone. Two spacing parameters exactly reproduce the run's two advance values (glyph 4.56pt, space 9.72/9.60pt). Measured in headless Chromium with a per-character DOM Range against the page origin: '1' starts at 66.98pt, '6' at 81.20pt, '5' at 95.42pt, versus the source origins 66.98 / 81.26 / 95.42 from build/ir/1621-2019.ir.json char_origin_offsets_pt - worst error 0.06pt. The 'I' of the 'W I ' run lands at 53.80pt against a source origin of 53.76pt. The 1.50-3.38pt accumulating leftward drift the finding measured is no longer present."
     },
     {
       "id": "F025",
@@ -837,8 +837,8 @@
       "evidence": "DOM query x 250-470 / y 118-148 returns a single input, p1c15-i at x 404.6 (the IC110 box). In the filled screenshot the IC110 checkbox contains '88' and the II030 checkbox is blank white. The layout JSON has cell p1c15 (x 404.16-416.04) as kind='field' but no corresponding field cell at x~290; the II030 box falls inside label cell p1c5.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The II030 checkbox now has an input. build/layout/1707-2021.layout.json and forms/extra/1707-2021/index.html carry field cell p1c183 at (289.44,124.32)-(301.44,136.02) holding one input - the box immediately left of the 'II030 ' run at (309.1,126.2) in build/ir/1707-2021.ir.json - alongside the IC110 field p1c15 at (404.16,124.80)-(416.04,136.02). A sweep of x 250-470 / y 118-148 now returns two inputs, not the single p1c15 the finding found, so both Part I ATC choices are markable."
     },
     {
       "id": "F064",
@@ -902,8 +902,8 @@
       "evidence": "p2c5 slot widths are [14.2, 14.3, 28.6, 14.3, 28.9, 14.3, 28.8, 14.4, 14.4] — nine slots for fourteen printed comb cells, three of them exactly double width. A 9x zoom of the filled TIN row shows the third '8' rendered dead-centre on the heavy divider, its glyph bulging out either side of the black bar. The same picture appears on every money row (digit sitting on each thousands separator). Corpus scan: 34 comb groups with unequal slots, 100 oversized slots on this form alone.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Re-measured every comb group emitted by forms/extra/1707-2021/index.html: 112 groups, and 0 of them contain a slot wider than 1.6x that group's minimum (the finding counted 100 oversized slots on this form). The page-2 TIN comb p2c5 now emits 14 slots of 14.16-14.52pt across (17.64,108.62)-(218.57,128.18) for the 14 printed compartments, replacing the nine slots [14.2, 14.3, 28.6, 14.3, 28.9, 14.3, 28.8, 14.4, 14.4] the finding measured. The 12-cell money combs the finding named at x 377.0 (p2c10, p2c14, p2c18, p2c24) each emit 12 uniform 14.4pt slots whose left edges - 377.71, 392.11, 406.51, 420.91, 435.31, 449.71, 464.14, 478.54, 492.94, 507.34, 521.74, 536.14 - coincide with the printed divider centres in build/ir/1707-2021.ir.json, so no digit is centred on a heavy separator."
     },
     {
       "id": "F069",
@@ -954,8 +954,8 @@
       "evidence": "DOM query x 220-420 / y 130-146 returns only p1c13-s0..s2 (x 227.8-270.2) and p1c16-s0..s2 (x 342.2-384.8) — six slots, not nine. Zoomed crop of the filled page shows '8 8 8 — [blank comb] — 8 8 8 — 0 0 0 0 0'.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The middle TIN triplet is fillable. forms/extra/1800-2018/index.html emits p1c15 as a comb at (284.33,131.78)-(342.25,148.82) with 4 slots whose left edges are 284.33, 298.49, 312.65 and 326.81 - the printed divider centres measured from build/ir/1800-2018.ir.json (284.33, 298.49, 312.65, 326.69/326.81, 342.19). With p1c13 (3 slots, 227.81-270.17), p1c16 (3 slots, 342.25-384.79) and p1c18 (5 slots, 398.95-470.66, the pre-printed 0 0 0 0 0 branch group), the 'Donor's Taxpayer Identification Number' row at y 135.4 now carries 15 per-cell inputs against 15 printed compartments, not the six the finding counted."
     },
     {
       "id": "F073",
@@ -980,8 +980,8 @@
       "evidence": "DOM query x 500-612 / y 202-220 returns only slots of the address comb p1c24 at y 195.7 — nothing in the ZIP box row. 5x crop of the filled page shows the 8A ZIP box blank while address digits run along the line above; one of those digits (the merged 28.2 pt slot p1c24-s34) also renders sitting on the label cell's left border rule.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The 8A ZIP box now has inputs. build/ir/1800-2018.ir.json prints that row's dividers at 470.62, 527.14, 541.66, 556.18, 570.58 and 584.50, and forms/extra/1800-2018/index.html emits p1c26 at (470.66,202.22)-(584.56,218.54) with 5 slots [56.48, 14.52, 14.52, 14.40, 13.98] landing on exactly those edges - four fillable ZIP cells at 527.14, 541.66, 556.18 and 570.58, under the '8A' / 'ZIP Code' runs at (473.0,205.1) and (487.2,205.1). The secondary defect the finding noted is also gone: the address comb p1c24 now emits 40 slots measuring 13.94-14.64pt, with no merged ~28.2pt slot straddling a border rule."
     },
     {
       "id": "F075",
@@ -1019,8 +1019,8 @@
       "evidence": "DOM query x 18-250 / y 100-120 returns p2c9-i (x 21.6, w 0.7 pt) and p2c11-s0 at x 246.9 (Donor's Name). Zoomed crop of official vs filled shows the nine drawn comb cells empty in the HTML while the pre-printed '0 0 0 0 0' branch code and the name comb beside it are unaffected.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The page-2 TIN comb is fully provisioned. forms/extra/1800-2018/index.html emits p2c5 at (22.32,98.18)-(246.89,118.22) with 14 slots of 15.96-16.32pt, matching the 15 printed divider centres in build/ir/1800-2018.ir.json (22.32, 38.28, 54.36, 70.34, 86.30, 102.26, 118.34, 134.30, 150.38, 166.46, 182.42, 198.53, 214.61, 230.57, 246.89). The 0.7pt-wide degenerate input the finding found (p2c9-i at x 21.6) no longer exists."
     },
     {
       "id": "F078",
@@ -1032,8 +1032,8 @@
       "evidence": "DOM query over x 180-620 / y 136-158 returns only the RDO Code slots (p1c20-s1/s2 at x 560.0 and 574.4) plus a 0.5 pt phantom. In the filled screenshot row 5 shows the drawn comb and the two dashes with no digits anywhere, while the RDO box to its right shows '8 8 8'.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Item 5's TIN is fillable. build/ir/1801-2018.ir.json prints the row's dividers at 204.65, 218.81, 233.57, 247.85 | 247.97, 262.01, 276.17, 290.33, 304.85 | 304.97, 318.89, 333.07, 347.23, 361.39 | 375.55, 389.71, 403.99, 418.15, 432.31, 446.47 - sixteen compartments - and forms/extra/1801-2018/index.html emits p1c13 (3 slots at 204.65/218.81/233.57), p1c14 (4 slots, 247.97-304.87), p1c15 (4 slots, 304.87-361.51) and p1c17 (5 slots, 375.55-446.47, the pre-printed 0 0 0 0 0 group), i.e. 16 per-cell inputs on those exact edges. The finding's 'DOM query over x 180-620 / y 136-158 returns only the RDO Code slots' no longer holds."
     },
     {
       "id": "F079",
@@ -1045,8 +1045,8 @@
       "evidence": "DOM query x 380-556 / y 628-648 returns count 0; the only inputs on the row are p1c138-s0/s1 (centavos) at x 558.9 and 573.6. Side-by-side crop of official vs filled HTML shows the official's full peso comb and the HTML's peso comb entirely blank with '8 | 8' only in the centavos.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Item 24's peso comb is fillable. forms/extra/1801-2018/index.html emits p1c110 with 11 slots whose left edges are 387.55, 401.71, 415.87, 430.03, 444.31, 458.59, 473.02, 487.18, 501.34, 515.50 and 529.90 - identical to the printed divider centres in build/ir/1801-2018.ir.json across 387.55-544.54 - under the '24 TOTAL AMOUNT PAYABLE' run at (27.0,629.0). The centavos pair (now p1c112 at 558.94-588.70) is unchanged. A sweep of x 380-556 / y 628-648 returns 11 inputs, against the count of 0 the finding recorded."
     },
     {
       "id": "F080",
@@ -1058,8 +1058,8 @@
       "evidence": "DOM query over that rectangle returns count 0. Filled screenshot shows the comb and both dashes with no digits, while item 12 Contact Number directly to its right fills.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Item 11's TIN is fillable. build/ir/1801-2018.ir.json prints 17 compartments between 136.22 and 376.39 (dividers at 136.22, 150.50, 164.54, 178.58, 192.74, 206.81, 220.97, 235.13, 249.29, 263.33, 277.49, 291.65, 305.81, 319.85, 334.03, 348.19, 362.35, 376.39) and forms/extra/1801-2018/index.html emits p1c31 (11 slots, 136.22-291.65) plus p1c32 (6 slots, 291.65-376.39) on those edges - 17 per-cell inputs where the finding's DOM query over x 130-380 / y 262-278 returned count 0."
     },
     {
       "id": "F081",
@@ -1084,8 +1084,8 @@
       "evidence": "DOM query x 290-540 / y 340-352 returns exactly two inputs: p1c63-i at x 352.9 (Quarterly) and p1c62-i at x 460.4 (Others). Filled screenshot shows '8888' in Quarterly and Others and empty boxes for Monthly and Semi-Annual.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Both missing frequency checkboxes now have inputs. forms/extra/1801-2018/index.html emits field p1c192 at (303.12,344.42)-(313.68,351.12), immediately left of the 'Monthly' run at (315.4,343.1), and field p1c195 at (402.48,344.42)-(413.04,351.64), immediately left of 'Semi-Annual' at (415.3,344.1), alongside the pre-existing Quarterly (p1c51) and Others (p1c50) fields. All four boxes on the 15D row are fillable; the finding's 'exactly two inputs in x 290-540 / y 340-352' is now four."
     },
     {
       "id": "F083",
@@ -1123,8 +1123,8 @@
       "evidence": "DOM query x 18-230 / y 92-110 returns exactly one input, p2c6-s0 at x 219.3, which is the first slot of the Taxpayer's Name comb. Filled screenshot: TIN comb blank, Taxpayer's Name comb full of 8s.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The page-2 TIN comb is fully provisioned. forms/extra/1801-2018/index.html emits p2c5 at (21.60,92.18)-(219.29,110.66) with 14 slots of 14.04-14.18pt, matching the 15 printed divider centres in build/ir/1801-2018.ir.json (21.60, 35.64, 49.80, 63.98, 78.14, 92.30, 106.46, 120.50, 134.66, 148.70, 162.74, 176.90, 191.06, 205.13, 219.29). build/audit.json does not list p2c5 among 1801-2018's comb_slots_match_printed offenders, so the audit evaluated this comb against the source independently and it matched."
     },
     {
       "id": "F086",
@@ -1188,8 +1188,8 @@
       "evidence": "Side-by-side crop of pt (15,575)-(612,665) at 2x: the official prints the full table there (title band \"Documentary Stamp Tax (DST)/Alphanumeric Tax Code (ATC) Table\", the Documents/Transactions | Tax Rate | ATC header row, three data rows DO 102 / DO 125 / DO 122, and the RR/CR/CL... legend). The HTML shows an empty grey band and a three-sided box. Row-ink scan confirms HTML ink stops at 637.1 pt while the PDF continues to 656.6 pt. Note 2000-dst-2018 keeps its equivalent ATC table on the page, so the two 2000 variants are treated inconsistently.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The orphaned three-sided frame is gone and the table is intact in the guide. forms/extra/2000-ot-2018/provenance.json records the page-2 cut at cut_y_pt 581.41 with straddlers_kept_by_form 0, and forms/extra/2000-ot-2018/index.html emits nothing below it: the page-2 SVG's lowest painted edge is 580.87pt, 0 of its 270 rects fall below the cut, no cell extends past y1=581.41 and the lowest page-2 text div sits at top=573.0 - so there is no heavy top rule, no empty grey title band and no bottom-open side rules. guide.html carries the whole table: the title 'Documentary Stamp Tax (DST)/Alphanumeric Tax Code (ATC) Table', the Documents/Transactions | Tax Rate | ATC header, the DO 102 / DO 125 / DO 122 rows and the RR/CR/CL legend. build/audit.json reports rules_below_guide_cut holds with area_fills_below_cut 0. The finding's closing remark about 2000-dst-2018 keeping its equivalent table on the page is a cross-form consistency question, not the orphaned frame this finding records."
     },
     {
       "id": "F091",
@@ -1487,8 +1487,8 @@
       "evidence": "Distinct-letter fill screenshot cropped against the PDF at 5x: DOB shows 'A B | C D | E _ F' where the official prints 2+2+4 = 8 tick-separated cells, with E and F straddling dividers; Contact Number shows G H I J K spread over roughly ten printed cells, each glyph sitting on a divider rather than inside a cell.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Both combs are now fully provisioned and slot-aligned. build/ir/2316-2021.ir.json prints the item 7 DOB dividers at 46.67 | 59.00 | 71.84 | 85.03 | 97.01 | 109.34 | 122.19 | 135.38 | 147.36, i.e. 2+2+4 = 8 compartments, and forms/2316-2021/index.html emits p1c27 (2 slots), p1c28 (2 slots) and p1c29 (4 slots) on exactly those edges - 8 inputs, not 6. The item 8 Contact Number comb prints 11 compartments between rails 167.00 and 309.19 (internal ticks 180.08, 193.16, 205.67, 219.10, 232.67, 244.70, 257.03, 269.73, 282.07, 295.61) and p1c30 emits 11 slots at 167.22 plus offsets 0/13.09/26.16/38.67/52.10/65.67/77.71/90.03/102.74/115.07/128.62 - 11 inputs, not about 5. No comb group on the form now has a slot wider than 1.6x its group minimum, and build/audit.json reports comb_slots_match_printed holds on 2316-2021 with 0 offenders."
     },
     {
       "id": "F114",
@@ -1552,8 +1552,8 @@
       "evidence": "Side-by-side crop at 8x: the PDF shows '0,0,0' in the fourth group, the HTML box is blank. The zeros are not text — page.get_text('rawdict', clip) over that rect returns only spaces, and there are no AcroForm widgets on any page. fitz get_drawings shows them as three stroked bezier paths (type 's', items ['c','c','c','c'], colour (0,0,0), width 0.72) at x 182.64, 193.44, 203.76, y 123.36-131.28. The extractor keeps only axis-aligned 're' rectangles as rules, so curve-drawn glyphs are dropped. build/ir/2550m-undated.ir.json page 1 has no text run in that band.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The finding's evidence predates path extraction and emission; verified directly rather than assumed. build/ir/2550m-2007.ir.json (the slug this form now carries) page 1 records path5, path6 and path7 as stroked beziers at x 182.64 / 193.44 / 203.76, y 123.36-131.28, stroke (0,0,0), stroke_width 0.72pt - the three curve-drawn zeros the extractor used to drop - and forms/2550m-2007/index.html emits all three as <path d=\"M185.28 123.36C...Z\" fill=\"none\" stroke=\"#000000\" stroke-width=\"0.72\"> elements starting at x 185.28, 196.08 and 206.16 with y 123.36, tagged data-path-id path5/path6/path7. The fourth TIN group is no longer blank. It remains true, as the finding says, that no text run exists in that band - the glyphs are vector paths in the source and are now carried as vector paths."
     },
     {
       "id": "F119",
@@ -1786,8 +1786,8 @@
       "evidence": "3x side-by-side crop of the line at (348.2,239.0): the HTML letters inside each word are separated by roughly a full space, the official words are set solid with the slack in the inter-word gaps. Both lines start and end at the same x, so the differ sees nothing. Measuring the IR: 41 of the 94 text runs on page 2 carry >=2pt of accumulated excess space advance and 40 of those carry >=8pt, peaking at 46.88pt on that line. Page 1 has 0 such runs, which is why only this page looks wrong.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Page 2 is no longer positioned glyph-by-glyph, so there is nothing left to smear. forms/extra/2553-1999/provenance.json records the whole of page 2 relocated as an unfillable-page guide region (marker 'BIR  Form No. 2553 - Return of  Percentage Tax Payable Under Special Laws', cut_y_pt 0.0, reclaimed_pct 100, 94 text runs moved, straddlers_kept_by_form 0), and forms/extra/2553-1999/guide.html re-sets that material as flowing paragraphs containing 0 letter-spacing and 0 word-spacing declarations - as does guide.css. The worst line the finding cited now reads as ordinary prose inside a paragraph: '...Failure to pay the deficiency tax within the time prescribed for its payment in the notice of assessment.' The string 'prescribed' does not occur in index.html at all, and page 1 - which the finding measured as having 0 offending runs - is unaffected."
     },
     {
       "id": "F137",
