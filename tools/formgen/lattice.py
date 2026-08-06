@@ -76,6 +76,21 @@ those fills; the cell grid had not. `wall_boundaries` closes that asymmetry for
 verticals, and the shape test that keeps a character divider out of the x
 lattice is measured there.
 
+A sixth finding is that the *tone of the paper* decides whether a region is a
+writing surface at all, and this module used to ask only about ink. An empty
+three-bordered region on a grey band satisfied "field" exactly as a white one
+did, so 297 cells across 37 forms carried an *emitted input* on decoration --
+on 2200T page 2 a taxpayer can type 999,999.00 into a row the official form
+shades precisely to say NO RATE APPLIES. 347 cells on 40 forms were classified
+`field` there, the difference being cells the emitter already refused on other
+evidence. Nothing had to be inferred to prevent it:
+`extract.classify_tone` stamps every fill structural / decorative / knockout
+from the literal content-stream operand and the IR carries the stamp, but
+`area_fills` reached the lattice only through `wall_boundaries` and
+`comb_boundary_candidates`, which read `role == "structural"` for grid
+geometry. `on_shaded_paper` consults the decorative population the box model
+was discarding, and a cell it answers for becomes `kind == "shaded"`.
+
 Usage:
     python3 tools/formgen/lattice.py --ir build/ir/2551q-2018.ir.json \\
         --out build/layout/2551q-2018.layout.json --summary
@@ -2456,8 +2471,84 @@ def cell_paper_gap(cell: dict[str, Any], xl: Lattice, yl: Lattice,
     return right - left, bottom - top
 
 
+# BIR's "this is not a writing surface" shading is `gray <= 0.8509`; that one
+# population alone is 17,740 of the corpus's 26,027 decorative fills.  The
+# whole decorative histogram is 0.502, 0.5882, 0.651, 0.7489, 0.7529, 0.8509 --
+# and then, above 0.87 and with nothing in between, exactly 7 near-white fills.
+# 5 of the cells those 7 cover are REAL fields, proved by their own labels:
+# 1604cf-2008 p1c8/c10/c12 (0.8902, beside item "7" and "(Last Name, First
+# Name, Middle Name)") and 2200an-2018 p2c247/c255 (0.9489, one labelled "(To
+# Schedule 1C)").  `role == "decorative"` alone would take those 5 away from
+# the taxpayer; 0.87 sits in the empty gap, spares them, and still moves 347
+# cells across 40 forms out of `field`.  Coverage is asked of the cell, not of
+# the fill: a tint band runs the width of a table and only the part under this
+# cell is paper this cell could have offered.
+SHADED_PAPER_MAX_GRAY = 0.87
+SHADED_PAPER_MIN_COVERAGE = 0.70
+
+
+def topmost_covering_fill(cell: dict[str, Any],
+                          area_fills: Sequence[dict[str, Any]],
+                          ) -> dict[str, Any] | None:
+    """The last-painted area fill that covers this cell's paper, if any.
+
+    Topmost, not any: a tint band painted early and a white knockout painted
+    over it leave white paper, and reading the band alone would call a
+    recovered writing surface shaded.  Ties -- two fills at one ordinal --
+    break on source order, which `extract.extract_area_fills` fixes by
+    ``(y0, x0)``, so the answer is deterministic.
+    """
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    area = (x1 - x0) * (y1 - y0)
+    if area <= 0.0:
+        return None
+    needed = area * SHADED_PAPER_MIN_COVERAGE
+    best_key: tuple[int, int] | None = None
+    best: dict[str, Any] | None = None
+    for index, fill in enumerate(area_fills):
+        width = min(float(fill["x1"]), x1) - max(float(fill["x0"]), x0)
+        if width <= 0.0:
+            continue
+        height = min(float(fill["y1"]), y1) - max(float(fill["y0"]), y0)
+        if height <= 0.0 or width * height < needed:
+            continue
+        key = (paint_ordinal(fill), index)
+        if best_key is None or key > best_key:
+            best_key, best = key, fill
+    return best
+
+
+def on_shaded_paper(cell: dict[str, Any],
+                    area_fills: Sequence[dict[str, Any]]) -> bool:
+    """Whether the source shaded this cell to say "do not write here".
+
+    `extract.classify_tone` already decides structural / decorative / knockout
+    from the literal content-stream operand, and the IR carries that decision
+    on every fill.  The box model then threw it away: `classify_cell` was asked
+    only whether a region was empty and bordered, so an empty three-bordered
+    region on a grey band satisfied "field" exactly as a white one did, and
+    `page["area_fills"]` reached this module only through `wall_boundaries` and
+    `comb_boundary_candidates`, both of which read `role == "structural"` for
+    grid geometry.  The decorative population -- the tint that means NO RATE
+    APPLIES -- was never consulted by anything that decides where a taxpayer
+    may type.  This is that consultation; the fact was computed correctly at
+    extraction and is only being restored here.
+
+    `emit.field_verdict`'s "a blank the source printed over is not a blank"
+    protects statutory TEXT.  Shading is the same statement made with tone
+    instead of glyphs, and no ink-coverage test can see it.
+    """
+    fill = topmost_covering_fill(cell, area_fills)
+    if fill is None or fill["role"] != "decorative":
+        return False
+    gray = fill.get("gray")
+    return gray is not None and float(gray) <= SHADED_PAPER_MAX_GRAY
+
+
 def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
-                  is_sliver_text_strip: bool = False) -> str:
+                  is_sliver_text_strip: bool = False,
+                  is_shaded_paper: bool = False) -> str:
     if is_empty and border_count >= 3:
         # An empty bordered strip whose paper cannot hold one glyph of the
         # smallest body line the form prints is a ruled gap -- the leading
@@ -2465,7 +2556,14 @@ def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
         # 2026-08 triage census: the 120 sliver offenders and no wide real
         # field move.  Mark boxes (narrower than the smallest two-glyph
         # line) and comb owners are exempt by construction.
-        return "blank" if is_sliver_text_strip else "field"
+        if is_sliver_text_strip:
+            return "blank"
+        # Shaded paper is a separate kind, not "blank": "blank" asserts there
+        # is no ink, and there IS ink -- the tint the source painted to say
+        # this row takes no entry.  Naming it keeps the reason inspectable
+        # downstream (`emit.field_verdict` publishes the kind as its refusal
+        # reason) instead of hiding 347 cells inside an unrelated bucket.
+        return "shaded" if is_shaded_paper else "field"
     if is_empty:
         return "blank"
     # Pre-printed text sitting in a comb -- the "%" glyph, the money decimal
@@ -3502,6 +3600,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 legacy_h_ink: Sequence[dict[str, Any]] | None = None,
                 uncertain_geometry_ids: set[str] | None = None,
                 fillable_metrics: dict[str, float] | None = None,
+                area_fills: Sequence[dict[str, Any]] | None = None,
                 ) -> tuple[list[dict[str, Any]], list[str],
                            list[dict[str, Any]], list[dict[str, Any]]]:
     nx, ny = len(xl) - 1, len(yl) - 1
@@ -4415,20 +4514,32 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         cell["text_run_ids"] = [f"p{page_index}t{i}" for i in sorted(members)]
     unassigned = [f"p{page_index}t{i}" for i in sorted(unplaced)]
 
+    page_area_fills = () if area_fills is None else area_fills
     for cell in cells:
         cell["is_empty"] = not cell["text_run_ids"]
         sliver = False
-        if (fillable_metrics is not None
-                and cell["is_empty"]
+        shaded = False
+        if (cell["is_empty"]
                 and cell["border_count"] >= 3
                 and "comb" not in cell):
-            paper_width, paper_height = cell_paper_gap(cell, xl, yl)
-            sliver = (
-                paper_height < fillable_metrics["glyph_height_pt"]
-                and paper_width >= fillable_metrics["line_width_pt"]
-            )
+            if fillable_metrics is not None:
+                paper_width, paper_height = cell_paper_gap(cell, xl, yl)
+                sliver = (
+                    paper_height < fillable_metrics["glyph_height_pt"]
+                    and paper_width >= fillable_metrics["line_width_pt"]
+                )
+            # Comb owners are exempt, as they are from the sliver rule, and
+            # for a stronger reason: printed character ticks are the source
+            # itself drawing N boxes to receive typing, and `emit.field_verdict`
+            # gives a comb an input whatever the kind says.  Demoting one here
+            # would leave the layout claiming "not a writing surface" over an
+            # emitted input -- worse than either verdict alone.  On the 53-form
+            # corpus this exempts nothing: no comb owner is covered by
+            # decorative shading, so the rule is stated, not measured into.
+            shaded = on_shaded_paper(cell, page_area_fills)
         cell["kind"] = classify_cell(
-            cell["is_empty"], cell["border_count"], "comb" in cell, sliver)
+            cell["is_empty"], cell["border_count"], "comb" in cell, sliver,
+            shaded)
         cell.pop("_component_root")
     # The gate binds the reviewed active-owner registry to the exact order of
     # the current layout cell stream.  Legacy subjects are discovered in
@@ -4892,7 +5003,8 @@ def build_page(page: dict[str, Any],
             legacy_v_ink=raw_verticals,
             legacy_h_ink=raw_horizontals,
             uncertain_geometry_ids=uncertain_ids,
-            fillable_metrics=fillable_metrics)
+            fillable_metrics=fillable_metrics,
+            area_fills=page["area_fills"])
         growables = detect_growables(index, xl, yl, v_at, h_at, cells, page["text_runs"])
         regions = detect_regions(index, xl, yl, v_at, cells, growables)
 
@@ -5390,6 +5502,67 @@ def self_test(ir_path: pathlib.Path) -> int:
     check(
         not wall_boundaries([synthetic_fill(0.0, 0.0, 600.0, 1.92)]),
         "a horizontal painted wall entered the vertical-only lattice",
+    )
+
+    # Shaded paper. 2551Q shades none of its cells, so the tone cut is asserted
+    # on the exact corpus tones it has to separate: BIR's 0.8509 "no entry here"
+    # band against the two near-white fills that cover REAL fields -- 1604cf-2008
+    # p1c8/c10/c12 at 0.8902 and 2200an-2018 p2c247/c255 at 0.9489. Those five
+    # must keep their inputs, which is why the rule is a tone and not merely
+    # `role == "decorative"`.
+    def toned_fill(x0: float, y0: float, x1: float, y1: float,
+                   gray: float, seq: int = 1) -> dict[str, Any]:
+        return {"x0": q(x0), "y0": q(y0), "x1": q(x1), "y1": q(y1),
+                "gray": gray, "role": tone_role(gray),
+                "paint_seq": seq, "paint_seq_max": seq}
+
+    shaded_cell = {"x0": 100.0, "y0": 200.0, "x1": 200.0, "y1": 210.0}
+    bir_shading = toned_fill(90.0, 198.0, 260.0, 212.0, 0.8509)
+    check(
+        on_shaded_paper(shaded_cell, [bir_shading]),
+        "BIR's 0.8509 no-entry shading did not reach the cell it covers",
+    )
+    check(
+        classify_cell(True, 4, False, False,
+                      on_shaded_paper(shaded_cell, [bir_shading])) == "shaded",
+        "an empty bordered cell on decorative shading was called a field",
+    )
+    for gray, where in ((0.8902, "1604cf-2008 p1c8/c10/c12"),
+                        (0.9489, "2200an-2018 p2c247/c255")):
+        near_white = toned_fill(90.0, 198.0, 260.0, 212.0, gray)
+        check(
+            not on_shaded_paper(shaded_cell, [near_white]),
+            f"a near-white {gray} fill took the real fields at {where}",
+        )
+        check(
+            classify_cell(True, 4, False, False,
+                          on_shaded_paper(shaded_cell, [near_white])) == "field",
+            f"a real field at {where} lost its input to its own tint",
+        )
+    check(
+        not on_shaded_paper(
+            shaded_cell, [toned_fill(90.0, 198.0, 150.0, 212.0, 0.8509)]),
+        "shading over less than 70% of a cell shaded the whole cell",
+    )
+    check(
+        not on_shaded_paper(shaded_cell, [
+            bir_shading, toned_fill(90.0, 198.0, 260.0, 212.0, 1.0, seq=9)]),
+        "paper a later white knockout restored was still read as shaded",
+    )
+    check(
+        on_shaded_paper(shaded_cell, [
+            toned_fill(90.0, 198.0, 260.0, 212.0, 1.0, seq=1),
+            toned_fill(90.0, 198.0, 260.0, 212.0, 0.8509, seq=9)]),
+        "shading painted over a knockout was hidden by the earlier white",
+    )
+    check(
+        not on_shaded_paper(
+            shaded_cell, [toned_fill(90.0, 198.0, 260.0, 212.0, 0.0)]),
+        "a black structural fill was reported as decorative shading",
+    )
+    check(
+        classify_cell(True, 4, False, True, True) == "blank",
+        "a ruled-gap sliver lost its established kind to the shading rule",
     )
 
     malformed_span_contracts: list[tuple[str, dict[str, Any]]] = [

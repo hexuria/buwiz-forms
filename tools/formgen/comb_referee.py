@@ -86,7 +86,7 @@ EXPECTED_FORMS = 53
 EXPECTED_COMBS = 4540
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 LATTICE_PRODUCER_SHA256 = (
-    "cc32ca68dff75e8924db1955f358d8d992c629a078b39188bab7f6b4d31fab5b"
+    "5ce291ae8b781e9b2284c861a0b174e34776b4ec1210454fe4da7adf85b470d4"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
@@ -94,7 +94,7 @@ AUDIT_PRODUCER_SHA256 = (
 )
 AUDIT_DEPENDENCY_SHA256 = {
     "tools/formgen/extract.py": (
-        "5f75f191624624b5625a2c08b0d75c4790884fda6dc84768fde2cd354bc32b03"
+        "d0876d1d10ba7dff94a07cbe543e17718fef8f1b387c5a39e1360bcbf460acbc"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"

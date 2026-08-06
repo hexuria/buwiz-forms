@@ -32,7 +32,7 @@ Measured 2026-08-06 at HEAD `0ea1f84`, worktree
 | Lattice cells | 20,797 (10,401 classified `field`) | |
 | Emitted inputs | 46,076 | 40,012 comb slots + 6,064 plain |
 | Comb cells | 4,523 | |
-| Findings in `review-findings.json` | 138 | 26 blocker+major **open** of 84 |
+| Findings in `review-findings.json` | 138 → **172** (2026-08-07) | 26 blocker+major open of 84 → **58 open of 116**. The 138 immutable baseline entries are untouched; the digest at `gate.py:8713` still matches |
 
 **Gate — last full run r13, 2026-08-06 19:38, at commit `d74771e` (4 commits
 behind HEAD). 9/12 PASS.** Re-run of `self-tests` only at true HEAD: PASS,
@@ -94,17 +94,28 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | G02d | 2316 TIN items 3/12/16: 8 inputs for 14 printed comb cells | F111 (blocker) | same | open | ledger |
 | G02e | 2200C item 1 date: MM and YYYY groups have no inputs (6 of 8 cells dead) | F097 (blocker) | same | open | ledger |
 | G02f | 1800 item 14 centavos: free-text where every other row is 2 comb slots | F073 | same | open | ledger |
-| **G03** | Real field has **no** input — the user's "no yellow box here" | 10 open findings | `lattice.py` cell classification | open | F049, F054, F058, F062 (Fiscal checkbox, 4 forms); F135 (2553 Q3); F106 (2200S ×3, blocker); F109 (2200T ×3, blocker); F112 (2316 items 23/24, blocker); F064, F065 (1707 specify lines) |
-| **G04** | Input exists where nothing should be fillable — grey spacers made FILLABLE | 4 open findings | `lattice.py` field classification vs tone | open | F066 (1707 grey filler = 330×17pt input); F081 (1801 rows 23A-D, 200pt inputs on grey band); F093, F095 (2200A grey "not applicable" schedule cells) |
+| G02g | 0605 items 5, 7, 9: 22 printed compartments → 8 unbounded inputs, TIN included | F163 | same | open | ledger; official ticks counted inside each input rect |
+| G02h | 2551M item 2 `Year Ended` → 1 input; Schedule 1 period+name columns merged per row | F164, F165 | same | open | ledger |
+| G02i | 2550Q item 10 address line 3 + 10A ZIP → one input; line 2 of the same block is correct | F166 | same | open | ledger |
+| **G03** | Real field has **no** input — the user's "no yellow box here" | 160 empty non-fillable `label` cells ≥40×9pt and ≥600pt², 38 of 53 forms (2026-08-07) — the candidate population; 16 open findings | `lattice.py` cell classification | open | F049, F054, F058, F062 (Fiscal checkbox, 4 forms); F135 (2553 Q3); F106 (2200S ×3, blocker); F109 (2200T ×3, blocker); F112 (2316 items 23/24, blocker); F064, F065 (1707 specify lines); **new 2026-08-07** F150 (2551M 23A Surcharge), F151 (1701-conso Sched C+D Description, blocker), F152/F153 (0619E, 0620 Amended-YES checkbox, blocker) |
+| G03a | An empty printed box is classified `label`, so no input is ever emitted. A `field` cell with 0 inputs does **not** occur anywhere in the corpus (measured: 0 of 9,971) — this is the whole mechanism | F150, F151 | `lattice.py` | open | ledger |
+| **G04** | Input exists where nothing should be fillable — grey spacers made FILLABLE | **169 inputs sit wholly on official grey decoration, 22 of 46 measured forms** (1pt inset, ≥95% tone 150–240, zero black; 7 forms have no saved raster) (2026-08-07); 11 open findings | `lattice.py` field classification vs tone | open | F066 (1707 grey filler = 330×17pt input); F081 (1801 rows 23A-D, 200pt inputs on grey band); F093, F095 (2200A grey "not applicable"); **new 2026-08-07** F154 (1701 449×34pt input over the sworn declaration), F156–F158 (0619E/0619F/0620 header pads, incl. the tax-type pad beside pre-printed "WE"/"WB"), F159 (2552), F160 (2551Q), F161 (1701MS), F162 (1701-attachment) |
 | **G05** | Input overlaps pre-printed text | 40 of 53 forms / 258 offenders (r13); got **worse by 19** on the writing-surface fix | `lattice.py` cell segmentation — the rectangle spans caption **and** comb | diag | STATUS.md triage; F134 (2553 "DD" header) |
 | **G06** | Lines painted that do not exist on the official sheet | 2 open findings | extract/guides crop — barcode tail | open | F027 (1700 p1), F030 (1701, all 4 pages) |
 | **G07** | Text run mis-positioned or reordered | 3 open findings | emit text placement / run ordering | open | F070 (1707A "Calendar" 4pt high); F102 (2200P header 5pt high); F060 (1702Q guide: superscript reordered, corrupts two sentences) |
 | **G08** | Guide reflow orphans ATC codes from their industry | F120 | `guides.py` reflow | open | ledger |
 | **G09** | Oversized leading comb slot | 29 groups at ≥1.10× median, 17 at ≥1.25× (corpus, 2026-08-06) | `lattice.comb_bands` | open | re-measured this session |
-| **G10** | 137 of 138 findings carry `audit_blind: true` — the audit is structurally blind to the field layer | 137/138 | `audit.py` assertions | open | F028: live inputs over 1700's statutory tax brackets, on a form scoring rules 100% / text 100% / 0 missing / 0 extra |
+| **G10** | 137 of 138 findings carry `audit_blind: true` — the audit is structurally blind to the field layer | 137/138 (171 of 172 at 2026-08-07) | `audit.py` assertions | open | F028: live inputs over 1700's statutory tax brackets, on a form scoring rules 100% / text 100% / 0 missing / 0 extra |
+| **G11** | **A cell the lattice itself marks `mixed` — meaning it knows pre-printed glyph ink is inside — is emitted with a full set of editable comb slots, so the taxpayer can type on a pre-printed constant.** `emit.py`'s `PrePrintedInk` guard (F028's second guard) applies to plain text cells only and has no effect on comb slots | **180 of 180 `mixed` cells carry inputs — 2,187 inputs, 34 of 53 forms**; 278 slots overlap a printed run; **175 sit on a short (≤9 char) pre-printed constant, 47 cells, 24 of 53 forms** (2026-08-07) | `emit.py` `field_verdict()` / `PrePrintedInk`, per-slot | open | F139–F146. Constants hit include the statutory ATC codes `II 011` (1700 p1c7) and `XC 010` (2200C p1c7), the century `2 0` (1600-PT/VT, 1604C, 1604E) and the TIN branch code `0 0 0 0 0` on 1701 ×5 pages, 1701A ×2, 1701Q, 1701MS, 1701-attachment ×2, 1702-EX/MX/RT/Q ×11, 1800 ×3 |
+| **G12** | A caption and the writable blank beside it are segmented into one `label` cell, so the blank gets **no input at all**. Same root cause as G05, opposite symptom — G05 is the case where the merged cell *does* get an input | 2 confirmed (2026-08-07) | `lattice.py` cell segmentation | open | F148 (1701 p4 item 9 "(specify)", `p4c89` 312.90×14.76pt label, 0 inputs), F149 (1701A p2 item 63) |
+| **G13** | **A multi-column guide source is reflowed scanline-by-scanline, interleaving the columns and binding values to the wrong key.** On 2551M this puts the wrong tax rate against an ATC code | 2 forms confirmed (2026-08-07); 2551M header row carries 5 source column labels in 3 cells | `guides.py` reflow — no column detection | open | F167 (2551M, **blocker**: PT 060 emitted with Tax Rate 5%, officially 2%), F168/F169/F170 (0605 tax-type table and the two-column Guidelines). **F127 is marked `fixed` and this table is still wrong** — that fix removed prose flattening only, and `reflow_rate_without_description` cannot see a rate bound to the wrong code |
+| **G14** | A BIR-only control field is emitted as a taxpayer input | 1 confirmed (2026-08-07) | `lattice.py` field classification | open | F147 (0605 "BCS No./Item No. (To be filled up by the BIR)" = 253.0×17.5pt free text, no maxlength). The exclusion works on the same sheet for DLN/PSIC/PSOC, so this box was missed, not unhandled |
+| **G15** | **The `?debug=fields` overlay shipped in `forms/` is the OLD self-referential one; the fixed overlay exists only in `emit.py` and has never been regenerated into the corpus.** In the shipped legend blue dashed means "this input is fine"; in the fixed one it means "printed box with NO input" — the inverse | `grep -l 'printed box with no input' forms/*/index.html` → **0**; `grep -l 'no usable box' forms/*/index.html` → **38** (2026-08-07) | `emit.py` overlay, unregenerated | open | F172. Blocks the Stage-1 definition of done, which requires the user to review through a **fixed** overlay |
 
 G10 is the one to read twice. It is why Stage 2's central guarantee is not yet
-real (see Risk R1).
+real (see Risk R1). **G11 is the one to fix first**: it is the only row where a
+single producer bug puts a live text box on a statutory constant, and the
+lattice has already labelled every one of those cells for us.
 
 **Not measured / not yet diagnosed:**
 - How many of the 626 both-endpoints-unsupported borders have a round or
@@ -272,6 +283,32 @@ Condensed to what changes behaviour.
 
 Newest first. One line each.
 
+- **2026-08-07** — Nine-reviewer sweep of all 53 forms against the official PDFs
+  consolidated. **34 findings appended, F139–F172**, all `open`; the 138
+  immutable entries and the `cause_codes` block were not touched and the pinned
+  digest still matches, so the ledger grew in place and no side file was needed.
+  Five new defect classes: **G11** (a lattice-`mixed` cell — pre-printed ink
+  inside — still gets a full set of editable comb slots: 180/180 such cells,
+  175 slots on a short pre-printed constant across 24 forms, including the
+  statutory ATC codes `II 011` and `XC 010`), **G12** (caption swallows the
+  writable blank → no input), **G13** (multi-column guide reflow interleaves
+  columns; **2551M's guide binds a 5% rate to PT 060, officially 2%, on a
+  finding already marked `fixed`**), **G14** (a BIR-only box is fillable),
+  **G15** (the shipped `?debug=fields` overlay is the old self-referential one
+  in all 38 bundles). G03 and G04 got their first measured denominators: 160
+  empty non-fillable `label` cells across 38 of 53 forms, and 169 inputs sitting
+  wholly on official grey decoration across 22 of 46 measured forms.
+  Three instrument errors found and corrected in the consolidation's own tools,
+  recorded here because each would have shipped a wrong number: assuming a
+  612pt page width inflated "inputs on printed ink" 8× on landscape bundles
+  (156 → 19); 12 of the surviving 19 were comb tick-marks, not text (19 → 7);
+  and one evidence image was misread as "2552's Amended-Return YES checkbox has
+  no input" when `p1c10` and `p1c11` both carry inputs — the old overlay simply
+  does not outline every input. Reviewer reports flagging the relocated tax
+  tables as "missing" from 1700/1701/1701A/1701Q/1701MS were checked and
+  **rejected**: that is F028's fix working, the tables are in `guide.html` with
+  0 inputs and no orphan frame remains; only the dangling "refer to tax table
+  below" cross-reference survives (F171, minor).
 - **2026-08-06** — Plan created at HEAD `0ea1f84`. Three stages recorded in
   ARCHITECTURE.md. Baseline measured: 53 bundles / 50 codes / 116 pages;
   gate r13 9/12; 26/84 blocker+major open. G01 (census pin contradiction

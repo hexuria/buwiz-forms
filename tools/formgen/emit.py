@@ -1372,10 +1372,104 @@ def _glyph_spans(run: dict[str, Any]) -> list[tuple[float, float]]:
     return spans
 
 
-def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None) -> tuple[bool, str]:
+# A cell the source shaded is a cell the source said not to write in. BIR's
+# "no rate applies here" grey is a literal operand in the content stream --
+# extract.classify_tone stamps every fill structural/decorative/knockout from
+# it -- so this is read, never inferred from a raster.
+#
+# The threshold separates the corpus rather than being tuned to it. Measured
+# over every non-comb `field` cell whose topmost covering fill is decorative
+# (build/layout + build/ir, 53 bundles, 2026-08-06), the grey values are:
+#
+#     0.5020   3     2551M's shaded Part II rows
+#     0.5882   1     1604CF page 3
+#     0.6510  27     1601-FQ / 1602Q schedule shading
+#     0.7489 149     the largest population, 2200-series schedules
+#     0.7529  41     0605 and the TIN-group gaps
+#     0.8509 126     the band grey CLAUDE.md names
+#     ----------  the gap the threshold sits in  ----------
+#     0.8902   3     1604CF p1c8/c10/c12 -- REAL fields, beside item "7" and
+#                    "(Last Name, First Name, Middle Name)"
+#     0.9489   2     2200AN p2c247/c255 -- REAL, one labelled "(To Schedule 1C)"
+#
+# Nothing lands between 0.8509 and 0.8902. `role == "decorative"` alone spans
+# the gap and would delete those 5 real fields; 0.87 catches 347 and spares
+# them. A knockout (>= 0.98) covering the cell is white paper painted back over
+# a band and leaves the cell fillable -- 2381 cells sit that way -- and a
+# chromatic fill (no grey at all: 2553 p1c16/c18/c20) is not this evidence and
+# is left alone.
+DECORATIVE_GRAY_MAX = 0.87
+# Area, not width. A band that runs the length of a row covers a narrow cell
+# entirely, and a cell straddling the edge of a band is not one the source
+# shaded -- it is one the lattice cut across a boundary, which is a different
+# defect and must not be silently answered here.
+DECORATIVE_COVERAGE = 0.7
+
+
+class DecorativeShading:
+    """What tone the paper under a cell is, asked per cell.
+
+    Topmost, because paint order decides what the taxpayer sees: BIR draws a
+    grey band across a whole row and then knocks white boxes back out of it for
+    the blanks, so the fill with the highest `paint_seq` is the one whose colour
+    the paper actually is. Reading the band alone would report every knocked-out
+    blank on the row as shaded and delete the row's real fields.
+    """
+
+    __slots__ = ("_buckets",)
+
+    BUCKET_PT = 32.0
+
+    def __init__(self, fills: Sequence[dict[str, Any]]) -> None:
+        self._buckets: dict[int, list[tuple[int, dict[str, Any]]]] = {}
+        for index, fill in enumerate(fills):
+            entry = (index, fill)
+            y0, y1 = float(fill["y0"]), float(fill["y1"])
+            for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
+                self._buckets.setdefault(bucket, []).append(entry)
+
+    def covering(self, cell: dict[str, Any]) -> dict[str, Any] | None:
+        """The topmost fill covering most of this cell, or None."""
+        x0, y0 = float(cell["x0"]), float(cell["y0"])
+        x1, y1 = float(cell["x1"]), float(cell["y1"])
+        area = (x1 - x0) * (y1 - y0)
+        if area <= 0.0:
+            return None
+        best: dict[str, Any] | None = None
+        # The IR's own index breaks a paint_seq tie, so the answer is a pure
+        # function of the file and cannot depend on bucket iteration order.
+        best_key: tuple[int, int] = (-1, -1)
+        seen: set[int] = set()
+        for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
+            for index, fill in self._buckets.get(bucket, ()):
+                if index in seen:
+                    continue
+                seen.add(index)
+                width = min(x1, float(fill["x1"])) - max(x0, float(fill["x0"]))
+                height = min(y1, float(fill["y1"])) - max(y0, float(fill["y0"]))
+                if width <= 0.0 or height <= 0.0:
+                    continue
+                if width * height < DECORATIVE_COVERAGE * area:
+                    continue
+                key = (int(fill["paint_seq"]), index)
+                if key > best_key:
+                    best, best_key = fill, key
+        return best
+
+    def blocks(self, cell: dict[str, Any]) -> bool:
+        """Whether the source shaded this cell to say it is not a blank."""
+        fill = self.covering(cell)
+        if fill is None or fill.get("role") != "decorative":
+            return False
+        gray = fill.get("gray")
+        return gray is not None and float(gray) <= DECORATIVE_GRAY_MAX
+
+
+def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
+                  shading: DecorativeShading | None) -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Two rules, in this order, and the order is the point:
+    Three rules, in this order, and the order is the point:
 
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
@@ -1391,13 +1485,43 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None) -> tuple[bool
         taxpayer could type over the statutory bracket "Not over P 250,000".
         This is the belt to that fix's braces and it protects the forms whose
         reference tables are never relocated.
+      * **A blank the source shaded is not a blank either.** The rule above
+        protects statutory TEXT and was applied to the wrong evidence for a
+        whole class of cells: an empty three-bordered region on a grey band
+        satisfies the box detector exactly as a white one does, because
+        `lattice.classify_cell` is never told what colour the paper is. On
+        2200T page 2 that let a taxpayer focus a cell the official form shades
+        precisely to say NO RATE APPLIES and type 999,999.00 into it. The tone
+        is in the IR -- `extract.classify_tone` computed it from the content
+        stream operand -- and was simply discarded at the box-model stage.
+
+    This function is the independent belt to `lattice.classify_cell`'s brace,
+    so it asks the IR itself rather than trusting the cell kind the lattice
+    assigned. Both must be wrong for a shaded cell to become typeable.
+
+    `shading` is separate from `ink` deliberately: they answer different
+    questions ("is there statutory text here" vs "is this paper a writing
+    surface") off different parts of the IR, and a cell can fail either alone.
+    Passing None for either means that evidence was not measured -- the caller
+    says so in its report rather than the check silently passing.
     """
     if cell.get("comb"):
+        # Left as it stands, on measurement rather than on principle. Exactly
+        # one comb-bearing cell in the corpus is >= 70% covered by decorative
+        # shading at <= 0.87 (1801 p1c13, 226pt wide on the 0.8509 Part I
+        # band), and its comb holds real TIN digit boxes: the band is the row,
+        # the comb is the field. The 25 narrow slivers in the census -- the
+        # grey gaps BETWEEN TIN digit groups, e.g. 2550M p1c10/c12/c14, 4.8pt
+        # strips each carrying its own 0.7529 patch -- are plain `field` cells
+        # and are caught below. Blanket-blocking a shaded comb would remove
+        # real digit boxes and buy nothing.
         return True, "comb"
     if cell["kind"] != "field":
         return False, cell["kind"]
     if ink is not None and ink.coverage(cell) > PREPRINTED_COVERAGE:
         return False, "pre-printed"
+    if shading is not None and shading.blocks(cell):
+        return False, "shading"
     return True, "field"
 
 
@@ -1438,12 +1562,15 @@ class FieldPlan:
         # cannot be paired by position if either list is ever ordered otherwise.
         ink_by_page = {int(page["index"]): PrePrintedInk(page["text_runs"])
                        for page in (ir or {}).get("pages", ())}
+        shading_by_page = {int(page["index"]): DecorativeShading(page["area_fills"])
+                           for page in (ir or {}).get("pages", ())}
         for page in layout["pages"]:
             ink = ink_by_page.get(int(page["index"]))
+            shading = shading_by_page.get(int(page["index"]))
             for cell in page["cells"]:
-                fillable, reason = field_verdict(cell, ink)
+                fillable, reason = field_verdict(cell, ink, shading)
                 if not fillable:
-                    if reason == "pre-printed":
+                    if reason in ("pre-printed", "shading"):
                         self.blocked[cell["id"]] = reason
                     continue
                 box = field_box(cell, face)
@@ -1461,17 +1588,28 @@ class FieldPlan:
         for index, key in enumerate(distinct):
             self.classes[key] = f"fh{index}"
         self._report(warnings)
-        if self.blocked:
-            names = sorted(self.blocked)
+        # Reported as two populations, each naming what it excluded: they are
+        # blocked on different evidence, and a count alone would leave a reader
+        # unable to tell a statutory bracket from a shaded spacer or to check
+        # either. An exclusion has to publish what it excluded.
+        printed = sorted(i for i, why in self.blocked.items() if why == "pre-printed")
+        shaded = sorted(i for i, why in self.blocked.items() if why == "shading")
+        if printed:
             warnings.append(
-                f"{len(names)} cell(s) the box detector called blank are filled with "
-                f"pre-printed text and get no typing surface ({', '.join(names[:6])}"
-                f"{'...' if len(names) > 6 else ''}); a taxpayer must not be able to "
-                f"type over a statutory rate")
+                f"{len(printed)} cell(s) the box detector called blank are filled with "
+                f"pre-printed text and get no typing surface ({self._sample(printed)}); "
+                f"a taxpayer must not be able to type over a statutory rate")
+        if shaded:
+            warnings.append(
+                f"{len(shaded)} cell(s) the box detector called blank sit on decorative "
+                f"shading at grey <= {fmt(DECORATIVE_GRAY_MAX)} and get no typing surface "
+                f"({self._sample(shaded)}); the source shaded them to say no entry "
+                f"applies there")
         if ir is None:
             warnings.append(
-                "no IR was given to the field plan, so pre-printed occupancy is "
-                "unmeasured and a cell filled with statutory text may be editable")
+                "no IR was given to the field plan, so pre-printed occupancy and paper "
+                "tone are both unmeasured; a cell filled with statutory text or shaded "
+                "out by the source may be editable")
 
     def _audit_surface(self, cell: dict[str, Any], box: FieldBox,
                        face: FieldFace) -> None:
@@ -1706,8 +1844,15 @@ def cell_markup(cell: dict[str, Any], fields: FieldPlan | None = None,
              f'data-row="{cell["row"]}"', f'data-col="{cell["col"]}"']
     if not cell.get("rectangular", True):
         attrs.append('data-rectangular="false"')
-    if fields is not None and fields.blocked.get(cell["id"]):
-        attrs.append('data-preprinted="true"')
+    # One attribute, because it answers one question -- "the source printed
+    # over this blank, so it is not one" -- and its value names WHICH evidence
+    # said so. `"true"` is kept for glyph ink rather than renamed: three
+    # resolved findings quote it verbatim, and a shaded cell is as literally
+    # pre-printed as a bracket of statutory text is.
+    blocked = fields.blocked.get(cell["id"]) if fields is not None else None
+    if blocked:
+        attrs.append('data-preprinted="shading"' if blocked == "shading"
+                     else 'data-preprinted="true"')
     live = id_attribute == "id"
     if box is not None:
         attrs.append(f'data-field-kind="{esc_attr(box.kind)}"')
@@ -3430,15 +3575,122 @@ window.formgenFields={slotsOf:slotsOf};
 # The field debug overlay
 # ---------------------------------------------------------------------------
 #
+# WHY THIS EXISTS, AND WHY ITS FIRST VERSION WAS WORTHLESS
+#
 # The affordance a taxpayer needs is `:focus`, and it shows exactly one field at
 # a time. That is right for filling a form in and useless for reviewing one:
 # 2551Q carries 782 inputs, so seeing them all means 782 tab presses, and a
-# defect nobody looked at is a defect that ships. Every writing-box fault this
-# module knows how to describe -- the four populations `FieldPlan._report`
-# counts, plus the two only a laid-out page can reveal -- is put on the screen
-# at once instead, in colour, behind one query string.
+# defect nobody looked at is a defect that ships.
 #
-# Why it is safe to ship inside the document:
+# The first version of this overlay coloured each input by occlusion, ancestor
+# clipping and fitted font size. Every one of those is computed FROM THE INPUT'S
+# OWN RECT -- the rect the field layer emitted. It reported "233 as drawn, 0
+# problems" on a page the user could see was wrong, and it was not lying: each
+# input really was exactly where the field layer said it should be. The field
+# layer was what was wrong.
+#
+#   AN OVERLAY THAT DERIVES ITS EXPECTATION FROM THE THING IT IS CHECKING IS
+#   DECORATION, NOT A CHECK. A checker that shares its subject's source of
+#   truth cannot fail.
+#
+# This version compares the field layer against a DIFFERENT PRODUCER on the
+# same page. `emit_page()` builds two layers from two inputs that never meet:
+#
+#     <svg class="rl">    from page_ir["rules"] / ["area_fills"] -- the PDF's
+#                         own painting operators, via extract.py
+#     <div class="layer-cells">   from page_layout["cells"] + FieldPlan -- what
+#                         lattice.py decided those operators MEAN
+#
+# The rule layer is the printed sheet. The field layer is our reading of it. The
+# overlay asks the only question that can catch a misreading: does each writing
+# box fill the printed box it is supposed to fill, and does every printed box
+# have a writing box in it? A wrong cell classification, a comb that stops
+# short, an input laid across three printed columns, a box a taxpayer cannot
+# type in -- all of those are silent to the field layer and loud here.
+#
+# It is not a perfect independence. Both layers descend from one extraction, so
+# an error in extract.py could move both together. It is the strongest
+# independence available inside the document, and it is the one that separates
+# "we drew the box here" from "the box is here".
+#
+# WHAT A PRINTED BOX IS, DERIVED RATHER THAN GUESSED
+#
+# The rule layer is not a list of boxes; it is a list of painted rectangles,
+# most of them one stroke of one wall. A box has to be reconstructed, and every
+# earlier attempt in this project to reconstruct one by proximity ("the nearest
+# printed rect by centre distance") produced numbers that were wrong. So:
+#
+#   * A rect bounds a region by its INNER face. The white space to the right of
+#     a rule starts at the rule's x1, not at its centre and not at its x0. That
+#     removes the "is a rule thin or thick" question entirely -- no thickness
+#     threshold is needed anywhere in this file, and none is used.
+#   * A rect only bounds what it is painted OVER differently. A white knockout
+#     inside a grey band is a visible box; the same white rect on white paper is
+#     nothing. `visibleRects()` compares each rect's fill with the fill of the
+#     innermost EARLIER rect that wholly contains it (paper white if there is
+#     none). Containment, not a point probe: an earlier draft sampled the fill
+#     under each rect's centre, and a vertical rule crossing a horizontal rule
+#     has another black rect under its centre, so it declared 2550M page 2's
+#     column dividers invisible and reported a 253pt-wide box where the printed
+#     box is 87pt. That was an instrument error, found by rendering the page.
+#   * A wall must SPAN the box it walls. `faceCoverage()` measures how much of
+#     each side is actually inked; a side under 90% is a tick, not a wall, and
+#     the search bans it and widens. This is what makes a comb slot resolve to
+#     the comb CELL its guides subdivide, instead of to a slot with two open
+#     sides. Comb guides are deliberately short on BIR forms.
+#   * Inputs that land in the same printed box are judged TOGETHER, as their
+#     union. Forty comb slots tiling one printed cell fill it; each slot alone
+#     covers 2.5% of it. Asking the question per input would report thirty-nine
+#     false defects per comb, which is how instruments in this project have
+#     inflated counts 68-fold before.
+#
+# TOLERANCE, FROM THE DATA
+#
+# Two numbers, and neither is taste:
+#
+#   * `RULE_POSITION_TOLERANCE_PT` (0.25pt) is the pipeline's own position
+#     tolerance, the same one verify.py holds the round-trip to.
+#   * The stroke's own width. "The box" is ambiguous to within the ink that
+#     draws it -- inside face, centre, outside face are three defensible
+#     answers differing by the stroke width -- so a writing box may sit anywhere
+#     within the wall without being wrong. That is expressed geometrically, not
+#     as a constant: the box has an INNER rectangle (inner faces) and an OUTER
+#     rectangle (outer faces), and an input is at home anywhere between them,
+#     plus 0.25pt.
+#
+# Measured over 2550M and 2200T (487 printed boxes, 1169 inputs): the emitted
+# insets cluster at 0.22-0.35pt and 0.70-0.74pt, always about half the wall they
+# sit inside, and every one of the 487 is inside the tolerance with margin --
+# the tolerance is not absorbing a population, it is absorbing the ink. The
+# defects that survive it are not marginal either: overflow beyond the outer
+# face is either 0.0pt (469 boxes) or 0.46pt and up, with six inputs 170pt
+# outside their box. There is no smooth tail for a threshold to sit in the
+# middle of, which is the property a threshold needs.
+#
+# THE STATES
+#
+#   fits      green, hairline dash -- the union of the box's inputs covers the
+#                                     printed box, and stays inside its walls
+#   small     orange               -- part of the printed box more than a wall's
+#                                     width inside the ink is unreachable; the
+#                                     % of box area unreached is reported
+#   over      red                  -- an input crosses a printed wall
+#   unboxed   magenta              -- no closed printed rectangle around it at
+#                                     all: the field layer invented this box
+#   vacant    blue                 -- a closed printed rectangle, big enough to
+#                                     write in, carrying no input and no printed
+#                                     label. This is the user's "no yellow box
+#                                     here", and the previous overlay could not
+#                                     express it: it iterated over inputs, so a
+#                                     missing input was a thing it never visited
+#
+# Health is a hairline dash and every defect is solid and filled, so a healthy
+# sheet reads as a wireframe and a fault reads as a blot. Every flagged printed
+# box is also outlined in the overlay layer, which is what makes a zero-size
+# input visible: the input paints nothing, but the box we compared it against
+# is drawn.
+#
+# WHY IT IS SAFE TO SHIP INSIDE THE DOCUMENT (four barriers, any one enough)
 #
 #   * The rules are a JS string. The emitted stylesheet is untouched, so a
 #     printed or packaged page contains no debug selector to lose a guard over,
@@ -3448,56 +3700,79 @@ window.formgenFields={slotsOf:slotsOf};
 #     `debug=fields` token in `location.search`. Without it the function returns
 #     having read one string off `window.location` and created nothing: no
 #     element, no attribute, no listener. A page opened without the token is the
-#     page that would have rendered if this script were deleted.
+#     page that would have rendered if this script were deleted. That is the
+#     byte-identical-render proof, and `field_debug_assertions()` re-proves it
+#     from the source text on every build.
 #   * The rules it does inject are wrapped in `@media screen`, and a second
 #     `@media print` block neutralises every one of them with `!important`.
-#   * `beforeprint` removes the injected stylesheet outright and `afterprint`
-#     puts it back, so even a browser that ignored both media guards has nothing
-#     to apply at print time.
+#   * `beforeprint` removes the injected stylesheet AND every element the
+#     overlay created, and `afterprint` puts them back, so even a browser that
+#     ignored both media guards has nothing left to apply.
 #
-# Four independent barriers, any one of which is sufficient. The order matters:
-# the query string is first because it is the only one that survives a
-# stylesheet transform dropping the media guards, which has happened to this
-# repo's packaged bundles before.
+# The order matters: the query string is first because it is the only one that
+# survives a stylesheet transform dropping the media guards, which has happened
+# to this repo's packaged bundles before.
+#
+# Two further containment rules the overlay obeys, both asserted:
+#
+#   * It never creates a `div`. `.page:last-of-type{break-after:auto}` is the
+#     one structural selector in BASE_CSS, and appending a div to `<body>`
+#     would make the LAST PAGE stop matching it and add a page break after the
+#     sheet. Overlay chrome is `<aside>` and `<i>`, which cannot be a `.page`.
+#   * It reads no geometry from the field layer's own containers. The selectors
+#     `.layer-cells`, `.c` and `.s` do not appear in the script at all -- if
+#     they did, the expectation could drift back towards the subject, which is
+#     the exact failure this rewrite exists to end.
 
-# The colours are the state names, and they mean:
-#   ok        blue, dashed  -- the input is where its geometry says it is
-#   small     orange        -- the fitted face is under FIELD_MIN_SIZE_PT
-#   clipped   magenta       -- an ancestor's overflow cuts the box away
-#   occluded  red           -- something else paints over the box
-#   nobox     purple        -- the box has no usable width or height
-# Defects are solid and filled, health is a hairline dash, so a healthy sheet
-# reads as a wireframe and a fault reads as a blot.
+# The pipeline's position tolerance, from GOAL.md's constraint list ("exact
+# tolerances (position 0.25pt, ...)"). Stated here rather than inlined so the
+# overlay and the round-trip cannot be relaxed independently of each other.
+RULE_POSITION_TOLERANCE_PT = 0.25
+
+# A side of a candidate box must be inked over at least this much of its length
+# to count as a wall rather than a guide tick. Measured on 2550M and 2200T,
+# sides are either fully inked (>= 0.99) or a comb guide at <= 0.46; nothing
+# lands between, so the cut has no population sitting on it.
+RULE_WALL_COVERAGE = 0.9
+
 FIELD_DEBUG_SCREEN_CSS = (
     '[data-fg-field]{outline-offset:0!important}'
-    '[data-fg-field="ok"]{outline:1px dashed rgba(21,101,192,.9)!important}'
+    '[data-fg-field="fits"]{outline:1px dashed rgba(46,125,50,.85)!important}'
     '[data-fg-field="small"]{outline:1.5px solid #ef6c00!important;'
     'background:rgba(239,108,0,.20)!important}'
-    '[data-fg-field="clipped"]{outline:1.5px solid #c2185b!important;'
-    'background:rgba(194,24,91,.22)!important}'
-    '[data-fg-field="occluded"]{outline:1.5px solid #d32f2f!important;'
+    '[data-fg-field="over"]{outline:1.5px solid #d32f2f!important;'
     'background:rgba(211,47,47,.25)!important}'
-    '[data-fg-field="nobox"]{outline:1.5px solid #6a1b9a!important;'
-    'background:rgba(106,27,154,.30)!important}'
-    # A field with no box paints no outline of its own, so the slot or cell that
-    # swallowed it is marked instead: otherwise the one fault a reviewer most
-    # needs to find is the only one that is invisible.
-    '[data-fg-host]{outline:1.5px dotted #6a1b9a!important;outline-offset:1px!important}'
-    '[data-fg-legend]{position:fixed;right:8px;top:8px;z-index:2147483647;'
+    '[data-fg-field="unboxed"]{outline:1.5px solid #c2185b!important;'
+    'background:rgba(194,24,91,.25)!important}'
+    # The printed box every flagged group was measured against, drawn where the
+    # RULE layer says it is. A zero-size input paints no outline of its own, so
+    # without this the one fault a reviewer most needs to find is the only one
+    # that is invisible.
+    '[data-fg-layer]{position:absolute;left:0;top:0;right:0;bottom:0;'
+    'pointer-events:none;z-index:2147483646}'
+    '[data-fg-box]{position:absolute;display:block}'
+    '[data-fg-box="small"]{outline:1.5px solid #ef6c00;'
+    'background:repeating-linear-gradient(45deg,rgba(239,108,0,.28) 0 3px,'
+    'rgba(239,108,0,0) 3px 7px)}'
+    '[data-fg-box="over"]{outline:1.5px solid #d32f2f}'
+    '[data-fg-box="vacant"]{outline:1.5px solid #1565c0;'
+    'background:rgba(21,101,192,.30)}'
+    '[data-fg-legend] b{display:block;font-weight:400}'
+    '[data-fg-legend]{position:absolute;right:4pt;top:4pt;z-index:2147483647;'
     'background:#fff;color:#111;border:1px solid #111;padding:6px 8px;'
-    'font:11px/1.5 system-ui,-apple-system,sans-serif;'
+    'font:11px/1.5 system-ui,-apple-system,sans-serif;white-space:nowrap;'
     'box-shadow:0 1px 4px rgba(0,0,0,.35)}'
     '[data-fg-swatch]{display:inline-block;width:9px;height:9px;'
     'margin-right:6px;vertical-align:-1px;border:1px solid #111}'
-    '[data-fg-swatch="ok"]{background:#1565c0}'
+    '[data-fg-swatch="fits"]{background:#2e7d32}'
     '[data-fg-swatch="small"]{background:#ef6c00}'
-    '[data-fg-swatch="clipped"]{background:#c2185b}'
-    '[data-fg-swatch="occluded"]{background:#d32f2f}'
-    '[data-fg-swatch="nobox"]{background:#6a1b9a}'
+    '[data-fg-swatch="over"]{background:#d32f2f}'
+    '[data-fg-swatch="unboxed"]{background:#c2185b}'
+    '[data-fg-swatch="vacant"]{background:#1565c0}'
 )
 FIELD_DEBUG_PRINT_CSS = (
     '[data-fg-field]{outline:0!important;background:none!important}'
-    '[data-fg-host]{outline:0!important}'
+    '[data-fg-layer]{display:none!important}'
     '[data-fg-legend]{display:none!important}'
 )
 FIELD_DEBUG_CSS = ("@media screen{" + FIELD_DEBUG_SCREEN_CSS + "}"
@@ -3518,222 +3793,422 @@ function requested(){
   return false;
 }
 /* Nothing above this line has touched the document, and nothing below it runs
-   without the token. This is the byte-identical-layout proof: a page loaded
+   without the token. This is the byte-identical-render proof: a page loaded
    without ?debug=fields creates no element, sets no attribute and registers no
    listener, so its rendered layout is the layout it had before this script
    existed. */
 if(!requested()){return;}
 var CSS=__FIELD_DEBUG_CSS__;
-/* FIELD_MIN_SIZE_PT, interpolated from the module constant so the overlay and
-   the report cannot drift apart or be relaxed independently. */
-var MIN_SIZE_PT=__FIELD_MIN_SIZE_PT__;
-var PT_PER_PX=0.75;
-/* Sub-pixel layout noise. A box out by a third of a pixel is not clipped; a box
-   out by a point is. */
-var EDGE_TOLERANCE_PX=0.5;
-var ORDER=["ok","small","clipped","occluded","nobox"];
-var LABELS={ok:"as drawn",
-            small:"fitted under "+MIN_SIZE_PT+"pt",
-            clipped:"clipped by an ancestor",
-            occluded:"covered by another element",
-            nobox:"no usable box"};
+/* Interpolated from the module constants so the overlay and the pipeline
+   cannot drift apart or be relaxed independently. */
+var TOL=__RULE_POSITION_TOLERANCE_PT__;
+var WALL=__RULE_WALL_COVERAGE__;
+var MIN_BOX=__FIELD_MIN_SIZE_PT__;
+/* Sub-point arithmetic noise on coordinates that arrive as pt from a viewport
+   measured in px. Never a tolerance: tolerances are TOL and the wall width. */
+var EPS=0.02;
+/* How far outside a wall a vacant-box probe is planted. Half a point is under
+   every printed gap on the corpus and over every rounding artefact. */
+var PROBE=0.5;
+/* A box has four sides, so four bans settle it; the cap is a termination
+   guarantee, not a tuning knob. */
+var ROUNDS=8;
+var PAPER="rgb(255, 255, 255)";
+var ORDER=["fits","small","over","unboxed","vacant"];
+var LABELS={fits:"fill their printed box",
+            small:"smaller than their printed box",
+            over:"cross a printed wall",
+            unboxed:"no printed box at all",
+            vacant:"printed box with no input"};
 
-function fontPt(el){
-  var size=parseFloat(window.getComputedStyle(el).fontSize);
-  return isFinite(size)?size*PT_PER_PX:0;
+/* ---- the printed sheet, read from the rule layer only ------------------- */
+
+/* Every painted rectangle on one page, in page points, in PAINT ORDER.
+   Rects only: an <image> or a filled <path> is ink, but its bounding box is
+   not a wall, and treating it as one would invent walls where the artwork
+   merely has extent. Both rule backends are read the same way, through the
+   viewport, so neither the svg backend's user units nor the css backend's
+   snapped divs are trusted to be what their markup says. */
+function ruleRects(page,frame,ptPerPx){
+  var out=[],nodes=page.querySelectorAll(".rl rect, .rl .r"),i,el,r,style;
+  for(i=0;i<nodes.length;i++){
+    el=nodes[i];
+    r=el.getBoundingClientRect();
+    if(r.width<=0||r.height<=0){continue;}
+    style=window.getComputedStyle(el);
+    out.push({n:out.length,
+              x:(r.left-frame.left)*ptPerPx,y:(r.top-frame.top)*ptPerPx,
+              x1:(r.right-frame.left)*ptPerPx,y1:(r.bottom-frame.top)*ptPerPx,
+              fill:el.tagName.toLowerCase()==="rect"?style.fill:style.backgroundColor});
+  }
+  return out;
 }
-/* Every ancestor that establishes a clip, against the field's own rect. `.f`
-   and `.f .s` both set overflow:hidden, which is what makes a comb band that
-   starts above its cell disappear rather than overhang. */
-function clipped(el,rect){
-  var node=el.parentElement;
-  while(node&&node!==document.documentElement){
-    var style=window.getComputedStyle(node);
-    if(style.overflow!=="visible"||style.overflowX!=="visible"||
-       style.overflowY!=="visible"){
-      var box=node.getBoundingClientRect();
-      if(rect.left<box.left-EDGE_TOLERANCE_PX||
-         rect.top<box.top-EDGE_TOLERANCE_PX||
-         rect.right>box.right+EDGE_TOLERANCE_PX||
-         rect.bottom>box.bottom+EDGE_TOLERANCE_PX){
-        return true;
+/* A rect delimits a region only where it changes the colour under it. The
+   comparison is against the innermost EARLIER rect that WHOLLY CONTAINS this
+   one, paper white if there is none.
+
+   Containment and not a point probe, and this is the instrument bug that made
+   the first draft of this function report a 253pt box where the printed box is
+   87pt: a vertical divider's centre lands on the horizontal rule it crosses,
+   which is also black, so a centre probe called every crossing divider
+   invisible. Containment cannot be fooled that way -- a crossing rect does not
+   contain the rect it crosses.
+
+   The residual error is one-directional and stated: a rect only PARTLY over a
+   different colour is kept. That over-reports walls, which can only shrink a
+   box, so it can turn a `fits` into an `over` and never the reverse. It cannot
+   hide a defect. */
+function visibleRects(rects){
+  var out=[],i,j,r,q,under;
+  for(i=0;i<rects.length;i++){
+    r=rects[i];under=PAPER;
+    for(j=i-1;j>=0;j--){
+      q=rects[j];
+      if(q.x<=r.x+EPS&&q.y<=r.y+EPS&&q.x1>=r.x1-EPS&&q.y1>=r.y1-EPS){
+        under=q.fill;break;
       }
     }
-    node=node.parentElement;
+    if(r.fill!==under){out.push(r);}
   }
-  return false;
+  return out;
 }
-/* Centre plus four inset corners. A single centre probe misses a box half
-   covered by the cell beside it, which is the shape most of these take. A hit
-   on a DESCENDANT is still this field; a hit on an ancestor is not -- it means
-   the point landed on the box behind the input rather than on the input.
+/* What fraction of [lo,hi] the union of these intervals inks. */
+function coverage(spans,lo,hi){
+  if(hi<=lo){return 1;}
+  spans.sort(function(a,b){return a[0]-b[0];});
+  var total=0,cursor=lo,i,a,b;
+  for(i=0;i<spans.length;i++){
+    a=Math.max(spans[i][0],lo);b=Math.min(spans[i][1],hi);
+    if(b<=cursor){continue;}
+    total+=b-Math.max(a,cursor);cursor=Math.max(cursor,b);
+  }
+  return total/(hi-lo);
+}
+/* The four walls of a candidate box: which rects form each one, how much of
+   the side they ink, and where the wall's OUTER face is. The outer face is the
+   far side of the ink, and it is the whole tolerance story: "the box" is
+   ambiguous to within the stroke that draws it, so an input is at home
+   anywhere between the inner rectangle and this one. */
+function wallsOf(L,T,R,B,vis,banned){
+  var walls={L:null,T:null,R:null,B:null},side,i,r,spans,members,outer,lo,hi;
+  var sides=["L","T","R","B"];
+  for(var s=0;s<4;s++){
+    side=sides[s];spans=[];members=[];outer=null;
+    for(i=0;i<vis.length;i++){
+      r=vis[i];
+      if(banned[r.n]){continue;}
+      if(side==="L"&&Math.abs(r.x1-L)<=TOL&&r.y<B&&r.y1>T){
+        spans.push([r.y,r.y1]);members.push(r.n);
+        outer=outer===null?r.x:Math.min(outer,r.x);
+      }else if(side==="R"&&Math.abs(r.x-R)<=TOL&&r.y<B&&r.y1>T){
+        spans.push([r.y,r.y1]);members.push(r.n);
+        outer=outer===null?r.x1:Math.max(outer,r.x1);
+      }else if(side==="T"&&Math.abs(r.y1-T)<=TOL&&r.x<R&&r.x1>L){
+        spans.push([r.x,r.x1]);members.push(r.n);
+        outer=outer===null?r.y:Math.min(outer,r.y);
+      }else if(side==="B"&&Math.abs(r.y-B)<=TOL&&r.x<R&&r.x1>L){
+        spans.push([r.x,r.x1]);members.push(r.n);
+        outer=outer===null?r.y1:Math.max(outer,r.y1);
+      }
+    }
+    lo=(side==="L"||side==="R")?T:L;
+    hi=(side==="L"||side==="R")?B:R;
+    walls[side]={cover:coverage(spans,lo,hi),members:members,
+                 outer:outer===null?(side==="L"?L:side==="R"?R:side==="T"?T:B):outer};
+  }
+  return walls;
+}
+/* The smallest CLOSED printed rectangle around a point, or null.
 
-   The inset is at least a whole CSS pixel, and that is measured, not tidy:
-   Chromium quantises hit testing to the pixel grid, so a probe 0.5px inside a
-   comb slot's right edge is answered by the NEXT slot. At the corner insets a
-   quarter-height rule produced -- 0.96px on a 3.83px-tall slot -- 2550M
-   reported 36 occluded fields, every one of them a false positive against its
-   own neighbour. A box too small to carry the inset on an axis is probed at its
-   centre on that axis instead of being lied about. */
-/* Snapped to the centre of a whole CSS pixel, because that is the granularity
-   the hit test answers at. Without it the verdict depends on the scroll offset
-   the field happened to be probed from, and a fractional offset is exactly what
-   centring a field in the viewport produces: the same 2550M reported 0 occluded
-   fields at one window size and 5 at another. A point clamped back inside the
-   box when snapping would push it out, so the snap can move a probe but never
-   move it off the element. */
-function pixelCentre(value,low,high){
-  var snapped=Math.floor(value)+0.5;
-  if(snapped<low){snapped=low;}
-  if(snapped>high){snapped=high;}
-  return snapped;
-}
-function probePoints(rect){
-  var cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
-  var dx=Math.min(2,Math.max(1,rect.width/4));
-  var dy=Math.min(2,Math.max(1,rect.height/4));
-  var x0=rect.width>=2*dx?rect.left+dx:cx;
-  var x1=rect.width>=2*dx?rect.right-dx:cx;
-  var y0=rect.height>=2*dy?rect.top+dy:cy;
-  var y1=rect.height>=2*dy?rect.bottom-dy:cy;
-  var lx=rect.left+Math.min(dx,rect.width/2),hx=rect.right-Math.min(dx,rect.width/2);
-  var ly=rect.top+Math.min(dy,rect.height/2),hy=rect.bottom-Math.min(dy,rect.height/2);
-  return [[pixelCentre(cx,lx,hx),pixelCentre(cy,ly,hy)],
-          [pixelCentre(x0,lx,hx),pixelCentre(y0,ly,hy)],
-          [pixelCentre(x1,lx,hx),pixelCentre(y0,ly,hy)],
-          [pixelCentre(x0,lx,hx),pixelCentre(y1,ly,hy)],
-          [pixelCentre(x1,lx,hx),pixelCentre(y1,ly,hy)]];
-}
-function occluded(el,rect){
-  var points=probePoints(rect);
-  for(var i=0;i<points.length;i++){
-    /* Every point is inside the viewport by construction: inView() refuses to
-       hand back a rect that is not wholly in it. */
-    var hit=document.elementFromPoint(points[i][0],points[i][1]);
-    if(hit!==el&&!el.contains(hit)){return true;}
-  }
-  return false;
-}
-/* Bring a field into the viewport by scrolling the WINDOW, never by
-   scrollIntoView. `.page`, `.f` and `.f .s` are all overflow:hidden, which
-   makes every one of them a scroll container the browser is entitled to scroll
-   instead -- and scrolling a clip box moves the very content this pass is
-   measuring, leaving the sheet displaced afterwards. Fields the window cannot
-   reach (a band that starts above its own page) are reported as unprobed rather
-   than assumed healthy. */
-function inside(rect){
-  /* WHOLLY inside, not merely intersecting. A field straddling the viewport
-     edge has probe points the browser will not answer for, and dropping those
-     points quietly changes what the remaining ones are allowed to prove: the
-     same four fields on 1800-2018 came back healthy at 1400x1000 and occluded
-     at 1200x900, purely because the pass happened to reach them at a different
-     scroll offset. A verdict that depends on the window size is not a
-     measurement. */
-  return rect.left>=0&&rect.top>=0&&
-         rect.right<=window.innerWidth&&rect.bottom<=window.innerHeight;
-}
-function inView(el){
-  var rect=el.getBoundingClientRect();
-  if(inside(rect)){return rect;}
-  var root=document.documentElement;
-  /* Whole pixels: a fractional scroll offset shifts every rect on the page by a
-     fraction and moves the probe grid under the field being measured. */
-  window.scrollTo(
-    Math.round(Math.max(0,Math.min(rect.left+window.pageXOffset-window.innerWidth/2,
-                                   root.scrollWidth-window.innerWidth))),
-    Math.round(Math.max(0,Math.min(rect.top+window.pageYOffset-window.innerHeight/2,
-                                   root.scrollHeight-window.innerHeight))));
-  rect=el.getBoundingClientRect();
-  return inside(rect)?rect:null;
-}
-function legend(counts,total,unprobed){
-  var node=document.querySelector("[data-fg-legend]");
-  if(!node){
-    node=document.createElement("div");
-    node.setAttribute("data-fg-legend","");
-    /* It sits over the top-right corner of the sheet, which on most BIR forms
-       is the form number. Clicking it gets it out of the way;
-       formgenFieldDebug.refresh() brings it back. */
-    node.addEventListener("click",function(){node.style.display="none";});
-    document.body.appendChild(node);
-  }
-  node.style.display="";
-  while(node.firstChild){node.removeChild(node.firstChild);}
-  var head=document.createElement("div");
-  head.textContent="?debug=fields — "+total+" input(s)"+
-    (unprobed?", "+unprobed+" unreachable on screen":"");
-  node.appendChild(head);
-  for(var i=0;i<ORDER.length;i++){
-    var state=ORDER[i];
-    var line=document.createElement("div");
-    var swatch=document.createElement("span");
-    swatch.setAttribute("data-fg-swatch",state);
-    line.appendChild(swatch);
-    line.appendChild(document.createTextNode(counts[state]+"  "+LABELS[state]));
-    node.appendChild(line);
-  }
-}
-/* Two passes, and the split is what keeps the verdicts honest.
-
-   The first needs no scrolling: size and ancestor clipping are answered from
-   geometry alone, and reading every field's rect at one scroll position means
-   no verdict depends on where the page happened to be. Only the fields that
-   survive it need a hit test, and only those are scrolled to.
-
-   Precedence, worst first: a box with no size cannot be probed, a clipped box
-   probes as whatever replaced it, and a covered box's font size is beside the
-   point. Each field reports the most fundamental thing wrong with it. */
-function run(){
-  var scrollX=window.pageXOffset,scrollY=window.pageYOffset;
-  /* <template> content lives in a separate document fragment, so a blueprint
-     row is never selected here and never marked. */
-  var inputs=document.querySelectorAll("input.fi");
-  var counts={},states=[],pending=[],unprobed=0,i,el,host,rect;
-  for(i=0;i<ORDER.length;i++){counts[ORDER[i]]=0;}
-  for(i=0;i<inputs.length;i++){
-    el=inputs[i];
-    el.removeAttribute("data-fg-field");
-    host=el.parentElement;
-    if(host){host.removeAttribute("data-fg-host");}
-  }
-  for(i=0;i<inputs.length;i++){
-    el=inputs[i];
-    rect=el.getBoundingClientRect();
-    if(rect.width<1||rect.height<1){states.push("nobox");}
-    else if(clipped(el,rect)){states.push("clipped");}
-    else{states.push(null);pending.push(i);}
-  }
-  /* The legend is position:fixed over the top-right of the viewport, so on a
-     small window it sits on top of real fields and every one of them probes as
-     covered -- by us. It reported 14 phantom occlusions on 2551Q at 900x700 and
-     none at 1400x1000, which is how a measurement that depends on the window
-     size announces itself. The overlay's own chrome leaves the document for the
-     duration of the pass; legend() puts it back. */
-  var chrome=document.querySelector("[data-fg-legend]");
-  if(chrome){chrome.style.display="none";}
-  /* In document order, so the window walks down the sheet once instead of
-     jumping back and forth across it. */
-  for(i=0;i<pending.length;i++){
-    el=inputs[pending[i]];
-    rect=inView(el);
-    if(rect===null){unprobed++;}
-    else if(occluded(el,rect)){states[pending[i]]="occluded";continue;}
-    states[pending[i]]=fontPt(el)<MIN_SIZE_PT?"small":"ok";
-  }
-  window.scrollTo(scrollX,scrollY);
-  /* Marked only after the whole sheet is measured: a mark is a paint, and no
-     field's verdict may depend on whether the field before it was painted. */
-  for(i=0;i<inputs.length;i++){
-    el=inputs[i];
-    counts[states[i]]++;
-    el.setAttribute("data-fg-field",states[i]);
-    if(states[i]!=="ok"){
-      host=el.parentElement;
-      if(host){host.setAttribute("data-fg-host",states[i]);}
+   Closed is the whole of it. A side inked over less than WALL of its length is
+   a guide tick, not a wall; it is banned and the search widens, which is what
+   resolves a comb slot to the comb cell its guides subdivide rather than to a
+   slot with two open sides. Without that step 2550M reported nine "no printed
+   box" fields that are sitting in perfectly good printed boxes. */
+function boxAt(cx,cy,vis){
+  var banned={},round,i,r,L,T,R,B,walls,worst,worstSide,sides=["L","T","R","B"],s;
+  for(round=0;round<ROUNDS;round++){
+    L=null;T=null;R=null;B=null;
+    for(i=0;i<vis.length;i++){
+      r=vis[i];
+      if(banned[r.n]){continue;}
+      /* Inner faces only, so no stroke-thickness question is ever asked. */
+      if(r.y-EPS<=cy&&cy<=r.y1+EPS){
+        if(r.x1<=cx+EPS&&(L===null||r.x1>L)){L=r.x1;}
+        if(r.x>=cx-EPS&&(R===null||r.x<R)){R=r.x;}
+      }
+      if(r.x-EPS<=cx&&cx<=r.x1+EPS){
+        if(r.y1<=cy+EPS&&(T===null||r.y1>T)){T=r.y1;}
+        if(r.y>=cy-EPS&&(B===null||r.y<B)){B=r.y;}
+      }
+    }
+    if(L===null||T===null||R===null||B===null||R-L<=EPS||B-T<=EPS){return null;}
+    walls=wallsOf(L,T,R,B,vis,banned);
+    worst=2;worstSide=null;
+    for(s=0;s<4;s++){
+      if(walls[sides[s]].cover<worst){worst=walls[sides[s]].cover;worstSide=sides[s];}
+    }
+    if(worst>=WALL){return {L:L,T:T,R:R,B:B,walls:walls};}
+    for(i=0;i<walls[worstSide].members.length;i++){
+      banned[walls[worstSide].members[i]]=true;
     }
   }
-  legend(counts,inputs.length,unprobed);
-  return counts;
+  return null;
+}
+/* Exact area of a union of axis-aligned rectangles, by coordinate sweep. Forty
+   comb slots tiling one printed cell fill it; forty times the area of one slot
+   would double-count every shared edge and is not the same question. */
+function unionArea(list){
+  var xs=[],i,j,x0,x1,spans,cursor,covered,total=0;
+  for(i=0;i<list.length;i++){xs.push(list[i][0]);xs.push(list[i][2]);}
+  xs.sort(function(a,b){return a-b;});
+  for(i=0;i<xs.length-1;i++){
+    x0=xs[i];x1=xs[i+1];
+    if(x1-x0<=0){continue;}
+    spans=[];
+    for(j=0;j<list.length;j++){
+      if(list[j][0]<=x0&&list[j][2]>=x1){spans.push([list[j][1],list[j][3]]);}
+    }
+    spans.sort(function(a,b){return a[0]-b[0];});
+    cursor=-1e9;covered=0;
+    for(j=0;j<spans.length;j++){
+      if(spans[j][1]<=cursor){continue;}
+      covered+=spans[j][1]-Math.max(spans[j][0],cursor);
+      cursor=Math.max(cursor,spans[j][1]);
+    }
+    total+=covered*(x1-x0);
+  }
+  return total;
+}
+
+/* ---- one page ----------------------------------------------------------- */
+
+function boxKey(box){
+  return [box.L,box.T,box.R,box.B].map(function(v){return v.toFixed(2);}).join("|");
+}
+/* Every closed printed rectangle on the page, found by planting a probe just
+   outside each crossing of a horizontal and a vertical rect. A box's corner IS
+   such a crossing, so no closed box on the sheet is unreachable this way, and
+   the probe count is proportional to the number of boxes rather than to the
+   square of the number of rects. Probes are snapped to a half-point grid so
+   two rules that cross twice do not pay twice. */
+function allBoxes(vis){
+  var horizontal=[],vertical=[],i,j,h,v,seen={},boxes={},px,py,key,box,probes=[];
+  for(i=0;i<vis.length;i++){
+    (vis[i].x1-vis[i].x>=vis[i].y1-vis[i].y?horizontal:vertical).push(vis[i]);
+  }
+  for(i=0;i<horizontal.length;i++){
+    h=horizontal[i];
+    for(j=0;j<vertical.length;j++){
+      v=vertical[j];
+      if(v.x1<h.x-PROBE||v.x>h.x1+PROBE||v.y1<h.y-PROBE||v.y>h.y1+PROBE){continue;}
+      var xs=[v.x-PROBE,v.x1+PROBE],ys=[h.y-PROBE,h.y1+PROBE],a,b;
+      for(a=0;a<2;a++){for(b=0;b<2;b++){
+        px=Math.round(xs[a]*2)/2;py=Math.round(ys[b]*2)/2;
+        key=px+","+py;
+        if(seen[key]){continue;}
+        seen[key]=true;probes.push([px,py]);
+      }}
+    }
+  }
+  for(i=0;i<probes.length;i++){
+    box=boxAt(probes[i][0],probes[i][1],vis);
+    if(box===null){continue;}
+    key=boxKey(box);
+    if(!boxes[key]){boxes[key]=box;}
+  }
+  return boxes;
+}
+function ptRect(el,frame,ptPerPx){
+  var r=el.getBoundingClientRect();
+  return {el:el,x:(r.left-frame.left)*ptPerPx,y:(r.top-frame.top)*ptPerPx,
+          x1:(r.right-frame.left)*ptPerPx,y1:(r.bottom-frame.top)*ptPerPx};
+}
+function pageRun(page,report){
+  var frame=page.getBoundingClientRect();
+  var widthPt=parseFloat(page.style.width);
+  if(!(widthPt>0)||!(frame.width>0)){return null;}
+  var ptPerPx=widthPt/frame.width;
+  var vis=visibleRects(ruleRects(page,frame,ptPerPx));
+  var boxes=allBoxes(vis);
+  var inputs=[],nodes=page.querySelectorAll("input.fi"),i,key,box;
+  for(i=0;i<nodes.length;i++){inputs.push(ptRect(nodes[i],frame,ptPerPx));}
+  var texts=[],tnodes=page.querySelectorAll(".t");
+  for(i=0;i<tnodes.length;i++){texts.push(ptRect(tnodes[i],frame,ptPerPx));}
+
+  /* Each input is judged in the smallest closed printed box its CENTRE lies
+     in. The centre and not a corner: an input that overflows its box has
+     corners in the neighbouring boxes, and asking which box a corner is in
+     would answer with the box next door. */
+  var groups={},unboxed=[];
+  for(i=0;i<inputs.length;i++){
+    box=boxAt((inputs[i].x+inputs[i].x1)/2,(inputs[i].y+inputs[i].y1)/2,vis);
+    if(box===null){unboxed.push(inputs[i]);continue;}
+    key=boxKey(box);
+    if(!boxes[key]){boxes[key]=box;}
+    if(!groups[key]){groups[key]=[];}
+    groups[key].push(inputs[i]);
+  }
+
+  var counts={},marks=[],state;
+  for(i=0;i<ORDER.length;i++){counts[ORDER[i]]=0;}
+  counts.unboxed=unboxed.length;
+  for(i=0;i<unboxed.length;i++){
+    unboxed[i].state="unboxed";
+    report.push({page:page.id,input:unboxed[i].el.id,state:"unboxed",unreached:null});
+  }
+  for(key in groups){
+    if(!Object.prototype.hasOwnProperty.call(groups,key)){continue;}
+    box=boxes[key];
+    var members=groups[key],w=box.walls,rects=[],over=0,m;
+    for(m=0;m<members.length;m++){
+      rects.push([members[m].x,members[m].y,members[m].x1,members[m].y1]);
+      /* Beyond the OUTER face of the wall, plus the pipeline's own position
+         tolerance. Inside the ink is not outside the box. */
+      over=Math.max(over,w.L.outer-members[m].x-TOL,members[m].x1-w.R.outer-TOL,
+                    w.T.outer-members[m].y-TOL,members[m].y1-w.B.outer-TOL);
+    }
+    /* The mirror image on the inside: erode the printed box to the far side of
+       its own ink plus TOL, and ask whether the inputs reach all of what is
+       left. `2*L - outer` is the far side of the left wall measured from the
+       inner face the box is defined by; the direction is easy to invert, and
+       inverting it made every field on both test forms report as too small,
+       because the "eroded" box then included the walls themselves. A fixed AREA fraction would have been the wrong shape -- the inset
+       is a fixed distance, so it costs a short box a far larger share of its
+       area than a tall one, and a fraction would flag every small box on the
+       sheet. */
+    var eL=2*box.L-w.L.outer+TOL,eT=2*box.T-w.T.outer+TOL;
+    var eR=2*box.R-w.R.outer-TOL,eB=2*box.B-w.B.outer-TOL;
+    var shortfall=0,clipped=[],c;
+    if(eR>eL&&eB>eT){
+      for(m=0;m<rects.length;m++){
+        c=[Math.max(rects[m][0],eL),Math.max(rects[m][1],eT),
+           Math.min(rects[m][2],eR),Math.min(rects[m][3],eB)];
+        if(c[2]>c[0]&&c[3]>c[1]){clipped.push(c);}
+      }
+      shortfall=1-unionArea(clipped)/((eR-eL)*(eB-eT));
+    }
+    /* Reported against the printed box itself, not against the eroded one: a
+       reviewer asked "how much of this box can nobody type in" means the box
+       they can see. */
+    var unreached=1-unionArea(rects)/((box.R-box.L)*(box.B-box.T));
+    state=over>0?"over":(shortfall>EPS?"small":"fits");
+    counts[state]+=members.length;
+    for(m=0;m<members.length;m++){
+      members[m].state=state;
+      report.push({page:page.id,input:members[m].el.id,state:state,
+                   unreached:state==="small"?unreached:null});
+    }
+    if(state!=="fits"){marks.push({box:box,state:state,unreached:unreached});}
+  }
+
+  /* The state the previous overlay could not express, because it iterated over
+     inputs and a missing input is not something an input iteration visits. A
+     printed box counts as vacant only when it holds no input AND no printed
+     text -- a box with a label in it is a label, not a field somebody forgot --
+     and only when it is big enough to write a character in. Boxes that contain
+     another found box are containers, not cells, and are not reported: the
+     sheet's outer frame encloses everything and is nobody's missing field. */
+  var keys=Object.keys(boxes),k,other,vacant=0;
+  for(i=0;i<keys.length;i++){
+    box=boxes[keys[i]];
+    if(groups[keys[i]]){continue;}
+    if(box.R-box.L<MIN_BOX||box.B-box.T<MIN_BOX){continue;}
+    var occupied=false;
+    for(k=0;k<inputs.length;k++){
+      if(inputs[k].x1>box.L+EPS&&inputs[k].x<box.R-EPS&&
+         inputs[k].y1>box.T+EPS&&inputs[k].y<box.B-EPS){occupied=true;break;}
+    }
+    if(occupied){continue;}
+    for(k=0;k<texts.length;k++){
+      if(texts[k].x1>box.L+TOL&&texts[k].x<box.R-TOL&&
+         texts[k].y1>box.T+TOL&&texts[k].y<box.B-TOL){occupied=true;break;}
+    }
+    if(occupied){continue;}
+    for(k=0;k<keys.length;k++){
+      if(k===i){continue;}
+      other=boxes[keys[k]];
+      if(other.L>=box.L-EPS&&other.T>=box.T-EPS&&
+         other.R<=box.R+EPS&&other.B<=box.B+EPS){occupied=true;break;}
+    }
+    if(occupied){continue;}
+    vacant++;
+    marks.push({box:box,state:"vacant",unreached:1});
+    report.push({page:page.id,input:null,state:"vacant",unreached:1,
+                 at:[box.L.toFixed(1),box.T.toFixed(1),
+                     (box.R-box.L).toFixed(1),(box.B-box.T).toFixed(1)].join(" ")});
+  }
+  counts.vacant=vacant;
+  return {counts:counts,inputs:inputs,marks:marks,boxes:keys.length,unboxed:unboxed};
+}
+
+/* ---- painting ----------------------------------------------------------- */
+
+/* `aside` and `i`, never `div`: `.page:last-of-type{break-after:auto}` is the
+   one structural selector in the emitted stylesheet, and a div appended to the
+   sheet would take that match off the last page and add a page break after it.
+   An element that cannot be a `.page` cannot do that. */
+function layerOf(page){
+  var layer=page.querySelector("[data-fg-layer]");
+  if(!layer){
+    layer=document.createElement("aside");
+    layer.setAttribute("data-fg-layer","");
+    page.appendChild(layer);
+  }
+  while(layer.firstChild){layer.removeChild(layer.firstChild);}
+  return layer;
+}
+function paintPage(page,result){
+  var layer=layerOf(page),i,mark,node,box;
+  for(i=0;i<result.inputs.length;i++){
+    result.inputs[i].el.setAttribute("data-fg-field",result.inputs[i].state);
+  }
+  for(i=0;i<result.marks.length;i++){
+    mark=result.marks[i];box=mark.box;
+    node=document.createElement("i");
+    node.setAttribute("data-fg-box",mark.state);
+    node.setAttribute("data-fg-unreached",Math.round(mark.unreached*100)+"%");
+    node.title=mark.state+": "+Math.round(mark.unreached*100)+"% of this printed "
+      +"box is unreached";
+    node.style.left=box.L+"pt";node.style.top=box.T+"pt";
+    node.style.width=(box.R-box.L)+"pt";node.style.height=(box.B-box.T)+"pt";
+    layer.appendChild(node);
+  }
+  /* One legend per page, inside the page, so a reviewer photographing a single
+     page gets that page's numbers with it. A viewport-fixed legend showed the
+     document's totals over whichever page happened to be scrolled to. */
+  var legend=document.createElement("aside");
+  legend.setAttribute("data-fg-legend","");
+  legend.addEventListener("click",function(){legend.style.display="none";});
+  /* <b>, not <div>, for the same reason the containers are <aside>: no
+     element this overlay creates may be a div, so no div can ever end up as
+     the last one in the sheet and take `.page:last-of-type` off the last
+     page. */
+  var head=document.createElement("b");
+  head.textContent="?debug=fields — "+result.inputs.length+" input(s), "
+    +result.boxes+" printed box(es)";
+  legend.appendChild(head);
+  for(i=0;i<ORDER.length;i++){
+    var line=document.createElement("b"),swatch=document.createElement("span");
+    swatch.setAttribute("data-fg-swatch",ORDER[i]);
+    line.appendChild(swatch);
+    line.appendChild(document.createTextNode(result.counts[ORDER[i]]+"  "
+                                             +LABELS[ORDER[i]]));
+    legend.appendChild(line);
+  }
+  layer.appendChild(legend);
+}
+function run(){
+  var pages=document.querySelectorAll(".page"),totals={},report=[],i,result;
+  for(i=0;i<ORDER.length;i++){totals[ORDER[i]]=0;}
+  for(i=0;i<pages.length;i++){
+    result=pageRun(pages[i],report);
+    if(result===null){continue;}
+    paintPage(pages[i],result);
+    for(var s=0;s<ORDER.length;s++){totals[ORDER[s]]+=result.counts[ORDER[s]];}
+  }
+  window.formgenFieldDebug.report=report;
+  return totals;
 }
 function inject(){
   if(document.getElementById("formgen-field-debug")){return;}
@@ -3742,21 +4217,27 @@ function inject(){
   style.textContent=CSS;
   document.head.appendChild(style);
 }
+/* The fourth barrier, and it removes the marks as well as the rules: the
+   overlay now creates ELEMENTS, and a media query that a transformed
+   stylesheet dropped would leave those elements painting on paper. Nothing the
+   overlay made survives into the print. */
 function drop(){
-  var style=document.getElementById("formgen-field-debug");
+  var style=document.getElementById("formgen-field-debug"),i,nodes;
   if(style&&style.parentNode){style.parentNode.removeChild(style);}
+  nodes=document.querySelectorAll("[data-fg-layer]");
+  for(i=0;i<nodes.length;i++){nodes[i].parentNode.removeChild(nodes[i]);}
+  nodes=document.querySelectorAll("[data-fg-field]");
+  for(i=0;i<nodes.length;i++){nodes[i].removeAttribute("data-fg-field");}
 }
-/* The fourth barrier. @media screen and @media print already keep the overlay
-   off paper; this removes the stylesheet from the document entirely for the
-   duration of the print, so a browser that honoured neither has nothing left
-   to apply. */
 window.addEventListener("beforeprint",drop);
-window.addEventListener("afterprint",inject);
+window.addEventListener("afterprint",function(){inject();run();});
 function start(){inject();run();}
 if(document.readyState==="complete"){start();}
 else{window.addEventListener("load",start);}
-window.formgenFieldDebug={refresh:run,occluded:occluded,clipped:clipped};
+window.formgenFieldDebug={refresh:run,boxAt:boxAt,report:[]};
 })();""".replace("__FIELD_DEBUG_CSS__", json.dumps(FIELD_DEBUG_CSS)) \
+        .replace("__RULE_POSITION_TOLERANCE_PT__", fmt(RULE_POSITION_TOLERANCE_PT)) \
+        .replace("__RULE_WALL_COVERAGE__", fmt(RULE_WALL_COVERAGE)) \
         .replace("__FIELD_MIN_SIZE_PT__", fmt(FIELD_MIN_SIZE_PT))
 
 
@@ -4508,8 +4989,8 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
             "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
         })
         ink = PrePrintedInk(page["text_runs"])
-        _check(not field_verdict(victim, ink)[0]
-               and field_verdict(dict(victim, comb={"cells": 3}), ink)[0],
+        _check(not field_verdict(victim, ink, None)[0]
+               and field_verdict(dict(victim, comb={"cells": 3}), ink, None)[0],
                "pre-printed text blocks a plain field but never a comb",
                f"coverage {ink.coverage(victim):.2f}", failures)
         html, _ = build_document(staged_ir, staged_layout, plan,
@@ -4518,6 +4999,69 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
         _check(cell is not None and cell.group(1) is None
                and 'data-preprinted="true"' in cell.group(0),
                "a cell filled with pre-printed text is emitted without an input",
+               cell.group(0)[:80] if cell else "cell absent", failures)
+
+    # -- C6 part 3: decorative shading over a blank makes it uneditable --------
+    # The 2200T page-2 hazard, staged: a cell the official form shades to say NO
+    # RATE APPLIES accepted 999,999.00 because nothing in the box model ever
+    # asked what colour its paper was.
+    shade_ir = json.loads(json.dumps(ir))
+    shade_layout = json.loads(json.dumps(layout))
+    shade_victim = next((c for p in shade_layout["pages"] for c in p["cells"]
+                         if c["kind"] == "field" and not c.get("comb")
+                         and c["x1"] - c["x0"] > 20.0
+                         and c["y1"] - c["y0"] > 4.0), None)
+    if shade_victim is None:
+        _check(False, "C6 part 3 has a plain field cell to shade", "none found", failures)
+    else:
+        page_index = int(shade_victim["id"][1:].split("c")[0])
+        page = next(p for p in shade_ir["pages"] if int(p["index"]) == page_index)
+        top = max((int(f["paint_seq"]) for f in page["area_fills"]), default=0)
+        x0, y0 = float(shade_victim["x0"]), float(shade_victim["y0"])
+        x1, y1 = float(shade_victim["x1"]), float(shade_victim["y1"])
+
+        def _fill(gray: float, role: str, seq: int, *, shrink: float = 0.0
+                  ) -> dict[str, Any]:
+            return {"x0": x0, "y0": y0, "x1": x1 - shrink * (x1 - x0), "y1": y1,
+                    "gray": gray, "rgb": [gray, gray, gray], "role": role,
+                    "paint_seq": seq, "paint_seq_max": seq}
+
+        band = _fill(0.8509, "decorative", top + 1)
+        _check(DecorativeShading([band]).blocks(shade_victim)
+               and field_verdict(shade_victim, None,
+                                 DecorativeShading([band]))[1] == "shading"
+               and field_verdict(dict(shade_victim, comb={"cells": 3}), None,
+                                 DecorativeShading([band]))[0],
+               "decorative shading blocks a plain field but never a comb",
+               f"grey 0.8509 over {shade_victim['id']}", failures)
+        # The five real fields the threshold exists to spare: 1604CF's three
+        # 0.8902 cells and 2200AN's two 0.9489 ones. Asserted as tone, not as
+        # form code -- a rule that named the forms would not be a rule.
+        _check(not DecorativeShading([_fill(0.8902, "decorative", top + 1)])
+               .blocks(shade_victim)
+               and not DecorativeShading([_fill(0.9489, "decorative", top + 1)])
+               .blocks(shade_victim),
+               "near-white decoration above the threshold leaves a real field typeable",
+               f"{fmt(DECORATIVE_GRAY_MAX)} is the bound", failures)
+        _check(not DecorativeShading([band, _fill(1.0, "knockout", top + 2)])
+               .blocks(shade_victim)
+               and DecorativeShading([_fill(1.0, "knockout", top + 1), band])
+               .blocks(shade_victim),
+               "the topmost fill decides: a knockout over a band restores the blank",
+               "and a band over a knockout takes it away", failures)
+        _check(not DecorativeShading([_fill(0.8509, "decorative", top + 1,
+                                            shrink=0.45)]).blocks(shade_victim),
+               "a band covering under 70% of the cell is not this cell's paper",
+               f"{fmt(DECORATIVE_COVERAGE * 100)}% is the bound", failures)
+
+        page["area_fills"].append(band)
+        page["area_fills"].sort(key=lambda f: (f["y0"], f["x0"]))
+        html, _ = build_document(shade_ir, shade_layout, plan,
+                                 Options("svg", "fonts", "assets", None, None, None))
+        cell = re.search(rf'<div id="{shade_victim["id"]}"[^>]*>(<input[^>]*>)?', html)
+        _check(cell is not None and cell.group(1) is None
+               and 'data-preprinted="shading"' in cell.group(0),
+               "a cell on decorative shading is emitted without an input",
                cell.group(0)[:80] if cell else "cell absent", failures)
 
     # -- Ink: a padded single-word run is emitted as its ink, at its own origin -
@@ -4648,7 +5192,8 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     disagree in both directions and each disagreement was a live defect: a
     comb-bearing `mixed` cell is a field the old test did not expect (2000-DST's
     entire money grid), and a `field` cell filled with statutory text is not one
-    (1700 page 2's tax brackets).
+    (1700 page 2's tax brackets), nor is one the source shaded out (2200T page
+    2's "no rate applies" rows).
     """
     fields = FieldPlan(layout, resolve_field_face(plan, []), [], ir)
     expected: dict[str, int] = {}
@@ -4659,8 +5204,10 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
                 expected[cell["id"]] = box.capacity or 1
 
     ink = {int(p["index"]): PrePrintedInk(p["text_runs"]) for p in ir["pages"]}
+    shading = {int(p["index"]): DecorativeShading(p["area_fills"]) for p in ir["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
-                if field_verdict(c, ink.get(int(p["index"])))[0]]
+                if field_verdict(c, ink.get(int(p["index"])),
+                                 shading.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
@@ -4894,16 +5441,61 @@ def field_debug_assertions(html: str, failures: list[str]) -> None:
            "; ".join(f"{name}:{value.strip()}" for name, value in declarations),
            failures)
 
-    # Barrier 4: the stylesheet leaves the document for the duration of a print.
+    # Barrier 4: the stylesheet AND every element the overlay made leave the
+    # document for the duration of a print. The elements matter now in a way
+    # they did not when the overlay only set attributes on inputs that were
+    # already there: a mark is a real <i> painting a real outline, and a
+    # stylesheet transform that dropped @media print would leave it on paper.
     _check('window.addEventListener("beforeprint",drop)' in FIELD_DEBUG_JS
-           and 'window.addEventListener("afterprint",inject)' in FIELD_DEBUG_JS,
-           "the injected stylesheet is removed for the print itself",
-           "beforeprint drops it, afterprint restores it", failures)
+           and 'window.addEventListener("afterprint",function(){inject();run();})'
+           in FIELD_DEBUG_JS,
+           "the overlay leaves the document for the print itself",
+           "beforeprint drops it, afterprint rebuilds it", failures)
+    _check('nodes=document.querySelectorAll("[data-fg-layer]");' in FIELD_DEBUG_JS
+           and 'nodes=document.querySelectorAll("[data-fg-field]");' in FIELD_DEBUG_JS,
+           "the print drop removes the marks, not only the stylesheet",
+           "layers detached and field marks cleared", failures)
 
-    # The overlay may never relax the threshold the report uses.
-    _check(f"var MIN_SIZE_PT={fmt(FIELD_MIN_SIZE_PT)};" in FIELD_DEBUG_JS,
-           "the overlay's minimum size is the module's own constant",
-           f"{fmt(FIELD_MIN_SIZE_PT)}pt", failures)
+    # The overlay may never relax a threshold the pipeline holds elsewhere.
+    for name, value in (("TOL", RULE_POSITION_TOLERANCE_PT),
+                        ("WALL", RULE_WALL_COVERAGE),
+                        ("MIN_BOX", FIELD_MIN_SIZE_PT)):
+        _check(f"var {name}={fmt(value)};" in FIELD_DEBUG_JS,
+               f"the overlay's {name} is the module's own constant",
+               f"{fmt(value)}", failures)
+
+    # The point of the rewrite, asserted rather than described. The expectation
+    # comes from the rule layer -- a different producer, fed by the PDF's own
+    # painting operators -- and the field layer's own containers are not
+    # readable from the script at all. An overlay that derives its expectation
+    # from the thing it is checking is decoration, not a check, and the way
+    # that failure comes back is by someone reaching for `.c` because it is
+    # convenient.
+    _check('querySelectorAll(".rl rect, .rl .r")' in FIELD_DEBUG_JS,
+           "the overlay's expectation is read from the rule layer",
+           "page_ir rules and area fills, not page_layout cells", failures)
+    for selector in ('".layer-cells"', '".c"', '".s"', "'.c'", "closest("):
+        _check(selector not in FIELD_DEBUG_JS,
+               f"the overlay never reads the field layer's {selector} container",
+               "no path from the subject to the expectation", failures)
+
+    # The erosion moves INWARD, and this is a regression guard for a bug that
+    # was written here: with the sign inverted the "eroded" box included its own
+    # walls, and every field on both test forms reported as too small -- 1069
+    # false positives, the exact failure mode this project keeps producing when
+    # an instrument is trusted before it is looked at.
+    _check("var eL=2*box.L-w.L.outer+TOL,eT=2*box.T-w.T.outer+TOL;" in FIELD_DEBUG_JS
+           and "var eR=2*box.R-w.R.outer-TOL,eB=2*box.B-w.B.outer-TOL;" in FIELD_DEBUG_JS,
+           "the shortfall test erodes the printed box inward",
+           "left/top gain the wall, right/bottom lose it", failures)
+
+    # `.page:last-of-type{break-after:auto}` is the one structural selector in
+    # BASE_CSS. A <div> appended anywhere in the sheet takes that match off the
+    # last page and adds a page break after it, which is a layout change made
+    # by a debug tool -- exactly what the query-string gate exists to prevent.
+    _check('createElement("div")' not in FIELD_DEBUG_JS,
+           "the overlay creates no div, so .page:last-of-type still matches",
+           "chrome is <aside> and <i>", failures)
 
 
 def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, Any],

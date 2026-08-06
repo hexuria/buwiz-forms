@@ -62,6 +62,23 @@ JOIN_EPSILON_PT = 0.011
 # is compared against its own stroke width instead, in is_bar_like.
 AXIS_EPSILON_PT = 1e-6
 
+# The distance at which a clip edge and the edge it cuts are the same edge.
+#
+# It is not a tolerance on the geometry; it is the resolution of the numbers.
+# MuPDF holds PDF coordinates as C floats, so a stream that writes 414.125
+# hands back an edge of 414.125012 once a stroke's half-width has been added,
+# and 2dp quantisation lands those two on opposite sides of a grid point -- a
+# 1pt rule reported as 0.99pt.
+#
+# The value is measured, not chosen. Over all 53 forms, every positive overhang
+# of a painted edge past its own scissor falls into two populations with an
+# empty band between them: 399 of them are float32 noise, the largest exactly
+# 0.0001221pt (2^-13, the ulp at 700pt, on edges both sides of which read
+# 430.97), and the next 273 start at 1e-3pt, which is the finest distinction the
+# BIR generator draws at all. Nothing lies between 1.3e-4 and 1e-3. This sits in
+# that band: twice the worst noise, four times below the smallest real cut.
+CLIP_COINCIDENCE_PT = 2.5e-4
+
 # MuPDF reports this codepoint for a glyph it could not map to Unicode. It is
 # the honest answer and the only one this module will substitute; see
 # extract_text_runs.
@@ -247,20 +264,95 @@ class PaintOrder:
     get_bboxlog() is the one view that lists fills, strokes and images together
     as separate entries in stream order, so the ordinal comes from there and the
     walk below reconciles it against get_drawings().
+
+    `clip` carries the other half of "what does this op actually ink": the
+    scissor in force when it paints. Neither get_drawings() nor get_bboxlog()
+    applies it -- both report the geometry the path *states* -- so an op drawn
+    outside its own clip arrives here looking exactly like one that paints.
     """
 
-    __slots__ = ("fill", "stroke", "images", "total")
+    __slots__ = ("fill", "stroke", "images", "clip", "total")
 
     def __init__(self, fill: list[int], stroke: list[int],
-                 images: list[tuple[fitz.Rect, int]], total: int) -> None:
+                 images: list[tuple[fitz.Rect, int]],
+                 clip: list[tuple[float, float, float, float] | None],
+                 total: int) -> None:
         self.fill = fill        # per drawing: ordinal of its fill op, or -1
         self.stroke = stroke    # per drawing: ordinal of its stroke op, or -1
         self.images = images    # (placement, ordinal) in stream order
+        self.clip = clip        # per drawing: active scissor, or None for unclipped
         self.total = total      # one past the last ordinal
 
 
+# The drawing types get_drawings() reports: fill, stroke, and both. Everything
+# else `extended=True` adds -- clips and transparency groups -- is structure
+# around those ops rather than an op, which is what makes the two lists
+# comparable entry by entry.
+PAINTING_TYPES = frozenset({"f", "s", "fs"})
+
+
+def clip_scissors(page: fitz.Page, drawings: Sequence[dict[str, Any]],
+                  ) -> list[tuple[float, float, float, float] | None]:
+    """The scissor rectangle in force for each drawing, or None if unclipped.
+
+    A PDF `W n` restricts every later op in its `q`/`Q` block to the intersection
+    of the current clip with the path just built, and Poppler honours it. This
+    module did not: it read `get_drawings()`, which states each path's own
+    geometry and says nothing about the scissor, so ink drawn wholly outside its
+    clip -- which the reader never sees -- was extracted as page structure. 1701
+    page 1 does exactly that: `434.35 836.38 163.97 55.224 re W* n` then a fill
+    at x 602.16, 3.8pt beyond the clip's right edge, repeated down the page. The
+    result was a black bar painted where the official form is blank.
+
+    `get_drawings(extended=True)` is the same walk with the clip and group
+    entries left in. An item at level L sits inside the nearest preceding item at
+    level L-1, so a scissor per level, dropped whenever a shallower item arrives,
+    reproduces the `q`/`Q` stack. Each `clip` entry's own `scissor` is already
+    cumulative, but it is intersected with its parent here anyway: relying on
+    that would make this walk correct only by MuPDF's convention.
+
+    A transparency `group` is deliberately not a scissor. Its rect is the page's
+    MediaBox, and clipping to the paper edge is a separate question -- about ink
+    that overhangs the sheet -- which nothing here has decided. Where a form
+    means it, it says so in the stream: 2551Q draws a knockout to x=612.12 and
+    then clips it with a literal `0.00000912 0 612 936 re W* n`, and that clip
+    is honoured below because it is a clip.
+
+    Raises rather than guessing if the two walks disagree, for the same reason
+    paint_order does: a fallback would publish a plausible document whose ink is
+    not the source's.
+    """
+    scissors: dict[int, tuple[float, float, float, float]] = {}
+    clips: list[tuple[float, float, float, float] | None] = []
+
+    for item in page.get_drawings(extended=True):
+        level = int(item.get("level", 0))
+        for deeper in [key for key in scissors if key >= level]:
+            del scissors[deeper]
+        parent = scissors.get(level - 1)
+        kind = str(item.get("type", ""))
+        if kind == "clip":
+            box = fitz.Rect(item["scissor"])
+            here = (box.x0, box.y0, box.x1, box.y1)
+            scissors[level] = here if parent is None else (
+                max(here[0], parent[0]), max(here[1], parent[1]),
+                min(here[2], parent[2]), min(here[3], parent[3]))
+        elif kind in PAINTING_TYPES:
+            clips.append(parent)
+        elif kind == "group":
+            # Not a scissor (see above), but it does nest: anything inside it
+            # inherits whatever clip the group itself sits under.
+            scissors[level] = parent
+
+    if len(clips) != len(drawings):
+        raise SystemExit(
+            f"clip stack desync: {len(clips)} painting ops in the extended walk, "
+            f"{len(drawings)} drawings")
+    return clips
+
+
 def paint_order(page: fitz.Page, drawings: Sequence[dict[str, Any]]) -> PaintOrder:
-    """Number every fill, stroke and image op on the page.
+    """Number every fill, stroke and image op on the page, and scissor each one.
 
     Raises rather than guessing if the log and the drawings disagree: a silent
     fallback would emit a plausible document whose z-order is not the source's,
@@ -295,7 +387,36 @@ def paint_order(page: fitz.Page, drawings: Sequence[dict[str, Any]]) -> PaintOrd
     if index != len(drawings):
         raise SystemExit(
             f"paint order desync: consumed {index} of {len(drawings)} drawings")
-    return PaintOrder(fill, stroke, images, ordinal)
+    # After the bbox reconciliation, so that a mutated drawings list still trips
+    # the check the desync probes are aimed at.
+    return PaintOrder(fill, stroke, images,
+                      clip_scissors(page, drawings), ordinal)
+
+
+def clipped(x0: float, y0: float, x1: float, y1: float,
+            clip: tuple[float, float, float, float] | None,
+            ) -> tuple[float, float, float, float] | None:
+    """One painted rect, cut down to what the scissor lets through.
+
+    None means the clip removes it entirely -- the op inks nothing and must not
+    reach the IR at all. Emptiness is judged on the quantised extent, the same
+    grid every coordinate in this module lands on, so "thinner than the IR can
+    express" and "absent" are the same answer rather than two.
+
+    An edge only moves when the scissor is inside it by more than the two
+    numbers can distinguish; see CLIP_COINCIDENCE_PT. Taking the plain minimum
+    instead would report a rule as 0.01pt thinner than it is drawn every time a
+    box is stroked exactly to its own clip, which is 1701MS's whole page 1.
+    """
+    if clip is None:
+        return (x0, y0, x1, y1)
+    nx0 = clip[0] if clip[0] - x0 > CLIP_COINCIDENCE_PT else x0
+    ny0 = clip[1] if clip[1] - y0 > CLIP_COINCIDENCE_PT else y0
+    nx1 = clip[2] if x1 - clip[2] > CLIP_COINCIDENCE_PT else x1
+    ny1 = clip[3] if y1 - clip[3] > CLIP_COINCIDENCE_PT else y1
+    if q(nx1 - nx0) <= 0 or q(ny1 - ny0) <= 0:
+        return None
+    return (nx0, ny0, nx1, ny1)
 
 
 def is_bar_like(p0: fitz.Point, p1: fitz.Point, thickness: float) -> bool:
@@ -352,8 +473,15 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
         collections.defaultdict(list))
 
     def offer(x0: float, y0: float, x1: float, y1: float,
-              gray: float | None, rgb: Any, seq: int) -> None:
-        """Route one axis-aligned bar into the horizontal and/or vertical group."""
+              gray: float | None, rgb: Any, seq: int,
+              scissor: tuple[float, float, float, float] | None) -> None:
+        """Route one axis-aligned bar, as its scissor lets it through, into the
+        horizontal and/or vertical group. Raw coordinates in; the quantisation
+        happens after the clip, because the clip is where the bar really ends."""
+        box = clipped(x0, y0, x1, y1, scissor)
+        if box is None:
+            return
+        x0, y0, x1, y1 = q(box[0]), q(box[1]), q(box[2]), q(box[3])
         width, height = q(x1 - x0), q(y1 - y0)
         if width <= 0 or height <= 0:
             return
@@ -373,6 +501,8 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
         # The two carry different ordinals because PDF paints them in that order.
         fill_seq = order.fill[index] if order.fill[index] >= 0 else order.stroke[index]
         stroke_seq = order.stroke[index] if order.stroke[index] >= 0 else order.fill[index]
+        # What the scissor lets through, not what the path states.
+        scissor = order.clip[index]
 
         stroke = item.get("color")
         stroke_width = float(item.get("width") or 0.0)
@@ -386,11 +516,11 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
                 r = op[1]
                 # Each edge of the outline is a bar centred on the rect's edge.
                 for y in (r.y0, r.y1):
-                    offer(q(r.x0 - half), q(y - half), q(r.x1 + half), q(y + half),
-                          s_gray, s_rgb, stroke_seq)
+                    offer(r.x0 - half, y - half, r.x1 + half, y + half,
+                          s_gray, s_rgb, stroke_seq, scissor)
                 for x in (r.x0, r.x1):
-                    offer(q(x - half), q(r.y0 - half), q(x + half), q(r.y1 + half),
-                          s_gray, s_rgb, stroke_seq)
+                    offer(x - half, r.y0 - half, x + half, r.y1 + half,
+                          s_gray, s_rgb, stroke_seq, scissor)
 
         fill = item.get("fill")
         if fill is None:
@@ -416,7 +546,7 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
             else:
                 continue
 
-            offer(q(rect.x0), q(rect.y0), q(rect.x1), q(rect.y1), gray, rgb, fill_seq)
+            offer(rect.x0, rect.y0, rect.x1, rect.y1, gray, rgb, fill_seq, scissor)
 
     segments: list[Segment] = []
     for (near, far, gray, rgb), spans in h_groups.items():
@@ -444,16 +574,20 @@ def extract_area_fills(drawings: Sequence[dict[str, Any]],
             continue
         seq = order.fill[index] if order.fill[index] >= 0 else order.stroke[index]
         gray = to_gray(fill)
+        scissor = order.clip[index]
         for op in item["items"]:
             if op[0] != "re":
                 continue
             rect = op[1]
-            width, height = q(rect.width), q(rect.height)
+            box = clipped(rect.x0, rect.y0, rect.x1, rect.y1, scissor)
+            if box is None:
+                continue
+            width, height = q(box[2] - box[0]), q(box[3] - box[1])
             if width <= MAX_RULE_THICKNESS_PT or height <= MAX_RULE_THICKNESS_PT:
                 continue
             fills.append({
-                "x0": q(rect.x0), "y0": q(rect.y0),
-                "x1": q(rect.x1), "y1": q(rect.y1),
+                "x0": q(box[0]), "y0": q(box[1]),
+                "x1": q(box[2]), "y1": q(box[3]),
                 "gray": gray,
                 "rgb": [round(float(c), 4) for c in fill[:3]] if len(fill) >= 3 else None,
                 "role": classify_tone(gray),
@@ -570,6 +704,25 @@ def extract_paths(drawings: Sequence[dict[str, Any]],
         fill_gray = to_gray(fill)
         stroke_gray = to_gray(stroke)
         rect = item["rect"]
+        # A curve cannot be truncated the way a bar can -- cutting a Bezier at a
+        # scissor edge is path arithmetic, not a coordinate swap -- so only the
+        # unambiguous answer is given here. Wholly outside its clip, the path
+        # inks nothing and is dropped; wholly inside, it is untouched. A path the
+        # scissor genuinely cuts stops extraction rather than shipping a shape
+        # that is not the source's: no form in this corpus has one, and the day
+        # one appears is the day to decide what to draw, not to guess.
+        scissor = order.clip[index]
+        if scissor is not None:
+            visible = clipped(rect.x0, rect.y0, rect.x1, rect.y1, scissor)
+            if visible is None:
+                continue
+            if (q(visible[0]), q(visible[1]), q(visible[2]), q(visible[3])) != (
+                    q(rect.x0), q(rect.y0), q(rect.x1), q(rect.y1)):
+                raise SystemExit(
+                    "a non-rectilinear path is cut by its clip and this module "
+                    "cannot truncate curves: path "
+                    f"{(q(rect.x0), q(rect.y0), q(rect.x1), q(rect.y1))} "
+                    f"under scissor {tuple(q(v) for v in scissor)}")
         # The fill lands under the stroke, so the first op is the fill's when
         # there is one -- the same reconciliation extract_segments makes.
         first = order.fill[index] if order.fill[index] >= 0 else order.stroke[index]
@@ -1584,6 +1737,99 @@ def leaning_bars(page: fitz.Page) -> list[dict[str, Any]]:
     return bars
 
 
+# A page whose whole purpose is to be clipped, written as a content stream so
+# the assertion below compares two independent statements: what the PDF says to
+# paint, and what the IR ended up holding. It is built here rather than tracked
+# under fixtures/ because every case in it is a property of the `W n` operator
+# rather than of any BIR form -- and because a check that only runs where the
+# official PDFs live is the green tick this project has already shipped once.
+#
+# Page is 200x200. PDF y counts up from the bottom; the IR's counts down from
+# the top, which is why the expectations below are the 200-complement.
+CLIP_PROBE_STREAM = b"""0 g
+q 20 100 60 60 re W n
+30 110 40 40 re f
+100 110 40 40 re f
+60 110 40 40 re f
+25 150 40 1 re f
+90 150 30 1 re f
+60 145 40 1 re f
+q 40 120 60 20 re W n
+85 122 10 16 re f
+45 122 30 16 re f
+Q
+50 105 20 10 re f
+Q
+150 20 30 30 re f
+"""
+
+# (x0, y0, x1, y1) in IR coordinates, and why each one is there. Anything the
+# probe page paints and this table does not name is a failure, in both
+# directions -- a missed drop and an over-eager one look the same on paper.
+CLIP_PROBE_AREA_FILLS: tuple[tuple[tuple[float, float, float, float], str], ...] = (
+    ((30.0, 50.0, 70.0, 90.0), "wholly inside its clip"),
+    ((60.0, 50.0, 80.0, 90.0), "straddles the clip's right edge, truncated to it"),
+    ((45.0, 62.0, 75.0, 78.0), "inside both nested clips"),
+    ((50.0, 85.0, 70.0, 95.0), "inside the outer clip, after the inner one popped"),
+    ((150.0, 150.0, 180.0, 180.0), "never clipped at all"),
+)
+
+# The same, for ink thin enough to become a rule. The dropped one is the defect
+# this table exists for: a bar drawn outside its scissor, which Poppler does not
+# paint and which reached the IR as page structure.
+CLIP_PROBE_RULES: tuple[tuple[tuple[float, float, float, float], str], ...] = (
+    ((25.0, 49.0, 65.0, 50.0), "a bar inside its clip"),
+    ((60.0, 54.0, 80.0, 55.0), "a bar cut short by the clip's right edge"),
+)
+
+# What the probe page proves is absent: two ops outside their scissor, one of
+# them inside the *inner* clip but outside the outer, so intersecting is the
+# only walk that drops it -- taking the innermost scissor alone would keep it.
+CLIP_PROBE_DROPPED = 3
+
+
+def clip_probe_pdf() -> bytes:
+    """Assemble the probe page into a PDF, offsets and all."""
+    objects = [
+        b"<</Type/Catalog/Pages 2 0 R>>",
+        b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
+        b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]"
+        b"/Contents 4 0 R/Resources<<>>>>",
+        b"<</Length %d>>stream\n%s\nendstream" % (
+            len(CLIP_PROBE_STREAM), CLIP_PROBE_STREAM),
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    start = len(out)
+    out += b"xref\n0 %d\n" % (len(objects) + 1)
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += b"%010d 00000 n \n" % offset
+    out += b"trailer\n<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1, start)
+    return bytes(out)
+
+
+def clip_probe_ir() -> dict[str, Any]:
+    """The probe page's IR, plus whether a desynced clip walk is refused."""
+    doc = fitz.open(stream=clip_probe_pdf(), filetype="pdf")
+    page = doc[0]
+    drawings = list(page.get_drawings())
+    ir = extract_page(page, doc, 1)
+    try:
+        clip_scissors(page, drawings[:-1])
+    except SystemExit:
+        refused = True
+    else:
+        refused = False
+    doc.close()
+    return {"rules": ir["rules"], "area_fills": ir["area_fills"],
+            "drawings": len(drawings), "desync_refused": refused}
+
+
 def paint_order_desync_probes(page: fitz.Page,
                               drawings: list[dict[str, Any]]) -> dict[str, bool]:
     """Whether paint_order refuses a drawings list the bbox log cannot explain.
@@ -1624,6 +1870,10 @@ def gather_evidence(profile: SelfTestProfile,
         "mask_is_opaque": {},
         "codepoints": {}, "leaning_bars": {}, "desync": {},
         "merged_intervals": merge_intervals(list(SELF_TEST_MERGE_INTERVALS)),
+        # Deliberately outside "ir": the clip probe is a page this module wrote
+        # to interrogate one operator, not a form, and the corpus-wide checks
+        # must not read it as one.
+        "clip_probe": clip_probe_ir(),
     }
     for code, (relative, revision, digest) in profile.fixtures.items():
         path = source_root / relative
@@ -2048,6 +2298,40 @@ def check_tone(evidence: dict[str, Any]) -> list[str]:
     return failures
 
 
+def check_clips(evidence: dict[str, Any]) -> list[str]:
+    """Ink outside its scissor never reaches the IR, and ink inside is untouched.
+
+    Both halves matter. Dropping too little is the shipped defect -- 22 rules
+    painted black on 6 forms where the official sheet is blank. Dropping too
+    much would be worse and quieter: structure the reader can see, missing.
+    """
+    probe = evidence["clip_probe"]
+    failures: list[str] = []
+    if not probe["desync_refused"]:
+        failures.append("clip_scissors accepted a drawings list the extended "
+                        "walk cannot explain instead of raising")
+
+    for name, expected in (("area_fills", CLIP_PROBE_AREA_FILLS),
+                           ("rules", CLIP_PROBE_RULES)):
+        want = {box: why for box, why in expected}
+        got = {(item["x0"], item["y0"], item["x1"], item["y1"])
+               for item in probe[name]}
+        for box, why in want.items():
+            if box not in got:
+                failures.append(f"clip probe lost the {name[:-1]} at {box} "
+                                f"({why})")
+        for box in sorted(got - set(want)):
+            failures.append(f"clip probe kept a {name[:-1]} at {box} that its "
+                            f"scissor does not let through")
+
+    kept = len(probe["area_fills"]) + len(probe["rules"])
+    if probe["drawings"] - kept != CLIP_PROBE_DROPPED:
+        failures.append(
+            f"clip probe painted {probe['drawings']} ops and kept {kept}; "
+            f"{CLIP_PROBE_DROPPED} are outside their scissor")
+    return failures
+
+
 def check_codepoints(evidence: dict[str, Any]) -> list[str]:
     """No run holds a character the source did not state.
 
@@ -2185,6 +2469,7 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("transforms", check_transforms),
     ("paths", check_paths),
     ("tone", check_tone),
+    ("clips", check_clips),
     ("codepoints", check_codepoints),
     ("is-bar-like", check_bar_like),
 )
@@ -2273,6 +2558,14 @@ def mutate_tone(evidence: dict[str, Any]) -> None:
     raise AssertionError("tone mutation found no decorative rule")
 
 
+def mutate_clips(evidence: dict[str, Any]) -> None:
+    """Paint the escaped bar after all, exactly as no clip handling did."""
+    probe = evidence["clip_probe"]
+    escaped = dict(probe["rules"][0])
+    escaped.update(x0=90.0, y0=49.0, x1=120.0, y1=50.0)
+    probe["rules"] = [*probe["rules"], escaped]
+
+
 def mutate_codepoints(evidence: dict[str, Any]) -> None:
     """Print the section sign rawdict offered, where the file states nothing."""
     for ir in evidence["ir"].values():
@@ -2311,6 +2604,7 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
      mutate_transforms),
     ("paths", "one filled triangle is dropped", mutate_paths),
     ("tone", "a decorative grey rule is reported as structural", mutate_tone),
+    ("clips", "a bar drawn outside its scissor is painted anyway", mutate_clips),
     ("codepoints", "an unmappable glyph prints as a section sign", mutate_codepoints),
     ("is-bar-like", "a leaning separator loses its rule", mutate_bar_like),
 )
