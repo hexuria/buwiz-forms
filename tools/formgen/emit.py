@@ -1032,6 +1032,49 @@ def text_json(run: dict[str, Any], identifier: str, style: RunStyle,
 # reported, never silently corrected: the box is the source's.
 FIELD_MIN_SIZE_PT = 4.0
 
+# ...but "the box is the source's" is only true of a box we did not shrink
+# ourselves, and until this split existed the report could not tell the two
+# apart. A field is undersized for exactly one of two reasons:
+#
+#   * the CELL the source drew is itself too short to carry a legible size --
+#     nothing downstream can fix that, and reporting it is all that is honest;
+#   * the cell is tall enough and the writing box we DERIVED from it is not --
+#     a legible box existed and we discarded it.
+#
+# Only the second is our defect, and it is the one that was invisible, because
+# both populations arrived as one undifferentiated count. Measured over the 53
+# built bundles at the time of writing: 243 undersized fields of 10,481, of
+# which 15 are the source's and 228 are ours.
+#
+# The classification is deliberately not a ratio: it asks whether the cell
+# COULD have carried FIELD_MIN_SIZE_PT, through the same fit `field_box`
+# performs, so the audit cannot disagree with the fit it is auditing.
+
+
+# A writing box that leaves its own cell is clipped away by `.f{overflow:hidden}`
+# and by `.f .s`, so the part outside is a typing surface nobody can see, reach
+# or print. That is never legitimate: 225 comb bands across 21 bundles are in
+# this state today, the worst of them 350.16pt tall and starting 165.84pt ABOVE
+# a 16.80pt cell. The epsilon is the layout's own coordinate noise, not a
+# tolerance to hide inside.
+FIELD_CONTAINMENT_EPSILON_PT = 0.01
+
+# A comb's writing box is the divider band lattice.py measured, and the official
+# artwork says that band is a guide mark UNDER the writing box rather than the
+# box itself: in 2550M's item-4 TIN row the cell walls span the full 15.60pt of
+# the row (x 65.64, 99.48, 104.28, 137.40, 141.96, 175.08, 179.88, 212.76, every
+# one from y 118.80 to 134.40) while the digit separators are 3.12pt ticks along
+# its bottom edge at y 131.28-134.40. Reading the tick as the height of the
+# writing surface collapses the typing box to a fifth of the row.
+#
+# A minority share of the cell is reported, not failed: whether a comb band is a
+# sub-band of a taller cell or the whole of it is lattice.py's measurement to
+# make, and emit.py policing it with a threshold of its own would be the wrong
+# file correcting the wrong producer. What emit.py owns is saying out loud how
+# much of the cell the surface it emitted actually covers. Measured today: 4,474
+# of 4,522 comb cells are under half, 2551Q's 105 of 105 at 0.34-0.42.
+COMB_BAND_COLLAPSE_RATIO = 0.5
+
 # Used only when the plan carries no shipped-face vertical metrics, which is
 # also warned about. 1.2em is the browser's own `normal` line box, so a field
 # fitted through it is no worse placed than an unstyled one.
@@ -1200,6 +1243,21 @@ def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
     if height <= 0.0 or face.line_span_em <= 0.0:
         return None
 
+    # One fit for both kinds, and the `min` is the whole reason a comb cannot
+    # outgrow the sheet it sits on. The fitted size is the smaller of what the
+    # box allows and what the sheet prints its own body text at, so a comb whose
+    # writing box is the full height of a 15.60pt row is set at the modal body
+    # size (8.52pt on 2551Q) and not at the 13.96pt that height alone would
+    # permit -- a taxpayer's TIN must not print larger than the label beside it.
+    # Measured over the corpus with every comb band taken at its cell's full
+    # height, all 4,522 land on the cap, so this is the binding constraint on
+    # every comb once the band is derived correctly, not a rare guard.
+    #
+    # The other axis needs no cap, and that is measured rather than assumed: at
+    # the capped size a digit's advance (0.556em in Arimo, 0.5em in Tinos)
+    # exceeds the narrowest slot of 0 of those 4,522 combs, and of 1 even at a
+    # pessimistic 0.6em. A width cap here would be speculative machinery earning
+    # nothing, so there is none.
     size = min(face.size_pt, _floor2(height / face.line_span_em))
     if size <= 0.0:
         return None
@@ -1349,7 +1407,9 @@ class FieldPlan:
     pure function of the layout and therefore deterministic.
     """
 
-    __slots__ = ("face", "boxes", "classes", "small", "blocked")
+    __slots__ = ("face", "boxes", "classes", "small", "blocked",
+                 "undersized_source", "undersized_derived", "uncontained",
+                 "collapsed", "comb_count")
 
     def __init__(self, layout: dict[str, Any], face: FieldFace | None,
                  warnings: list[str], ir: dict[str, Any] | None = None) -> None:
@@ -1357,6 +1417,15 @@ class FieldPlan:
         self.boxes: dict[str, FieldBox] = {}
         self.classes: dict[tuple[float, float, float | None], str] = {}
         self.small: list[str] = []
+        # The two populations `small` used to conflate, and the two comb-band
+        # faults nothing reported at all. Each cell id appears in at most one of
+        # `uncontained` and `collapsed`: a band that has left its cell is
+        # already the worse finding and its share of the cell is meaningless.
+        self.undersized_source: list[str] = []
+        self.undersized_derived: list[str] = []
+        self.uncontained: list[str] = []
+        self.collapsed: list[str] = []
+        self.comb_count = 0
         # cell id -> why it has no typing surface, for the markup and the report.
         self.blocked: dict[str, str] = {}
         if face is None:
@@ -1379,8 +1448,7 @@ class FieldPlan:
                                     f"height, so it gets no typing surface")
                     continue
                 self.boxes[cell["id"]] = box
-                if box.size_pt < FIELD_MIN_SIZE_PT:
-                    self.small.append(cell["id"])
+                self._audit_surface(cell, box, face)
         # Sorted through an explicit key: the tracking is None for a field whose
         # scaled tracking rounds to nothing, and a bare tuple sort would compare
         # None against a float the day two boxes share a size and differ there.
@@ -1388,12 +1456,7 @@ class FieldPlan:
                           key=lambda k: (k[0], k[1], k[2] is not None, k[2] or 0.0))
         for index, key in enumerate(distinct):
             self.classes[key] = f"fh{index}"
-        if self.small:
-            warnings.append(
-                f"{len(self.small)} field(s) fit the body face at under "
-                f"{fmt(FIELD_MIN_SIZE_PT)}pt ({', '.join(self.small[:6])}"
-                f"{'...' if len(self.small) > 6 else ''}); the box is the source's own and "
-                f"is emitted as measured")
+        self._report(warnings)
         if self.blocked:
             names = sorted(self.blocked)
             warnings.append(
@@ -1405,6 +1468,85 @@ class FieldPlan:
             warnings.append(
                 "no IR was given to the field plan, so pre-printed occupancy is "
                 "unmeasured and a cell filled with statutory text may be editable")
+
+    def _audit_surface(self, cell: dict[str, Any], box: FieldBox,
+                       face: FieldFace) -> None:
+        """Classify one emitted writing box against the cell it came from."""
+        cell_height = float(cell["y1"]) - float(cell["y0"])
+        if box.size_pt < FIELD_MIN_SIZE_PT:
+            self.small.append(cell["id"])
+            # The same fit `field_box` performs, applied to the whole cell: if
+            # the cell could have carried a legible size then the box that
+            # cannot is one we derived, not one the source drew.
+            capable = (face.line_span_em > 0.0
+                       and _floor2(cell_height / face.line_span_em) >= FIELD_MIN_SIZE_PT)
+            target = self.undersized_derived if capable else self.undersized_source
+            target.append(cell["id"])
+        comb = cell.get("comb")
+        if not comb:
+            return
+        self.comb_count += 1
+        top = float(comb.get("y0", cell["y0"])) - float(cell["y0"])
+        height = float(comb.get("height_pt", cell_height))
+        if (top < -FIELD_CONTAINMENT_EPSILON_PT
+                or top + height > cell_height + FIELD_CONTAINMENT_EPSILON_PT):
+            self.uncontained.append(cell["id"])
+        elif cell_height > 0.0 and height < COMB_BAND_COLLAPSE_RATIO * cell_height:
+            self.collapsed.append(cell["id"])
+
+    @staticmethod
+    def _sample(ids: Sequence[str], limit: int = 6) -> str:
+        return ", ".join(ids[:limit]) + ("..." if len(ids) > limit else "")
+
+    def _report(self, warnings: list[str]) -> None:
+        """State every writing-box fault, by population, against a denominator.
+
+        Four populations, because one count could not be acted on. The previous
+        report said "N field(s) fit the body face at under 4pt; the box is the
+        source's own" about every undersized field at once, which was true of 15
+        of them and false of the other 228, and said nothing whatever about a
+        comb band that had left its cell -- 225 of those, unreported, including
+        one 350.16pt band inside a 16.80pt cell.
+
+        Each line names its denominator. A report that says "228 fields" leaves
+        a reader guessing whether that is most of the sheet or a rounding error;
+        one that says "228 of 10,481" does not, and a count that moves between
+        two runs is legible without going and measuring the corpus.
+
+        Note where this arrives: `main` prints these to stderr, and batch.py's
+        `run_stage` discards a subprocess's stderr entirely unless it exits
+        non-zero, so on a corpus run nobody sees a single one of them. That is
+        the real reason the old warning was invisible -- not that it fired often,
+        but that it fired into a stream that is thrown away. The channels that do
+        survive are `--self-test`, which gate.py runs and cannot discard, and the
+        `?debug=fields` overlay, which puts the same four populations in front of
+        a human in colour. Both are wired to these lists.
+        """
+        total = len(self.boxes)
+        if self.undersized_derived:
+            warnings.append(
+                f"{len(self.undersized_derived)} of {total} field(s) fit the body face "
+                f"at under {fmt(FIELD_MIN_SIZE_PT)}pt inside a cell that is tall enough "
+                f"to carry a legible one, so the writing box was lost in derivation and "
+                f"is ours to fix, not the source's ({self._sample(self.undersized_derived)})")
+        if self.undersized_source:
+            warnings.append(
+                f"{len(self.undersized_source)} of {total} field(s) fit the body face at "
+                f"under {fmt(FIELD_MIN_SIZE_PT)}pt because the cell the source drew is "
+                f"itself that short; the box is the source's own and is emitted as "
+                f"measured ({self._sample(self.undersized_source)})")
+        if self.uncontained:
+            warnings.append(
+                f"{len(self.uncontained)} of {self.comb_count} comb writing box(es) are "
+                f"not inside the cell that owns them, so `.f{{overflow:hidden}}` clips "
+                f"away a typing surface that cannot be seen, reached or printed "
+                f"({self._sample(self.uncontained)})")
+        if self.collapsed:
+            warnings.append(
+                f"{len(self.collapsed)} of {self.comb_count} comb writing box(es) cover "
+                f"under {fmt(COMB_BAND_COLLAPSE_RATIO * 100)}% of the height of their own "
+                f"cell, so the typing surface is the divider band rather than the box the "
+                f"cell walls draw ({self._sample(self.collapsed)})")
 
     def __bool__(self) -> bool:
         return bool(self.boxes)
@@ -3280,6 +3422,340 @@ window.formgenFields={slotsOf:slotsOf};
 })();"""
 
 
+# ---------------------------------------------------------------------------
+# The field debug overlay
+# ---------------------------------------------------------------------------
+#
+# The affordance a taxpayer needs is `:focus`, and it shows exactly one field at
+# a time. That is right for filling a form in and useless for reviewing one:
+# 2551Q carries 782 inputs, so seeing them all means 782 tab presses, and a
+# defect nobody looked at is a defect that ships. Every writing-box fault this
+# module knows how to describe -- the four populations `FieldPlan._report`
+# counts, plus the two only a laid-out page can reveal -- is put on the screen
+# at once instead, in colour, behind one query string.
+#
+# Why it is safe to ship inside the document:
+#
+#   * The rules are a JS string. The emitted stylesheet is untouched, so a
+#     printed or packaged page contains no debug selector to lose a guard over,
+#     and the single `<style>` the document ships is byte-for-byte the one it
+#     shipped before this existed.
+#   * The script's first statement that touches anything is behind an exact
+#     `debug=fields` token in `location.search`. Without it the function returns
+#     having read one string off `window.location` and created nothing: no
+#     element, no attribute, no listener. A page opened without the token is the
+#     page that would have rendered if this script were deleted.
+#   * The rules it does inject are wrapped in `@media screen`, and a second
+#     `@media print` block neutralises every one of them with `!important`.
+#   * `beforeprint` removes the injected stylesheet outright and `afterprint`
+#     puts it back, so even a browser that ignored both media guards has nothing
+#     to apply at print time.
+#
+# Four independent barriers, any one of which is sufficient. The order matters:
+# the query string is first because it is the only one that survives a
+# stylesheet transform dropping the media guards, which has happened to this
+# repo's packaged bundles before.
+
+# The colours are the state names, and they mean:
+#   ok        blue, dashed  -- the input is where its geometry says it is
+#   small     orange        -- the fitted face is under FIELD_MIN_SIZE_PT
+#   clipped   magenta       -- an ancestor's overflow cuts the box away
+#   occluded  red           -- something else paints over the box
+#   nobox     purple        -- the box has no usable width or height
+# Defects are solid and filled, health is a hairline dash, so a healthy sheet
+# reads as a wireframe and a fault reads as a blot.
+FIELD_DEBUG_SCREEN_CSS = (
+    '[data-fg-field]{outline-offset:0!important}'
+    '[data-fg-field="ok"]{outline:1px dashed rgba(21,101,192,.9)!important}'
+    '[data-fg-field="small"]{outline:1.5px solid #ef6c00!important;'
+    'background:rgba(239,108,0,.20)!important}'
+    '[data-fg-field="clipped"]{outline:1.5px solid #c2185b!important;'
+    'background:rgba(194,24,91,.22)!important}'
+    '[data-fg-field="occluded"]{outline:1.5px solid #d32f2f!important;'
+    'background:rgba(211,47,47,.25)!important}'
+    '[data-fg-field="nobox"]{outline:1.5px solid #6a1b9a!important;'
+    'background:rgba(106,27,154,.30)!important}'
+    # A field with no box paints no outline of its own, so the slot or cell that
+    # swallowed it is marked instead: otherwise the one fault a reviewer most
+    # needs to find is the only one that is invisible.
+    '[data-fg-host]{outline:1.5px dotted #6a1b9a!important;outline-offset:1px!important}'
+    '[data-fg-legend]{position:fixed;right:8px;top:8px;z-index:2147483647;'
+    'background:#fff;color:#111;border:1px solid #111;padding:6px 8px;'
+    'font:11px/1.5 system-ui,-apple-system,sans-serif;'
+    'box-shadow:0 1px 4px rgba(0,0,0,.35)}'
+    '[data-fg-swatch]{display:inline-block;width:9px;height:9px;'
+    'margin-right:6px;vertical-align:-1px;border:1px solid #111}'
+    '[data-fg-swatch="ok"]{background:#1565c0}'
+    '[data-fg-swatch="small"]{background:#ef6c00}'
+    '[data-fg-swatch="clipped"]{background:#c2185b}'
+    '[data-fg-swatch="occluded"]{background:#d32f2f}'
+    '[data-fg-swatch="nobox"]{background:#6a1b9a}'
+)
+FIELD_DEBUG_PRINT_CSS = (
+    '[data-fg-field]{outline:0!important;background:none!important}'
+    '[data-fg-host]{outline:0!important}'
+    '[data-fg-legend]{display:none!important}'
+)
+FIELD_DEBUG_CSS = ("@media screen{" + FIELD_DEBUG_SCREEN_CSS + "}"
+                   "@media print{" + FIELD_DEBUG_PRINT_CSS + "}")
+
+FIELD_DEBUG_JS = r"""(function(){
+"use strict";
+/* An exact token, not a substring: `?nodebug=fields` and `?debug=fieldsets`
+   are not requests for this. */
+var TOKEN="debug=fields";
+function requested(){
+  var query=String(window.location.search||"");
+  if(query.charAt(0)==="?"){query=query.slice(1);}
+  var parts=query.split("&");
+  for(var i=0;i<parts.length;i++){
+    if(parts[i]===TOKEN){return true;}
+  }
+  return false;
+}
+/* Nothing above this line has touched the document, and nothing below it runs
+   without the token. This is the byte-identical-layout proof: a page loaded
+   without ?debug=fields creates no element, sets no attribute and registers no
+   listener, so its rendered layout is the layout it had before this script
+   existed. */
+if(!requested()){return;}
+var CSS=__FIELD_DEBUG_CSS__;
+/* FIELD_MIN_SIZE_PT, interpolated from the module constant so the overlay and
+   the report cannot drift apart or be relaxed independently. */
+var MIN_SIZE_PT=__FIELD_MIN_SIZE_PT__;
+var PT_PER_PX=0.75;
+/* Sub-pixel layout noise. A box out by a third of a pixel is not clipped; a box
+   out by a point is. */
+var EDGE_TOLERANCE_PX=0.5;
+var ORDER=["ok","small","clipped","occluded","nobox"];
+var LABELS={ok:"as drawn",
+            small:"fitted under "+MIN_SIZE_PT+"pt",
+            clipped:"clipped by an ancestor",
+            occluded:"covered by another element",
+            nobox:"no usable box"};
+
+function fontPt(el){
+  var size=parseFloat(window.getComputedStyle(el).fontSize);
+  return isFinite(size)?size*PT_PER_PX:0;
+}
+/* Every ancestor that establishes a clip, against the field's own rect. `.f`
+   and `.f .s` both set overflow:hidden, which is what makes a comb band that
+   starts above its cell disappear rather than overhang. */
+function clipped(el,rect){
+  var node=el.parentElement;
+  while(node&&node!==document.documentElement){
+    var style=window.getComputedStyle(node);
+    if(style.overflow!=="visible"||style.overflowX!=="visible"||
+       style.overflowY!=="visible"){
+      var box=node.getBoundingClientRect();
+      if(rect.left<box.left-EDGE_TOLERANCE_PX||
+         rect.top<box.top-EDGE_TOLERANCE_PX||
+         rect.right>box.right+EDGE_TOLERANCE_PX||
+         rect.bottom>box.bottom+EDGE_TOLERANCE_PX){
+        return true;
+      }
+    }
+    node=node.parentElement;
+  }
+  return false;
+}
+/* Centre plus four inset corners. A single centre probe misses a box half
+   covered by the cell beside it, which is the shape most of these take. A hit
+   on a DESCENDANT is still this field; a hit on an ancestor is not -- it means
+   the point landed on the box behind the input rather than on the input.
+
+   The inset is at least a whole CSS pixel, and that is measured, not tidy:
+   Chromium quantises hit testing to the pixel grid, so a probe 0.5px inside a
+   comb slot's right edge is answered by the NEXT slot. At the corner insets a
+   quarter-height rule produced -- 0.96px on a 3.83px-tall slot -- 2550M
+   reported 36 occluded fields, every one of them a false positive against its
+   own neighbour. A box too small to carry the inset on an axis is probed at its
+   centre on that axis instead of being lied about. */
+/* Snapped to the centre of a whole CSS pixel, because that is the granularity
+   the hit test answers at. Without it the verdict depends on the scroll offset
+   the field happened to be probed from, and a fractional offset is exactly what
+   centring a field in the viewport produces: the same 2550M reported 0 occluded
+   fields at one window size and 5 at another. A point clamped back inside the
+   box when snapping would push it out, so the snap can move a probe but never
+   move it off the element. */
+function pixelCentre(value,low,high){
+  var snapped=Math.floor(value)+0.5;
+  if(snapped<low){snapped=low;}
+  if(snapped>high){snapped=high;}
+  return snapped;
+}
+function probePoints(rect){
+  var cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+  var dx=Math.min(2,Math.max(1,rect.width/4));
+  var dy=Math.min(2,Math.max(1,rect.height/4));
+  var x0=rect.width>=2*dx?rect.left+dx:cx;
+  var x1=rect.width>=2*dx?rect.right-dx:cx;
+  var y0=rect.height>=2*dy?rect.top+dy:cy;
+  var y1=rect.height>=2*dy?rect.bottom-dy:cy;
+  var lx=rect.left+Math.min(dx,rect.width/2),hx=rect.right-Math.min(dx,rect.width/2);
+  var ly=rect.top+Math.min(dy,rect.height/2),hy=rect.bottom-Math.min(dy,rect.height/2);
+  return [[pixelCentre(cx,lx,hx),pixelCentre(cy,ly,hy)],
+          [pixelCentre(x0,lx,hx),pixelCentre(y0,ly,hy)],
+          [pixelCentre(x1,lx,hx),pixelCentre(y0,ly,hy)],
+          [pixelCentre(x0,lx,hx),pixelCentre(y1,ly,hy)],
+          [pixelCentre(x1,lx,hx),pixelCentre(y1,ly,hy)]];
+}
+function occluded(el,rect){
+  var points=probePoints(rect);
+  for(var i=0;i<points.length;i++){
+    /* Every point is inside the viewport by construction: inView() refuses to
+       hand back a rect that is not wholly in it. */
+    var hit=document.elementFromPoint(points[i][0],points[i][1]);
+    if(hit!==el&&!el.contains(hit)){return true;}
+  }
+  return false;
+}
+/* Bring a field into the viewport by scrolling the WINDOW, never by
+   scrollIntoView. `.page`, `.f` and `.f .s` are all overflow:hidden, which
+   makes every one of them a scroll container the browser is entitled to scroll
+   instead -- and scrolling a clip box moves the very content this pass is
+   measuring, leaving the sheet displaced afterwards. Fields the window cannot
+   reach (a band that starts above its own page) are reported as unprobed rather
+   than assumed healthy. */
+function inside(rect){
+  /* WHOLLY inside, not merely intersecting. A field straddling the viewport
+     edge has probe points the browser will not answer for, and dropping those
+     points quietly changes what the remaining ones are allowed to prove: the
+     same four fields on 1800-2018 came back healthy at 1400x1000 and occluded
+     at 1200x900, purely because the pass happened to reach them at a different
+     scroll offset. A verdict that depends on the window size is not a
+     measurement. */
+  return rect.left>=0&&rect.top>=0&&
+         rect.right<=window.innerWidth&&rect.bottom<=window.innerHeight;
+}
+function inView(el){
+  var rect=el.getBoundingClientRect();
+  if(inside(rect)){return rect;}
+  var root=document.documentElement;
+  /* Whole pixels: a fractional scroll offset shifts every rect on the page by a
+     fraction and moves the probe grid under the field being measured. */
+  window.scrollTo(
+    Math.round(Math.max(0,Math.min(rect.left+window.pageXOffset-window.innerWidth/2,
+                                   root.scrollWidth-window.innerWidth))),
+    Math.round(Math.max(0,Math.min(rect.top+window.pageYOffset-window.innerHeight/2,
+                                   root.scrollHeight-window.innerHeight))));
+  rect=el.getBoundingClientRect();
+  return inside(rect)?rect:null;
+}
+function legend(counts,total,unprobed){
+  var node=document.querySelector("[data-fg-legend]");
+  if(!node){
+    node=document.createElement("div");
+    node.setAttribute("data-fg-legend","");
+    /* It sits over the top-right corner of the sheet, which on most BIR forms
+       is the form number. Clicking it gets it out of the way;
+       formgenFieldDebug.refresh() brings it back. */
+    node.addEventListener("click",function(){node.style.display="none";});
+    document.body.appendChild(node);
+  }
+  node.style.display="";
+  while(node.firstChild){node.removeChild(node.firstChild);}
+  var head=document.createElement("div");
+  head.textContent="?debug=fields — "+total+" input(s)"+
+    (unprobed?", "+unprobed+" unreachable on screen":"");
+  node.appendChild(head);
+  for(var i=0;i<ORDER.length;i++){
+    var state=ORDER[i];
+    var line=document.createElement("div");
+    var swatch=document.createElement("span");
+    swatch.setAttribute("data-fg-swatch",state);
+    line.appendChild(swatch);
+    line.appendChild(document.createTextNode(counts[state]+"  "+LABELS[state]));
+    node.appendChild(line);
+  }
+}
+/* Two passes, and the split is what keeps the verdicts honest.
+
+   The first needs no scrolling: size and ancestor clipping are answered from
+   geometry alone, and reading every field's rect at one scroll position means
+   no verdict depends on where the page happened to be. Only the fields that
+   survive it need a hit test, and only those are scrolled to.
+
+   Precedence, worst first: a box with no size cannot be probed, a clipped box
+   probes as whatever replaced it, and a covered box's font size is beside the
+   point. Each field reports the most fundamental thing wrong with it. */
+function run(){
+  var scrollX=window.pageXOffset,scrollY=window.pageYOffset;
+  /* <template> content lives in a separate document fragment, so a blueprint
+     row is never selected here and never marked. */
+  var inputs=document.querySelectorAll("input.fi");
+  var counts={},states=[],pending=[],unprobed=0,i,el,host,rect;
+  for(i=0;i<ORDER.length;i++){counts[ORDER[i]]=0;}
+  for(i=0;i<inputs.length;i++){
+    el=inputs[i];
+    el.removeAttribute("data-fg-field");
+    host=el.parentElement;
+    if(host){host.removeAttribute("data-fg-host");}
+  }
+  for(i=0;i<inputs.length;i++){
+    el=inputs[i];
+    rect=el.getBoundingClientRect();
+    if(rect.width<1||rect.height<1){states.push("nobox");}
+    else if(clipped(el,rect)){states.push("clipped");}
+    else{states.push(null);pending.push(i);}
+  }
+  /* The legend is position:fixed over the top-right of the viewport, so on a
+     small window it sits on top of real fields and every one of them probes as
+     covered -- by us. It reported 14 phantom occlusions on 2551Q at 900x700 and
+     none at 1400x1000, which is how a measurement that depends on the window
+     size announces itself. The overlay's own chrome leaves the document for the
+     duration of the pass; legend() puts it back. */
+  var chrome=document.querySelector("[data-fg-legend]");
+  if(chrome){chrome.style.display="none";}
+  /* In document order, so the window walks down the sheet once instead of
+     jumping back and forth across it. */
+  for(i=0;i<pending.length;i++){
+    el=inputs[pending[i]];
+    rect=inView(el);
+    if(rect===null){unprobed++;}
+    else if(occluded(el,rect)){states[pending[i]]="occluded";continue;}
+    states[pending[i]]=fontPt(el)<MIN_SIZE_PT?"small":"ok";
+  }
+  window.scrollTo(scrollX,scrollY);
+  /* Marked only after the whole sheet is measured: a mark is a paint, and no
+     field's verdict may depend on whether the field before it was painted. */
+  for(i=0;i<inputs.length;i++){
+    el=inputs[i];
+    counts[states[i]]++;
+    el.setAttribute("data-fg-field",states[i]);
+    if(states[i]!=="ok"){
+      host=el.parentElement;
+      if(host){host.setAttribute("data-fg-host",states[i]);}
+    }
+  }
+  legend(counts,inputs.length,unprobed);
+  return counts;
+}
+function inject(){
+  if(document.getElementById("formgen-field-debug")){return;}
+  var style=document.createElement("style");
+  style.id="formgen-field-debug";
+  style.textContent=CSS;
+  document.head.appendChild(style);
+}
+function drop(){
+  var style=document.getElementById("formgen-field-debug");
+  if(style&&style.parentNode){style.parentNode.removeChild(style);}
+}
+/* The fourth barrier. @media screen and @media print already keep the overlay
+   off paper; this removes the stylesheet from the document entirely for the
+   duration of the print, so a browser that honoured neither has nothing left
+   to apply. */
+window.addEventListener("beforeprint",drop);
+window.addEventListener("afterprint",inject);
+function start(){inject();run();}
+if(document.readyState==="complete"){start();}
+else{window.addEventListener("load",start);}
+window.formgenFieldDebug={refresh:run,occluded:occluded,clipped:clipped};
+})();""".replace("__FIELD_DEBUG_CSS__", json.dumps(FIELD_DEBUG_CSS)) \
+        .replace("__FIELD_MIN_SIZE_PT__", fmt(FIELD_MIN_SIZE_PT))
+
+
 class Options:
     __slots__ = ("rule_backend", "fonts_dir", "assets_dir", "out_dir", "band_rows",
                  "title", "guide_plan", "document", "guide_layout", "guide_href",
@@ -3855,6 +4331,11 @@ def build_document(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, A
         "<script>",
         FIELD_JS,
         "</script>",
+        # Last, and inert until asked for: see FIELD_DEBUG_JS for the four
+        # barriers that keep it out of the printed and packaged page.
+        "<script>",
+        FIELD_DEBUG_JS,
+        "</script>",
         "</body>",
         "</html>",
         "",
@@ -4227,6 +4708,198 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     _check("@media print{.fi{" in html,
            "the print stylesheet strips input chrome",
            "@media print resets border/outline/background", failures)
+
+    field_surface_assertions(layout, plan, failures)
+    field_debug_assertions(html, failures)
+
+
+def _synthetic_comb(cells: int, x0: float, pitch: float,
+                    y0: float, height: float) -> dict[str, Any]:
+    return {"cells": cells, "pitch_pt": pitch, "y0": y0, "height_pt": height,
+            "slot_x": [x0 + index * pitch for index in range(cells + 1)]}
+
+
+def _synthetic_cell(cell_id: str, y0: float, y1: float,
+                    comb: dict[str, Any] | None = None) -> dict[str, Any]:
+    cell: dict[str, Any] = {"id": cell_id, "kind": "field", "row": 0, "col": 0,
+                            "x0": 0.0, "x1": 120.0, "y0": y0, "y1": y1}
+    if comb is not None:
+        cell["comb"] = comb
+    return cell
+
+
+def field_surface_assertions(layout: dict[str, Any], plan: dict[str, Any],
+                             failures: list[str]) -> None:
+    """The fitted size is capped, and every writing-box fault is classified.
+
+    Two things are proved here, and the second is why the first was worth
+    proving. The size a field is fitted at is the smaller of what its box allows
+    and what the sheet prints its own body text at, so a comb whose writing box
+    grows to the full height of its row is still set at the modal body size --
+    a taxpayer's TIN must not print larger than the caption beside it. And every
+    field whose writing box is unusable lands in exactly one named population,
+    so the report can be acted on: 243 undersized fields split 15 the source's
+    and 228 ours is a work list, while "243 fields are small" is not.
+
+    The populations are exercised on constructed cells rather than found ones.
+    A corpus that happens to contain no uncontained comb today would silently
+    stop testing the classifier that finds them, and the whole point of this
+    layer is that a fault nobody can see is a fault that ships.
+    """
+    face = resolve_field_face(plan, [])
+    if face is None:
+        _check(False, "the font plan resolves a body face to fit fields to",
+               "no metric-compatible face", failures)
+        return
+
+    # A comb band at the full height of a realistic 15.60pt row: the row allows
+    # a far larger size than the sheet's own body text, and the cap is what
+    # decides. Asserted against a plain field of identical height, because the
+    # two must be capped by the same rule and once were not obviously so.
+    row = 15.6
+    allowed = _floor2(row / face.line_span_em)
+    comb_box = field_box(_synthetic_cell("synthetic-comb", 0.0, row,
+                                         _synthetic_comb(9, 0.0, 11.04, 0.0, row)), face)
+    plain_box = field_box(_synthetic_cell("synthetic-field", 0.0, row), face)
+    _check(comb_box is not None and plain_box is not None
+           and comb_box.size_pt == face.size_pt
+           and plain_box.size_pt == face.size_pt
+           and allowed > face.size_pt,
+           "a full-height comb is capped at the sheet's own body size",
+           f"{fmt(row)}pt box allows {fmt(allowed)}pt, both kinds fit "
+           f"{fmt(comb_box.size_pt) if comb_box else 'none'}pt against a body face of "
+           f"{fmt(face.size_pt)}pt", failures)
+
+    # One cell per population, in this order, and nothing may land in two.
+    short = 2.0
+    tall = 15.6
+    stub = {"pages": [{"index": 0, "cells": [
+        _synthetic_cell("p0c0", 0.0, short),
+        _synthetic_cell("p0c1", 0.0, tall,
+                        _synthetic_comb(9, 0.0, 11.04, tall - short, short)),
+        _synthetic_cell("p0c2", 0.0, 10.0,
+                        _synthetic_comb(9, 0.0, 11.04, -5.0, 20.0)),
+        _synthetic_cell("p0c3", 0.0, tall,
+                        _synthetic_comb(9, 0.0, 11.04, 0.0, tall)),
+    ]}]}
+    stub_warnings: list[str] = []
+    stub_plan = FieldPlan(stub, face, stub_warnings)
+    classified = {
+        "undersized_source": stub_plan.undersized_source,
+        "undersized_derived": stub_plan.undersized_derived,
+        "uncontained": stub_plan.uncontained,
+        "collapsed": stub_plan.collapsed,
+    }
+    _check(classified == {"undersized_source": ["p0c0"],
+                          "undersized_derived": ["p0c1"],
+                          "uncontained": ["p0c2"],
+                          "collapsed": ["p0c1"]},
+           "every writing-box fault lands in its own population",
+           "; ".join(f"{name}={value}" for name, value in sorted(classified.items())),
+           failures)
+    _check(stub_plan.small == ["p0c0", "p0c1"]
+           and len(stub_plan.undersized_source) + len(stub_plan.undersized_derived)
+           == len(stub_plan.small),
+           "the undersized populations partition the undersized fields",
+           f"{len(stub_plan.small)} undersized = "
+           f"{len(stub_plan.undersized_source)} the source's + "
+           f"{len(stub_plan.undersized_derived)} ours", failures)
+    # A count with no denominator cannot be read, and a fault with no count
+    # cannot be tracked. Both were true of the report this replaced.
+    reported = "\n".join(stub_warnings)
+    _check(all(phrase in reported for phrase in
+               ("1 of 4 field(s)", "1 of 3 comb writing box(es)",
+                "lost in derivation", "the cell the source drew is",
+                "not inside the cell that owns them", "cover under 50%")),
+           "each population is reported with its own count and denominator",
+           f"{len(stub_warnings)} warning(s)", failures)
+
+    # The same four populations over the form actually under test. The first two
+    # are invariants -- a legible box was available and something threw it away,
+    # or a typing surface sits outside the box that clips it, and neither is ever
+    # the source's doing. The third is reported, not asserted: how much of a cell
+    # a comb band covers is lattice.py's measurement, and emit.py failing on a
+    # threshold of its own would be the wrong file correcting the wrong producer.
+    live = FieldPlan(layout, face, [])
+    _check(not live.undersized_derived,
+           "no field on this form fits under the minimum inside a cell that could "
+           "have carried a legible size",
+           f"{len(live.undersized_derived)} of {len(live.boxes)}: "
+           f"{FieldPlan._sample(live.undersized_derived) or 'none'}", failures)
+    _check(not live.uncontained,
+           "every comb writing box is inside the cell that owns it",
+           f"{len(live.uncontained)} of {live.comb_count}: "
+           f"{FieldPlan._sample(live.uncontained) or 'none'}", failures)
+    _check(True, "comb writing boxes covering under half their cell (reported)",
+           f"{len(live.collapsed)} of {live.comb_count}", failures)
+
+
+def field_debug_assertions(html: str, failures: list[str]) -> None:
+    """The overlay cannot reach paper, and cannot move anything without asking.
+
+    Four barriers, asserted one at a time, because "it is behind a flag" is the
+    kind of claim that is true until a refactor and false silently afterwards.
+    """
+    styles = re.findall(r"<style>(.*?)</style>", html, flags=re.S)
+    _check(len(styles) == 1, "the document still ships exactly one stylesheet",
+           f"{len(styles)} <style> element(s)", failures)
+    _check(all("data-fg-" not in sheet for sheet in styles),
+           "no debug rule is in the emitted stylesheet",
+           "the overlay's CSS exists only as a runtime string", failures)
+    body = html.split('<script type="application/json"', 1)[0]
+    _check("data-fg-" not in body,
+           "no debug attribute is in the emitted markup",
+           "every mark is set at runtime", failures)
+    _check(html.count(FIELD_DEBUG_JS) == 1 and 'debug=fields' in html,
+           "the overlay ships once, behind its query string",
+           "?debug=fields", failures)
+
+    # Barrier 1: the token gate precedes every statement that could touch the
+    # document, so a page without it renders exactly as it did before.
+    guard = FIELD_DEBUG_JS.find("if(!requested()){return;}")
+    first_touch = min((index for index in
+                       (FIELD_DEBUG_JS.find("document."),
+                        FIELD_DEBUG_JS.find("addEventListener"))
+                       if index >= 0), default=-1)
+    _check(guard > 0 and first_touch > guard,
+           "the query-string gate precedes any access to the document",
+           f"gate at {guard}, first document access at {first_touch}", failures)
+
+    # Barrier 2/3: every injected rule is inside @media screen or @media print,
+    # proved by walking the braces rather than by matching a substring.
+    depth, cursor, outside = 0, 0, []
+    for index, char in enumerate(FIELD_DEBUG_CSS):
+        if char == "{":
+            if depth == 0:
+                outside.append(FIELD_DEBUG_CSS[cursor:index])
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                cursor = index + 1
+    outside.append(FIELD_DEBUG_CSS[cursor:])
+    _check(depth == 0 and [chunk.strip() for chunk in outside]
+           == ["@media screen", "@media print", ""],
+           "every debug rule is inside a media block",
+           " | ".join(chunk.strip() for chunk in outside), failures)
+    declarations = re.findall(r"([a-z-]+)\s*:([^;}]*)", FIELD_DEBUG_PRINT_CSS)
+    _check(bool(declarations) and all(
+               name in ("outline", "background", "display")
+               and "!important" in value for name, value in declarations),
+           "the print block only neutralises, with !important",
+           "; ".join(f"{name}:{value.strip()}" for name, value in declarations),
+           failures)
+
+    # Barrier 4: the stylesheet leaves the document for the duration of a print.
+    _check('window.addEventListener("beforeprint",drop)' in FIELD_DEBUG_JS
+           and 'window.addEventListener("afterprint",inject)' in FIELD_DEBUG_JS,
+           "the injected stylesheet is removed for the print itself",
+           "beforeprint drops it, afterprint restores it", failures)
+
+    # The overlay may never relax the threshold the report uses.
+    _check(f"var MIN_SIZE_PT={fmt(FIELD_MIN_SIZE_PT)};" in FIELD_DEBUG_JS,
+           "the overlay's minimum size is the module's own constant",
+           f"{fmt(FIELD_MIN_SIZE_PT)}pt", failures)
 
 
 def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, Any],
