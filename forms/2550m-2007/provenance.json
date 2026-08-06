@@ -26,7 +26,7 @@
   "rules": 442,
   "text_runs": 666,
   "images": 1,
-  "cells": 344,
+  "cells": 407,
   "comb_cells": 22,
   "growables": [
     {
@@ -58,6 +58,18 @@
       "rows": 4,
       "capacity": 4,
       "pitch_pt": 10.08
+    },
+    {
+      "page": 2,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 10.08
+    },
+    {
+      "page": 2,
+      "rows": 4,
+      "capacity": 4,
+      "pitch_pt": 10.08
     }
   ],
   "sources": [
@@ -82,7 +94,7 @@
         "marker_pattern": "unfillable-page",
         "moved": {
           "rules": 21,
-          "cells": 50,
+          "cells": 74,
           "text_runs": 125,
           "area_fills": 27,
           "images": 0
@@ -122,7 +134,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 434087,
+  "html_bytes": 469357,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

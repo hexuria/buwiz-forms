@@ -24,8 +24,8 @@
   "rules": 387,
   "text_runs": 385,
   "images": 1,
-  "cells": 209,
-  "comb_cells": 13,
+  "cells": 230,
+  "comb_cells": 14,
   "growables": [
     {
       "page": 2,
@@ -56,7 +56,7 @@
         "marker_pattern": "alphanumeric-tax-code",
         "moved": {
           "rules": 4,
-          "cells": 1,
+          "cells": 2,
           "text_runs": 213,
           "area_fills": 5,
           "images": 0
@@ -78,7 +78,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 237660,
+  "html_bytes": 248073,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

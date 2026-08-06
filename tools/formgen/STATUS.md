@@ -4,41 +4,93 @@
 same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
-Measured 2026-08-06 at HEAD `1dc9c87`, over the 53-form corpus. Gate verdicts
-are from run **r8**, a complete clean-tree run at these exact producer bytes.
+Measured 2026-08-06 over the 53-form corpus. Gate verdicts are from run
+**r10**, a complete clean-tree run at these exact producer bytes.
 Assertion counts are from a corpus-wide `audit.py --assertions-only`; the
 findings tally is recomputed from `review-findings.json`.
 
-## Gate — r8
+## Gate — r10
 
-| Check | r8 | r7 | Detail |
+| Check | r10 | r8 | Detail |
 | --- | --- | --- | --- |
-| self-tests | PASS | PASS | 10 modules |
-| conversion | PASS | PASS | 53/53 unique tracked forms |
-| rules | PASS | PASS | clean on 53/53 |
-| paper | PASS | PASS | exact on 53/53 |
-| artwork | PASS | PASS | clean on 53/53 |
-| text | PASS | PASS | clean on 53/53 |
-| assertions | **FAIL** | FAIL | `inputs_over_printed_text` 40 forms / 258 offenders; `comb_slots_match_printed` 22 forms / 186 offenders |
-| findings | **FAIL** | FAIL | 26/84 blocker+major unresolved (worst: 1707-2021 3, 1702q-2018 2, 2200a-2020 2, 2316-2021 2) |
-| tracked-files | PASS | PASS | no tracked deletion |
-| audit-refresh | PASS | PASS | fresh audit atomically published for 53 forms |
-| determinism | PASS | PASS | byte-identical (`5867ca1f9d5a`) |
-| comb-referee | UNEVALUABLE | UNEVALUABLE | report partial 0/53; corpus identity incomplete — the blocked HTML pins |
+| self-tests | PENDING | PASS | 10 modules |
+| conversion | PENDING | PASS | 53/53 unique tracked forms |
+| rules | PENDING | PASS | clean on 53/53 |
+| paper | PENDING | PASS | exact on 53/53 |
+| artwork | PENDING | PASS | clean on 53/53 |
+| text | PENDING | PASS | clean on 53/53 |
+| assertions | PENDING | **FAIL** | `inputs_over_printed_text` 40 forms / 258 offenders; `comb_slots_match_printed` 22 forms / 186 offenders |
+| findings | PENDING | **FAIL** | 26/84 blocker+major unresolved |
+| tracked-files | PENDING | PASS | no tracked deletion |
+| audit-refresh | PENDING | PASS | fresh audit atomically published for 53 forms |
+| determinism | PENDING | PASS | byte-identical (`5867ca1f9d5a`) |
+| comb-referee | PENDING | UNEVALUABLE | report partial 0/53; corpus identity incomplete — the blocked HTML pins |
 
-**9 of 12 PASS. Identical to r7 and r6, check for check and count for count.**
-The determinism digest moved (`5061598cbb20` → `5867ca1f9d5a`) because
-`1dc9c87` added `page_papers` to every `provenance.json`; both regenerations
-agreed.
+r10 is in flight at these bytes; this table is completed in the same commit
+before push. r9 was never run (the comb-divider increment it was to measure
+applied no producer change, so it could only have reproduced r8).
 
-**No r9 was run, and this is deliberate.** The comb-divider increment that r9
-was to measure applied **no producer change** (see below), so the working tree
-is byte-identical to the one r8 scored: same commit, clean tree, and all four
-producer files still match the referee's pins
-(`lattice` `9aeedba0`, `audit` `7c902be9`, `extract` `5f75f191`,
-`verify` `8dbeb222`). All 10 module self-tests were re-run at these bytes and
-pass, matching r8's `10 modules pass`. A gate run is a deterministic function
-of those bytes, so r9 could only reproduce r8 at a 60-minute cost.
+## Painted walls now bound cells (this increment)
+
+The user's complaint — a fillable box that does not fill its printed box, "the
+yellow box isn't the full width", "no yellow box here" — is a boundary that the
+cell grid never saw. `extract.py` files a filled rectangle as a rule only up to
+`MAX_RULE_THICKNESS_PT` (1.5) and calls anything heavier an **area fill**;
+`lattice.build_page` built `x_lattice` from `page["rules"]` alone, so a table
+side painted as a 1.92pt rectangle never became a column. `2550M` page 2 paints
+its sides at x 20.16–22.08 and 590.04–591.96 exactly that way.
+
+The asymmetry that named the fix: `comb_boundary_candidates` had **always**
+ingested structural area fills, but only for the comb path. `wall_boundaries`
+(lattice.py, next to it, same fill-to-candidate shape) now feeds them to the
+cell grid too, filtered by `MIN_WALL_ASPECT = 5.0`. `MAX_RULE_THICKNESS_PT` is
+untouched: a wall never becomes a rule, never enters `split_verticals`, never
+enters the decorative tests. **Verticals only** this increment — a horizontal
+wall moves row boundaries and the growable bands measured from them.
+
+The discriminator is measured, not guessed. Over the corpus the 997 vertical
+structural fills form two populations that do not overlap on any of three
+measurements: 944 **in-field dividers** (2000-OT's TIN group separators, 1707's
+2.16pt marks) at aspect 2.28–4.56, and 53 **walls** at aspect 5.50–514.27.
+Aspect decides because it is the scale-free measurement.
+
+### 2550M page 2, Schedule 1 — measured against the printed grid
+
+| | before | after | printed |
+| --- | --- | --- | --- |
+| page-2 `x_lattice` | 13 lines, 77.04 → 523.20 | **15 lines, 21.12 → 591.00** | walls at 21.12 / 591.00 |
+| Schedule 1 col 1 (`p2c0/4/8`) | x 77.04–248.16 (171.12pt) | **x 21.12–248.16 (227.04pt)** | 22.08–248.16 = 226.08pt |
+| Schedule 1 col 4 (`p2c3/7/11`) | x 448.32–523.20 (74.88pt) | **x 448.32–591.00 (142.68pt)** | 448.32–590.04 = 141.72pt |
+| Schedules 6 & 8 right strip 523.20–591.00 | no cell, no input | **`p2c33/41/49`, `p2c58/66/74`** | printed column |
+| inputs emitted on page 2 | 101 | **128** | — |
+
+Emitted width exceeds printed width by 0.96pt on each side because a cell snaps
+to the wall's **centre**, exactly as it snaps to a rule's centre; `emit.field_box`
+then insets by the border thickness. Rasters of the before/after are in the
+session scratchpad — this was checked by eye, not only by number.
+
+### Corpus effect
+
+Six forms changed geometry (`1604cf-2008` 111 cells, `2550m-2007` 58,
+`1600wp-2010` 28, `2551m-2002` 19, `2316-2021` 6, `0605-1999` 4); seven bundles
+changed bytes. 131 field cells **widened** to a painted wall, 95 field cells were
+**newly created** on surface that previously had no cell at all, and 11,730pt of
+writing-surface width was reclaimed.
+
+A wall-specific census — field cells with ≥10pt of writing surface between the
+cell edge and the painted wall that bounds their rows, with no lattice line in
+between — moves **199 cells → 90** (7 forms), and the total lost strip width
+halves, 9,938pt → 5,469pt. This instrument is *not* the 230-cell/22-form census
+from the brief: that one counted all input-vs-printed-box mismatch causes,
+of which thick walls were the largest population. The residual 90 sits mostly on
+`1604cf-2008` (38) and `2550m-2007` (30) and is the horizontal half plus causes
+this increment did not address.
+
+43 previously-`field` cells became `label`. Every one is a narrow left-margin
+strip (e.g. `1604cf-2008` p1c33, x 57.84–72.72, empty, 0 text runs) that merged
+leftward to its painted wall and absorbed the printed row label already sitting
+at x 30.24. Those cells were emitting an input over the right half of a label
+box; not emitting one there is the correct outcome, not a lost field.
 
 ## Comb dividers lost to stroke caps (this increment — diagnosis only, no code change)
 
@@ -155,11 +207,10 @@ increment.
 
 `EXPECTED_HTML_STRUCTURE_SHA256`'s 53 reviewed pins remain stale and were **not**
 touched: re-pinning them is a user-review action (see `GOAL.md` `## Blocked`).
-The producer pins that *are* an agent's to maintain were refreshed in `8df82e7`:
-`LATTICE_PRODUCER_SHA256` for the writing-surface change, and
-`HTML_RUNTIME_SCRIPT_SHA256` from a 2-tuple to a 3-tuple for the appended
-`?debug=fields` overlay — the first two hashes byte-identical, which is the
-evidence the overlay changed no shipped behaviour.
+The producer pin that *is* an agent's to maintain was refreshed this increment:
+`LATTICE_PRODUCER_SHA256` `9aeedba0` → `cc32ca68` for `wall_boundaries`. The
+other three are unchanged and still match (`audit` `7c902be9`,
+`extract` `5f75f191`, `verify` `8dbeb222`).
 
 ### Open integration question for the referee (not acted on)
 

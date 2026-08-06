@@ -65,6 +65,17 @@ whose bounding lines leave no paper between their ink at all, which is what a
 jog leaves. Neither is allowed to move a comb or a growable band; both counts
 are unchanged across the corpus.
 
+A fifth finding is that a boundary is not always a *rule*. `extract.py` files a
+filled rectangle as a rule only up to 1.5pt and calls anything heavier an area
+fill, so 2550M page 2's 1.92pt table sides never reached the lattice and its
+Schedule 1 cells snapped to columns belonging to rows further down the sheet --
+24.3% of column 1 and 47.2% of column 4 left as writing surface no input
+covered. The 1.5pt cut is about how BIR *draws* a line, not about whether the
+line *bounds* a cell. `comb_boundary_candidates` had always known this and read
+those fills; the cell grid had not. `wall_boundaries` closes that asymmetry for
+verticals, and the shape test that keeps a character divider out of the x
+lattice is measured there.
+
 Usage:
     python3 tools/formgen/lattice.py --ir build/ir/2551q-2018.ir.json \\
         --out build/layout/2551q-2018.layout.json --summary
@@ -648,6 +659,83 @@ def comb_boundary_candidates(verticals: Sequence[dict[str, Any]],
     } for f in area_fills if f["role"] == "structural"]
     candidates.sort(key=lambda r: (centre(r), r["y0"], r["y1"]))
     return candidates
+
+
+# A wall's length over its own thickness. The two populations of vertical
+# structural area fill are measured in `wall_boundaries`; this sits in the gap
+# between them, not at either edge.
+MIN_WALL_ASPECT = 5.0
+
+
+def wall_boundaries(area_fills: Sequence[dict[str, Any]]
+                    ) -> list[dict[str, Any]]:
+    """Structural area fills that BOUND a cell, as x-lattice candidates.
+
+    A 1.92pt painted wall is a wall. `extract.py` files a filled rectangle as a
+    rule only when its short side is at most `MAX_RULE_THICKNESS_PT` (1.5) and
+    calls anything heavier an area fill, but that cut is about how BIR *draws*
+    a line, not about whether the line *bounds* a cell -- and only the second
+    question builds a grid. The comb path has always known this:
+    `comb_boundary_candidates` above ingests exactly these fills so that a
+    thick separator can end a comb slot. The cell grid never did, and that
+    asymmetry is the defect this closes.
+
+    What it cost, measured: 2550M page 2 paints its table sides at x 20.16-22.08
+    and 590.04-591.96 as 1.92pt rectangles. Neither reaches `page["rules"]`, so
+    neither reaches `build_lattice`, so Schedule 1's cells snap to unrelated
+    columns contributed by rows further down the sheet. Column 1 loses 54.96 of
+    226.08pt, column 4 loses 66.84 of 141.72pt, and the lost strips hold no text
+    run at all: they are pure writing surface that does nothing when clicked.
+    22 cells on that page, 230 field cells across 22 forms.
+
+    Not every structural fill is a wall, and promoting the wrong one would cut a
+    comb into separate cells. Measured over the 53-form corpus, the 997 vertical
+    structural fills fall into two populations that do not touch on any of three
+    independent measurements:
+
+      * 944 dividers *inside* a field -- 2000-OT's TIN group separators at
+        x 256.13/302.93/349.75, 1707's 2.16pt marks -- thickness 2.16-2.20,
+        length 4.92-9.84, aspect 2.28-4.56;
+      * 53 walls -- page frames, table sides, header column boundaries --
+        thickness 1.68-1.92, length 10.56-891.84, aspect 5.50-514.27.
+
+    Aspect decides it because aspect is the scale-free measurement: it asks
+    about the mark's shape rather than about how big this particular sheet is
+    drawn. Length and thickness happen to agree here, and are recorded above so
+    a future disagreement is visible rather than silent.
+
+    Horizontals are held back. `comb_boundary_candidates` excludes them because
+    a band is bounded top and bottom by horizontal rules; here the reason is
+    different and narrower -- a horizontal wall moves row boundaries and the
+    growable bands measured from them, which is a change with its own evidence
+    to gather. This increment moves columns only.
+
+    Sorted so that clustering inside `build_lattice` is order-independent.
+    """
+    walls: list[dict[str, Any]] = []
+    for fill in area_fills:
+        if fill["role"] != "structural":
+            continue
+        thickness = float(fill["x1"]) - float(fill["x0"])
+        length = float(fill["y1"]) - float(fill["y0"])
+        if thickness <= 0 or length < thickness * MIN_WALL_ASPECT:
+            continue
+        walls.append({
+            "axis": "v",
+            "x0": fill["x0"], "y0": fill["y0"],
+            "x1": fill["x1"], "y1": fill["y1"],
+            "thickness_pt": q(thickness),
+            "gray": fill["gray"],
+            "role": fill["role"],
+            # A wall painted before a knockout is not a boundary. Keep the
+            # source ordinal so final-paint compositing can still say so,
+            # instead of turning a thick separator into timeless ink.
+            "paint_seq": fill.get("paint_seq", -1),
+            "paint_seq_max": fill.get("paint_seq_max",
+                                      fill.get("paint_seq", -1)),
+        })
+    walls.sort(key=lambda wall: (centre(wall), wall["y0"], wall["y1"]))
+    return walls
 
 
 def paint_ordinal(paint: dict[str, Any]) -> int:
@@ -4592,7 +4680,13 @@ def build_page(page: dict[str, Any],
         raw_verticals, raw_horizontals)
     raw_extra_ink = comb_boundary_candidates(
         raw_verticals, page["area_fills"])
-    raw_xl = build_lattice(_raw_borders, raw_verticals, "v")
+    # Painted walls join the x lattice on both counts: `defining`, because the
+    # wall is what draws the boundary, and `all_ink`, because the same wall is
+    # that boundary's coverage and weight. The raw/legacy stream takes them
+    # unfiltered, exactly as `raw_extra_ink` above takes its fills unfiltered.
+    raw_walls = wall_boundaries(page["area_fills"])
+    raw_xl = build_lattice(
+        [*_raw_borders, *raw_walls], [*raw_verticals, *raw_walls], "v")
     raw_yl = build_lattice(raw_horizontals, raw_horizontals, "h")
     if len(raw_xl) >= 2 and len(raw_yl) >= 2:
         raw_dsu, raw_v_at, raw_h_at = merge_grid(raw_xl, raw_yl)
@@ -4713,6 +4807,14 @@ def build_page(page: dict[str, Any],
             fill, float(fill["y0"]), float(fill["y1"]), "v")
     ]
     extra_ink = comb_boundary_candidates(verticals, final_area_fills)
+    # The same visibility test `final_area_fills` applies, but asked on the
+    # wall's own axis rather than a hard-coded "v": a wall that a later
+    # knockout paints over must not define a column.
+    final_walls = [
+        wall for wall in raw_walls
+        if final_paint.structural_across_axis(
+            wall, float(wall["y0"]), float(wall["y1"]), str(wall["axis"]))
+    ]
 
     # Once a composite vertical has been partitioned into paper corridors, a
     # character tick in one row must not become lattice coverage merely because
@@ -4756,8 +4858,11 @@ def build_page(page: dict[str, Any],
     border_defining.sort(key=lambda rule: (
         centre(rule), float(rule["y0"]), float(rule["y1"]),
         str(rule.get("id"))))
+    # `borders` stays rules-only: it is the published border inventory and its
+    # members are counted by source id, which a painted wall does not carry.
     borders = border_defining
-    xl = build_lattice(border_defining, border_coverage, "v")
+    xl = build_lattice(
+        [*border_defining, *final_walls], [*border_coverage, *final_walls], "v")
     yl = build_lattice(
         geometry_horizontals, geometry_horizontals, "h")
 
@@ -5245,6 +5350,46 @@ def self_test(ir_path: pathlib.Path) -> int:
             same_start_join, same_start_knockout,
         ]).structural_across_axis(same_start_join, 0.0, 10.0, "h"),
         "a same-start contributor was omitted from a join bridge ordinal range",
+    )
+
+    # Painted walls. 2551Q draws none, so the discriminator is asserted on the
+    # exact corpus shapes it has to separate: 2550M page 2's 1.92 x 840.96 left
+    # table side, its 1.92 x 10.56 shortest sibling on 1600WP, and 2000-OT's
+    # 2.16 x 9.84 TIN group separator -- which must stay out of the x lattice,
+    # because promoting it would cut its own comb into four cells.
+    def synthetic_fill(x0: float, y0: float, x1: float, y1: float,
+                       role: str = "structural") -> dict[str, Any]:
+        return {"x0": q(x0), "y0": q(y0), "x1": q(x1), "y1": q(y1),
+                "gray": 0.0 if role == "structural" else 0.75,
+                "role": role, "paint_seq": 1, "paint_seq_max": 1}
+
+    wall_2550m = synthetic_fill(20.16, 77.04, 22.08, 918.00)
+    wall_shortest = synthetic_fill(340.87, 745.80, 342.79, 756.36)
+    divider_2000ot = synthetic_fill(256.13, 167.66, 258.29, 177.50)
+    grey_band = synthetic_fill(20.16, 77.04, 22.08, 918.00, role="decorative")
+    walls = wall_boundaries([
+        divider_2000ot, wall_2550m, grey_band, wall_shortest,
+    ])
+    check(
+        [q(centre(wall)) for wall in walls] == [21.12, 341.83],
+        "wall_boundaries did not keep exactly the two painted walls",
+    )
+    check(
+        all(wall["axis"] == "v" and wall["thickness_pt"] == 1.92
+            for wall in walls),
+        "a painted wall reached the lattice without its axis or thickness",
+    )
+    check(
+        not wall_boundaries([divider_2000ot]),
+        "a comb group separator was promoted to a cell-grid boundary",
+    )
+    check(
+        not wall_boundaries([grey_band]),
+        "a decorative band was promoted to a cell-grid boundary",
+    )
+    check(
+        not wall_boundaries([synthetic_fill(0.0, 0.0, 600.0, 1.92)]),
+        "a horizontal painted wall entered the vertical-only lattice",
     )
 
     malformed_span_contracts: list[tuple[str, dict[str, Any]]] = [
