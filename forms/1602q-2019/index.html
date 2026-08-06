@@ -305,10 +305,24 @@ function slotsOf(el){
   var cell=el.closest("[data-cell-kind]");
   return cell?cell.querySelectorAll("input.fi[data-slot-index]"):null;
 }
+/* Position in the list of TYPEABLE slots, which is not `data-slot-index`. A
+   comb compartment the source already filled -- the century "2 0", a TIN's
+   printed branch code, the grey gap between two digit groups -- emits its slot
+   div with no input, so the two numberings diverge the moment any comb has one.
+   Reading the attribute and indexing the NodeList with it would then step off
+   the end (a 4-slot year comb whose first two are printed leaves 2 inputs, and
+   slot 2 would look for list[3]) and typing would stop advancing at the first
+   printed box. The list itself is the sequence a taxpayer moves through. */
+function positionOf(list,el){
+  for(var i=0;i<list.length;i++){if(list[i]===el){return i;}}
+  return -1;
+}
 function move(el,delta,select){
   var list=slotsOf(el);
   if(!list){return null;}
-  var index=parseInt(el.getAttribute("data-slot-index"),10)+delta;
+  var at=positionOf(list,el);
+  if(at<0){return null;}
+  var index=at+delta;
   if(index<0||index>=list.length){return null;}
   list[index].focus();
   if(select&&list[index].select){list[index].select();}
@@ -347,7 +361,8 @@ document.addEventListener("paste",function(ev){
   var text=(clipboard.getData("text")||"").replace(/\s+/g,"");
   if(!text){return;}
   ev.preventDefault();
-  var index=parseInt(el.getAttribute("data-slot-index"),10),written=0,last=el;
+  var index=positionOf(list,el),written=0,last=el;
+  if(index<0){return;}
   while(index<list.length&&written<text.length){
     list[index].value=text.charAt(written);
     last=list[index];
