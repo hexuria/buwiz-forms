@@ -4,15 +4,14 @@
 same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
-Measured 2026-08-06 at HEAD `d37462e`, over the 53-form corpus regenerated on
-the comb writing-surface fix (`d37462e`). Gate verdicts are from run **r7**,
-a complete clean-tree run at these exact producer bytes. Assertion counts are
-from a corpus-wide `audit.py --assertions-only` at the same bytes; the findings
-tally is recomputed from `review-findings.json`.
+Measured 2026-08-06 at HEAD `1dc9c87`, over the 53-form corpus. Gate verdicts
+are from run **r8**, a complete clean-tree run at these exact producer bytes.
+Assertion counts are from a corpus-wide `audit.py --assertions-only`; the
+findings tally is recomputed from `review-findings.json`.
 
-## Gate — r7
+## Gate — r8
 
-| Check | r7 | r6 (baseline) | Detail |
+| Check | r8 | r7 | Detail |
 | --- | --- | --- | --- |
 | self-tests | PASS | PASS | 10 modules |
 | conversion | PASS | PASS | 53/53 unique tracked forms |
@@ -20,20 +19,74 @@ tally is recomputed from `review-findings.json`.
 | paper | PASS | PASS | exact on 53/53 |
 | artwork | PASS | PASS | clean on 53/53 |
 | text | PASS | PASS | clean on 53/53 |
-| assertions | **FAIL** | FAIL | `inputs_over_printed_text` 40 forms; `comb_slots_match_printed` 22 forms |
+| assertions | **FAIL** | FAIL | `inputs_over_printed_text` 40 forms / 258 offenders; `comb_slots_match_printed` 22 forms / 186 offenders |
 | findings | **FAIL** | FAIL | 26/84 blocker+major unresolved (worst: 1707-2021 3, 1702q-2018 2, 2200a-2020 2, 2316-2021 2) |
 | tracked-files | PASS | PASS | no tracked deletion |
 | audit-refresh | PASS | PASS | fresh audit atomically published for 53 forms |
-| determinism | PASS | PASS | byte-identical (`5061598cbb20`) |
+| determinism | PASS | PASS | byte-identical (`5867ca1f9d5a`) |
 | comb-referee | UNEVALUABLE | UNEVALUABLE | report partial 0/53; corpus identity incomplete — the blocked HTML pins |
 
-**9 of 12 PASS. Identical to the r6 baseline, check for check and count for
-count: no check changed verdict and neither failing assertion changed the
-number of forms it fails on.** The determinism digest moved (`c928b792f9d8` →
-`5061598cbb20`) because the corpus itself changed, which is the intended
-result, and both regenerations agreed.
+**9 of 12 PASS. Identical to r7 and r6, check for check and count for count.**
+The determinism digest moved (`5061598cbb20` → `5867ca1f9d5a`) because
+`1dc9c87` added `page_papers` to every `provenance.json`; both regenerations
+agreed.
 
-## The comb writing surface (this increment)
+**No r9 was run, and this is deliberate.** The comb-divider increment that r9
+was to measure applied **no producer change** (see below), so the working tree
+is byte-identical to the one r8 scored: same commit, clean tree, and all four
+producer files still match the referee's pins
+(`lattice` `9aeedba0`, `audit` `7c902be9`, `extract` `5f75f191`,
+`verify` `8dbeb222`). All 10 module self-tests were re-run at these bytes and
+pass, matching r8's `10 modules pass`. A gate run is a deterministic function
+of those bytes, so r9 could only reproduce r8 at a 60-minute cost.
+
+## Comb dividers lost to stroke caps (this increment — diagnosis only, no code change)
+
+The user's complaint is that a fillable box does not occupy the printed box.
+The measured instance: 2550M item 1's YYYY group prints **four** compartments,
+but `p1c2` (x 208.56–270.72) emits **one** free-text input. It still does —
+`kind: "field"`, no comb — because this increment changed no code.
+
+**The tolerance fix proposed for it was refused, and refusing it was correct.**
+The proposal was to make `lattice.supported_at` (lattice.py:183-187) apply
+`CLUSTER_TOL_PT` on the y axis as it already does on x. Measured over the
+corpus, a symmetric 0.30 flips 138 borders to combs **and 45 combs to borders**,
+and does not fix 2550M anyway: its gap is 0.36. The gap histogram has a dead
+zone — 0.01/0.09/0.10/0.12/0.18/0.25, then nothing until 0.34/0.35/0.36 — so no
+threshold both reaches 0.36 and avoids comb→border flips (even 0.01 flips 37).
+The legitimacy test in the brief is also unmet: the x test compares a point
+against a horizontal's **length** endpoints, the y test against its
+**thickness** band — different classes of measurement. lattice's own precedent
+for y-support slack is `supported_near`, which uses `JOIN_EPSILON_PT` (0.05).
+
+**The real cause is in extract.py, and it needs no tolerance at all.** Verified
+against the pinned source (`bir2550m.pdf`, sha256 `9fb4101a…`, matching
+`provenance.json`): the three ticks are stroked with `lineCap = (1,1,1)` —
+**round** — at width 0.72. A round cap paints half the line width past each
+path endpoint, so the ticks' real painted extent is y 99.24–102.84, and h4's
+ink top edge is **exactly** 102.84. The strokes touch; the 0.36 "gap" is an
+artefact of reading the path instead of the ink.
+
+extract.py never consults the cap: there is no `lineCap`/`J` reference in the
+file. Its stroke-to-rect conversion applies `half = width / 2.0` to the
+**thickness** axis only — visible in the IR, where v177 spans x 223.08–223.80
+(0.72 wide, half-width each side of 223.44) while its y stays the bare path
+99.60–102.48. The two sites are extract.py:382 (`re` ops) and extract.py:1571
+(`l` ops — the one that draws these ticks), where `near`/`far` get `half` and
+`start`/`end` get raw `min`/`max`.
+
+The fix is to extend a stroke's **length** by `width/2` when `lineCap` is 1
+(round) or 2 (projecting square), and not at all for 0 (butt). That is
+honouring the official geometry rather than relaxing a check — strictly more
+faithful, form-code-agnostic, and it makes the 2550M contact exact instead of
+approximate. It is a producer change to extract.py, so it re-pins
+`AUDIT_DEPENDENCY_SHA256` and invalidates every downstream digest.
+
+Not yet measured: how many of the 626 both-endpoints-unsupported borders have a
+round or projecting cap, and therefore how far this moves
+`comb_slots_match_printed`. That is the next increment's first measurement.
+
+## The comb writing surface (previous increment)
 
 `lattice.comb_bands` published the divider **tick** band as the comb's own
 vertical extent. The tick is a guide mark under the writing box, not the box:
@@ -136,5 +189,6 @@ yet been through a CI cycle.
 | --- | --- | --- | --- |
 | `inputs_over_printed_text`: 40 forms / 258 offenders | worse by 19 this increment | 17 new offenders are comb cells whose lattice rectangle spans caption + comb, so the full-height writing surface reaches the caption. Residual populations A/B1/C1/C2 per the 2026-08 triage are unchanged. | `lattice.py` cell segmentation |
 | `comb_slots_match_printed`: 22 forms / 186 offenders | unchanged | `printed_compartments` reads only the cell rectangle and no member of the lattice `comb` object, which is why a vertical-only change cannot move it. Residual: the still-refused U-frame-crop / corridor-absorb topologies plus genuine geometry defects. | `audit.py` topology chooser |
+| Comb dividers filed as borders (2550M `p1c2` = 1 input where 4 print) | diagnosed, not fixed | extract.py ignores `lineCap`, so a round-capped tick's ink (which reaches its baseline exactly) is recorded 0.36pt short and `supported_at` correctly finds no support. Widening the tolerance was measured, refuted and refused. | `extract.py` stroke-to-rect (382, 1571) |
 | comb-referee UNEVALUABLE | user-blocked | 53 reviewed HTML structure pins stale; plus the `classify_band` source/emission key collision above. | user review, then `comb_referee.py` |
 | findings: 26 blocker+major open | unchanged | comb capacity (referee track), inputs-over-text populations, guide-cut orphan policy, text mis-position, individual re-verifications | per-cause owners |
