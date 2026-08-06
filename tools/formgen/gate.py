@@ -12559,9 +12559,31 @@ def main(argv: list[str] | None = None) -> int:
                 "and official-source tree; the write would stale the final "
                 "referee snapshot")
     if full and not args.skip_regenerate:
+        # Fail fast on a stale GENERATED-AND-TRACKED file. forms/index.html is
+        # written by batch.package() as its last act, so if the committed copy
+        # is stale the first regeneration dirties the worktree, and
+        # capture_audit_application_snapshot then refuses to bind -- fifty
+        # minutes later, with six checks cascading to UNEVALUABLE and a message
+        # that names neither the file nor the cause. That has now cost three
+        # full runs. Say it in five seconds instead, and name the file.
+        _pre_state = _git_state()
+        if not _pre_state["worktree_clean"]:
+            parser.error(
+                "the worktree is not clean, so the audit could not bind its "
+                "application scope after regeneration. Commit or revert first. "
+                "If the only change is a generated file (forms/index.html is "
+                "the usual one), regenerate and commit it: "
+                "python3 tools/formgen/batch.py --report build/batch-report.json")
         print("regenerating twice and auditing final bytes; referee runs last...",
               file=sys.stderr)
         full_refresh = refresh_full_pipeline(referee_refresher=None)
+        _post_state = _git_state()
+        if not _post_state["worktree_clean"]:
+            parser.error(
+                "regeneration changed tracked files, so this tree does not "
+                "match its commit and the audit cannot bind. The regenerated "
+                "bytes are on disk now -- inspect and commit them, then re-run. "
+                "This is what a stale tracked forms/index.html looks like.")
         for diagnostic in full_refresh.diagnostics:
             print(f"  {diagnostic}", file=sys.stderr)
 
