@@ -64,9 +64,14 @@ COMB_REFEREE_REPORT = BUILD / "comb-referee.json"
 COMB_REFEREE_ATTESTATION = BUILD / "comb-referee-attested.json"
 COMB_REFEREE_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
 
-EXPECTED_FORMS = 51
+# Corpus census. Pins, not thresholds: a form that appears or disappears has to
+# be declared here, in a commit that says which one and why. 51 -> 53 and
+# extra 13 -> 15 is 1604-CF and 2200-AN arriving -- two forms on BIR's official
+# list that had no local source PDF until they were fetched from the BIR CDN.
+# Both land under forms/extra/ because neither is in the reviewed in-corpus set.
+EXPECTED_FORMS = 53
 EXPECTED_IN_CORPUS_FORMS = 38
-EXPECTED_EXTRA_FORMS = 13
+EXPECTED_EXTRA_FORMS = 15
 EXPECTED_COMB_SUBJECTS = 4442
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
@@ -10003,19 +10008,26 @@ def self_test() -> int:
     if "comb_referee" not in SELF_TEST_MODULES:
         failures.append("comb_referee.py must be included in module self-tests")
 
+    # Built from the census constants rather than repeating 38 and 13 as
+    # literals: the fixture and the thing it certifies must move together, and
+    # they did not -- the corpus grew to 38/15 while this fixture still built
+    # 38/13 and failed as though the tree were wrong.
     direct_paths = [
-        f"forms/direct-{index}/provenance.json" for index in range(38)]
+        f"forms/direct-{index}/provenance.json"
+        for index in range(EXPECTED_IN_CORPUS_FORMS)]
     extra_paths = [
-        f"forms/extra/extra-{index}/provenance.json" for index in range(13)]
+        f"forms/extra/extra-{index}/provenance.json"
+        for index in range(EXPECTED_EXTRA_FORMS)]
     corpus_fixture = direct_paths + extra_paths + [
         "forms/direct-0/unrelated\nname.json"]
     try:
         fixture_slugs = _canonical_form_slugs_from_paths(corpus_fixture)
         if (len(fixture_slugs) != EXPECTED_FORMS
                 or "direct-0" not in fixture_slugs
-                or "extra-12" not in fixture_slugs):
+                or f"extra-{EXPECTED_EXTRA_FORMS - 1}" not in fixture_slugs):
             failures.append(
-                "the canonical corpus must include 38 direct and 13 extra forms")
+                f"the canonical corpus must include {EXPECTED_IN_CORPUS_FORMS} "
+                f"direct and {EXPECTED_EXTRA_FORMS} extra forms")
     except Exception as error:  # noqa: BLE001 - self-test reports exact failure
         failures.append(f"valid canonical corpus fixture failed: {error}")
     for label, paths in (
@@ -10043,7 +10055,8 @@ def self_test() -> int:
     try:
         tracked_inventory = canonical_form_inventory()
         if len(tracked_inventory) != EXPECTED_FORMS:
-            failures.append("the tracked canonical corpus must resolve 51 forms")
+            failures.append(
+                f"the tracked canonical corpus must resolve {EXPECTED_FORMS} forms")
         batch_fixture = []
         for slug, in_corpus in tracked_inventory.items():
             record = _synthetic_batch_record(slug)

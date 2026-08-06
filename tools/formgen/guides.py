@@ -1207,20 +1207,30 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
     check(not is_gutter(gutter_top, [gutter_top, boxed_tail]),
           "a horizontal source stroke was ignored when joining gutter fragments")
 
+    # Corpus census. These are pins, not thresholds: they exist so a change that
+    # silently adds or drops a form has to be declared here. 51 -> 53 bundles and
+    # 110 -> 116 pages is the deliberate arrival of 1604-CF and 2200-AN, the two
+    # forms on BIR's official list that had no local source PDF until they were
+    # fetched from the BIR CDN. Never move these to make a run pass; move them
+    # only when the corpus was meant to change, and say which forms in the commit.
     rows = sweep(ir_dir, layout_dir, source_root)
-    check(len(rows) == 51, f"expected 51 forms in the corpus, got {len(rows)}")
+    check(len(rows) == 53, f"expected 53 forms in the corpus, got {len(rows)}")
     plans = dict(rows)
 
     pages = sum(p["stats"]["pages"] for _, p in rows)
-    check(pages == 110, f"expected 110 pages in the corpus, got {pages}")
+    check(pages == 116, f"expected 116 pages in the corpus, got {pages}")
 
     guide_pages = [(slug, e) for slug, p in rows for e in p["inline"]]
     forms_with = [slug for slug, p in rows if p["inline"]]
-    check(len(guide_pages) == 28, f"expected 28 guide pages, got {len(guide_pages)}")
-    check(len(forms_with) == 27, f"expected 27 forms with a guide, got {len(forms_with)}")
+    check(len(guide_pages) == 29, f"expected 29 guide pages, got {len(guide_pages)}")
+    check(len(forms_with) == 28, f"expected 28 forms with a guide, got {len(forms_with)}")
 
     pcts = [e["reclaimed_pct"] for _, e in guide_pages]
-    check(round(sum(pcts) / len(pcts)) == 60, f"expected mean reclaim 60%, got {pcts}")
+    # 60 -> 62 is arithmetic, not drift: the 29th guide page (2200-AN, which
+    # reclaims 100% of its page) pulls a 28-page mean of 60 up by two points.
+    # min and max are unmoved, which is the check that the distribution's shape
+    # did not change -- only its membership.
+    check(round(sum(pcts) / len(pcts)) == 62, f"expected mean reclaim 62%, got {pcts}")
     check(min(pcts) == 9, f"expected min reclaim 9%, got {min(pcts)}")
     check(max(pcts) == 100, f"expected max reclaim 100%, got {max(pcts)}")
 
