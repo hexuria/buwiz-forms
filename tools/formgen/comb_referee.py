@@ -86,7 +86,7 @@ EXPECTED_FORMS = 53
 EXPECTED_COMBS = 4539
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 LATTICE_PRODUCER_SHA256 = (
-    "3057fbe728f10678481143db62801a0bf29222834de98e80a2e5bb880d8fe92e"
+    "9aeedba0f49c53f4574482d3ace58449749fd9ab9f89f813958ce5c38dbd31b3"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 AUDIT_PRODUCER_SHA256 = (
@@ -512,9 +512,15 @@ HTML_STYLESHEET_FIXED_VALUES: dict[tuple[str, str], frozenset[str]] = {
     }),
     ("@page", "margin"): frozenset({"0"}),
 }
+# In document order: the band data runtime, the field runtime, and the field
+# debug overlay. The first two are byte-identical to the values reviewed before
+# the overlay existed -- the overlay is appended, it does not modify them, and
+# that is the evidence that adding it changed no shipped behaviour. All 53
+# bundles emit this exact tuple.
 HTML_RUNTIME_SCRIPT_SHA256 = (
     "8822f0d4efe00ffbf32e2e0fe2922139419f08184143699b789a0aa5050e649d",
     "e2b0b7794d0b72c3d5ab818c290ffca183f3b1fff9797e487450a3ca4b0f4049",
+    "877c6c01ce3d39819c27cc902ca1ddb6eb9f18aeeb298e875a9b88898f0bc03c",
 )
 HTML_ROOT_ATTRIBUTES = frozenset({
     "data-form",
