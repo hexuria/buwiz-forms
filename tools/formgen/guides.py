@@ -1222,15 +1222,19 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
 
     guide_pages = [(slug, e) for slug, p in rows for e in p["inline"]]
     forms_with = [slug for slug, p in rows if p["inline"]]
-    check(len(guide_pages) == 29, f"expected 29 guide pages, got {len(guide_pages)}")
-    check(len(forms_with) == 28, f"expected 28 forms with a guide, got {len(forms_with)}")
+    # 29 -> 30 pages and 28 -> 29 forms is one page arriving: 1601-EQ p2, which
+    # is pinned in `expected` below with the reason it was previously refused.
+    # No page left, and no page that already had a cut changed where it cuts.
+    check(len(guide_pages) == 30, f"expected 30 guide pages, got {len(guide_pages)}")
+    check(len(forms_with) == 29, f"expected 29 forms with a guide, got {len(forms_with)}")
 
     pcts = [e["reclaimed_pct"] for _, e in guide_pages]
     # 60 -> 62 is arithmetic, not drift: the 29th guide page (2200-AN, which
     # reclaims 100% of its page) pulls a 28-page mean of 60 up by two points.
+    # 62 -> 63 is the same arithmetic again for the 30th (1601-EQ p2, 86%).
     # min and max are unmoved, which is the check that the distribution's shape
     # did not change -- only its membership.
-    check(round(sum(pcts) / len(pcts)) == 62, f"expected mean reclaim 62%, got {pcts}")
+    check(round(sum(pcts) / len(pcts)) == 63, f"expected mean reclaim 63%, got {pcts}")
     check(min(pcts) == 9, f"expected min reclaim 9%, got {min(pcts)}")
     check(max(pcts) == 100, f"expected max reclaim 100%, got {max(pcts)}")
 
@@ -1239,6 +1243,20 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
     # hundredth. `field_cells_below` counts cells lattice.py called `field`,
     # including the ones a pre-printed run crosses; the corpus-wide assertion
     # further down is what proves none of them is actually fillable.
+    #
+    # Four of those counts dropped when lattice.py learned to read the tone of
+    # the paper: a cell whose topmost covering fill is decorative shading at
+    # gray <= 0.87 is no longer `field` but a new kind, `shaded`. Nothing left a
+    # page and no cut moved -- each of these cuts is at the same y, relocating
+    # the same runs, at the same percentage, found by the same detector. What
+    # moved is only what the census calls the grey blocks BIR prints inside a
+    # reference table to mean "no code applies in this column": 1700 p2 9 -> 1
+    # (8 cells, gray 0.8509), 1701MS p2 6 -> 5 (1, 0.8509), 2000-DST p2 7 -> 2
+    # (5, 0.651 and 0.8509), 2550M p3 6 -> 1 (5, 0.7529). Every dropped cell was
+    # checked one at a time: each is `shaded` in the new layout, each has a
+    # decorative covering fill beneath it, and no cell anywhere in the corpus
+    # became `field` that was not one before. 1601-FQ p2 (24 -> 0) and 1602Q p3
+    # (4 -> 0) moved for the same reason and are not pinned here.
     expected = {
         ("1603q-2018", 2): (284.54, 0, 171, 70, "marker"),
         ("1600-pt-2018", 2): (283.91, 4, 126, 70, BAND_PATTERN),
@@ -1249,12 +1267,27 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         # The tax-bracket tables C6 called a blocker: a taxpayer could type over
         # "Not over P 250,000". Partial cuts -- the fillable face above them is
         # untouched, which is what the seven-page guard below proves.
-        ("1700-2018", 2): (837.56, 9, 22, 11, BAND_PATTERN),
-        ("1701ms-2024", 2): (838.43, 6, 22, 10, BAND_PATTERN),
+        ("1700-2018", 2): (837.56, 1, 22, 11, BAND_PATTERN),
+        ("1701ms-2024", 2): (838.43, 5, 22, 10, BAND_PATTERN),
         ("1701q-2018", 2): (769.46, 9, 22, 18, BAND_PATTERN),
         ("1701a-2018", 2): (854.84, 9, 22, 9, BAND_PATTERN),
-        ("2000-dst-2018", 2): (538.03, 7, 137, 43, BAND_PATTERN),
+        ("2000-dst-2018", 2): (538.03, 2, 137, 43, BAND_PATTERN),
         ("2552-2018", 2): (801.52, 2, 23, 14, BAND_PATTERN),
+        # 1601-EQ p2 held the "no cut at all" line until lattice.py started
+        # reading paper tone, and it was holding it for a defect. The page is a
+        # masthead, a TIN comb, a Withholding Agent's Name comb, and then
+        # nothing but the "Schedule of Alphanumeric Tax Codes (ATC)" -- the
+        # reference material this module exists to move, on the same page design
+        # 1602Q p3 has, which has always cut at 128.42 for 86%. What refused it
+        # was admissible_cut_limit stopping at 831.84 on "cut would sever
+        # fillable column p2c222 -> p2c226": two grey blocks (0.7489/0.8509) in
+        # the bottom-right corner of the ATC table, where the right-hand column
+        # runs out of codes before the left one does. They are decoration, they
+        # were never an entry column, and now that they are `shaded` the walk
+        # stops where it should -- at the TIN comb, y 110.06 -- so the band cut
+        # lands at 129.62, the lattice line under the comb row. Both combs stay
+        # on the form, and the corpus-wide comb assertion below is the proof.
+        ("1601eq-2019", 2): (129.62, 26, 339, 86, BAND_PATTERN),
         # Whole pages: 2550M p3 is nothing but its ATC table, so the marker cut at
         # 72.52 that left the running head behind is superseded by cutting at 0.
         #
@@ -1272,7 +1305,17 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         # claimed by a cut at 0 -- so the count grew where the census counts, inside
         # the reclaimed region, while the corpus-wide non-fillable assertion below
         # is unmoved. The cut, runs, reclaim and detector are all unchanged.
-        ("2550m-2007", 3): (0.0, 6, 125, 100, UNFILLABLE_PATTERN),
+        #
+        # 6 -> 1 is the paper-tone change described at the head of this table, and
+        # it half-supersedes the paragraph above: of the two blanks a group heading
+        # leaves in 2550M's ATC column, the one beside "12. Others:" is one of the
+        # five cells here that BIR fills with its 0.7529 grey, so it is `shaded`
+        # now and no longer counted. The one beside "9. Real Estate, Renting &
+        # Business Activity" is grey on paper too but stays `field`: it is a
+        # two-row-tall cell and the source paints that block as two 7.8pt strips,
+        # neither of which covers 70% of it on its own. 0605 p2 keeps all 8 -- its
+        # blanks are white. Cut, runs, reclaim and detector are again unchanged.
+        ("2550m-2007", 3): (0.0, 1, 125, 100, UNFILLABLE_PATTERN),
         ("2550m-2007", 4): (0.0, 0, 143, 100, UNFILLABLE_PATTERN),
         ("2553-1999", 2): (0.0, 0, 94, 100, UNFILLABLE_PATTERN),
         ("0605-1999", 2): (0.0, 8, 281, 100, UNFILLABLE_PATTERN),
@@ -1292,13 +1335,17 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         check(entry["detector"] == detector,
               f"{slug} p{page}: detector {entry['detector']}, expected {detector}")
 
-    # The seven pages a cut must never eat. Four take no cut at all. Three --
+    # The six pages a cut must never eat. Three take no cut at all. Three --
     # 1700 p2, 1701MS p2, 2552 p2 -- end in a statutory rate or ATC table and
     # take a small partial cut, leaving the fillable face above it untouched;
     # C6 lists two of them as blockers for exactly that table. So the assertion
     # is the property that matters rather than "no cut": nothing fillable moves.
-    for slug, page in (("1701-2018", 1), ("1701q-2018", 1), ("1702ex-2018", 1),
-                       ("1601eq-2019", 2)):
+    #
+    # 1601-EQ p2 was a fourth "no cut" page and is one no longer. It is pinned
+    # in `expected` above instead, on all five of its values rather than on the
+    # single fact that it was refused, because the thing that refused it was two
+    # shaded ATC-table blocks read as an entry column and not any form content.
+    for slug, page in (("1701-2018", 1), ("1701q-2018", 1), ("1702ex-2018", 1)):
         entry = next((e for e in plans[slug]["inline"] if e["page"] == page), None)
         check(entry is None, f"{slug} p{page}: cut a guide out of fillable form")
     for slug, page in (("1700-2018", 2), ("1701ms-2024", 2), ("2552-2018", 2)):
