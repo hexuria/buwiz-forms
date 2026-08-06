@@ -2487,35 +2487,138 @@ SHADED_PAPER_MAX_GRAY = 0.87
 SHADED_PAPER_MIN_COVERAGE = 0.70
 
 
-def topmost_covering_fill(cell: dict[str, Any],
+def covering_shading_band(cell: dict[str, Any],
                           area_fills: Sequence[dict[str, Any]],
-                          ) -> dict[str, Any] | None:
-    """The last-painted area fill that covers this cell's paper, if any.
+                          needed: float) -> float:
+    """Paper this cell loses to ONE connected band of a single shading tone.
 
-    Topmost, not any: a tint band painted early and a white knockout painted
-    over it leave white paper, and reading the band alone would call a
-    recovered writing surface shaded.  Ties -- two fills at one ordinal --
-    break on source order, which `extract.extract_area_fills` fixes by
-    ``(y0, x0)``, so the answer is deterministic.
+    Asking whether one fill covers the cell is a false negative for any cell
+    taller than one source shading strip, and the source draws shading in
+    strips: 2550M p3c9 is grey on paper, and grey in the raster, because two
+    7.8pt 0.7529 strips are painted back to back across a 15.6pt cell.  Neither
+    reaches the coverage rule alone (0.508 and 0.500), so the cell kept a field
+    and an input over shading that says NO ENTRY HERE.  What is fixed here is
+    how coverage is *computed*; what counts as shaded -- `role == "decorative"`
+    at or below `SHADED_PAPER_MAX_GRAY` -- is unchanged.
+
+    Three properties the single-fill test had, kept exactly:
+
+    * **Topmost, not any**, and topmost among ALL fills, not among shading.
+      A tint painted early and anything opaque painted over it leave paper that
+      is not that tint: a white knockout (2551Q), a *chromatic* fill with no
+      gray at all (2553 p1c16/c18/c20, where a coloured box sits on the page's
+      0.7529 band), or a second decorative tint above the cut (1604cf-2008
+      p1c8/c10/c12, whose 0.8902 boxes are the REAL fields the cut exists to
+      spare, painted at seq 283-287 over a seq-1 band).  Every point of the cell
+      is resolved to the last fill painted there and counts only if that fill is
+      the shading itself, which is `topmost_covering_fill` asked per point
+      instead of per cell.
+    * **Deterministic.**  Ties -- two fills at one ordinal -- break on source
+      order, which `extract.extract_area_fills` fixes by ``(y0, x0)``.
+    * **Coverage is asked of the cell**, not of the fill.
+
+    Two properties that are new, and both are what makes a union safe:
+
+    * **One tone.**  Strips of one band share the operand that drew them.
+      Unioning 0.502 against 0.8509 would be inventing a band the source never
+      painted, so tones accumulate separately and the largest wins.
+    * **One connected region.**  Strips must touch.  Two tinted strips with
+      white paper -- or a knockout -- between them are two bands with a writing
+      surface in the middle, and their areas must not be added into a verdict
+      about the middle.  Resolving each point against everything painted over
+      it *before* the connectivity test is what stops a union reaching across a
+      whited-out centre.
+
+    Returns the largest such band's area in pt², or 0.0 when no band can reach
+    `needed` -- the short-circuit is exact, since the clipped areas summed
+    without regard to overlap bound every union from above.
     """
     x0, y0 = float(cell["x0"]), float(cell["y0"])
     x1, y1 = float(cell["x1"]), float(cell["y1"])
-    area = (x1 - x0) * (y1 - y0)
-    if area <= 0.0:
-        return None
-    needed = area * SHADED_PAPER_MIN_COVERAGE
-    best_key: tuple[int, int] | None = None
-    best: dict[str, Any] | None = None
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+
+    # (x0, y0, x1, y1, paint key, tone) per fill overlapping this cell's paper.
+    # Tone is None for every fill that is not shading -- those are carried
+    # because they can COVER shading, not because they can be it.
+    layers: list[tuple[float, float, float, float,
+                       tuple[int, int], float | None]] = []
+    bound = 0.0
+    floor: tuple[int, int] | None = None
     for index, fill in enumerate(area_fills):
-        width = min(float(fill["x1"]), x1) - max(float(fill["x0"]), x0)
-        if width <= 0.0:
+        cx0 = max(float(fill["x0"]), x0)
+        cx1 = min(float(fill["x1"]), x1)
+        if cx1 <= cx0:
             continue
-        height = min(float(fill["y1"]), y1) - max(float(fill["y0"]), y0)
-        if height <= 0.0 or width * height < needed:
+        cy0 = max(float(fill["y0"]), y0)
+        cy1 = min(float(fill["y1"]), y1)
+        if cy1 <= cy0:
             continue
+        gray = fill.get("gray")
+        tone_value: float | None = None
+        if (fill["role"] == "decorative" and gray is not None
+                and float(gray) <= SHADED_PAPER_MAX_GRAY):
+            tone_value = float(gray)
         key = (paint_ordinal(fill), index)
-        if best_key is None or key > best_key:
-            best_key, best = key, fill
+        if tone_value is not None:
+            bound += (cx1 - cx0) * (cy1 - cy0)
+            if floor is None or key < floor:
+                floor = key
+        layers.append((cx0, cy0, cx1, cy1, key, tone_value))
+    if floor is None or bound < needed:
+        return 0.0
+
+    # A fill painted before every shading strip here is under all of them.
+    # Where shading covers it, the shading wins anyway; where it does not, the
+    # point is unshaded either way.  Dropping it is exact, and it keeps the
+    # atom grid at the single strip the old test measured whenever one strip is
+    # involved, so a cell already shaded by one fill keeps that fill's area.
+    layers = [layer for layer in layers
+              if layer[5] is not None or layer[4] > floor]
+
+    xs = sorted({x0, x1} | {edge for r in layers for edge in (r[0], r[2])})
+    ys = sorted({y0, y1} | {edge for r in layers for edge in (r[1], r[3])})
+    columns, rows = len(xs) - 1, len(ys) - 1
+
+    # Every atom lies wholly inside or wholly outside each clipped rectangle,
+    # because the grid is cut on those rectangles' own edges; its midpoint
+    # therefore decides containment for the whole atom.
+    tone: list[list[float | None]] = []
+    for j in range(rows):
+        my = (ys[j] + ys[j + 1]) / 2.0
+        row: list[float | None] = []
+        for i in range(columns):
+            mx = (xs[i] + xs[i + 1]) / 2.0
+            top: tuple[int, int] | None = None
+            gray = None
+            for cx0, cy0, cx1, cy1, key, value in layers:
+                if cx0 < mx < cx1 and cy0 < my < cy1:
+                    if top is None or key > top:
+                        top, gray = key, value
+            row.append(gray)
+        tone.append(row)
+
+    best = 0.0
+    seen = [[False] * columns for _ in range(rows)]
+    for j in range(rows):
+        for i in range(columns):
+            if seen[j][i] or tone[j][i] is None:
+                continue
+            band = tone[j][i]
+            seen[j][i] = True
+            stack = [(j, i)]
+            area = 0.0
+            while stack:
+                cj, ci = stack.pop()
+                area += (xs[ci + 1] - xs[ci]) * (ys[cj + 1] - ys[cj])
+                for nj, ni in ((cj - 1, ci), (cj + 1, ci),
+                               (cj, ci - 1), (cj, ci + 1)):
+                    if (0 <= nj < rows and 0 <= ni < columns
+                            and not seen[nj][ni] and tone[nj][ni] == band):
+                        seen[nj][ni] = True
+                        stack.append((nj, ni))
+            if area > best:
+                best = area
     return best
 
 
@@ -2539,11 +2642,13 @@ def on_shaded_paper(cell: dict[str, Any],
     protects statutory TEXT.  Shading is the same statement made with tone
     instead of glyphs, and no ink-coverage test can see it.
     """
-    fill = topmost_covering_fill(cell, area_fills)
-    if fill is None or fill["role"] != "decorative":
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    area = (x1 - x0) * (y1 - y0)
+    if area <= 0.0:
         return False
-    gray = fill.get("gray")
-    return gray is not None and float(gray) <= SHADED_PAPER_MAX_GRAY
+    needed = area * SHADED_PAPER_MIN_COVERAGE
+    return covering_shading_band(cell, area_fills, needed) >= needed
 
 
 def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
@@ -5563,6 +5668,86 @@ def self_test(ir_path: pathlib.Path) -> int:
     check(
         classify_cell(True, 4, False, True, True) == "blank",
         "a ruled-gap sliver lost its established kind to the shading rule",
+    )
+
+    # Strip unions. Asserted on 2550M p3c9's exact source geometry: a 15.6pt
+    # cell shaded by two 7.8pt 0.7529 strips covering 0.508 and 0.500, which no
+    # single-fill coverage test can see. The negatives beside it are the three
+    # ways a union would be wrong -- two tones are not one band, two strips with
+    # paper between them leave that paper writable, and a knockout through the
+    # middle restores it -- and each is the SAME two strips with one fact
+    # changed, so a union that passes them cannot be passing by luck.
+    strip_cell = {"x0": 537.36, "y0": 98.52, "x1": 591.00, "y1": 114.12}
+    upper_strip = toned_fill(537.36, 98.52, 591.12, 106.44, 0.7529, seq=4)
+    lower_strip = toned_fill(537.36, 106.32, 591.12, 114.24, 0.7529, seq=6)
+    check(
+        not on_shaded_paper(strip_cell, [upper_strip]),
+        "one 0.508-coverage strip shaded a cell on its own",
+    )
+    check(
+        on_shaded_paper(strip_cell, [upper_strip, lower_strip]),
+        "2550M p3c9's two abutting 0.7529 strips did not shade the cell",
+    )
+    check(
+        classify_cell(True, 4, False, False,
+                      on_shaded_paper(strip_cell,
+                                      [upper_strip, lower_strip])) == "shaded",
+        "a cell shaded by a strip pair kept the input the raster refutes",
+    )
+    check(
+        not on_shaded_paper(strip_cell, [
+            upper_strip,
+            toned_fill(537.36, 106.32, 591.12, 114.24, 0.8509, seq=6)]),
+        "two different tones were unioned into one band the source never drew",
+    )
+    check(
+        not on_shaded_paper(strip_cell, [
+            toned_fill(537.36, 98.52, 591.12, 103.00, 0.7529, seq=4),
+            toned_fill(537.36, 109.00, 591.12, 114.24, 0.7529, seq=6)]),
+        "a union reached across white paper between two separated strips",
+    )
+    check(
+        not on_shaded_paper(strip_cell, [
+            upper_strip, lower_strip,
+            toned_fill(537.36, 104.00, 591.12, 108.00, 1.0, seq=9)]),
+        "a union reached across a knockout that whited out the middle",
+    )
+    check(
+        on_shaded_paper(strip_cell, [
+            toned_fill(537.36, 104.00, 591.12, 108.00, 1.0, seq=1),
+            upper_strip, lower_strip]),
+        "a knockout painted UNDER the strips broke a band drawn over it",
+    )
+
+    # White is not the only thing that covers a tint, and a per-point rule that
+    # only subtracts knockouts is a NEW way to lose a real field. Both shapes
+    # below are corpus geometry over a page-wide band: 2553 p1c16/c18/c20 paint
+    # a chromatic box (no gray at all) over the 0.7529 sheet band, and
+    # 1604cf-2008 p1c8/c10/c12 paint their 0.8902 boxes -- the five near-white
+    # fields the tone cut exists to spare -- over it at seq 283-287.
+    band_cell = {"x0": 91.80, "y0": 189.36, "x1": 96.60, "y1": 208.80}
+    sheet_band = toned_fill(20.64, 131.76, 591.60, 652.56, 0.7529, seq=1)
+    check(
+        on_shaded_paper(band_cell, [sheet_band]),
+        "the page-wide 0.7529 sheet band did not shade a cell inside it",
+    )
+    chromatic = {"x0": q(91.68), "y0": q(189.36), "x1": q(96.72),
+                 "y1": q(208.80), "gray": None, "role": tone_role(None),
+                 "paint_seq": 303, "paint_seq_max": 303}
+    check(
+        not on_shaded_paper(band_cell, [sheet_band, chromatic]),
+        "a chromatic box painted over the band was read through as shading",
+    )
+    check(
+        not on_shaded_paper(band_cell, [
+            sheet_band,
+            toned_fill(91.68, 189.36, 96.72, 208.80, 0.8902, seq=283)]),
+        "a near-white 0.8902 field box painted over the band lost its input",
+    )
+    check(
+        on_shaded_paper(band_cell, [
+            {**chromatic, "paint_seq": 0, "paint_seq_max": 0}, sheet_band]),
+        "a chromatic box painted UNDER the band suppressed the band above it",
     )
 
     malformed_span_contracts: list[tuple[str, dict[str, Any]]] = [

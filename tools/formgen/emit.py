@@ -83,7 +83,7 @@ import re
 import sys
 import tempfile
 import urllib.parse
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Iterator, Sequence
 
 SCHEMA_VERSION = 1
 
@@ -1309,7 +1309,8 @@ class PrePrintedInk:
     BUCKET_PT = 16.0
 
     def __init__(self, runs: Sequence[dict[str, Any]]) -> None:
-        self._buckets: dict[int, list[tuple[float, float, list[tuple[float, float]]]]] = {}
+        self._buckets: dict[
+            int, list[tuple[float, float, list[tuple[str, float, float]]]]] = {}
         for run in runs:
             spans = _glyph_spans(run)
             if not spans:
@@ -1319,14 +1320,15 @@ class PrePrintedInk:
             for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
                 self._buckets.setdefault(bucket, []).append(entry)
 
-    def coverage(self, cell: dict[str, Any]) -> float:
-        """Fraction of the cell's width covered by pre-printed glyph ink."""
-        width = float(cell["x1"]) - float(cell["x0"])
-        if width <= 0:
-            return 0.0
-        x0, x1 = float(cell["x0"]), float(cell["x1"])
-        y0, y1 = float(cell["y0"]), float(cell["y1"])
-        inside: list[tuple[float, float]] = []
+    def _spans_over(self, y0: float, y1: float
+                    ) -> Iterator[list[tuple[str, float, float]]]:
+        """The glyphs of every run that is printed IN the band `y0..y1`.
+
+        The half-its-own-height test is the whole of "printed in" -- see the
+        class docstring -- and lives here so that the two questions asked of
+        this index, occupancy of a cell and what a comb slot carries, cannot
+        drift apart on which runs they consider.
+        """
         seen: set[int] = set()
         for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
             for entry in self._buckets.get(bucket, ()):
@@ -1337,10 +1339,20 @@ class PrePrintedInk:
                 overlap = min(y1, run_y1) - max(y0, run_y0)
                 if run_y1 <= run_y0 or overlap < 0.5 * (run_y1 - run_y0):
                     continue
-                for span_x0, span_x1 in spans:
-                    low, high = max(x0, span_x0), min(x1, span_x1)
-                    if high > low:
-                        inside.append((low, high))
+                yield spans
+
+    def coverage(self, cell: dict[str, Any]) -> float:
+        """Fraction of the cell's width covered by pre-printed glyph ink."""
+        width = float(cell["x1"]) - float(cell["x0"])
+        if width <= 0:
+            return 0.0
+        x0, x1 = float(cell["x0"]), float(cell["x1"])
+        inside: list[tuple[float, float]] = []
+        for spans in self._spans_over(float(cell["y0"]), float(cell["y1"])):
+            for _char, span_x0, span_x1 in spans:
+                low, high = max(x0, span_x0), min(x1, span_x1)
+                if high > low:
+                    inside.append((low, high))
         if not inside:
             return 0.0
         inside.sort()
@@ -1355,20 +1367,81 @@ class PrePrintedInk:
         covered += high - low
         return covered / width
 
+    def slot_constant(self, x0: float, y0: float, x1: float, y1: float) -> str | None:
+        """The pre-printed CONSTANT this comb slot carries, or None.
 
-def _glyph_spans(run: dict[str, Any]) -> list[tuple[float, float]]:
-    """Each non-space glyph's x extent, from the IR's own per-glyph metrics."""
+        `coverage` cannot answer this. A comb slot is one character wide, so a
+        single printed glyph covers most of it whatever that glyph is, and the
+        money `.` decoration would score exactly as high as a statutory ATC
+        code. The question here is not how much ink is in the slot but WHOSE
+        ink it is: something the form states, or something drawn inside the
+        taxpayer's own field.
+
+        Three conditions, and each one is a population the corpus separates on
+        (build/layout + build/ir, 53 bundles, 4,523 comb cells, 2026-08-07 --
+        406 slots carry ink at all):
+
+          * **Exactly one glyph.** A constant is typeset AT the comb's pitch,
+            one character per compartment, because it is printed to look like
+            a filled-in box: `I I 0 1 1`, `X C 0 1 0`, `2 0`, `0 0 0 0 0`. A
+            caption the lattice swallowed into the same cell is typeset at
+            label scale and lands 9 to 300 glyphs in ONE slot -- `7A ZIP Code`,
+            `12 Contact Number`, 2200A's whole signature line. All 34 such
+            slots are that; all 271 single-glyph slots are not. Nothing in the
+            corpus is in between, and the two populations answer to different
+            defects: a swallowed caption is a segmentation fault (G05/G12) and
+            deleting its slot's input would hide it, not fix it.
+          * **Alphanumeric.** `.` `,` `-` `%` `)` and the money bullet `●` are
+            drawn INSIDE a field to shape what is typed into it, not to state
+            a value: 101 slots, every one of them a separator or a decimal
+            point. Removing those inputs is exactly the C4 regression -- it is
+            what left 2000-DST's page-1 money grid, 2200A/2200P Part III,
+            1801 item 24 and 2316 items 23-24 with no way to type an amount.
+          * **Wholly inside the slot.** A neighbour's caption can clip one
+            glyph into the first compartment: 2551M's and 2553's `28C`/`29B`
+            item numbers overhang by 4.53pt. The margin (glyph to slot wall)
+            is -4.53pt for all six of those and >= +1.31pt for all 265
+            constants; nothing lands between, so the test is containment
+            itself and carries no tolerance.
+
+        Where it stops, stated rather than papered over: a format hint typeset
+        at comb pitch and centred in the writing band -- a literal `M M / Y Y`
+        inside the boxes -- would be read as a constant. The corpus has no such
+        hint. Its only date hints (`( MM / YYYY )` on 0605 p1c3, `( MM / DD /
+        YYYY )`) are printed OUTSIDE the comb and merely clip a bracket into
+        the first slot, which condition three already rejects. Adding a size or
+        colour test against a population that does not exist would be machinery
+        earning nothing.
+        """
+        found: tuple[str, float, float] | None = None
+        for spans in self._spans_over(y0, y1):
+            for char, span_x0, span_x1 in spans:
+                if min(x1, span_x1) <= max(x0, span_x0):
+                    continue
+                if found is not None:
+                    return None
+                found = (char, span_x0, span_x1)
+        if found is None:
+            return None
+        char, span_x0, span_x1 = found
+        if not char.isalnum() or span_x0 < x0 or span_x1 > x1:
+            return None
+        return char
+
+
+def _glyph_spans(run: dict[str, Any]) -> list[tuple[str, float, float]]:
+    """Each non-space glyph and its x extent, from the IR's per-glyph metrics."""
     origin = run.get("origin_x")
     if origin is None:
         return []
     offsets = run.get("char_origin_offsets_pt") or []
     widths = run.get("char_widths_pt") or []
-    spans: list[tuple[float, float]] = []
+    spans: list[tuple[str, float, float]] = []
     for index, char in enumerate(run["text"]):
         if char.isspace() or index >= len(offsets) or index >= len(widths):
             continue
         start = float(origin) + float(offsets[index])
-        spans.append((start, start + float(widths[index])))
+        spans.append((char, start, start + float(widths[index])))
     return spans
 
 
@@ -1479,6 +1552,13 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         Part III, 1801 item 24, 2316 items 23-24 and 1702EX item 18 had no way
         to type an amount at all, headline payable included. 195 cells across
         37 forms.
+
+        This is a verdict about the CELL and it stops there. Which of that
+        cell's compartments a taxpayer may type in is a separate question with
+        a separate answer per compartment -- see `comb_slot_verdicts`. Reading
+        this rule as "and therefore every slot is editable" is what put a live
+        text box on the statutory ATC codes `II 011` and `XC 010`, on the
+        century `2 0`, and on the TIN branch code `0 0 0 0 0` across 24 forms.
       * **A blank the source printed over is not a blank.** Independently of
         whether guides.py relocated the table it belongs to, a cell whose
         geometry is filled with pre-printed text gets no input: on 1700 page 2 a
@@ -1514,7 +1594,8 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         # grey gaps BETWEEN TIN digit groups, e.g. 2550M p1c10/c12/c14, 4.8pt
         # strips each carrying its own 0.7529 patch -- are plain `field` cells
         # and are caught below. Blanket-blocking a shaded comb would remove
-        # real digit boxes and buy nothing.
+        # real digit boxes and buy nothing. The evidence that DOES survive at
+        # comb resolution is applied per slot instead, in `comb_slot_verdicts`.
         return True, "comb"
     if cell["kind"] != "field":
         return False, cell["kind"]
@@ -1523,6 +1604,69 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
     if shading is not None and shading.blocks(cell):
         return False, "shading"
     return True, "field"
+
+
+def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
+                       shading: DecorativeShading | None) -> dict[int, str]:
+    """Which of a comb's compartments the source already filled in, and why.
+
+    `field_verdict` settles the cell; a comb cell is N compartments and they do
+    not share an answer. On 1600-PT the year comb prints the century `2 0` in
+    its first two boxes and leaves the last two blank for the taxpayer -- one
+    cell, two verdicts. Answering per cell can only be wrong in one of the two
+    directions: editable everywhere (what shipped: 2,187 inputs over 180 cells
+    the lattice had already marked `mixed`) or editable nowhere (which would
+    delete the year).
+
+    Two kinds of evidence, the same two `field_verdict` uses, re-asked of the
+    slot's own rectangle rather than the cell's:
+
+      * **Glyph ink that is a constant of the form** -- `slot_constant`, which
+        is where the decoration-versus-constant discrimination lives.
+      * **Decorative shading under the slot** -- the identical
+        `DecorativeShading.blocks` test at slot resolution. It resolves 16
+        slots the ink rule deliberately declines: the grey group-separator
+        compartments of a TIN comb, which print `-` (1801 p1c14/c15/c31/c32,
+        1800 p1c15) or `.` (1801 p1c55) and are exactly the "narrow grey
+        slivers between TIN digit groups" the cell-level rule catches when the
+        lattice happens to cut them as their own cells, plus the caption
+        compartment of a cell whose lattice segmentation swallowed a label
+        (1801 p1c13/c33/c110, 1800 p1c26, 2200S p1c29, 2552 p1c28, 1604F
+        p1c25/c36). Not one of the 16 is a digit box: the separators are 14pt
+        compartments carrying printed punctuation, the caption ones are 56 to
+        366pt wide.
+
+    Per slot and never per group, which is a decision the corpus forces. "Any
+    constant in this comb blocks the comb" would delete 1600-PT's year entry
+    (constant leading, blanks trailing); "everything left of the constant goes
+    too" would delete the first nine digits of every 12-slot TIN comb
+    (constant trailing, blanks leading: 1702EX p1c75, 1702Q p2c47). The two
+    shapes are mirror images and no rule over the group distinguishes them, so
+    the group is not the unit -- the compartment is. The one case this leaves
+    open is recorded rather than guessed at: 1800 p2c63 prints `2 5 0 0 0 0`
+    into the last six of ten compartments and leaves four leading ones blank,
+    the way a right-aligned number does; those four stay editable, and typing
+    in them produces a figure the form's own printed digits contradict. That is
+    a segmentation question (the printed amount is one value, not a field),
+    not a can-a-taxpayer-overtype-a-constant one.
+    """
+    comb = cell.get("comb")
+    if not comb:
+        return {}
+    slot_x = [float(value) for value in comb["slot_x"]]
+    y0 = float(comb.get("y0", cell["y0"]))
+    y1 = y0 + float(comb.get("height_pt", float(cell["y1"]) - float(cell["y0"])))
+    verdicts: dict[int, str] = {}
+    for index in range(len(slot_x) - 1):
+        x0, x1 = slot_x[index], slot_x[index + 1]
+        if x1 <= x0:
+            continue
+        if ink is not None and ink.slot_constant(x0, y0, x1, y1) is not None:
+            verdicts[index] = "pre-printed"
+        elif shading is not None and shading.blocks(
+                {"x0": x0, "y0": y0, "x1": x1, "y1": y1}):
+            verdicts[index] = "shading"
+    return verdicts
 
 
 class FieldPlan:
@@ -1537,7 +1681,7 @@ class FieldPlan:
 
     __slots__ = ("face", "boxes", "classes", "small", "blocked",
                  "undersized_source", "undersized_derived", "uncontained",
-                 "collapsed", "comb_count")
+                 "collapsed", "comb_count", "blocked_slots", "slot_count")
 
     def __init__(self, layout: dict[str, Any], face: FieldFace | None,
                  warnings: list[str], ir: dict[str, Any] | None = None) -> None:
@@ -1554,8 +1698,15 @@ class FieldPlan:
         self.uncontained: list[str] = []
         self.collapsed: list[str] = []
         self.comb_count = 0
+        self.slot_count = 0
         # cell id -> why it has no typing surface, for the markup and the report.
         self.blocked: dict[str, str] = {}
+        # cell id -> {slot index: why that ONE compartment has none}. Separate
+        # from `blocked` because it is a different claim: `blocked` says the
+        # cell is not a blank at all, this says the source already wrote in
+        # some of the boxes it drew. A cell appears in at most one of them --
+        # a comb cell is always fillable at cell resolution.
+        self.blocked_slots: dict[str, dict[int, str]] = {}
         if face is None:
             return
         # Keyed by page index rather than zipped, so a layout page and an IR page
@@ -1580,6 +1731,12 @@ class FieldPlan:
                     continue
                 self.boxes[cell["id"]] = box
                 self._audit_surface(cell, box, face)
+                comb = cell.get("comb")
+                if comb:
+                    self.slot_count += max(len(comb["slot_x"]) - 1, 0)
+                    filled = comb_slot_verdicts(cell, ink, shading)
+                    if filled:
+                        self.blocked_slots[cell["id"]] = filled
         # Sorted through an explicit key: the tracking is None for a field whose
         # scaled tracking rounds to nothing, and a bare tuple sort would compare
         # None against a float the day two boxes share a size and differ there.
@@ -1605,6 +1762,29 @@ class FieldPlan:
                 f"shading at grey <= {fmt(DECORATIVE_GRAY_MAX)} and get no typing surface "
                 f"({self._sample(shaded)}); the source shaded them to say no entry "
                 f"applies there")
+        # The same obligation at slot resolution, and named the same two ways:
+        # a compartment refused for glyph ink is a value the form STATES and a
+        # reader must be able to check that claim against the sheet, while one
+        # refused for tone is a separator or a swallowed caption. Reporting a
+        # single total would put an ATC code and a TIN hyphen in one bucket.
+        printed_slots = sorted(
+            f"{cell_id}[{index}]" for cell_id, slots in self.blocked_slots.items()
+            for index, why in slots.items() if why == "pre-printed")
+        shaded_slots = sorted(
+            f"{cell_id}[{index}]" for cell_id, slots in self.blocked_slots.items()
+            for index, why in slots.items() if why == "shading")
+        if printed_slots:
+            warnings.append(
+                f"{len(printed_slots)} of {self.slot_count} comb slot(s) already carry "
+                f"a constant the form prints and get no input "
+                f"({self._sample(printed_slots)}); a taxpayer must not be able to "
+                f"overtype a statutory code, a century or a fixed branch code")
+        if shaded_slots:
+            warnings.append(
+                f"{len(shaded_slots)} of {self.slot_count} comb slot(s) sit on "
+                f"decorative shading at grey <= {fmt(DECORATIVE_GRAY_MAX)} and get no "
+                f"input ({self._sample(shaded_slots)}); they are the grey gaps between "
+                f"digit groups and the caption end of a cell the lattice cut too wide")
         if ir is None:
             warnings.append(
                 "no IR was given to the field plan, so pre-printed occupancy and paper "
@@ -1695,6 +1875,10 @@ class FieldPlan:
 
     def of(self, cell_id: str) -> FieldBox | None:
         return self.boxes.get(cell_id)
+
+    def slot_blocked(self, cell_id: str, index: int) -> str | None:
+        """Why this one comb compartment carries no input, or None."""
+        return self.blocked_slots.get(cell_id, {}).get(index)
 
     def class_of(self, box: FieldBox) -> str:
         return self.classes[box.metrics_key]
@@ -1881,6 +2065,21 @@ def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any],
     slots": the input *is* the slot box, so a centred character is centred on a
     measured slot centre by layout rather than by an advance calculation over a
     pitch that is not uniform (2551Q's pitch deviates by up to 0.12pt).
+
+    Each slot the SOURCE already filled holds none. The slot div is emitted
+    either way, because the printed compartment exists either way and every
+    consumer that counts compartments -- `comb_slots_match_printed`, the comb
+    referee's structural pass -- is counting the artwork, not the affordance.
+    What changes is only whether there is something to type into, which is the
+    same signal `money_boxes_have_inputs` already reads ("<input" in the slot).
+
+    No attribute says so, deliberately. The obvious move is a `data-preprinted`
+    on the slot to match the one `cell_markup` puts on a blocked cell, and it
+    would break two downstream readers that pin this element's exact attribute
+    set: `audit.SLOT_RE` matches `class`, `data-slot`, `style` in that order and
+    nothing else, and `comb_referee._emitter_attributes_valid` asserts the key
+    set is exactly `{"class", "data-slot", "style"}`. The exclusion is published
+    through `FieldPlan`'s warnings, per cell and per slot index, instead.
     """
     slot_x = comb["slot_x"]
     top = float(comb.get("y0", cell["y0"])) - cell["y0"]
@@ -1893,7 +2092,17 @@ def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any],
             ("left", f"{fmt(left)}pt"), ("top", f"{fmt(top)}pt"),
             ("width", f"{fmt(width)}pt"), ("height", f"{fmt(height)}pt"),
         ))
+        # `live` is the guard, not an optimisation. A band template is cut from
+        # row 0 and carries row 0's cell id, so consulting the verdict there
+        # would take a constant printed in the first row of a schedule and
+        # stamp it onto every row the renderer clones -- rows whose paper is
+        # blank. What the source printed is a fact about the row it printed it
+        # in; the pre-rendered rows are real cells and get their own verdicts a
+        # few lines up in `emit_page`. No cell in the corpus is affected either
+        # way (measured: 0 of the 82 cells with a filled compartment lie inside
+        # a growable band), so this is a guard rather than a behaviour.
         inner = ("" if box is None or fields is None
+                 or (live and fields.slot_blocked(cell["id"], index) is not None)
                  else field_input_markup(cell["id"], box, fields, index, live))
         parts.append(f'<div class="s" data-slot="{index}" '
                      f'style="{esc_attr(style)}">{inner}</div>')
@@ -3507,10 +3716,24 @@ function slotsOf(el){
   var cell=el.closest("[data-cell-kind]");
   return cell?cell.querySelectorAll("input.fi[data-slot-index]"):null;
 }
+/* Position in the list of TYPEABLE slots, which is not `data-slot-index`. A
+   comb compartment the source already filled -- the century "2 0", a TIN's
+   printed branch code, the grey gap between two digit groups -- emits its slot
+   div with no input, so the two numberings diverge the moment any comb has one.
+   Reading the attribute and indexing the NodeList with it would then step off
+   the end (a 4-slot year comb whose first two are printed leaves 2 inputs, and
+   slot 2 would look for list[3]) and typing would stop advancing at the first
+   printed box. The list itself is the sequence a taxpayer moves through. */
+function positionOf(list,el){
+  for(var i=0;i<list.length;i++){if(list[i]===el){return i;}}
+  return -1;
+}
 function move(el,delta,select){
   var list=slotsOf(el);
   if(!list){return null;}
-  var index=parseInt(el.getAttribute("data-slot-index"),10)+delta;
+  var at=positionOf(list,el);
+  if(at<0){return null;}
+  var index=at+delta;
   if(index<0||index>=list.length){return null;}
   list[index].focus();
   if(select&&list[index].select){list[index].select();}
@@ -3549,7 +3772,8 @@ document.addEventListener("paste",function(ev){
   var text=(clipboard.getData("text")||"").replace(/\s+/g,"");
   if(!text){return;}
   ev.preventDefault();
-  var index=parseInt(el.getAttribute("data-slot-index"),10),written=0,last=el;
+  var index=positionOf(list,el),written=0,last=el;
+  if(index<0){return;}
   while(index<list.length&&written<text.length){
     list[index].value=text.charAt(written);
     last=list[index];
@@ -4842,6 +5066,13 @@ DEFAULT_LAYOUT = _ROOT / "build/layout/2551q-2018.layout.json"
 DEFAULT_PLAN = _ROOT / "build/fonts/2551q-2018.fontplan.json"
 DEFAULT_GUIDE_PLAN = _ROOT / "build/guides/2551q-2018.guide.json"
 
+# The slot element as the self-test reads it back. Deliberately the same shape
+# as `audit.SLOT_RE` -- class, data-slot, style, in that order and nothing else
+# -- so that adding an attribute here fails the emitter's own test rather than
+# the audit's, 60 minutes later.
+SELF_TEST_SLOT_RE = re.compile(
+    r'<div class="s" data-slot="\d+" style="[^"]*">(.*?)</div>', re.S)
+
 
 def _check(ok: bool, label: str, detail: str, failures: list[str]) -> None:
     print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {detail}", file=sys.stderr)
@@ -5063,6 +5294,144 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                and 'data-preprinted="shading"' in cell.group(0),
                "a cell on decorative shading is emitted without an input",
                cell.group(0)[:80] if cell else "cell absent", failures)
+
+    # -- C6 part 4: a comb slot the SOURCE already filled in --------------------
+    # G11, the one place in the corpus where a producer bug puts a live text box
+    # on a statutory constant: 180 of 180 `mixed` cells were emitted with a full
+    # set of editable slots because `field_verdict`'s first rule returns before
+    # any ink is consulted. The assertions below are the three populations that
+    # decide the rule -- a constant, a decoration, and a whole printed group --
+    # plus the two false positives that would have cost real typing surface.
+    slot_victim = next(
+        (cell for page in layout["pages"] for cell in page["cells"]
+         if cell.get("comb") and len(cell["comb"]["slot_x"]) >= 6
+         and not any(cell["x0"] >= band["x0"] - 1.0 and cell["x1"] <= band["x1"] + 1.0
+                     and cell["y0"] >= band["y0"] - 1.0 and cell["y1"] <= band["y1"] + 1.0
+                     for band in (page.get("growable") or ()))), None)
+    if slot_victim is None:
+        _check(False, "C6 part 4 has a comb cell of 5+ slots to fill in",
+               "none found", failures)
+    else:
+        slot_x = [float(v) for v in slot_victim["comb"]["slot_x"]]
+        band_y0 = float(slot_victim["comb"].get("y0", slot_victim["y0"]))
+        band_y1 = band_y0 + float(slot_victim["comb"].get(
+            "height_pt", float(slot_victim["y1"]) - float(slot_victim["y0"])))
+        glyph_y0 = band_y0 + 0.25 * (band_y1 - band_y0)
+        glyph_y1 = band_y1 - 0.25 * (band_y1 - band_y0)
+
+        def _printed(text: str, left: float, width: float, *,
+                     y0: float = glyph_y0, y1: float = glyph_y1) -> dict[str, Any]:
+            """A run of `text` laid from `left`, each glyph `width` wide."""
+            return {
+                "text": text, "font": "Arial,Bold", "family": "Arial",
+                "size_pt": 11.04, "bold": True, "italic": False, "serif": False,
+                "monospace": False, "superscript": False, "flags": 16, "color": 0,
+                "x0": left, "y0": y0, "x1": left + width * len(text), "y1": y1,
+                "baseline_y": y1, "origin_x": left, "ascender": 0.905,
+                "descender": -0.21, "line_height_pt": y1 - y0,
+                "measured_advance_pt": width * len(text),
+                "char_origin_offsets_pt": [width * i for i in range(len(text))],
+                "char_advances_pt": [width] * len(text),
+                "char_widths_pt": [width] * len(text),
+                "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+            }
+
+        def _centred(char: str, index: int, share: float = 0.45) -> dict[str, Any]:
+            """`char` printed in the middle of slot `index`, at comb pitch."""
+            width = (slot_x[index + 1] - slot_x[index]) * share
+            return _printed(char, slot_x[index] + (slot_x[index + 1]
+                                                   - slot_x[index] - width) / 2.0, width)
+
+        def _verdicts(runs: Sequence[dict[str, Any]],
+                      fills: Sequence[dict[str, Any]] = ()) -> dict[int, str]:
+            return comb_slot_verdicts(slot_victim, PrePrintedInk(runs),
+                                      DecorativeShading(fills))
+
+        # 1. A constant: the century BIR prints into the first two boxes of a
+        #    year comb (1600-PT/VT p1c5, 1604C/1604E p1c4). Per slot, so the
+        #    two the taxpayer must still fill stay fillable -- a whole-cell rule
+        #    here would delete the year.
+        _check(_verdicts([_centred("2", 0), _centred("0", 1)]) ==
+               {0: "pre-printed", 1: "pre-printed"},
+               "a constant printed at comb pitch takes only its own slots",
+               "the century leaves the year's boxes typeable", failures)
+        # 2. A whole printed group: the TIN branch code, 5 adjacent slots of
+        #    zeros on 1701 x5 pages, 1701A x2, 1702-EX/MX/RT/Q x11, 1800 x3.
+        #    Recognised without a group rule, because each zero answers for its
+        #    own compartment.
+        _check(_verdicts([_centred("0", i) for i in range(5)]) ==
+               {i: "pre-printed" for i in range(5)},
+               "every slot of a printed branch code is refused",
+               "5 of 5, from 5 independent per-slot verdicts", failures)
+        # 3. Decoration inside the taxpayer's own field: the money bullet and
+        #    the "." and "%" that C4 deliberately made fillable. Re-refusing
+        #    these is what left 2000-DST's page-1 money grid, 2200A Part III/IV,
+        #    2200P Part III, 1801 item 24, 2316 items 23-24 and 1702EX item 18
+        #    with no way to type an amount.
+        _check(all(_verdicts([_centred(char, 2)]) == {} for char in "●.,-%/"),
+               "a separator or a money point never takes a slot away",
+               "the decimal point stays inside a fillable money comb", failures)
+        # 4. A caption the lattice swallowed into the comb cell: 9+ glyphs in
+        #    ONE slot, at label scale rather than comb pitch. That is a
+        #    segmentation defect (G05/G12) and deleting the input would hide it.
+        _check(_verdicts([_printed(
+            "7A ZIP Code", slot_x[0] + 0.5,
+            (slot_x[1] - slot_x[0] - 1.0) / 11.0)]) == {},
+               "a label typeset across one slot is a segmentation fault, not a value",
+               "'7A ZIP Code' leaves every compartment typeable", failures)
+        # 5. A neighbour's item number clipping into the first box: 2551M's and
+        #    2553's "28C"/"29B" overhang by 4.53pt, and every real constant in
+        #    the corpus clears its walls by at least 1.31pt.
+        overhang = (slot_x[1] - slot_x[0]) * 0.45
+        _check(_verdicts([_printed("8", slot_x[0] - overhang / 2.0, overhang)]) == {}
+               and _verdicts([_centred("8", 0)]) == {0: "pre-printed"},
+               "a glyph must clear the slot's own walls to be that slot's value",
+               "containment carries no tolerance; the corpus separates by 5.84pt",
+               failures)
+        # 6. Tone at slot resolution: the grey gaps between TIN digit groups
+        #    (1801 p1c14/c15/c31/c32, 1800 p1c15) and the caption end of a cell
+        #    cut too wide. Same test as the cell-level rule, same threshold.
+        def _slot_fill(index: int, gray: float, role: str, seq: int) -> dict[str, Any]:
+            return {"x0": slot_x[index], "y0": band_y0,
+                    "x1": slot_x[index + 1], "y1": band_y1,
+                    "gray": gray, "rgb": [gray, gray, gray], "role": role,
+                    "paint_seq": seq, "paint_seq_max": seq}
+
+        grey = _slot_fill(3, 0.8509, "decorative", 1)
+        _check(_verdicts((), [grey]) == {3: "shading"}
+               and _verdicts((), [grey, _slot_fill(3, 1.0, "knockout", 2)]) == {},
+               "a shaded compartment is refused and a knockout over it is not",
+               "the topmost fill decides, exactly as it does for a cell", failures)
+
+        # 7. End to end: the slot div is still emitted, and it is the absent
+        #    <input> that says so -- no new attribute, because audit.SLOT_RE and
+        #    the comb referee both pin this element's exact attribute set.
+        slot_ir = json.loads(json.dumps(ir))
+        page_index = int(slot_victim["id"][1:].split("c")[0])
+        page = next(p for p in slot_ir["pages"] if int(p["index"]) == page_index)
+        page["text_runs"].append(_centred("0", 0))
+        page["text_runs"].sort(key=lambda r: (r["y0"], r["x0"]))
+        html, slot_warnings = build_document(
+            slot_ir, layout, plan, Options("svg", "fonts", "assets", None, None, None))
+        cell = re.search(rf'<div id="{slot_victim["id"]}"[^>]*>(.*?)</div></div>',
+                         html, re.S)
+        slots = SELF_TEST_SLOT_RE.findall(cell.group(1)) if cell else []
+        _check(len(slots) >= 2 and "<input" not in slots[0] and "<input" in slots[1],
+               "the filled compartment emits its slot div with no input in it",
+               f"slot 0 {'empty' if slots and '<input' not in slots[0] else 'editable'}",
+               failures)
+        _check(any("carry a constant the form prints" in w for w in slot_warnings),
+               "the exclusion is published, per cell and per slot index",
+               next((w for w in slot_warnings if "constant the form prints" in w),
+                    "no such warning")[:90], failures)
+        # 8. The navigation the gap breaks. `data-slot-index` is the compartment's
+        #    number and stays that; the NodeList is the sequence a taxpayer moves
+        #    through, and indexing one with the other stops advancing at the first
+        #    printed box.
+        _check("positionOf(list,el)" in FIELD_JS
+               and 'getAttribute("data-slot-index"),10)+delta' not in FIELD_JS,
+               "comb navigation steps through the typeable slots, not slot numbers",
+               "positionOf, not the attribute", failures)
 
     # -- Ink: a padded single-word run is emitted as its ink, at its own origin -
     padded = {"text": " No ", "origin_x": 231.17,
