@@ -20,6 +20,8 @@ regenerated at the r14 producer bytes. Assertion counts are from a corpus-wide
 | Emitted inputs | **45,583** | 45,915 | −332 |
 | Comb slot divs | 40,008 | 40,008 | unchanged — slots stay, inputs go |
 | Comb slots with no input | **281** | 0 | the compartments the source already filled in |
+| Editable slots on a short pre-printed constant | **0** | 175 | G11's own metric |
+| `mixed` cells still carrying an input | 156 of 180 | 180 of 180 | correct — money combs, printed ink is the decimal decoration (C4) |
 | Findings | 172 | 172 | **49 blocker+major open of 116** (was 58 of 116) |
 
 ## Gate — r14
