@@ -34,8 +34,9 @@ table; the rows below carry only the per-defect numbers.
 | Comb cells | 4,521 | the pin said 4,540 and was stale at HEAD, not here |
 | Findings in `review-findings.json` | 172 | **49 blocker+major open of 116** at r14 (was 58). The 138 immutable baseline entries are untouched; the digest at `gate.py:8713` still matches |
 
-**Gate — full run r14, 2026-08-07 04:22, clean tree at `8defe23`. 9/12 PASS.**
-STATUS.md holds the full table and the analysis.
+**Gate — full runs r14 (04:22, `8defe23`) and r15 (05:35, `e38672f`), both
+clean-tree. 9/12 PASS in both; r15 is authoritative.** STATUS.md holds the full
+table and the analysis.
 
     PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
     PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
@@ -43,14 +44,16 @@ STATUS.md holds the full table and the analysis.
     FAIL  assertions    inputs_over_printed_text 20/53 forms (was 40)
                         comb_slots_match_printed 36/53 forms (was 22) — G16
     FAIL  findings      49/116 blocker+major open (was 58)
-    UNEV  comb-referee  40/53; HTML_RUNTIME_SCRIPT_SHA256 stale — G17
+    UNEV  comb-referee  40/53; at r15 every residual error is G16's shadow
 
-Same three checks red as r13, and no longer for stale reasons on two of them.
-**The referee's UNEVALUABLE was a THIRD reviewed emitter pin nobody had
-counted** — `HTML_RUNTIME_SCRIPT_SHA256`, read only by the referee, which runs
-last. It is re-pinned now, with the two moved hashes named and reasoned at the
-constant, but **that re-pin carries no r14 verdict**: the next full run settles
-it.
+Same three checks red as r13, and no longer for stale reasons. **r14's referee
+UNEVALUABLE was a THIRD reviewed emitter pin nobody had counted** —
+`HTML_RUNTIME_SCRIPT_SHA256`, read only by the referee, which runs last. It is
+re-pinned and **r15 confirms the fix**: all five `form emission binding has
+errors` entries are gone. What remains at r15 is `form audit relation contains
+errors` on exactly the forms where compartments are now correctly refused, which
+fires on `assertion_valid is not True` — **the referee is UNEVALUABLE because
+G16 is open, not because of a second defect.**
 
 **That landmine is defused, and a second one of the same shape was found and
 defused with it.** `EXPECTED_COMB_SUBJECTS` and `EXPECTED_COMBS` now agree at
@@ -114,7 +117,7 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | **G13** | **A multi-column guide source is reflowed scanline-by-scanline, interleaving the columns and binding values to the wrong key.** On 2551M this puts the wrong tax rate against an ATC code | 2 forms confirmed (2026-08-07); 2551M header row carries 5 source column labels in 3 cells | `guides.py` reflow — no column detection | open | F167 (2551M, **blocker**: PT 060 emitted with Tax Rate 5%, officially 2%), F168/F169/F170 (0605 tax-type table and the two-column Guidelines). **F127 is marked `fixed` and this table is still wrong** — that fix removed prose flattening only, and `reflow_rate_without_description` cannot see a rate bound to the wrong code |
 | **G14** | A BIR-only control field is emitted as a taxpayer input | 1 confirmed (2026-08-07) | `lattice.py` field classification | open | F147 (0605 "BCS No./Item No. (To be filled up by the BIR)" = 253.0×17.5pt free text, no maxlength). The exclusion works on the same sheet for DLN/PSIC/PSOC, so this box was missed, not unhandled |
 | **G16** | **`audit.py`'s `comb_slots_match_printed` requires a comb's input indexes to run 0..N−1 with no gap, so it fails on every compartment G11 correctly refuses.** The emission contract changed; the assertion that owns it was not told | **76 offenders, 24 forms**, `slot-input-index-mismatch` + `invalid-emission` (r14). The other 167 of the assertion's 247 are the pre-existing `source-topology-unevaluable` population | `audit.py` `check_comb_slots_match_printed` | open | STATUS.md §"The two assertions". **The assertion must not be weakened.** The fix is to re-derive the constant from the SOURCE PDF's own text operators — where this assertion already reads from, so it stays independent of `emit.py` — and accept a gap exactly where the source printed one. This is the "a schema change is declared everywhere it is asserted, in the same commit" rule being paid late |
-| **G17** | **A reviewed emitter pin lives in a place no one has enumerated, and only the referee reads it — so it costs a full 60-minute gate run to discover.** `comb_referee.HTML_RUNTIME_SCRIPT_SHA256` is a third such pin, distinct from `EXPECTED_HTML_STRUCTURE_SHA256` and from the four producer SHAs | 5 forms UNEVALUABLE at r14, report partial 40/53; 2 of the pin's 3 hashes had moved | `comb_referee.py:535`, read at `comb_referee.py:2822` | open | Re-pinned after r14 and **not yet covered by a verdict**. The class stays open because the underlying defect is the enumeration, not this pin: the "census pins that must move together" list under **How we work** did not contain it, and does not name whatever else is like it. An inventory that a producer change can be checked against in seconds — rather than at the end of an hour — is the actual fix |
+| **G17** | **A reviewed emitter pin lives in a place no one has enumerated, and only the referee reads it — so it costs a full 60-minute gate run to discover.** `comb_referee.HTML_RUNTIME_SCRIPT_SHA256` is a third such pin, distinct from `EXPECTED_HTML_STRUCTURE_SHA256` and from the four producer SHAs | 5 forms UNEVALUABLE at r14, report partial 40/53; 2 of the pin's 3 hashes had moved | `comb_referee.py:535`, read at `comb_referee.py:2822` | open | The pin itself is re-pinned and **r15 confirms it** (all five emission-binding errors gone). The class stays open because the underlying defect is the enumeration, not this pin: the "census pins that must move together" list under **How we work** did not contain it, and does not name whatever else is like it. An inventory that a producer change can be checked against in seconds — rather than at the end of an hour — is the actual fix |
 | **G15** | **The `?debug=fields` overlay shipped in `forms/` is the OLD self-referential one; the fixed overlay exists only in `emit.py` and has never been regenerated into the corpus.** In the shipped legend blue dashed means "this input is fine"; in the fixed one it means "printed box with NO input" — the inverse | was 0 / 38; **now `printed box with no input` → 53 of 53, `no usable box` → 0** (r14, 2026-08-07) | `emit.py` overlay, unregenerated | **done** | F172 `fixed`. Nothing needed fixing — the corrected overlay already existed in `emit.py` and had simply never been written out. Regenerating the corpus at r14 shipped it. The Stage-1 definition of done is no longer blocked on the overlay |
 
 G10 is the one to read twice. It is why Stage 2's central guarantee is not yet

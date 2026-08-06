@@ -26,7 +26,8 @@ regenerated at the r14 producer bytes. Assertion counts are from a corpus-wide
 
 ## Gate — r14
 
-Run r14, 2026-08-07 04:22, clean tree at commit `8defe23`. **9 of 12 PASS.**
+Runs r14 (04:22, `8defe23`) and **r15 (05:35, `e38672f`)**, both complete clean-tree
+runs. **9 of 12 PASS** in both. r15 is the authoritative one.
 
 | Check | r14 | r13 | Detail |
 | --- | --- | --- | --- |
@@ -41,7 +42,7 @@ Run r14, 2026-08-07 04:22, clean tree at commit `8defe23`. **9 of 12 PASS.**
 | tracked-files | PASS | PASS | no tracked deletion |
 | audit-refresh | PASS | PASS | fresh audit atomically published for 53 forms |
 | determinism | PASS | PASS | byte-identical (`8ceeab9e506d`) |
-| comb-referee | **UNEVALUABLE** | UNEVALUABLE | 40/53; `HTML_RUNTIME_SCRIPT_SHA256` was a THIRD stale pin — see below |
+| comb-referee | **UNEVALUABLE** | UNEVALUABLE | 40/53. r14's cause (a third stale pin) is fixed; r15's residue is G16's shadow — see below |
 
 The verdict shape is unchanged from r13: the same three checks are red, for
 reasons that moved in the intended direction on two of them. r14 is the first
@@ -59,9 +60,23 @@ field runtime (`positionOf` replacing attribute-indexed comb navigation, which
 would otherwise stop advancing at the first printed compartment) and the field
 debug overlay (F172). The band-data runtime is byte-identical, which is the
 standing evidence that none of this reached page scaffolding. Re-pinned after
-r14 with that reasoning recorded at the constant; **the re-pin is NOT covered by
-an r14 verdict** and needs the next full gate run to settle. Cost of finding it
-this way: one 60-minute run.
+r14 with that reasoning recorded at the constant, and **r15 settled it**: all
+five `form emission binding has errors` entries are gone and no
+runtime-script complaint remains. Cost of finding it this way: one 60-minute
+run, and one more to clear it. A referee-only re-run cannot substitute — it
+reports `audit application envelope is stale`, because changing `comb_referee.py`
+invalidates the envelope the previous run bound.
+
+### What is left of the referee's UNEVALUABLE at r15
+
+The report is still partial at 40/53, and every remaining complaint is
+`form audit relation contains errors` (1600-PT, 1600-VT, 1604C, 1604E, 1621) or
+`form audit source frame/unframed partition is false` (1604C, 1700). Those fire
+on `audit_evidence.assertion_valid is not True`, and every named form is one
+where compartments are now correctly refused. **The referee is UNEVALUABLE
+because `comb_slots_match_printed` fails, so this is G16's shadow, not a second
+defect.** Closing G16 is expected to close it; nothing else should be attempted
+here first.
 
 ## The two assertions, and one of them got worse
 
