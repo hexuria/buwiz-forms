@@ -86,7 +86,7 @@
       "1701-MS Guide August 2024 ENCS_Final.pdf"
     ]
   },
-  "html_bytes": 751477,
+  "html_bytes": 766234,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
