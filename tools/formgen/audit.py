@@ -323,6 +323,19 @@ POSITION_TOL_PT = 0.25
 # "pre-printed".
 PREPRINTED_COVERAGE = 0.5
 
+# What the SOURCE itself already put in a comb compartment, and therefore which
+# compartments cannot be blanks. Re-derived here from the source PDF's own text
+# and paint operators; see `SourceSlotOracle`. The three bounds are copied, not
+# invented -- lattice.py carries the tone pair as SHADED_PAPER_MAX_GRAY /
+# SHADED_PAPER_MIN_COVERAGE and comb_referee.py repeats both -- because a
+# compartment must not be "occupied" to one producer and "blank" to another.
+# The lower tone bound is extract.classify_tone's structural/decorative
+# boundary: a black rule that happens to cover a compartment is ink the sheet
+# draws, never paper the sheet shaded, and must not excuse a missing input.
+SOURCE_SHADING_MAX_TONE = 0.87
+SOURCE_SHADING_MIN_TONE = 0.15
+SOURCE_SHADING_MIN_COVERAGE = 0.70
+
 # Default offender preview limit. Assertions that need exhaustive evidence may
 # opt out explicitly; the comb assertion does because its full disagreement set
 # is the evidence the referee needs.
@@ -989,8 +1002,21 @@ def slot_boxes(cell: Cell) -> list[tuple[int, Rect, bool]]:
     return out
 
 
-def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
-    """Physical emitted-comb state without falling back to layout metadata."""
+def emitted_comb_evidence(cells: Sequence[Cell],
+                          source: SourceSlotOracle | None = None,
+                          ) -> dict[str, Any]:
+    """Physical emitted-comb state without falling back to layout metadata.
+
+    `source` answers the one question this evidence cannot answer from the
+    emitted document: whether a compartment carrying no input is a compartment
+    the SOURCE already filled in. Every compartment of an editable comb must
+    offer a typing surface EXCEPT the ones the official sheet printed a
+    constant into or shaded, and those are read from the source PDF's own
+    operators (`SourceSlotOracle`) rather than from anything the emitter says
+    about itself. Passing None -- an ambiguous owner, a comb with no layout
+    subject at all -- means that evidence was not established, and then no
+    compartment is excused.
+    """
     occurrences = len(cells)
     if occurrences == 0:
         return {
@@ -1104,6 +1130,17 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
                 input_index = int(index_match.group(1)) if index_match else None
                 within_slot.append(input_index)
             input_indexes.append(within_slot)
+    # The compartment a taxpayer would type into, so the source is asked about
+    # that exact rectangle. An excuse cannot carry a comb whose boxes are not
+    # where the sheet prints them: whenever the emitted partition is not the
+    # source's own the comb is an offender anyway, on
+    # `emission-printed-mismatch` for a different compartment count, on
+    # `emission-source-position-mismatch` for edges past the referee's
+    # position bound, and on `source-topology-unevaluable` where the source
+    # partition could not be derived at all. The excuse only ever decides
+    # whether `invalid-emission` joins those, never whether the comb passes.
+    slot_rects = {index: box for index, box, _live in slot_boxes(cell)}
+    source_filled: dict[int, dict[str, Any]] = {}
     for slot_index, within_slot in zip(indexes, input_indexes):
         for input_index in within_slot:
             if input_index != slot_index:
@@ -1118,11 +1155,29 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
                 "reason": "multiple editable inputs in one physical slot",
             })
         if "f" in cell.classes.split() and not within_slot:
+            occupancy = (
+                source.occupancy(slot_rects.get(slot_index))
+                if source is not None else None
+            )
+            if occupancy is not None:
+                source_filled[slot_index] = occupancy
+                continue
+            if source is not None and source.available:
+                why_not = (
+                    "the source prints no constant or shading in that "
+                    "compartment")
+            else:
+                unavailable = (
+                    source.unavailable_reason if source is not None else None)
+                why_not = (
+                    "source compartment occupancy is unevaluable: "
+                    + (unavailable or "no source evidence was supplied"))
             bad_input_indexes.append({
                 "slot": slot_index,
                 "input_slot_index": None,
                 "reason": (
-                    "editable comb slot has no live input element"),
+                    "editable comb slot has no live input element and "
+                    + why_not),
             })
     nested_input_count = sum(len(items) for items in input_indexes)
     if dom_slots is None:
@@ -1150,6 +1205,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
             "occurrences": occurrences,
             "slot_indexes": indexes,
             "input_slot_indexes": input_indexes,
+            "source_filled_slots": source_filled,
             "reason": (
                 "one or more comb inputs do not identify their owning slot: "
                 f"{bad_input_indexes}"),
@@ -1227,6 +1283,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
             "slot_indexes": indexes,
             "input_slot_indexes": input_indexes,
             "slot_geometry": geometry,
+            "source_filled_slots": source_filled,
             "reason": (
                 "emitted slots must be finite positive, vertically present "
                 "after clipping, and form one ordered contiguous x partition "
@@ -1243,6 +1300,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
             "slot_indexes": indexes,
             "input_slot_indexes": input_indexes,
             "slot_geometry": geometry,
+            "source_filled_slots": source_filled,
             "reason": (
                 f"emitted comb declares {declared} slot(s) but renders "
                 f"{physical} physical slots"),
@@ -1257,6 +1315,7 @@ def emitted_comb_evidence(cells: Sequence[Cell]) -> dict[str, Any]:
         "slot_indexes": indexes,
         "input_slot_indexes": input_indexes,
         "slot_geometry": geometry,
+        "source_filled_slots": source_filled,
         "reason": "",
     }
 
@@ -4571,6 +4630,158 @@ def drawn_codepoints(page) -> dict[tuple[float, float], set[int]]:
     return seen
 
 
+@dataclasses.dataclass(frozen=True)
+class SourceGlyph:
+    """One glyph the source page's own text operators draw, and where."""
+
+    text: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+def drawn_glyph_boxes(page) -> tuple[SourceGlyph, ...]:
+    """Every visible glyph the page draws, with the box the file gives it.
+
+    The same `get_texttrace()` view `drawn_codepoints` reads, for the same
+    reason: it reports what the font's encoding actually yields rather than
+    rawdict's plausible substitute, and it is the source file's own operator
+    stream rather than any IR derived from it. A glyph whose encoding failed
+    arrives as U+FFFD and is simply not alphanumeric, so it can never be read
+    as a printed constant.
+
+    Whitespace and degenerate boxes are dropped: a space occupies a
+    compartment the way an empty compartment does, which is to say not at all.
+    """
+    glyphs: list[SourceGlyph] = []
+    for span in page.get_texttrace():
+        for char in span.get("chars") or ():
+            if len(char) < 4:
+                continue
+            text = chr(char[0]) if char[0] else ""
+            if not text.strip():
+                continue
+            box = tuple(float(value) for value in char[3])
+            if not all(math.isfinite(value) for value in box):
+                continue
+            if box[2] <= box[0] or box[3] <= box[1]:
+                continue
+            glyphs.append(SourceGlyph(text, *box))
+    return tuple(glyphs)
+
+
+@dataclasses.dataclass(frozen=True)
+class SourceSlotOracle:
+    """Which comb compartments the SOURCE has already filled in, and how.
+
+    A comb compartment the official sheet printed a value into is not a blank,
+    and emitting a text box over it lets a taxpayer overtype a statutory
+    constant -- the ATC codes `II 011` and `XC 010`, the century `2 0`, the TIN
+    branch code `0 0 0 0 0`. The emitter now refuses those compartments an
+    input, which is a change to what "a complete comb emission" means, and this
+    is the assertion's independent re-derivation of that same fact. It reads
+    the source PDF's own text and paint operators -- never emit.py's decision,
+    never a marker emit publishes, and never the absence of the input, all
+    three of which would make the check a mirror of its subject.
+
+    Two ways the source occupies a compartment, answered in this order because
+    that is the order they are painted in:
+
+      * **A printed constant.** Exactly one glyph overlaps the compartment, it
+        is alphanumeric, and it lies wholly inside the compartment's walls.
+        One glyph, because a constant is typeset AT the comb's pitch, one
+        character per box, to look like a filled-in form; a caption the lattice
+        swallowed into the same cell lands 9 to 87 glyphs in a single
+        compartment (measured: 1801 p1c110 carries 87). Alphanumeric, because
+        `.` `,` `-` `%` and the money bullet are drawn INSIDE a field to shape
+        what is typed there rather than to state a value -- excusing those
+        would put back exactly the C4 regression that left the money grids with
+        no way to enter an amount. Wholly inside, because a neighbouring
+        caption can clip one glyph across a compartment wall.
+      * **Decorative shading.** The topmost source fill covering the
+        compartment is grey at the copied `SOURCE_SHADING_*` bounds. This is
+        the same statement made with tone instead of glyphs -- BIR shades a
+        box to say NO ENTRY APPLIES -- and it is what accounts for the printed
+        `-` and `.` separators between TIN digit groups and for the swallowed
+        captions. Topmost, because the sheet paints a grey band across a row
+        and then knocks white boxes back out of it for the blanks; reading the
+        band alone would excuse every real field on that row.
+
+    `available` is False when either evidence is missing (no glyph operators
+    for the page, no modelled source paint, a rotated page whose text operators
+    are not in the paint's coordinate space). An unavailable oracle excuses
+    nothing: a compartment with no input and no readable source evidence stays
+    an offender, because "we could not look" is not "the source filled it in".
+    """
+
+    glyphs: tuple[SourceGlyph, ...] | None
+    paints: tuple[VectorPaint, ...] | None
+    unavailable_reason: str | None = None
+
+    @property
+    def available(self) -> bool:
+        return (self.glyphs is not None and self.paints is not None
+                and self.unavailable_reason is None)
+
+    def occupancy(self, box: Rect | None) -> dict[str, Any] | None:
+        """What the source put in this compartment, or None for nothing."""
+        if not self.available or box is None:
+            return None
+        x0, y0, x1, y1 = (float(value) for value in box)
+        if not all(math.isfinite(value) for value in (x0, y0, x1, y1)):
+            return None
+        if x1 <= x0 or y1 <= y0:
+            return None
+        constant = self._printed_constant(x0, y0, x1, y1)
+        if constant is not None:
+            return {"kind": "printed-constant", "text": constant}
+        tone = self._covering_shading(x0, y0, x1, y1)
+        if tone is not None:
+            return {"kind": "decorative-shading", "tone": tone}
+        return None
+
+    def _printed_constant(self, x0: float, y0: float,
+                          x1: float, y1: float) -> str | None:
+        found: SourceGlyph | None = None
+        for glyph in self.glyphs or ():
+            if min(x1, glyph.x1) <= max(x0, glyph.x0):
+                continue
+            if min(y1, glyph.y1) <= max(y0, glyph.y0):
+                continue
+            if found is not None:
+                return None
+            found = glyph
+        if found is None or not found.text.isalnum():
+            return None
+        if found.x0 < x0 or found.x1 > x1 or found.y0 < y0 or found.y1 > y1:
+            return None
+        return found.text
+
+    def _covering_shading(self, x0: float, y0: float,
+                          x1: float, y1: float) -> float | None:
+        area = (x1 - x0) * (y1 - y0)
+        needed = area * SOURCE_SHADING_MIN_COVERAGE
+        best: VectorPaint | None = None
+        best_key: tuple[int, int] = (-1, -1)
+        for index, paint in enumerate(self.paints or ()):
+            width = min(x1, paint.x1) - max(x0, paint.x0)
+            height = min(y1, paint.y1) - max(y0, paint.y0)
+            if width <= 0.0 or height <= 0.0 or width * height < needed:
+                continue
+            # The source's own paint order decides what the paper is; the
+            # enumeration index only breaks a tie between two paints of one
+            # operation, so the answer stays a pure function of the file.
+            key = (paint.order, index)
+            if key > best_key:
+                best, best_key = paint, key
+        if best is None or best.kind != "fill-region" or best.opacity != 1.0:
+            return None
+        if not SOURCE_SHADING_MIN_TONE < best.tone <= SOURCE_SHADING_MAX_TONE:
+            return None
+        return best.tone
+
+
 def transform_signature(matrix: Sequence[float]) -> tuple[int, int, bool]:
     """Orientation of a placement matrix: (x sign, y sign, sheared).
 
@@ -5534,6 +5745,27 @@ class Bundle:
         return {index: ordered_vector_paints(self.doc[index - 1])
                 for index in self.pages}
 
+    @functools.cached_property
+    def source_glyphs(self) -> dict[int, tuple[SourceGlyph, ...]]:
+        """Glyphs the source pages draw, in the same space as their paint.
+
+        A page is ABSENT from this map rather than empty when its text
+        operators cannot be compared with `vector_pages` -- today that is a
+        page the file rotates, whose text trace is reported in the unrotated
+        space. Absent means unevaluable, and every reader here fails closed on
+        it; there is no such page in this corpus (134 of 134 are unrotated) and
+        the day one appears it must not be answered with a guess.
+        """
+        if self.doc is None:
+            return {}
+        out: dict[int, tuple[SourceGlyph, ...]] = {}
+        for index in self.pages:
+            page = self.doc[index - 1]
+            if int(getattr(page, "rotation", 0) or 0):
+                continue
+            out[index] = drawn_glyph_boxes(page)
+        return out
+
     def run_text(self, page: int, index: int) -> str:
         runs = self.pages.get(page, {}).get("text_runs", [])
         return runs[index]["text"] if 0 <= index < len(runs) else ""
@@ -5629,6 +5861,17 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     regeneration and a fix. Layout and emission relations are published
     independently; a malformed or duplicate emitted comb remains an offender
     even when the source and lattice counts agree.
+
+    A compartment the source itself filled in -- a printed statutory constant,
+    or shading that says no entry applies -- is emitted without an input on
+    purpose, and this assertion reads that fact from the same place it reads
+    the printed topology: the source PDF's own operators, through
+    `SourceSlotOracle`. It is deliberately NOT read from emit.py's verdict, nor
+    from any marker emit could publish, nor inferred from the missing input
+    itself; a check that takes the emitter's word for why the emitter did
+    something is a mirror, not a check. Everything else about a compartment
+    with no input is unchanged: with no source evidence, or with source
+    evidence that the compartment is blank paper, it is still an offender.
     """
     if b.layout is None:
         return broken("no layout to read comb geometry from")
@@ -5636,6 +5879,40 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
         return broken("source PDF not resolved; printed compartments unknown")
     owner_registry = reviewed_comb_owner_registry(b)
     form_html = getattr(b, "form_html", None)
+    # One oracle per page, built once and only from the source file: the
+    # glyphs its text operators draw and the paint `printed_compartments`
+    # already reads. A bundle that publishes no glyph operators at all, or a
+    # page missing from either view, yields an oracle that excuses nothing.
+    source_glyph_pages = getattr(b, "source_glyphs", None)
+    source_oracles: dict[int, SourceSlotOracle] = {}
+
+    def source_oracle(page_index: int) -> SourceSlotOracle:
+        oracle = source_oracles.get(page_index)
+        if oracle is not None:
+            return oracle
+        glyphs = (
+            source_glyph_pages.get(page_index)
+            if isinstance(source_glyph_pages, dict) else None
+        )
+        vector = b.vector_pages.get(page_index)
+        reason: str | None = None
+        if not isinstance(source_glyph_pages, dict):
+            reason = "bundle publishes no source glyph operators"
+        elif glyphs is None:
+            reason = (
+                f"page {page_index} has no source glyph operators in the "
+                "source paint's coordinate space")
+        elif vector is None:
+            reason = f"page {page_index} has no source vector paint"
+        oracle = SourceSlotOracle(
+            glyphs=glyphs if reason is None else None,
+            paints=vector.paints if reason is None and vector is not None
+            else None,
+            unavailable_reason=reason,
+        )
+        source_oracles[page_index] = oracle
+        return oracle
+
     emitted_by_id: dict[str, list[Cell]] = collections.defaultdict(list)
     for emitted_cell in b.cells:
         emitted_by_id[emitted_cell.id].append(emitted_cell)
@@ -5745,7 +6022,14 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     for cell_id in expected_ids:
         subjects = layout_subjects[cell_id]
         checked_ids.append(cell_id)
-        emission = emitted_comb_evidence(emitted_by_id.get(cell_id, ()))
+        # A comb with two layout owners has no settled page, so it gets no
+        # source oracle and no compartment of it is excused. It is already an
+        # offender on `duplicate-layout-subject`; the point is that ambiguous
+        # ownership must not become a way to excuse a missing input.
+        emission = emitted_comb_evidence(
+            emitted_by_id.get(cell_id, ()),
+            source_oracle(subjects[0][0]) if len(subjects) == 1 else None,
+        )
         slots = emission["slots"]
         base_stale_emission = (
             not emission["valid"]
@@ -6148,6 +6432,8 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
             })
 
     for cell_id in unexpected_emitted_ids:
+        # No non-relocated layout subject owns this comb, so nothing certifies
+        # which source rectangle its compartments are. It gets no oracle.
         emission = emitted_comb_evidence(emitted_by_id[cell_id])
         stale_emission += 1
         emission_invalid += int(not emission["valid"])
@@ -9501,6 +9787,215 @@ def self_test() -> int:
             and inert_input_money["offenders"][0]["without_input"]
             == [0, 1, 2],
         )
+
+    # A compartment the SOURCE already filled in is emitted with no input on
+    # purpose -- the statutory ATC codes, the century, the TIN branch code --
+    # and the assertion re-derives that from the source file's own operators.
+    # Every fixture below decides the same emitted markup (slot 1 carries no
+    # input) purely on what the source is holding under it, which is the whole
+    # point: the emitter's own verdict is never consulted.
+    def first_offender(result: dict[str, Any]) -> dict[str, Any]:
+        """The first published offender, or an empty record if none.
+
+        A verdict that publishes no offender at all is the failure these
+        fixtures exist to catch, and it has to read as one rather than as an
+        IndexError three frames away from the assertion that caught it.
+        """
+        offenders = result.get("offenders") or ()
+        return offenders[0] if offenders else {}
+
+    def source_filled_fixture(
+            *,
+            omit: Sequence[int] = (),
+            glyphs: Sequence[SourceGlyph] = (),
+            extra_paints: Sequence[VectorPaint] = (),
+            publish_glyphs: bool = True,
+            paints: Sequence[VectorPaint] | None = None,
+            ) -> CombEmissionFixture:
+        markup = "".join(
+            f'<div class="s" data-slot="{index}" '
+            f'style="left:{index * 10}pt;top:0pt;width:10pt;height:10pt">'
+            + ("" if index in omit
+               else '<input type="text" class="fi fc" '
+                    f'data-slot-index="{index}">')
+            + "</div>"
+            for index in range(3)
+        )
+        filled_html = (
+            '<div class="page page-1">'
+            + emitted_cell_markup(
+                dataclasses.replace(valid_three, inner=markup))
+            + "</div>"
+        )
+        fixture = CombEmissionFixture(parse_cells(filled_html))
+        fixture.form_html = filled_html
+        if paints is not None:
+            fixture.vector_pages = {1: VectorPage(tuple(paints), ())}
+        elif extra_paints:
+            fixture.vector_pages = {1: VectorPage(
+                (*fixture.vector_pages[1].paints, *extra_paints), ())}
+        if publish_glyphs:
+            fixture.source_glyphs = {1: tuple(glyphs)}
+        return fixture
+
+    def source_oracle_for(
+            fixture: CombEmissionFixture) -> SourceSlotOracle:
+        published = getattr(fixture, "source_glyphs", None)
+        page = fixture.vector_pages.get(1)
+        return SourceSlotOracle(
+            glyphs=published.get(1) if isinstance(published, dict) else None,
+            paints=page.paints if page is not None else None,
+            unavailable_reason=(
+                None if isinstance(published, dict) and page is not None
+                else "fixture publishes no source evidence"),
+        )
+
+    # The second compartment of `0 0 0`: one alphanumeric glyph, at the comb's
+    # own pitch, wholly inside that compartment's walls.
+    printed_constant = source_filled_fixture(
+        omit=(1,), glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),))
+    printed_constant_result = check_comb_slots_match_printed(printed_constant)
+    printed_constant_evidence = emitted_comb_evidence(
+        printed_constant.cells, source_oracle_for(printed_constant))
+    check(
+        "a compartment the source printed a constant into is legitimately "
+        "inputless",
+        printed_constant_result["holds"] is True
+        and printed_constant_result["emission_invalid"] == 0
+        and printed_constant_evidence["valid"] is True
+        and printed_constant_evidence["state"] == "physical-slots"
+        and printed_constant_evidence["source_filled_slots"]
+        == {1: {"kind": "printed-constant", "text": "0"}},
+    )
+
+    # The rule this whole change must not become. Same markup, blank paper.
+    blank_compartment = source_filled_fixture(omit=(1,))
+    blank_result = check_comb_slots_match_printed(blank_compartment)
+    blank_offender = first_offender(blank_result)
+    check(
+        "a compartment with neither an input nor a source constant still "
+        "fails",
+        blank_result["holds"] is False
+        and blank_result["emission_invalid"] == 1
+        and blank_offender["emission_state"] == "slot-input-index-mismatch"
+        and "invalid-emission" in blank_offender["failure_kinds"]
+        and "no live input element" in blank_offender["why"]
+        and "prints no constant or shading" in blank_offender["why"]
+        and emitted_comb_evidence(
+            blank_compartment.cells,
+            source_oracle_for(blank_compartment),
+        )["source_filled_slots"] == {},
+    )
+
+    # Four ways a compartment can hold source ink and still not be a constant.
+    # The first is C4: the money bullet and the decimal point are drawn INSIDE
+    # a field to shape what is typed there, and excusing them is what left the
+    # money grids with no way to enter an amount.
+    for ink_label, ink_glyphs in (
+            ("a decimal point is decoration, not a constant",
+             (SourceGlyph(".", 13.0, 2.0, 17.0, 8.0),)),
+            ("a swallowed caption is a segmentation fault, not a constant",
+             (SourceGlyph("Z", 11.0, 2.0, 13.0, 8.0),
+              SourceGlyph("I", 13.5, 2.0, 15.0, 8.0))),
+            ("a glyph clipped across the compartment wall is not a constant",
+             (SourceGlyph("0", 9.0, 2.0, 13.0, 8.0),)),
+            ("a glyph printed outside the compartment band is not a constant",
+             (SourceGlyph("0", 13.0, 12.0, 17.0, 18.0),))):
+        ink_result = check_comb_slots_match_printed(
+            source_filled_fixture(omit=(1,), glyphs=ink_glyphs))
+        check(
+            ink_label,
+            ink_result["holds"] is False
+            and first_offender(ink_result)["emission_state"]
+            == "slot-input-index-mismatch",
+        )
+
+    # Tone says the same thing glyphs do -- BIR shades a box to state that no
+    # entry applies -- and it is read the same way: topmost covering fill.
+    shading_paint = VectorPaint(
+        10.0, 0.0, 20.0, 10.0, 0.8509, 1.0, 900, "fill-region")
+    shaded = source_filled_fixture(omit=(1,), extra_paints=(shading_paint,))
+    shaded_result = check_comb_slots_match_printed(shaded)
+    check(
+        "a compartment the source shaded is legitimately inputless",
+        shaded_result["holds"] is True
+        and emitted_comb_evidence(
+            shaded.cells, source_oracle_for(shaded),
+        )["source_filled_slots"]
+        == {1: {"kind": "decorative-shading", "tone": 0.8509}},
+    )
+    for tone_label, tone_paints in (
+            ("a structural rule covering a compartment is ink, not shading",
+             (dataclasses.replace(shading_paint, tone=0.0),)),
+            ("a knockout painted back over the band leaves a real blank",
+             (shading_paint,
+              VectorPaint(10.0, 0.0, 20.0, 10.0, 0.9899, 1.0, 901,
+                          "fill-region"))),
+            ("a translucent fill is not the measured tone",
+             (dataclasses.replace(shading_paint, opacity=0.5),)),
+            ("shading short of the coverage bound does not fill a "
+             "compartment",
+             (dataclasses.replace(shading_paint, x0=16.0),))):
+        tone_result = check_comb_slots_match_printed(
+            source_filled_fixture(omit=(1,), extra_paints=tone_paints))
+        check(
+            tone_label,
+            tone_result["holds"] is False
+            and first_offender(tone_result)["emission_state"]
+            == "slot-input-index-mismatch",
+        )
+
+    # "We could not look" is not "the source filled it in".
+    unreadable = source_filled_fixture(
+        omit=(1,), glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),),
+        publish_glyphs=False)
+    unreadable_result = check_comb_slots_match_printed(unreadable)
+    check(
+        "an unevaluable source excuses no compartment",
+        unreadable_result["holds"] is False
+        and first_offender(unreadable_result)["emission_state"]
+        == "slot-input-index-mismatch"
+        and "unevaluable" in first_offender(unreadable_result).get("why", ""),
+    )
+
+    # The population this change must leave exactly where it was: a comb that
+    # fails for a source-topology reason keeps failing for that reason, with
+    # its emission valid and its state `physical-slots`, whether or not one of
+    # its compartments is excused. Fourteen corpus offenders have this shape.
+    for topology_label, topology_omit in (
+            ("with every compartment editable", ()),
+            ("with one compartment the source filled", (1,))):
+        topology_result = check_comb_slots_match_printed(
+            source_filled_fixture(
+                omit=topology_omit,
+                glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),),
+                paints=(),
+            ))
+        topology_offender = first_offender(topology_result)
+        check(
+            "an unevaluable source topology still fails as itself "
+            + topology_label,
+            topology_result["holds"] is False
+            and topology_result["emission_invalid"] == 0
+            and topology_offender["emission_state"] == "physical-slots"
+            and topology_offender["failure_kinds"]
+            == ["source-topology-unevaluable"],
+        )
+
+    # An excused compartment changes nothing about a comb that has its inputs:
+    # the oracle is asked only where an input is missing, so a constant printed
+    # under a live input is not this assertion's business and is reported by
+    # `inputs_over_printed_text` instead.
+    inked_live = source_filled_fixture(
+        glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),))
+    inked_live_result = check_comb_slots_match_printed(inked_live)
+    check(
+        "a source constant under a live input leaves the emission valid",
+        inked_live_result["holds"] is True
+        and emitted_comb_evidence(
+            inked_live.cells, source_oracle_for(inked_live),
+        )["source_filled_slots"] == {},
+    )
 
     duplicate_cells = check_comb_slots_match_printed(
         CombEmissionFixture([valid_three, valid_three]))
