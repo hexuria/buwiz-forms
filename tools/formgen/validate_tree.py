@@ -612,8 +612,17 @@ def _check_geometry(record: dict[str, Any], bundle: Bundle, tree: Tree,
     if not bundle.has("index.html"):
         return
     html = read_text(bundle.path / "index.html")
+    # Each page is checked against ITS OWN recorded size, not the bundle's.
+    # 1604-CF's page 3 really is landscape (1008x612 among three 612x1008) and
+    # the emission is faithful; comparing every page to the single bundle paper
+    # reported that faithful page as a defect. The bundle paper stays the
+    # fallback for records written before page_papers existed, so an older
+    # bundle still gets checked rather than silently skipped.
+    page_papers = record.get("page_papers")
+    if not isinstance(page_papers, list):
+        page_papers = []
     ids: list[str] = []
-    for tag in PAGE_DIV_RE.findall(html):
+    for index, tag in enumerate(PAGE_DIV_RE.findall(html)):
         attrs = dict(ATTR_RE.findall(tag))
         ids.append(attrs.get("id", ""))
         style = attrs.get("style", "")
@@ -621,11 +630,17 @@ def _check_geometry(record: dict[str, Any], bundle: Bundle, tree: Tree,
         if not all(got.values()):
             fail(f"index.html page {attrs.get('id')!r} has no pt width/height")
             continue
-        if not (near(float(got["width"].group(1)), width)
-                and near(float(got["height"].group(1)), height)):
+        want = paper_of({"paper": page_papers[index]}) if index < len(page_papers) else None
+        if want is None:
+            want = (width, height)
+            source = f"paper is {record.get('paper')}"
+        else:
+            source = f"page_papers[{index}] is {page_papers[index]}"
+        if not (near(float(got["width"].group(1)), want[0])
+                and near(float(got["height"].group(1)), want[1])):
             fail(f"index.html page {attrs.get('id')!r} is "
                  f"{got['width'].group(1)}x{got['height'].group(1)}pt, "
-                 f"paper is {record.get('paper')}")
+                 f"{source}")
 
     if ids != [f"page-{n}" for n in range(1, len(ids) + 1)]:
         fail(f"index.html page ids are {ids}, expected page-1..page-{len(ids)}")

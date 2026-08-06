@@ -12,6 +12,10 @@
   "pages": 2,
   "paper": "936.0x612.0",
   "uniform_paper": true,
+  "page_papers": [
+    "936.0x612.0",
+    "936.0x612.0"
+  ],
   "fonts": [
     "Arial",
     "Arial Narrow",

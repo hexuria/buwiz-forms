@@ -6632,7 +6632,7 @@ class FullRefresh:
 BATCH_RECORD_KEYS = {
     "slug", "code", "revision", "variant", "in_corpus", "source_file",
     "sha256", "stage_failed", "error", "images_extracted", "pages",
-    "paper", "uniform_paper", "fonts", "rules", "text_runs", "images",
+    "paper", "uniform_paper", "page_papers", "fonts", "rules", "text_runs", "images",
     "cells", "comb_cells", "growables", "sources", "guide",
     "guide_detected", "html_bytes", "html", "guide_build",
     "guide_source_irs", "font_plans", "asset_digests",
@@ -9579,6 +9579,7 @@ def _synthetic_batch_record(slug: str) -> dict[str, Any]:
         "pages": 1,
         "paper": "612.0x792.0",
         "uniform_paper": True,
+        "page_papers": ["612.0x936.0"],
         "fonts": [],
         "rules": 0,
         "text_runs": 0,
@@ -12031,6 +12032,7 @@ def self_test() -> int:
         incomplete_batch[0].update({
             "sources": [*incomplete_batch[0]["sources"], None],
             "pages": 0, "html_bytes": 0, "html": None, "paper": "",
+            "page_papers": [],
             "guide_detected": {}, "guide_build": {}, "fonts": [None],
             "font_plans": [], "asset_digests": {},
         })

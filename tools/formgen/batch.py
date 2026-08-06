@@ -553,6 +553,16 @@ def convert(source: Source, work: pathlib.Path, backend: str, fonts_dir: pathlib
         "pages": len(ir_data["pages"]),
         "paper": f"{ir_data['paper']['width_pt']}x{ir_data['paper']['height_pt']}",
         "uniform_paper": ir_data["paper"]["uniform"],
+        # Every page's own size, always -- not only when they differ. A single
+        # bundle "paper" cannot describe 1604-CF, whose page 3 really is
+        # landscape in the source (1008x612 among three 612x1008). The tree
+        # validator compared every page against the ONE bundle paper and
+        # reported the faithful landscape page as a defect; a check that cannot
+        # express the truth will eventually call the truth a fault. Recording it
+        # unconditionally keeps one code path instead of a uniform case and a
+        # special case.
+        "page_papers": [f"{page['width_pt']}x{page['height_pt']}"
+                        for page in ir_data["pages"]],
         "fonts": sorted({f["family"] for f in ir_data["fonts"].values()}),
         "rules": sum(p["stats"]["rules_structural"] for p in ir_data["pages"]),
         "text_runs": sum(len(p["text_runs"]) for p in ir_data["pages"]),
