@@ -235,6 +235,17 @@ the red one.** `printed_box_peers_all_fillable` no longer appears in the
 `assertions` detail at all: that is the full clean-tree gate confirming the
 14 → 0 measurement.
 
+**Re-run to confirmation at `e7416c8` (2026-08-07 19:20), after both faults
+below were fixed.** Same 9 of 12, same three red, and each red one now reading
+its honest value:
+
+    FAIL  assertions   3 of 10 (the same three)
+    FAIL  findings     42/128 blocker+major unresolved   (was UNEVALUABLE)
+    UNEV  comb-referee report is partial: 52/53 forms    (was 27/53)
+    PASS  determinism  byte-identical (b5e4f9e1b979) — the SAME digest as the
+                       18:27 run, so the corpus under measurement did not move
+                       between them
+
 **Two faults in this run were mine, both self-inflicted, both fixed, and both
 worth recording because each cost a 60-minute run:**
 

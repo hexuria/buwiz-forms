@@ -63,6 +63,12 @@ found.
     FAIL  findings      42/128 blocker+major open (r19: 55/126)
     UNEV  comb-referee  52/53 forms, 2551Q the only error, identical to r19
 
+Confirmed by a second full clean-tree run at `e7416c8` (19:20) after the two
+self-inflicted faults were fixed: same 9 of 12, same three red, `findings` now
+FAIL 42/128 rather than UNEVALUABLE, `comb-referee` back to 52/53, and the
+determinism digest character-for-character the 18:27 value, so the corpus did
+not move between the two runs.
+
 *(r19's block, superseded: determinism `7a152bc88161`; assertions 20/22/11/14;
 findings 55/126; comb-referee 52/53.)*
 
