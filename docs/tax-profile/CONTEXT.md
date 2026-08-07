@@ -48,6 +48,18 @@ TIN Root; it is recorded from registration evidence, not treated as a second
 taxpayer identifier.
 _Avoid_: Generated TIN, profile number
 
+**Branch Code Confirmation**:
+A reviewed evidence decision that a five-digit Branch Code is the code recorded
+by BIR for a Registration Unit. A UI suggestion or unverified user entry is not
+a confirmation.
+_Avoid_: Assigned by the app, auto-generated branch code
+
+**Registration Unit Status**:
+The effective-dated state of a Registration Unit, such as pending evidence,
+confirmed active, confirmed closed, or legacy unresolved. It is independent of
+whether a candidate Branch Code has been confirmed.
+_Avoid_: Selected branch, branch-code status
+
 **Tax-Type Registration**:
 An effective-dated BIR registration connecting a tax type to a Registration
 Unit, supported by a COR, eCOR, or another authoritative registration record.
@@ -81,6 +93,11 @@ The Registration Unit where a transaction, employee, payment, credit, asset,
 or other reportable fact originated.
 _Avoid_: Filing unit
 
+**Source Attribution**:
+The evidence-backed link between a reportable fact and its Source Unit,
+including whether the link was entered, derived, or remains legacy unknown.
+_Avoid_: Current branch, filing-unit assignment
+
 **Return Coverage**:
 The exact set of Source Units and effective registrations included in one
 return.
@@ -91,6 +108,17 @@ The rule result that determines whether a return is head-office consolidated,
 filed per registered unit, tied to a transaction, inherited from a parent
 filing, historical-only, or blocked for review.
 _Avoid_: Consolidated flag
+
+**Resolved Filing Plan**:
+The immutable result for one Taxpayer, exact form revision, and filing period:
+zero or more Filing Obligations, not applicable, or Review Required, together
+with the revisions and evidence used to decide it.
+_Avoid_: Forms Set, selected profile, selected branch
+
+**Form Workspace Preference**:
+A user-owned choice to surface an optional form or workflow for a tax year. It
+is not a Tax-Type Registration or proof of a Filing Obligation.
+_Avoid_: Registered form, enabled obligation
 
 **Head-Office-Consolidated Return**:
 One return filed by the Head Office that covers the resolved set of applicable
@@ -134,3 +162,9 @@ _Avoid_: Current rule, consolidated boolean
 A fail-closed state used when the available registration evidence or effective
 rule cannot establish one safe Filing Scope.
 _Avoid_: Best guess, default branch
+
+**Migration Decision**:
+A reviewed, immutable disposition for legacy profile data that records whether
+it maps to a Taxpayer and Registration Unit, remains legacy-only, or is blocked
+with explicit reasons.
+_Avoid_: Automatic merge, inferred branch mapping

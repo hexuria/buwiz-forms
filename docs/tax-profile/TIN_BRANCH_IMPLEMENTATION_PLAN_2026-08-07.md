@@ -1,101 +1,175 @@
-# TIN Root, Registration Units, and Filing Scope — Implementation Plan
+# TIN Root, Registration Units, and Filing Scope — Revised Implementation Plan
 
-**Status:** proposed architecture and dependency-ordered execution plan
-
-**As of:** 2026-08-07
-
-**Implementation state:** documentation only; no application code or schema has been changed
-
-**Research companion:** [TIN, Branch Code, and Multi-Branch Filing Guide](TIN_BRANCH_PROFILE_AND_FILING_GUIDE_2026-08-07.md)
+**Status:** proposed architecture and dependency-ordered execution plan, revision 2\
+**As of:** 2026-08-07\
+**Implementation state:** documentation only; no application code or schema has been changed\
+**Repository baseline:** `main` at `8b2cd914e5ae3cd8009f0a6a3e2fff81f28d9d83`\
+**Research companion:** [TIN, Branch Code, and Multi-Branch Filing Guide](TIN_BRANCH_PROFILE_AND_FILING_GUIDE_2026-08-07.md)\
 **Canonical vocabulary:** [BIR Taxpayer, Registration, and Filing Context](CONTEXT.md)
 
-> **Portability note for `reverse-engineer-ebir-forms/bir`:** this plan was first audited against the Native/Zig application. Its `src/...` paths and UI/storage observations are historical evidence from that application, not paths or claims about this Rust/GPUI repository. Before implementation, remap each ownership boundary to this repository's `crates/bir-core`, `crates/bir-desktop`, form registry, Forms Set, calendar, migration, and draft-provenance code. Keep the regulatory conclusions and fail-closed **Review Required** behavior, but re-audit every code-level assumption here.
+> **Portability note for `reverse-engineer-ebir-forms/bir`:** This plan was
+> first grounded in the Native/Zig application at the baseline named above.
+> Its `src/...` paths and UI/storage observations are historical evidence about
+> that application, not implementation paths or architecture claims for this
+> Rust/GPUI repository. Before coding here, produce the repository-specific
+> execution plan required below and remap every ownership boundary to the
+> actual `crates/bir-core`, `crates/bir-desktop`, form registry, Forms Set,
+> calendar, migration, and draft-provenance code. Preserve the regulatory
+> conclusions and fail-closed **Review Required** behavior, but re-audit every
+> code-level assumption.
 
 This plan translates the companion guide's official-source findings into a safe
-change sequence for this repository. It is a product and software architecture
-plan, not legal or tax advice. The taxpayer's effective BIR registration records
-and the official rule applicable to the exact return revision and filing period
-remain controlling.
+change sequence for the Native/Zig application. It is a product and software
+architecture plan, not legal or tax advice. A taxpayer's effective BIR
+registration records, the applicable official rule, the exact form revision,
+and the filing period remain controlling.
 
-For TIN-root, branch, facility, filing-unit, and return-coverage questions, this
-document supersedes older profile-per-branch assumptions. It does not replace
-the existing canonical field/projection contracts except where a future reviewed
-milestone explicitly migrates their identity ownership. Historical UX and audit
-documents remain evidence of prior behavior, not authority for filing scope.
+The companion guide owns regulatory findings, the form-family policy inventory,
+and unresolved research. This document owns application seams, migration,
+sequencing, and verification. Detailed screen composition belongs in a later UX
+specification. A separate repository must produce its own execution plan after
+mapping these domain decisions to its actual code and schema.
 
-If this plan conflicts with a current official issuance or form instruction,
-the application must stop at **Review Required** until the policy record is
-corrected and tested. A catalog entry or working screen is never evidence that a
-taxpayer is legally required or permitted to file that form.
+If this plan conflicts with a current official issuance or exact form
+instruction, the application must stop at **Review Required** until the policy
+record is corrected and tested. A catalog entry or working editor is never proof
+that a taxpayer must or may file a form.
 
 ---
 
 ## Executive decision
 
-The current branch implementation is not safe enough to extend with a simple
-auto-increment button.
+The current profile-per-branch implementation must not be extended with a simple
+auto-increment button. The target model is:
 
-The target model is:
+1. One `Taxpayer` owns one canonical nine-digit `Tin9` root.
+2. A Taxpayer owns one or more effective-dated `RegistrationUnit` records.
+3. The principal/head-office Registration Unit has Branch Code `00000`.
+4. Creating a Taxpayer creates a **pending-evidence** head-office unit with
+   candidate code `00000`; it is not filing-capable until registration evidence
+   confirms it.
+5. A branch is another Registration Unit, not another legal taxpayer profile.
+6. The UI may suggest `00001` or another lowest unused value, but a suggestion is
+   not durable BIR identity and is never a Branch Code Confirmation.
+7. Registered facilities and Facility Codes remain a separate domain linked to
+   a responsible Registration Unit only through evidence.
+8. Tax-Type Registrations and Large Taxpayer Service Registration are
+   effective-dated, evidence-backed facts, not form checkboxes.
+9. A deep `FilingPlanner` produces a Resolved Filing Plan for an exact Taxpayer,
+   form revision, and period.
+10. A filing draft can be created only from one resolved Filing Obligation and
+    must copy its exact taxpayer, filing-unit, coverage, registration, policy,
+    and evidence revisions without re-querying current state.
+11. Source Unit and Filing Unit remain separate. Consolidation changes the filer
+    and coverage; it never rewrites where a reportable fact originated.
 
-1. One `Taxpayer` owns one nine-digit `Tin9` root.
-2. The taxpayer has one or more head-office/branch `RegistrationUnit` records;
-   separately registered facilities are related records, not aliases for branches.
-3. The head-office or principal registration unit uses branch code `00000`.
-4. Each non-head-office unit records its BIR branch code separately.
-   A BIR Facility Code remains a distinct identifier.
-5. A new-branch flow may *suggest* the lowest unused code, such as `00001`, but
-   the suggestion is not authoritative and cannot become filing-ready until it
-   is confirmed against COR, eCOR, ORUS, or another reviewed BIR record.
-6. Tax-type registrations are effective-dated facts of registration units, not
-   form checkboxes.
-7. A pure `FilingScopeResolver` decides the filing unit and exact coverage for a
-   form revision and period.
-8. A draft can be created only from a resolved filing obligation and must retain
-   immutable taxpayer, filing-unit, source-unit coverage, registration, and
-   policy provenance.
+The displayed filing identifier is a composition:
 
-Therefore the base taxpayer profile must own `000-000-000`, not
-`000-000-000-00000`. The first-taxpayer workflow should create the taxpayer and
-its `00000` registration unit together. A branch is a child registration unit,
-not another legal taxpayer profile.
+```text
+TIN root:             000-000-000
+Registration unit:   00000
+Filing display:       000-000-000-00000
+```
 
-This changes identity, persistence, migration, form availability, draft
-provenance, calendars, and navigation. It is not an input-mask-only change.
+It is not a second taxpayer identity.
 
 ---
 
-## What the repository does today
+## Decision supersession and compatibility
 
-The observations below are from `main` at
-`8b2cd914e5ae3cd8009f0a6a3e2fff81f28d9d83`.
+This initiative deliberately changes several current assumptions:
 
-| Current behavior | Evidence | Consequence |
+| Current assumption | Revised decision |
+| --- | --- |
+| One `ProfileId` and combined TIN identify one legal taxpayer. | One `TaxpayerId` and `Tin9` identify the taxpayer; a legacy `ProfileId` may map to one Taxpayer plus one Registration Unit. |
+| RDO, registered address, and branch suffix are one profile identity. | RDO, registered address, ZIP, and Branch Code belong to an effective Registration Unit revision. |
+| Forms Set activation implies the profile should file a form. | A Forms Set becomes a Form Workspace Preference. It cannot establish a Tax-Type Registration or Filing Obligation. |
+| Selecting a branch profile chooses the filer. | Selection is a workspace/source filter. The Filing Planner determines the Filing Unit. |
+| A combined `Tin` is projected to every form. | Form projection composes the taxpayer TIN root with the resolved Filing Unit's Branch Code using an exact form-revision representation adapter. |
+| Two different branch `ProfileId` values are different people. | Named-role distinctness compares `TaxpayerId`; two Registration Units of one natural person cannot satisfy filer/spouse distinctness. |
+
+The following remain valid and must be preserved:
+
+- canonical field definitions and named role bindings;
+- taxpayer-wide effective revisions;
+- transaction-owned amounts, schedules, calculations, and elections;
+- append-only history and immutable draft provenance;
+- explicit Forms Set user decisions as workspace preferences;
+- exact catalog, setup-spec, and form-revision hashes;
+- current fileability and production-readiness warnings.
+
+Existing drafts and filed/prepared artifacts are historical records. Migration
+may link them to new identities, but it must never invent coverage or reinterpret
+their bytes.
+
+### Non-goals
+
+- Do not make all 51 catalog forms editable or fileable.
+- Do not implement tax-law inference from free text, OCR, or ChatGPT output.
+- Do not treat a branch suggestion as BIR assignment.
+- Do not merge legacy profiles merely because their first nine digits match.
+- Do not move transaction values into taxpayer or registration-unit records.
+- Do not combine deadline, filing venue, filing scope, and artifact
+  representation into one policy.
+- Do not make the same source-specific execution plan authoritative in another
+  repository.
+
+---
+
+## Current repository disposition contract
+
+The current schema is already an append-only, versioned system through tax
+profile schema v27. The implementation must classify every existing stream
+before adding a mutating migration.
+
+### Existing stream disposition
+
+| Existing stream | Required disposition |
+| --- | --- |
+| `tax_profiles`, local labels, archive state | Create or link a Taxpayer shell. Preserve branch-specific labels as Registration Unit labels or legacy aliases; never pick a legal name from a label. |
+| `tax_profile_revisions` | Split fields using the field-ownership matrix below. Keep original rows readable as migration evidence. |
+| identity anchors and identity corrections | Re-express TIN-root correction and Branch Code correction as separate audited decisions. Block ambiguous historical corrections. |
+| civil-status revisions | Re-key to `TaxpayerId`; conflicting branch histories block automatic merge. |
+| profile relationships | Re-key endpoints to `TaxpayerId`; duplicate branch endpoints collapse only after identity review. |
+| COR document records | Preserve file name, path, digest, size, and attachment provenance. Bind evidence to Taxpayer, Registration Unit, Facility, or Tax-Type Registration only through a reviewed Migration Decision. |
+| business-activity and registration streams, including retained legacy tables | Classify each anchor/revision as taxpayer-wide, unit-specific, facility-specific, or legacy-only. Do not revive rejected pilot semantics automatically. |
+| taxpayer-year settings | Merge only when branch histories are identical or one reviewed decision selects the authoritative stream. Conflicts remain blocked. |
+| Tax Form Profile revisions | Re-key to Taxpayer/form/year only after role and setup ownership are reviewed. Branch-specific conflicting values remain separate legacy evidence. |
+| Forms Set baselines, intervals, and decisions | Preserve decisions as Form Workspace Preferences and migration evidence. Never promote them to Tax-Type Registrations. |
+| calendar selections and exports | Preserve user preferences. Rebuild taxpayer obligation projections from resolved filing plans. |
+| generic/coarse drafts and provenance | Preserve exact revision bindings and mark unrecorded coverage `legacy_unknown`. |
+| exact-form draft streams, revisions, occurrences, and provenance sidecars | Preserve workspace identity and bytes. Map the historical filer `ProfileId` without changing the artifact identity or claiming missing coverage. |
+| on-demand occurrence counters and business keys | Re-key only when the resulting taxpayer, filing unit, form, period, and occurrence identity are provably equivalent. Otherwise keep the legacy key. |
+
+Milestone 0 must turn this table into a machine-readable inventory of actual
+tables, foreign keys, triggers, exported structures, and runtime callers. Every
+entry must end in one of: `reuse`, `rekey`, `split`, `legacy_read_only`,
+`supersede`, or `blocked`.
+
+### Field ownership matrix
+
+| Fact | Revised owner | Migration rule |
 | --- | --- | --- |
-| `Tin` stores a 9-digit root plus an optional 3–5 digit suffix as one value. | `src/tax_profile/field.zig:105-160` | Taxpayer identity and registration-unit identity are fused. |
-| `ProfileRevision.identity.tin` owns that combined value. | `src/tax_profile/model.zig:64-67,251-264` | A branch-specific full TIN becomes a taxpayer-profile fact. |
-| Evolution says one `ProfileId` is one legal taxpayer but anchors it with the combined TIN. | `src/tax_profile/evolution.zig:1-5,33-45` | Two branches of one taxpayer become two supposedly distinct legal identities. |
-| New or changed profiles require 14 digits. | `src/tax_profile/ui_state.zig:1928-1935` | A base taxpayer cannot be entered as a root-only `Tin9`. |
-| “Add branch” starts another profile, then requires the same root and legal-person kind. | `src/tax_profile/ui_state.zig:1653-1731,1985-2003` | The UI understands related registrations, but persistence still creates separate profile aggregates. |
-| Branch creation does not allocate a code; tests manually enter `00002`. | `src/tax_profile/ui_state.zig:6286-6339` | There is no current incrementing policy, verified or otherwise. |
-| Canonical-TIN uniqueness is checked on the complete stored value. | `src/tax_profile/store.zig:3603-3616,11959-11985` | It prevents duplicate full identifiers but not duplicate taxpayers with one shared root. |
-| SQLite identity anchors accept 9, 12, 13, or 14 digits. | `src/tax_profile/store.zig:17226-17264` | Migration must preserve unresolved legacy suffix lengths; it must not silently pad them. |
-| Forms Sets are keyed by `(profile_id, tax_year)`. | `src/tax_profile/store.zig:17009-17025` | Each branch profile can independently enable consolidated forms. |
-| Form launch takes the selected `ProfileId` as filer. | `src/main.zig:14235-14261,14527-14623` | A branch row can launch a taxpayer-level or consolidated return with no scope decision. |
-| Draft identity records `owner_profile_id`, form, year, and catalog hashes, but no filing unit or coverage. | `src/forms/draft_provenance.zig:165-184` | A saved draft cannot prove which branches it includes. |
-| Exact draft streams store `filer_profile_id`. | `src/tax_profile/store.zig:17586-17617` | Existing immutable drafts need an explicit compatibility mapping. |
-| Named-role distinctness compares `ProfileId` values. | `src/forms/compose.zig:53-120` | Two branch profiles of one natural taxpayer could incorrectly appear to be distinct people, including filer/spouse roles. |
-| Taxpayer-year settings and Tax Form Profiles are also `ProfileId` scoped. | `src/tax_profile/taxpayer_year_settings.zig:78-93`; `src/tax_profile/tax_form_profile.zig:90-102` | Elections and annual setup can diverge across branches of one taxpayer. |
-| The generated form catalog has category and cadence but no filing-scope policy. | `src/forms/generated/catalog.zig:74-89` | The app cannot distinguish consolidated, per-unit, inherited, transaction-specific, or review-required behavior. |
-| There are 51 catalog forms: 10 editors and 41 calendar-only entries. | `src/forms/generated/catalog.zig:7370-7375` | Catalog presence must remain separate from editor capability and legal obligation. |
-| Sidebar grouping by TIN root is presentation-only. | `src/main.zig:2170-2188,8514-8530` | Sorting does not create a taxpayer aggregate or enforce filing rules. |
-| New entry is 3-3-3-5, while stored 3–5 digit suffixes remain visible without padding. | `src/components/segmented_tin.zig:1-13,99-113` | The migration needs an explicit unresolved-legacy state. |
-| Exact 1701Q's filer branch mapping allows only three digits, although new profiles require five. | `src/form_engine/forms/form_1701q_2018/profile_mapping.zig:84-91,347-365`; `src/forms/form_1701q_exact_ui_state.zig:423-447` | A valid newly saved `...-00000` identity can fail editor opening; the official form/XML representation must be verified before changing geometry or mapping. |
-| Taxpayer calendar availability first requires a catalog form and the selected profile's Forms Set. | `src/main.zig:11311-11324,11409-11430` | It cannot derive one consolidated obligation across units. |
-| Calendar inventories disagree. Six rule codes are outside the 51-form catalog; three are also absent from the 54 global options. | `src/main.zig:342-358,391-399,8123-8136`; `src/calendar/domain.zig:482-531` | Some deadlines are impossible to select in a taxpayer calendar and some global events are filtered out. |
+| Nine-digit TIN root | Taxpayer identity revision | All legacy combined TINs in one candidate group must agree on the root. |
+| Legal-person class and legal/registered name | Taxpayer revision | Conflicts block merge; a branch label is not legal-name evidence. |
+| Date of birth, citizenship, foreign tax number | Natural-person Taxpayer revision | Never copied from one branch profile over a conflicting value. |
+| Civil status and spouse relationship | Taxpayer revision/relationship | Compare `TaxpayerId`, not Registration Unit or legacy `ProfileId`. |
+| Branch Code and head-office/branch kind | Registration Unit revision | Candidate code is separate from evidence-backed confirmation. |
+| RDO, registered address, ZIP | Registration Unit revision | Differences are expected between units and are not taxpayer conflicts. |
+| Phone, email, trade name, line of business | Evidence-reviewed allocation | Do not assume taxpayer-wide or unit-specific during migration; unresolved values remain review-required. |
+| Unit open/close/transfer state | Registration Unit revision | Preserve effective history and evidence. |
+| Facility Code, facility type, premises | Registered Facility revision | Never parse or generate as Branch Code. |
+| Accounting-period basis and EOPT tier | Taxpayer revision | Preserve current effective history; EOPT tier is not LTS status. |
+| Tax type, ATC, registration activity, registration interval | Tax-Type Registration revision | Must bind to the responsible Registration Unit and evidence. |
+| Large Taxpayer Service status/office | Taxpayer LTS revision | Never infer from EOPT tier. |
+| Income-tax regime and deduction election | Taxpayer-year settings | Branch count does not choose the annual or quarterly ITR variant. |
+| Genuine form/year setup value | Tax Form Profile | Preserve exact generated setup contract and provenance. |
+| Amounts, schedules, amendment state, payments, penalties | Filing transaction/draft | Never migrate into taxpayer or unit facts. |
+| Reportable fact origin | Source Attribution | Legacy missing origin becomes `legacy_unknown`, never head office by default. |
+| Local display label | Local metadata | May be copied to Taxpayer or Registration Unit display metadata, never tax facts. |
 
-The README correctly limits current claims: other editors are UI/projection only,
-submission and payment are UI only, and the app is not yet an authoritative
-filing plan (`README.md:9-34`). This work must preserve that boundary.
+No persistence or UI milestone may proceed until every currently persisted
+field and generated reusable key has one reviewed row in this matrix.
 
 ---
 
@@ -103,485 +177,462 @@ filing plan (`README.md:9-34`). This work must preserve that boundary.
 
 ```mermaid
 flowchart LR
-    T["Taxpayer<br/>Tin9 + taxpayer-wide revisions"]
-    U["Registration units<br/>00000, 00001, ..."]
-    F["Registered facilities<br/>distinct Facility Code"]
-    R["Effective tax-type registrations<br/>with COR/eCOR evidence"]
-    P["Effective filing-policy catalog"]
-    S["FilingScopeResolver"]
-    O["Resolved filing obligations<br/>filing unit + exact coverage"]
-    D["Drafts and returns<br/>immutable scope provenance"]
-    C["Taxpayer calendar"]
-
-    T --> U
-    T --> F
-    U -. evidence-backed responsibility .-> F
-    U --> R
-    F --> S
-    T --> S
-    R --> S
-    P --> S
-    S --> O
-    O --> D
-    O --> C
+    E["Registration Evidence"] --> L["Taxpayer Registration Ledger"]
+    L --> S["Coherent period snapshot"]
+    P["Filing Policy Catalog"] --> F["Filing Planner"]
+    S --> F
+    X["Special filing context"] --> F
+    F --> O["Resolved Filing Plan"]
+    O --> D["Draft preparation"]
+    O --> C["Obligation/calendar projection"]
+    D --> A["Exact form artifact adapters"]
 ```
 
-### Aggregate boundaries
+### `TaxpayerRegistrationLedger`
 
-#### `TaxpayerRegistry`
+This is one deep module whose small interface owns registration invariants:
 
-Owns:
+```text
+apply(RegistrationCommand) -> RegistrationWriteResult
+snapshot(TaxpayerId, FilingPeriod) -> RegistrationSnapshotResult
+```
 
-- `TaxpayerId`;
-- one canonical `Tin9` root;
-- taxpayer-wide, effective-dated legal identity revisions;
-- registration units and their effective histories;
-- separately registered facilities, facility types, and their effective histories;
-- tax-type registrations;
-- COR/eCOR/ORUS evidence references and review state;
-- effective Large Taxpayers Service registration facts.
+Commands include taxpayer creation, evidence recording, unit confirmation,
+unit closure/transfer, tax-registration revision, LTS revision, and reviewed
+identity correction. Callers do not write individual tables or reconstruct
+effective state themselves.
 
-It does not decide which form must be filed.
+The SQLite implementation is the production adapter. Tests may use the same
+module with an in-memory SQLite database; no separate public repository
+interface is required solely for mocking.
 
-#### `FilingPolicyCatalog`
+### `FilingPolicyCatalog`
 
-Owns:
+Owns reviewed, effective-dated policy data:
 
 - exact form code and revision applicability;
-- tax family and filing-scope policy;
-- effective dates;
-- LTS override, where an official rule establishes one;
+- filing-period semantics;
+- return-scope policy;
+- LTS overrides where sourced;
 - required special context;
-- primary-source identifiers and reviewed policy version.
+- primary-source identifiers and review state;
+- supersession and effective intervals.
 
-It does not load taxpayer data or create drafts.
+It does not load taxpayer records, create drafts, or calculate deadlines.
 
-#### `FilingScopeResolver`
+### `FilingPlanner`
 
-Consumes immutable inputs and returns zero or more filing obligations or a
-fail-closed review result. It performs no SQLite access and no UI work.
+This is the single interface used by form launch, Forms Set reconciliation,
+taxpayer calendar projection, and draft creation:
 
-#### Draft preparation
+```text
+plan(PlanningRequest) -> ResolvedFilingPlan
+```
 
-Accepts a resolved obligation, form composition contract, and exact revision
-snapshots. It must reject a bare selected profile or selected branch as
-insufficient authority.
+The module obtains one coherent registration snapshot and one exact policy
+revision, then runs pure internal applicability and scope stages. Callers cannot
+provide an arbitrary mix of revisions.
 
-### Fact ownership
+Expected domain outcomes are values, not infrastructure errors:
 
-| Fact | Proposed owner | Notes |
-| --- | --- | --- |
-| Nine-digit TIN root | Taxpayer | Unique taxpayer identity anchor. |
-| Legal-person class and registered legal name | Taxpayer revision | A branch does not create another legal person. Conflicts require migration review. |
-| Head-office/branch code | Registration unit | `00000` is reserved for the principal/head-office unit. |
-| Facility Code and facility type | Registered facility | Kept distinct from `BranchCode5`; link to a responsible unit only from evidence. |
-| Unit status and effective period | Registration-unit revision | Opening, closure, transfer, and historical units must remain queryable. |
-| RDO and registered address | Registration-unit revision | These can differ by unit and over time. |
-| Trade name and line of business | Evidence-reviewed allocation | Some facts may be taxpayer-wide and others unit-specific; migrate only after their source contract is classified. |
-| Tax type, ATC, and registration period | Tax-type registration | Must be tied to the unit and supporting evidence. |
-| LTS registration/office | Effective taxpayer registration fact | Never infer it from EOPT size tier. |
-| Income-tax regime and deduction election | Taxpayer-year settings | Branch count does not choose 1701 vs 1701A vs 1701-MS. |
-| Transaction origin | Source unit on the transaction/fact | Consolidation must not rewrite origin to `00000`. |
-| Filing identifier | Resolved obligation | Composes `Tin9` and the filing unit's `BranchCode5`. |
-| Return coverage | Resolved obligation and immutable draft snapshot | Exact unit IDs, not a boolean `consolidated` flag. |
+- obligations;
+- not applicable;
+- Review Required with ordered issues.
 
-### Core invariants
+SQLite, allocation, and corrupted-storage failures remain implementation errors.
 
-1. A canonical `Tin9` belongs to at most one taxpayer.
-2. A taxpayer has at most one effective `00000` unit at a time.
-3. A branch code is unique among a taxpayer's effective registration units.
-4. New confirmed codes have exactly five digits.
-5. Legacy three- or four-digit suffixes are preserved as unresolved evidence;
-   they are not silently left-padded.
-6. A suggested branch code is provisional and cannot identify a filed return.
-7. Correcting a TIN root and correcting a branch code are different audited
-   operations.
-8. A closed code is not automatically recycled without official evidence.
-9. Named-role distinctness compares `TaxpayerId`, not a branch or legacy
-   `ProfileId`.
-10. A BIR Facility Code is never parsed or generated as a `BranchCode5` without
-    an explicit official mapping.
-11. Tax-type registrations and evidence are effective-dated and append-only.
-12. Filing unit and source unit are distinct concepts.
-13. Filing venue is distinct from filing scope and coverage.
-14. A consolidated obligation contains an explicit, non-empty coverage set.
-15. For one taxpayer, tax type, and period, resolved obligations cannot overlap
-    coverage unless the policy explicitly models a legal overlap.
-16. Draft creation requires a policy-backed obligation; selection state alone is
-    never sufficient.
-17. Existing immutable draft snapshots are not reinterpreted after migration.
+### Draft preparation
+
+Draft preparation accepts one resolved Filing Obligation plus the exact form
+composition contract. It copies the complete revision bindings from the
+obligation. It must reject a selected profile, selected branch, or manually
+constructed filing identifier as insufficient authority.
+
+### Calendar and library projection
+
+Calendar and library views consume resolved filing plans but do not own filing
+scope. The deadline resolver remains a separate module: it combines an
+obligation with exact calendar rules and overrides without changing Filing Unit
+or Return Coverage.
 
 ---
 
-## Identifier types and branch-code workflow
+## Domain types and lifecycle
 
-The implementation should introduce separate opaque domain types before
-changing persistence or UI:
+Implementation introduces separate opaque types before persistence or UI
+changes:
 
 ```zig
 pub const TaxpayerId = OpaqueId(.taxpayer);
+pub const TaxpayerRevisionId = OpaqueId(.taxpayer_revision);
 pub const RegistrationUnitId = OpaqueId(.registration_unit);
+pub const RegistrationUnitRevisionId = OpaqueId(.registration_unit_revision);
 pub const RegisteredFacilityId = OpaqueId(.registered_facility);
+pub const TaxTypeRegistrationRevisionId = OpaqueId(.tax_type_registration_revision);
+pub const RegistrationEvidenceId = OpaqueId(.registration_evidence);
 
 pub const Tin9 = struct {
     digits: [9]u8,
-
-    pub fn parse(raw: []const u8) TinError!Tin9;
-    pub fn write(self: Tin9, output: []u8) error{NoSpaceLeft}![]const u8;
 };
 
 pub const BranchCode5 = struct {
     digits: [5]u8,
-
-    pub fn parse(raw: []const u8) BranchCodeError!BranchCode5;
-    pub fn isHeadOffice(self: BranchCode5) bool;
 };
 
-pub const UnitCodeState = union(enum) {
-    proposed: BranchCode5,
+pub const RegistrationUnitKind = enum {
+    head_office,
+    branch,
+};
+
+pub const BranchCodeEvidenceState = union(enum) {
+    unconfirmed: BranchCode5,
     confirmed: struct {
         code: BranchCode5,
         evidence_id: RegistrationEvidenceId,
     },
     legacy_unresolved: OwnedLegacySuffix,
 };
+
+pub const RegistrationUnitStatus = union(enum) {
+    pending_evidence,
+    confirmed_active,
+    confirmed_closed,
+    legacy_unresolved,
+};
 ```
 
-The displayed 14-digit filing identifier is a composition, not a stored second
-taxpayer identity:
+The exact Zig shape may follow repository conventions, but code evidence and
+unit lifecycle must remain independent.
+
+### Time semantics
+
+- Reuse the repository's civil `Date` and inclusive `EffectivePeriod` model.
+- All policy and registration comparisons use Philippine civil filing dates,
+  not device-local instants.
+- A `FilingPeriod` must distinguish calendar month, calendar quarter, taxable
+  year, fiscal period, date range, and event/transaction period.
+- The planner must inspect every effective change inside the filing period.
+- A mid-period change returns Review Required unless the exact policy defines
+  split coverage or a controlling as-of rule.
+- Deadline calendar year remains separate from taxable period year.
+
+### Registration-unit commands
+
+The lifecycle must support:
+
+- create Taxpayer plus pending `00000` unit atomically;
+- enter or replace an unconfirmed candidate Branch Code;
+- confirm code and unit facts from reviewed evidence;
+- append RDO/address/contact revisions;
+- close or transfer a unit with effective date and evidence;
+- correct a Branch Code without changing the TIN root;
+- correct a TIN root through a distinct audited taxpayer-identity decision;
+- reject duplicate effective codes and multiple effective head offices;
+- preserve historical units and codes after closure.
+
+The UI may derive a lowest-unused suggestion, but the suggestion is not a
+RegistrationCommand until the user explicitly enters it, and it remains
+unconfirmed until evidence review.
+
+### Core invariants
+
+1. One canonical `Tin9` belongs to at most one Taxpayer in the active registry.
+2. One Taxpayer has at most one effective head-office unit for a date.
+3. `00000` is reserved for the head-office unit.
+4. A non-`00000` code cannot identify a head-office unit.
+5. A confirmed Branch Code contains exactly five digits and cites evidence.
+6. A candidate or suggested code cannot identify a Filing Unit.
+7. Branch Code lineage is not recycled merely because a unit closed.
+8. A Facility Code is never accepted as a Branch Code.
+9. A legacy three- or four-digit suffix remains unresolved until reviewed.
+10. Tax-Type Registrations are append-only, effective-dated, and evidence-backed.
+11. LTS status is independent of EOPT tier.
+12. Filing Unit and Source Unit remain distinct.
+13. Return Coverage is an explicit, deterministic, non-empty set for every
+    obligation that covers units.
+14. Obligations for one taxpayer, family, and period cannot overlap Source Unit
+    coverage unless the policy explicitly models a legal overlap.
+15. Named-role distinctness compares Taxpayer IDs.
+16. Draft creation requires an obligation from a Resolved Filing Plan.
+17. Existing immutable drafts and artifacts are never reinterpreted.
+18. Correcting a TIN root, correcting a Branch Code, transferring an RDO, and
+    closing a unit are separate audited operations.
+19. Every persisted Source Attribution records provenance or `legacy_unknown`.
+20. Derived obligation caches are never authoritative over ledger and policy
+    revisions.
+
+---
+
+## Evidence lifecycle
+
+Registration Evidence stores metadata and review decisions separately from tax
+facts:
+
+- evidence ID, source kind, digest, display name, byte size, and capture date;
+- local path or encrypted-blob reference governed by existing storage policy;
+- Taxpayer/Registration Unit/Facility subjects proposed by the evidence;
+- reviewer decision, actor identity available to the local-owner model,
+  timestamp, and reason;
+- supersession or contradiction links;
+- exact facts accepted from the evidence.
+
+An attached file is not itself an accepted fact. Missing, moved, or changed files
+remain detectable through the stored digest. Migration reports and backups must
+not create unprotected plaintext evidence copies or expose full TIN/name data by
+default.
+
+Policy Evidence has a separate promotion lifecycle:
 
 ```text
-TIN root:          000-000-000
-Registration unit: 00000
-Filing display:    000-000-000-00000
+candidate -> reviewed -> effective -> superseded
 ```
 
-### First taxpayer
-
-One transaction creates:
-
-- a taxpayer with `Tin9`;
-- a principal/head-office unit with the system-reserved code `00000`;
-- an evidence-review task if registration evidence has not yet confirmed the
-  unit's RDO, address, and tax registrations.
-
-The user should not create a second “base profile” for the head office.
-
-### Add branch
-
-The app may calculate the lowest unused five-digit suggestion for convenience.
-For example, if `00000` exists and no other units exist, it may display
-`Suggested: 00001`.
-
-The workflow must also say:
-
-> Confirm this code from the branch's BIR registration record. The suggestion is
-> not a BIR assignment.
-
-The app must allow a different confirmed code, gaps, and a code already assigned
-by BIR. It must reject a collision. A proposed unit may hold setup work, but it
-must not generate filing obligations, appear as a confirmed invoice identity, or
-create a filing draft.
+Generated policy data must fail when an evidence ID is missing, an effective
+interval overlaps, a form revision is unclassified, or a candidate policy would
+become actionable. Updating a policy revision invalidates derived obligations
+but never mutates existing draft snapshots.
 
 ---
 
 ## Filing-policy contract
 
-Do not add `form.is_consolidated: bool`. Scope depends on the exact form
-revision, period, effective registrations, LTS status, and sometimes a property,
-instrument, facility, payee, employee, or parent return.
+Do not add `form.is_consolidated: bool`. Do not use an undefined
+`taxpayer_level` policy that still leaves the Filing Unit unknown.
 
-The policy vocabulary is:
+The companion guide's `TaxpayerLevel` entries are research/catalog
+classifications, not executable policies. Before a form becomes actionable,
+each entry must be refined to an exact return, payment, artifact, or
+administrative policy below, or remain Review Required.
+
+Use distinct policy categories:
 
 ```zig
-pub const FilingScopePolicy = union(enum) {
-    taxpayer_level,
-    head_office_consolidated,
-    registration_driven: RegistrationDrivenPolicy,
-    transaction_specific: TransactionPolicyKind,
-    administrative_registration,
-    inherit_liability,
-    source_recipient_document,
-    inherit_parent: ParentArtifactKind,
+pub const FilingPolicy = union(enum) {
+    periodic_return: ReturnScopePolicy,
+    transaction_return: TransactionScopePolicy,
+    payment: LiabilityScopePolicy,
+    supporting_artifact: ArtifactScopePolicy,
+    administrative_registration: AdministrativePolicy,
     historical_only,
     review_required: ReviewReason,
 };
-```
 
-Every current catalog code must have an explicit policy record. Unknown is not a
-default; it is `review_required`.
-
-### Keep capability separate from obligation
-
-The existing generated catalog answers questions such as:
-
-- Does a code exist in the product catalog?
-- Is there an editor route or only a calendar entry?
-- Which profile roles and fields can be projected?
-
-The policy catalog answers different questions:
-
-- Is this form revision applicable to this taxpayer and period?
-- Which unit files it?
-- Which units does it cover?
-- Does LTS registration override the ordinary rule?
-- What context or evidence is missing?
-
-Implementation should add a reviewed policy source beside the TypeScript catalog
-source, then generate Zig from it. Do not hand-edit
-`src/forms/generated/catalog.zig`. A policy record should carry source IDs and an
-effective interval, and the generator must reject any of the 51 codes without an
-explicit classification.
-
-### Resolver input and output
-
-Illustrative Zig contract:
-
-```zig
-pub const ResolveInput = struct {
-    form: FormRevisionKey,
-    period: FilingPeriod,
-    taxpayer: TaxpayerRegistrationSnapshot,
-    policy: FilingPolicyRevision,
-    special_context: ?SpecialFilingContext,
+pub const ReturnScopePolicy = union(enum) {
+    head_office_consolidated,
+    registration_driven: RegistrationDrivenPolicy,
 };
 
-pub const FilingObligation = struct {
+pub const ArtifactScopePolicy = union(enum) {
+    inherit_parent: ParentArtifactKind,
+    source_recipient_document: SourceRecipientKind,
+};
+```
+
+Transaction-specific returns receive their Filing Unit and jurisdiction from the
+required transaction/property/instrument/facility context. Payment forms inherit
+the exact underlying liability. Supporting artifacts cannot broaden the parent
+return's coverage.
+
+Every exact catalog form revision must have one explicit capability state and
+one policy state. An unreviewed form remains `review_required`; it does not block
+identifier or ledger foundations, but it cannot become actionable.
+
+### Planning interface
+
+```zig
+pub const PlanningRequest = struct {
     taxpayer_id: TaxpayerId,
     form: FormRevisionKey,
     period: FilingPeriod,
+    special_context: ?SpecialFilingContextRef,
+};
+
+pub const ResolvedFilingObligation = struct {
+    taxpayer_id: TaxpayerId,
+    taxpayer_revision_id: TaxpayerRevisionId,
+    form: FormRevisionKey,
+    period: FilingPeriod,
     filing_unit_id: RegistrationUnitId,
-    covered_unit_ids: []const RegistrationUnitId,
+    filing_unit_revision_id: RegistrationUnitRevisionId,
+    covered_units: []const RegistrationUnitRevisionBinding,
     registration_revision_ids: []const TaxTypeRegistrationRevisionId,
-    policy_revision: FilingPolicyRevisionId,
+    lts_revision_id: ?LargeTaxpayerServiceRevisionId,
+    facility_revision_ids: []const RegisteredFacilityRevisionId,
+    source_attribution_requirement: SourceAttributionRequirement,
+    policy_revision_id: FilingPolicyRevisionId,
     policy_evidence_ids: []const PolicyEvidenceId,
+    special_context_digest: ?[32]u8,
+    decision_schema_version: u16,
     resolution_hash: [32]u8,
 };
 
-pub const ResolveResult = union(enum) {
-    obligations: []const FilingObligation,
+pub const ResolvedFilingPlan = union(enum) {
+    obligations: []const ResolvedFilingObligation,
     not_applicable,
     review_required: []const ResolutionIssue,
 };
-
-pub fn resolve(input: ResolveInput, arena: std.mem.Allocator) !ResolveResult;
 ```
 
-The result is plural because a registration-driven rule can produce one return
-per registered unit. The resolver must:
+The resolution hash uses a versioned canonical encoding, a domain separator,
+deterministic list ordering, and the full set of revision/evidence IDs. It is a
+reproducibility check, not a substitute for storing the bindings.
 
-1. select the policy effective for the exact form revision and period;
-2. load no state itself—its caller supplies a coherent as-of snapshot;
-3. reject missing or contradictory registration evidence;
-4. detect changes inside the period rather than choosing an arbitrary date;
-5. apply a verified LTS override where applicable;
-6. calculate the filing unit and exact source-unit coverage;
-7. prove that coverage has no duplicate unit for the same obligation family;
-8. return `Review Required` for facility-, property-, instrument-, or
-   transaction-specific rules without the required context;
-9. reject an incomplete or mixed registration pattern unless the effective
-   policy explicitly defines its coverage;
-10. hash the complete decision and evidence set for downstream provenance.
+The planner must:
 
-“All branches” must mean the exact set of applicable unit IDs selected from the
-period snapshot, including a unit active for only part of the period when policy
-requires it. It must not mean whatever branches exist when the draft is later
-reopened.
+1. load one coherent registration snapshot for the requested period;
+2. select one exact effective policy revision;
+3. determine applicability internally;
+4. reject missing, contradictory, or mixed-time evidence;
+5. apply a verified LTS override only where policy establishes one;
+6. calculate the Filing Unit and exact Return Coverage;
+7. validate coverage partition and Source Attribution requirements;
+8. require special context for transaction/site/property rules;
+9. return ordered, actionable Review Required issues;
+10. return exact revision bindings without downstream re-query.
 
-### Scope, venue, and form representation are separate
+“All branches” means the exact covered Registration Unit revisions selected for
+the filing period. It never means whatever units exist when a draft is reopened.
 
-The scope resolver answers **who files and what the return covers**. A separate,
-effective-dated venue policy answers **where or through which channel filing and
-payment may occur**. Current venue flexibility must not be interpreted as
-permission to choose any branch as filer.
+### Separate policy dimensions
 
-Exact form and submission adapters then answer **how the resolved identity is
-represented** on that form revision. This separation is especially important
-for the current 1701Q three-versus-five-digit control conflict: the taxpayer and
-unit identity must remain lossless even when a historical paper or XML artifact
-uses a different field shape.
+- Filing scope decides who files and what units the return covers.
+- Applicability decides whether the form/period produces an obligation.
+- Filing venue decides where or through which channel filing/payment occurs.
+- Deadline policy decides when the obligation is due.
+- Artifact representation decides how the resolved identity appears in an exact
+  form, XML, print, or other payload.
+
+These stages may be internal to deep modules, but they must not share one
+ambiguous boolean or infer one another.
 
 ---
 
-## Draft and return provenance
+## Forms Set, capability, and obligation precedence
 
-The current `FilingIdentity` is not enough for multiple branches. Its successor
-must snapshot at least:
+The existing Forms Set becomes a Form Workspace Preference and historical user
+decision. It remains user-owned, but it cannot erase or manufacture a resolved
+obligation.
 
-- `TaxpayerId` and exact taxpayer revision;
-- `Tin9` used by the draft;
-- `RegistrationUnitId` and exact filing-unit revision;
-- exact `BranchCode5` used on the return;
-- all covered unit IDs and revisions in deterministic order;
-- relevant tax-type registration revision IDs;
-- form code, revision, and period;
-- policy revision, primary-source evidence IDs, and resolution hash;
-- LTS fact revision when it influenced scope;
-- special context or parent-return identity;
-- registered-facility identity and revision when a site rule affects the return;
-- source-unit identity for every imported or entered reportable fact.
+| Resolution/capability state | Library and calendar behavior | Launch behavior |
+| --- | --- | --- |
+| Resolved required obligation, editor supported | Always visible as required; an inactive preference cannot hide it. | Opens exact resolved obligation. |
+| Resolved required obligation, editor unsupported | Visible with deadline/reference and unsupported-editor label. | Blocked; no false fileability claim. |
+| Optional workflow selected by user | Visible as optional, clearly separate from required. | Opens only when policy permits and exact context resolves. |
+| Covered by head-office obligation | Visible from a branch/source workspace as covered elsewhere. | Opens the existing head-office obligation without changing global workspace selection. |
+| Review Required | Visible with ordered missing/conflicting evidence. | Blocked until repaired and re-resolved. |
+| Not applicable but old preference active | Show a reconciliation warning; preserve preference history. | Blocked unless a new reviewed policy/evidence result changes applicability. |
+| Historical-only | Visible only for supported historical periods. | Exact historical adapter only. |
 
-Reopening a draft shows the saved decision even when later registration facts
-change. It may warn that the current resolver would now decide differently, but
-it must not mutate the historical snapshot. An amended return creates a new
-resolution and links to the prior return.
+Tax-type registration evidence is upstream. The Filing Planner is authoritative
+for legal/application scope. Form Workspace Preference is authoritative only for
+optional workspace organization.
 
-A consolidated return changes only the filing unit. It never rewrites a sale,
-employee, payee, payment, credit, property, or instrument from its true source
-unit to `00000`.
+No screen should use the combined label “Required/eligible.” Required,
+conditionally available, optional, covered elsewhere, and blocked are distinct
+states.
 
 ---
 
-## UI and interaction design
+## Projection, draft provenance, and Source Attribution
 
-### Navigation hierarchy
+### Form identity projection
 
-The primary selector becomes taxpayer-first:
+Before changing the canonical `Tin` field, build a representation matrix for all
+ten supported editor revisions and every affected artifact adapter:
+
+- TIN root control geometry;
+- Branch Code control geometry and accepted length;
+- XML or encoded payload representation;
+- print/PDF representation;
+- spouse/secondary-party behavior;
+- historical compatibility;
+- blocked behavior when an artifact cannot represent a confirmed five-digit
+  code losslessly.
+
+The exact 1701Q three-digit filer control versus five-digit page-2/spouse controls
+is the first known blocker, not the complete inventory.
+
+Profile composition must accept a `FilingProjectionContext` containing:
+
+- exact Taxpayer revision;
+- exact Filing Unit revision;
+- resolved Return Coverage;
+- form revision and period;
+- named taxpayer roles;
+- taxpayer-year and Tax Form Profile bindings;
+- transaction-owned values.
+
+It must not reconstruct the filing branch from the legacy combined `Tin`.
+
+### Draft snapshot
+
+A new draft copies at least:
+
+- Taxpayer ID and revision;
+- `Tin9` used by the artifact;
+- Filing Unit ID, revision, and exact `BranchCode5`;
+- all covered Registration Unit revision bindings in deterministic order;
+- Tax-Type Registration and LTS revision IDs;
+- facility and special-context bindings when applicable;
+- policy revision, evidence IDs, decision schema version, and resolution hash;
+- Forms Set preference/decision provenance as non-legal workspace evidence;
+- generated catalog, form, setup-spec, and projection hashes;
+- named profile-role bindings;
+- Source Attribution for every reportable fact that requires it.
+
+Reopening shows the saved decision even when current facts now resolve
+differently. The UI may warn and offer a new/amended workflow, but it never
+mutates the historical snapshot.
+
+### Source Attribution
+
+Introduce an explicit model before claiming coverage partition:
 
 ```text
-ACME CORPORATION                    123-456-789
-  Head office                       00000  · RDO 047
-  Cebu branch                       00001  · RDO 081
-  Davao branch                      00004  · RDO 113
+entered(RegistrationUnitRevisionId, evidence/reference)
+derived(RegistrationUnitRevisionId, derivation rule/version)
+legacy_unknown(reason)
 ```
 
-Indentation alone is insufficient. Rows need semantic labels, accessible state,
-and a visible distinction between the taxpayer workspace and the current source
-unit workspace.
-
-### Taxpayer setup
-
-Use separate sections:
-
-1. **Taxpayer identity** — nine-digit TIN and taxpayer-wide facts.
-2. **Registration units** — head office and branches.
-3. **Registered facilities** — BIR facility code/type and evidence-backed
-   relationship to a responsible office.
-4. **Tax registrations** — effective tax types per unit.
-5. **Registration evidence** — COR/eCOR/ORUS records and review state.
-6. **Taxpayer-year settings** — elections and other period-specific facts.
-
-### Form library states
-
-Replace indiscriminate `Select all 51` behavior with policy-aware groups:
-
-- **Required/eligible** — resolved from supported evidence;
-- **Optional workflow** — legally optional and explicitly selected;
-- **Covered by head office** — visible from a branch but cannot create a
-  duplicate branch return;
-- **Historical** — available only for supported historical periods;
-- **Needs review** — blocked with an actionable missing-evidence reason;
-- **Unsupported editor** — calendar/reference capability only.
-
-Every card or form header should show:
-
-- masked taxpayer TIN;
-- current source-unit workspace;
-- actual filing unit and branch code;
-- resolved scope label;
-- covered-unit count and expandable list;
-- policy/evidence explanation;
-- editor/fileability status separately.
-
-### Behavior by scope
-
-#### Head-office consolidated
-
-From a branch workspace, the card remains visible but says, for example:
-
-> Filed by Head office `00000`; covers Head office, Cebu, and Davao.
-
-Opening it explicitly changes to filing context `00000` after showing the scope.
-The branch tile becomes “Covered by head-office return,” not another actionable
-return.
-
-#### Per registered unit
-
-The current confirmed unit remains the filing unit. The app lists the exact tax
-registration and period that made the form applicable. Separate obligations must
-partition source facts so the same transaction cannot be included twice.
-
-#### Transaction-specific
-
-The app asks for the property, instrument, transfer, facility, or other required
-context. The currently selected branch is a convenience default only if the
-policy explicitly permits it; otherwise no filing unit is assumed.
-
-#### Review required
-
-Launch is blocked. The screen explains the exact missing or contradictory fact,
-such as:
-
-- no confirmed `00000` unit;
-- legacy short suffix not reconciled;
-- missing effective tax registration;
-- tax registration changes within the period;
-- unknown LTS status where it changes the outcome;
-- missing site or property jurisdiction;
-- conflicting COR evidence.
-
-### Draft switching
-
-Switching taxpayer or unit with unsaved work must be blocked or explicitly
-confirmed. Saved drafts always reopen with their immutable filing unit and
-coverage, not the unit currently selected in navigation.
+Apply it only to forms and schedule rows whose policy requires unit-origin
+partitioning. Provide bulk assignment and correction UI for imported facts.
+Legacy unknown data blocks filing when the planner cannot prove non-overlap.
 
 ---
 
-## Calendar and Forms Set redesign
+## Calendar and derived obligation storage
 
-The global dashboard can remain taxpayer-independent. The taxpayer calendar must
-derive obligations from the same resolver used by form launch.
+The taxpayer calendar consumes resolved filing plans and separate deadline rules.
+It must not generate one card per legacy branch `ProfileId`.
 
-For example, one taxpayer with three units should get:
+A stable obligation projection key includes:
 
-- one 1701Q/1702Q obligation under `00000` with three-unit coverage;
-- one 2550Q obligation under `00000` with three-unit coverage;
-- either one consolidated 2551Q or the exact per-registered-unit set, according
-  to effective percentage-tax registrations and verified LTS status.
+- Taxpayer ID;
+- exact form revision and Filing Period;
+- Filing Unit revision;
+- policy revision;
+- resolution hash.
 
-The stable calendar key should include taxpayer, form revision, period, filing
-unit, and scope-policy revision. It must not be generated once per branch merely
-because three old `ProfileId` rows exist.
+If `resolved_filing_obligations` or a similar table is retained, it is a derived
+cache only. Each row stores its complete input digest, generated-at version,
+supersession state, and recomputation reason. Registration, policy, or special-
+context changes invalidate the cache. Draft snapshots remain immutable and are
+not invalidated.
 
-The current Forms Set mixes user configuration with implied filing obligation.
-Split it into:
+The Global Tax Calendar may remain a taxpayer-independent reference calendar.
+A global taxpayer dashboard must instead display the union of each Taxpayer's
+resolved obligations. These are different products and must have different
+labels.
 
-1. evidence-backed registration and policy inputs;
-2. resolver-produced obligations;
-3. explicit optional workflow preferences;
-4. product capability/editor availability.
-
-Do not migrate old checkboxes directly into tax-type registrations. They are
-useful migration evidence but not proof of what BIR registered.
-
-Before rollout, reconcile the inventory drift among:
-
-- 51 generated catalog codes;
-- 54 global selector codes;
-- 48 normalized calendar rule codes;
-- the six current domain-only codes `1606`, `1621`, `2550DS`, `0611A`, `0613`,
-  and `1707`;
-- the `1604C`/`1604F` to `1604CF` normalization;
-- `1701MS` versus `1701-MS` spelling;
-- local legacy codes absent from the current official list, including
-  `1601E`, `1601F`, `1602`, `1603`, generic `1702`, `1704`, and `2551M`;
-- the severe `2200C` title conflict: the current official list describes
-  cosmetic procedures, while the local catalog says coal and coke;
-- local Form 2000 cadence `on_demand` versus the current official-list monthly
-  description;
-- the `0620` monthly and `1621` quarterly transition/effective-period gap.
-
-Every code must have an explicit capability state and filing-policy state.
-The `2200C` route stays blocked until its identity and source artifact are
-corrected or proven.
+Before obligation projection is enabled, reconcile all catalog/global/calendar
+codes and aliases. The detailed inventory remains in the companion guide and a
+generated coverage report, not duplicated here.
 
 ---
 
-## Persistence design
+## Persistence and transactional guarantees
 
-Add new append-only tables rather than rewriting identity anchors in place. The
-exact names can follow repository conventions, but the logical records are:
+Logical new records are:
 
 ```text
 taxpayers
@@ -591,478 +642,514 @@ registration_unit_revisions
 registered_facilities
 registered_facility_revisions
 registration_evidence
+branch_code_confirmations
 tax_type_registrations
 tax_type_registration_revisions
 taxpayer_lts_revisions
 filing_policy_revisions
 legacy_profile_unit_mappings
-resolved_filing_obligations
+migration_decisions
 draft_filing_scope_snapshots
 draft_coverage_units
 draft_registration_bindings
+source_attributions
+derived_obligation_cache (optional)
 ```
 
-Required database constraints include:
+Exact table names may reuse or extend existing schema structures. Milestone 0's
+disposition matrix decides this; do not add parallel tables merely because this
+list uses new logical names.
 
-- unique canonical nine-digit TIN root;
-- one durable `(taxpayer_id, branch_code)` assignment lineage; a code cannot be
-  attached to a different unit merely because the first unit closed;
-- at most one effective head-office unit;
-- `00000` only for a head-office/principal unit;
-- non-`00000` for a branch unit;
-- Facility Code stored in a distinct facility domain and never constrained as a
-  branch-code suffix;
-- append-only revision rows;
-- evidence and reviewer provenance for confirmed unit codes;
-- deterministic coverage order and unique coverage members;
-- foreign-key restriction from immutable drafts to exact revisions;
-- no silent cascade deleting a taxpayer, registration unit, policy, or evidence
-  referenced by a draft.
+Required constraints include:
 
-Use repository-style pure domain modules, explicit allocators, SQLite adapters,
-and versioned migrations. Do not place filing rules in view handlers or SQL
-queries.
+- unique canonical TIN root among active Taxpayers;
+- one effective head office per Taxpayer/date;
+- durable Branch Code lineage and no effective collisions;
+- `00000` only for head office;
+- confirmed code requires evidence;
+- Facility Code remains a separate type/domain;
+- append-only revision and Migration Decision rows;
+- deterministic unique coverage membership;
+- immutable draft foreign keys use `RESTRICT`;
+- no cascade deleting facts/evidence referenced by drafts;
+- first Taxpayer plus pending `00000` unit created atomically;
+- optimistic sequence checks for concurrent windows;
+- code suggestion recalculated inside the confirmation transaction and never
+  treated as a reservation.
+
+Do not place filing rules in SQL queries or Native view handlers.
 
 ---
 
-## Legacy migration strategy
+## Migration and cutover strategy
 
-Migration must begin with a report, not a merge.
+### Cutover decision: no dual-write system
 
-### Phase A — read-only inventory report
+This local SQLite application will not maintain two writable identity models.
+Dual writes would create a second reconciliation problem and make rollback
+semantics harder to prove.
 
-For every current profile, emit:
+The rollout is:
 
-- old `ProfileId`;
-- complete stored TIN and parsed root/suffix length;
-- candidate taxpayer group by nine-digit root;
-- legal-person class and registered/taxpayer names by revision;
-- head-office/branch candidate;
-- branch code, RDO, address, and effective history;
-- facility codes/types and their evidence-backed office relationships;
-- registration facts and COR evidence;
-- Forms Sets and decision histories;
-- coarse and exact draft references;
-- candidate migration state and every blocking reason.
+1. add new schema and read-only inventory while old model remains writable;
+2. build and test the new path behind a feature flag using fixtures;
+3. review Migration Decisions for real local data;
+4. enter a write-frozen maintenance window;
+5. create a protected backup using the existing repository storage/key-custody
+   policy;
+6. migrate reviewed-safe groups in one transaction;
+7. run reconciliation before commit and again after reopen;
+8. enable the new path;
+9. keep old tables read-only for compatibility/export.
 
-The report must be deterministic, contain no private field values beyond the
-minimum needed for local review, and make no database writes.
+Rollback is lossless only before the first post-cutover write. After that point,
+rollback requires restoring the protected backup and explicitly discarding
+post-cutover work, or shipping a forward repair. A feature flag alone is not a
+rollback plan.
 
-### Phase B — classify groups
+### Phase A — deterministic read-only inventory
 
-Safe candidates require:
+For every legacy profile and related stream, report:
 
-- one shared root;
-- compatible legal-person class and taxpayer-wide identity history;
-- at most one confirmed head-office candidate per effective interval;
-- no duplicate effective branch code;
-- a reviewed mapping for every legacy suffix;
-- no unexplained overlapping Forms Set or draft filing behavior.
+- old `ProfileId` and parsed TIN root/suffix length;
+- candidate Taxpayer group;
+- every field/stream disposition row;
+- head-office/branch candidate and evidence state;
+- RDO/address/contact histories;
+- COR/evidence references and digests;
+- taxpayer-year, Tax Form Profile, Forms Set, relationship, and civil-status
+  histories;
+- generic and exact draft references;
+- on-demand counters/business keys;
+- candidate Migration Decision and every blocking reason.
 
-RDO and address differences are expected unit differences. Legal name or
-legal-person-class differences are taxpayer conflicts and must not be silently
-merged.
+The report is deterministic, local-only, masked by default, and contains no
+evidence file contents. It performs zero database writes.
 
-A group containing branches but no verified `00000` profile remains blocked; the
-migration must not manufacture a head office merely to satisfy the target shape.
+### Phase B — human-reviewed Migration Decisions
 
-### Phase C — create new records and compatibility mappings
-
-Create distinct `TaxpayerId` and `RegistrationUnitId` values, then record an
-immutable mapping:
+Each candidate group receives an immutable result:
 
 ```text
-old ProfileId -> TaxpayerId + RegistrationUnitId + migration decision
+safe_to_map
+legacy_read_only
+blocked(reason list)
 ```
 
-Do not reuse the old full-TIN identity anchor as the new taxpayer key. Keep old
-tables readable during the compatibility period.
+Safe mapping requires one root, compatible taxpayer-wide histories, at most one
+confirmed head office per interval, no effective code collision, reviewed legacy
+suffixes, and a disposition for every dependent stream.
 
-### Phase D — preserve drafts
+RDO/address differences are expected unit differences. Legal-name, legal-person-
+class, civil-status, taxpayer-year, role, or Tax Form Profile conflicts cannot be
+silently merged.
 
-Existing drafts remain byte-for-byte and revision-for-revision historical
-records. Link their old `ProfileId` through the migration map, but do not claim a
-coverage set that was never stored. Mark such scope provenance as
-`legacy_unknown` or `review_required`.
+### Phase C — schema migration and immutable mappings
 
-A prior branch-coded income-tax or VAT draft is a filing-safety finding. It is
-not automatically reassigned to `00000`.
+Create stable new IDs and record:
 
-### Phase E — Forms Set disposition
+```text
+old ProfileId
+-> TaxpayerId
++ RegistrationUnitId
++ MigrationDecisionId
++ dependent-stream dispositions
+```
 
-Old per-profile selections become migration evidence only. The migration report
-may propose:
+Do not reuse a legacy full-TIN identity anchor as the new Taxpayer key. Keep old
+tables readable.
 
-- product-capability preference;
-- optional workflow preference;
-- candidate tax-type registration needing COR confirmation;
-- unsafe consolidated-form selection on a branch;
-- obsolete or historical form selection.
+### Phase D — historical drafts and preferences
 
-It must never convert “enabled” directly into “legally registered.”
+- Preserve draft bytes, revisions, workspaces, and artifact keys.
+- Map historical filer identity only where proven.
+- Mark missing Return Coverage and Source Attribution `legacy_unknown`.
+- Treat branch-coded income-tax/VAT drafts as filing-safety findings; do not
+  silently reassign them to `00000`.
+- Preserve Forms Set decisions as preferences/evidence, never registrations.
 
-### Phase F — cutover and rollback
+### Phase E — reconciliation
 
-Use a feature flag or schema capability check so the old read path remains
-available until:
+Verify before cutover:
 
-- counts and mappings reconcile;
-- all non-conflicting groups pass invariant checks;
-- resolver results match reviewed fixtures;
-- drafts reopen with unchanged historical provenance;
-- UI and calendar tests pass;
-- a backup and rollback rehearsal have succeeded on a disposable database copy.
+- row counts and ID mappings;
+- all foreign-key/revision references;
+- no unreviewed group changed;
+- deterministic planner fixtures;
+- old drafts reopen with unchanged provenance;
+- profile projection and exact artifact identity remain stable;
+- migration rerun produces no new IDs or decisions;
+- backup restore rehearsal succeeds on a protected disposable copy;
+- crash/fault injection at every migration checkpoint leaves either the old or
+  complete new state, never a partial committed identity.
 
-The migration must be idempotent. A second dry run and a second completed run
-must not create new IDs or different decisions.
+### Mandatory stop conditions
 
-### Mandatory migration stop conditions
+Stop a group when any occurs:
 
-Stop a taxpayer group and request review when any of these occurs:
-
-- two different legal people share a parsed root;
-- subject kind or legal-person class conflicts;
-- no unique head-office candidate exists;
-- only branch candidates exist and no evidence establishes the head office;
+- two legal people appear to share one parsed root;
+- legal-person class, legal name, civil status, or relationship history
+  conflicts;
+- no unique confirmed head-office candidate exists;
 - multiple effective `00000` candidates exist;
-- branch codes collide or are absent;
-- a 3- or 4-digit legacy suffix has no verified representation;
-- a stored Facility Code has been conflated with a branch suffix;
+- Branch Codes collide, are absent, or have unresolved legacy length;
+- Facility Code and Branch Code were conflated;
+- evidence records conflict or their digests/subjects cannot be preserved;
+- taxpayer-year, Tax Form Profile, Forms Set, or role histories cannot be
+  dispositioned safely;
 - effective histories overlap inconsistently;
-- COR/eCOR and stored data disagree;
-- a governing issuance's exact effectivity for the filing period is unverified;
-- tax registration changes inside a filing period;
-- LTS status is unknown and would change the result;
-- a branch-coded draft exists for a normally consolidated family;
-- old immutable draft references cannot be preserved;
-- complete, non-duplicate return coverage cannot be proven.
+- governing policy effectivity is unresolved;
+- mid-period registration or LTS state would change the result without a
+  controlling rule;
+- historical draft references cannot be preserved;
+- complete, non-duplicate coverage or required Source Attribution cannot be
+  proven.
+
+Migration tests must cover every supported historical schema path through v27,
+not merely a fresh database and the latest schema.
 
 ---
 
-## Rejected designs
+## UI behavior requirements
 
-### Keep one profile per branch and add `parent_profile_id`
+Detailed layout belongs in a separate UX specification. The domain behavior is:
 
-Rejected. It leaves taxpayer-wide revisions duplicated, keeps Forms Sets and
-draft identity attached to the wrong aggregate, and makes every form path
-responsible for remembering whether to climb to a parent. The current failure is
-an ownership failure, not merely a missing parent pointer.
+### Taxpayer-first navigation
 
-### Store a list of branches inside one profile revision
+```text
+ACME CORPORATION                    123-456-789
+  Head office                       00000 · RDO 047
+  Cebu branch                       00001 · RDO 081
+  Davao branch                      00004 · RDO 113
+```
 
-Rejected. Units need independent effective histories, RDO/address facts, tax
-registrations, evidence, closure state, and queryable draft references. A single
-large profile revision would force unrelated branch changes to rewrite the whole
-taxpayer aggregate.
+The selected Registration Unit is a workspace/source filter, not a legal filing
+decision. Opening a head-office-consolidated return must not mutate the global
+selection; the form-local header shows the resolved Filing Unit and coverage.
 
-### Add `is_consolidated` to each form
+### Setup
 
-Rejected. Percentage tax, withholding, periodic DST, excise, transaction forms,
-attachments, historical revisions, and LTS overrides demonstrate that scope is a
-resolved policy, not a static property.
+Separate taxpayer identity, registration units, facilities, tax registrations,
+registration evidence, and taxpayer-year settings. A new Taxpayer displays its
+`00000` head-office candidate as **Pending evidence** until confirmed.
 
-### Let the selected branch decide the filer
+### Add branch
 
-Rejected. Selection is a workspace convenience. It cannot override a mandatory
-head-office filing rule or establish property/site jurisdiction.
+The UI may show:
 
-### Automatically assign `00001`, `00002`, and so on as official codes
+> Suggested: `00001`
+>
+> Confirm the actual code from the branch's BIR registration record. This
+> suggestion is not a BIR assignment.
 
-Rejected. The UI may suggest the lowest unused value, but only reviewed BIR
-registration evidence can confirm the code. Existing taxpayers can have gaps,
-closed branches, migrated numbering, or codes already assigned outside the app.
+The user may enter a different confirmed code or a code with gaps. Collision
+checks run at save/confirmation time. A pending branch cannot produce an invoice
+identity, obligation, or filing draft.
 
-### Silently pad legacy suffixes to five digits
+### Filing scope visibility
 
-Rejected. The current component deliberately preserves legacy values without
-manufacturing zeroes. Any normalization must be backed by exact official/form
-revision evidence and an auditable migration decision.
+Every actionable form view shows:
+
+- masked Taxpayer TIN root;
+- current source-unit workspace/filter;
+- resolved Filing Unit and Branch Code;
+- scope category and exact covered-unit list;
+- policy/evidence explanation;
+- separate editor/fileability status.
+
+Review Required lists ordered repair actions. Switching workspaces with unsaved
+transaction data requires explicit confirmation. Saved drafts always reopen
+their immutable scope, not the current navigation state.
 
 ---
 
-## Dependency-ordered implementation plan
+## Dependency graph and milestones
 
-No later milestone may begin its write path until the preceding milestone's exit
-gate passes.
+```mermaid
+flowchart LR
+    M0["M0 disposition and contract freeze"] --> M1["M1 domain types and lifecycle"]
+    M1 --> M2["M2 registration ledger persistence"]
+    M2 --> M3["M3 read-only migration report"]
+    M0 --> M4["M4 policy framework and vertical slice"]
+    M2 --> M5["M5 Filing Planner"]
+    M4 --> M5
+    M5 --> M6["M6 projection, drafts, source attribution"]
+    M6 --> M7["M7 Forms Set and calendar projection"]
+    M6 --> M8["M8 taxpayer/unit UI"]
+    M3 --> M9["M9 reviewed migration and cutover"]
+    M7 --> M9
+    M8 --> M9
+    M9 --> M10["M10 form-family expansion"]
+    M10 --> M11["M11 release gates"]
+```
 
-The first representative fixture should be one taxpayer with `00000` plus one
-confirmed branch. Use 1701Q to exercise head-office-consolidated scope and 2551Q
-to exercise both consolidated and per-registered-unit outcomes. This fixture may
-test the resolver, calendar, and provenance before the exact 1701Q editor is
-enabled; that editor remains blocked by its unresolved three-versus-five-digit
-artifact mapping.
+Read-only policy research and migration-fixture work may run in parallel. A
+write path cannot bypass its dependency gates.
 
-### Milestone 0 — policy evidence matrix and contract fixtures
-
-Deliver:
-
-- reviewed source register and 51-code filing-policy matrix;
-- verified effectivity intervals or an explicit Review Required result where an
-  issuance's publication/effectivity date is unresolved;
-- adjacent form/attachment inventory;
-- confidence and open-gap classification;
-- executable policy fixtures for the directly supported rule families;
-- an explicit `ReviewRequired` fixture for every unverified family.
-
-Include at minimum:
-
-- income tax and VAT head-office consolidation;
-- percentage-tax and withholding registration-driven alternatives;
-- verified LTS overrides;
-- periodic DST distinction;
-- excise/site, ONETT/property, transfer-tax, and special-form review states;
-- parent-scope inheritance for attachments.
-
-**Exit gate:** every one of the 51 catalog codes has an explicit, sourced policy
-or `ReviewRequired`; no source claim relies only on the supplied ChatGPT text.
-
-### Milestone 1 — identifier and registry domain types
+### Milestone 0 — disposition and contract freeze
 
 Deliver:
 
-- `Tin9`, `BranchCode5`, `TaxpayerId`, and `RegistrationUnitId`;
-- `RegisteredFacilityId` and a distinct, evidence-preserving Facility Code type;
-- head-office and unit-code invariants;
-- provisional/confirmed/legacy-unresolved code states;
-- taxpayer and unit revision types;
-- formatting adapters that compose 14-digit display identifiers without
-  restoring a combined identity anchor.
+- complete table/field/runtime-caller disposition matrix;
+- explicit supersession map for current tax-profile documents and behavior;
+- exact form identity representation inventory for all supported editors;
+- versioned policy schema and evidence-source register shape;
+- representative fixture: one Taxpayer, pending/confirmed `00000`, one confirmed
+  branch, one legacy short suffix, and old generic/exact drafts.
 
-**Exit gate:** pure unit tests cover valid/invalid roots and codes, uniqueness,
-`00000`, suggestion without confirmation, and legacy non-padding.
+**Exit gate:** every persisted stream and reusable field has an owner and
+disposition; no implementation relies on an undefined “taxpayer level,” selected
+branch, or combined-TIN assumption.
 
-### Milestone 2 — registry persistence and evidence
+### Milestone 1 — domain types and lifecycle
 
-Deliver:
+Deliver `Tin9`, `BranchCode5`, opaque IDs, code confirmation, unit status,
+effective intervals, audited correction commands, and Source Attribution types.
 
-- versioned append-only taxpayer/unit tables;
-- registered-facility tables that do not reuse branch-code constraints;
-- effective tax-type registration tables;
-- COR/eCOR/ORUS evidence references and review states;
-- explicit effective LTS registration facts;
-- repository adapters and invariant enforcement.
+**Exit gate:** pure tests cover parsing, formatting, pending versus confirmed,
+`00000`, collisions, lifecycle transitions, corrections, legacy non-padding,
+and suggestion non-authority.
 
-**Exit gate:** persistence tests prove revisions, effective-date lookup, code
-collision prevention, and foreign-key preservation.
+### Milestone 2 — registration ledger and evidence persistence
 
-### Milestone 3 — migration report before mutation
+Deliver append-only ledger records, constraints, evidence metadata/review
+states, protected storage references, optimistic sequence checks, and coherent
+period snapshots.
 
-Deliver:
+**Exit gate:** transactional tests prove atomic taxpayer/`00000` creation,
+revision lookup, concurrency conflicts, evidence binding, code lineage,
+foreign-key preservation, and no cascade loss.
 
-- deterministic read-only legacy profile grouping report;
-- conflict classifications and human-review format;
-- fixtures for one taxpayer with head office and multiple branches;
-- fixtures for duplicate roots, names, classes, suffix lengths, missing head
-  office, and old drafts.
+### Milestone 3 — deterministic migration report
 
-**Exit gate:** report runs twice with identical output and zero database writes.
-No data migration is authorized by this milestone.
+Deliver the zero-write inventory, Migration Decision format, masking/privacy
+rules, schema-version fixtures, and human-review workflow.
 
-### Milestone 4 — filing-policy catalog
+**Exit gate:** two runs against every fixture produce byte-identical reports and
+zero writes. No data migration is authorized yet.
 
-Deliver:
+### Milestone 4 — policy framework and representative families
 
-- effective-dated, evidence-linked policy source;
-- generated Zig representation;
-- build-time 51-code coverage check;
-- normalized code aliases without losing official display codes;
-- separate capability and policy queries.
+Deliver generated, evidence-linked policy records. Every catalog form revision
+has an explicit state; forms without reviewed policy remain Review Required.
 
-**Exit gate:** generator fails on an unclassified code, stale evidence ID,
-overlapping policy interval, or unsupported silent default.
+Implement sourced fixtures first for:
 
-### Milestone 5 — pure filing-scope resolver
+- head-office-consolidated income tax and VAT;
+- percentage-tax consolidated and per-registered-unit outcomes;
+- verified LTS override behavior;
+- at least one parent-artifact inheritance case;
+- explicit transaction/excise Review Required cases.
 
-Deliver:
+**Exit gate:** generator rejects missing codes, stale evidence, overlapping
+intervals, and actionable candidate policies. Identifier work is not blocked by
+unresearched families; form launch is.
 
-- resolver and resolution issue vocabulary;
-- exact filing-unit and coverage output;
-- registration-driven plural obligations;
-- LTS override processing;
-- parent and transaction context paths;
-- coverage-partition checks and resolution hash.
+### Milestone 5 — deep Filing Planner
 
-**Exit gate:** exhaustive matrix tests pass, including mid-period changes,
-missing evidence, duplicate coverage, and special-context failures.
+Deliver the one public planning interface, coherent snapshot assembly, internal
+applicability/scope stages, exact revision output, ordered issues, coverage
+partition checks, and canonical resolution hashing.
 
-### Milestone 6 — draft provenance and launch guard
+**Exit gate:** interface-level tests cover head-office consolidation, per-unit
+plural obligations, LTS overrides, mid-period changes, missing evidence,
+duplicate coverage, special context, and deterministic hashes.
 
-Deliver:
-
-- immutable filing-scope snapshot tables;
-- draft creation from `FilingObligation` only;
-- stale/direct UI action re-resolution;
-- compatibility mapping for old profile-based drafts;
-- reopen/amendment behavior;
-- exact 1701Q five-digit representation research and regression test.
-
-**Exit gate:** no editor route can open a new draft from only a selected
-`ProfileId`; old drafts reopen unchanged; five-digit 1701Q behavior is proven
-against the exact official form/XML artifact or fails closed.
-
-### Milestone 7 — Forms Set and taxpayer calendar projection
+### Milestone 6 — projection, draft provenance, and Source Attribution slice
 
 Deliver:
 
-- obligation-based taxpayer calendar;
-- one consolidated deadline rather than one per branch;
-- per-unit deadlines only when policy resolves them;
-- separation of registrations, optional preferences, and editor capability;
-- reconciliation of catalog/global/calendar code drift.
+- `FilingProjectionContext` and form identity adapters;
+- immutable scope snapshots for generic and exact drafts;
+- draft creation only from a resolved obligation;
+- source-attributed schedule/fact model for the representative slice;
+- legacy draft compatibility;
+- exact 1701Q representation proof or fail-closed route.
 
-**Exit gate:** form launch, calendar cards, and export consume the same resolved
-obligation identity and coverage.
+**Exit gate:** no new editor can open from a bare `ProfileId`; all supported
+vertical-slice artifacts preserve five-digit code losslessly or block; old drafts
+reopen unchanged.
+
+### Milestone 7 — Forms Set and calendar projection
+
+Deliver preference/obligation reconciliation, distinct required/optional/covered
+states, obligation-based taxpayer calendar, separate deadline projection, code
+inventory reconciliation, and derived-cache invalidation.
+
+**Exit gate:** library, launch, calendar, and export consume the same obligation
+identity and coverage while preserving user preference history.
 
 ### Milestone 8 — taxpayer and registration-unit UI
 
-Deliver:
+Deliver taxpayer-first navigation, pending/confirmed evidence flows, branch
+suggestion, source-workspace filters, scope banners, Review Required repair,
+dirty-draft guards, accessibility, and representative desktop/phone states.
 
-- taxpayer-first navigation;
-- separate taxpayer/unit/evidence/tax-registration editors;
-- add-branch suggestion plus evidence confirmation;
-- scope banner and covered-unit detail;
-- Review Required repair flows;
-- dirty-draft switching guards;
-- accessible keyboard, screen-reader, focus, and responsive states.
+Edit Native fragments, regenerate `src/app.native`, rebuild, and relaunch before
+trusting automation screenshots.
 
-Edit Native source fragments, not generated `src/app.native`, then regenerate.
+**Exit gate:** representative flows pass model-contract, keyboard, screen-reader,
+focus, responsive, and interaction tests before broad conversion.
 
-**Exit gate:** representative desktop and phone flows pass visual and interaction
-tests before broad page conversion.
+### Milestone 9 — reviewed migration and cutover
 
-### Milestone 9 — form-family integration in risk order
+Deliver protected backup, approved Migration Decisions, idempotent transactional
+migration, immutable old-to-new mappings, reconciliation, fault injection,
+restore rehearsal, write-freeze UI, and explicit rollback point.
 
-1. **Income tax and VAT:** mandatory head-office-consolidated identity and
-   coverage. This establishes the safest vertical slice.
-2. **Percentage tax and withholding:** effective registration-driven scope and
-   LTS override.
-3. **Annual information returns, certificates, and attachments:** inherit and
-   validate parent/period scope.
-4. **Payment forms:** inherit the underlying assessed/return liability. Never
-   generate a recurring branch Form 0605 annual registration-fee obligation
-   after the fee's 2024 repeal.
-5. **ONETT, capital gains, donor, and estate flows:** dedicated transaction and
-   jurisdiction context.
-6. **Periodic DST:** registration-driven only where exact evidence is complete.
-7. **Excise and specialist site/product forms:** remain Review Required until
-   premises, product, removal, and registration rules are modeled.
+**Exit gate:** every safe record reconciles, every blocked group remains
+untouched and visible, old drafts reopen unchanged, and no post-cutover write can
+be lost through a feature-flag rollback.
 
-**Exit gate per family:** sourced policy fixtures, resolver tests, persistence
-provenance tests, UI scope tests, calendar tests, and exact form mapping tests all
-pass. One family passing does not certify another.
+### Milestone 10 — form-family expansion
 
-### Milestone 10 — reviewed data migration and compatibility cutover
+Integrate independently in risk order:
 
-Deliver:
+1. income tax and VAT;
+2. percentage tax and withholding;
+3. annual information returns, certificates, and attachments;
+4. payment forms inheriting exact liabilities;
+5. ONETT, capital-gains, donor, and estate flows;
+6. periodic DST where exact evidence is complete;
+7. excise/site/product forms after premises and product models exist.
 
-- approved mapping decisions from the dry-run report;
-- idempotent migration on disposable database copies;
-- old-to-new ID mappings;
-- unchanged historical drafts;
-- rollback rehearsal and migration audit report;
-- feature-flagged cutover.
+Each family needs sourced policy fixtures, planner tests, projection/artifact
+tests, draft provenance, Source Attribution where applicable, calendar behavior,
+and UI scope tests. One family passing does not certify another.
 
-**Exit gate:** every migrated record reconciles, every blocked group remains
-untouched and visible for review, and no draft or filing identity is silently
-rewritten.
+### Milestone 11 — fileability and release separation
 
-### Milestone 11 — fileability and release gates
+Keep independent gates for editor/computation completeness, exact form/PDF/XML
+representation, validation/attachments, submission authorization/transport,
+payment/status/retry, and signed distribution/production operations.
 
-This architecture can make identity and scope safer, but it does not by itself
-make a form fileable or the app production-ready.
-
-Keep separate gates for:
-
-- editor/computation completeness;
-- official PDF/XML/schema parity;
-- validation and attachment completeness;
-- submission authorization and transport;
-- payment/status/retry behavior;
-- signed distribution and production operations.
-
-**Exit gate:** only the exact form revisions that pass all applicable gates may
-be called fileable. The repository-wide README warning remains until the whole
-product claim is independently justified.
+**Exit gate:** only exact form revisions that pass all applicable gates may be
+called fileable. Identity and scope correctness alone never proves release
+readiness.
 
 ---
 
 ## Acceptance test matrix
 
-### Identity and unit registration
+### Identity and registration
 
-- Creating a taxpayer accepts a nine-digit TIN root and creates one `00000` unit.
-- A second effective `00000` unit is rejected.
-- Add branch suggests the lowest unused code but labels it provisional.
-- A confirmed code must cite reviewed registration evidence.
-- A gap such as `00001` then `00004` is accepted when evidence supports it.
-- A duplicate effective code is rejected.
-- A legacy 3- or 4-digit suffix remains unresolved and cannot file.
-- A Facility Code remains distinct and cannot satisfy a branch-code requirement
-  by accident.
-- A different legal person with another TIN is never added as a branch.
-- Two registration units of one natural person cannot satisfy a filer/spouse
-  distinct-person rule.
+- Creating a Taxpayer atomically creates one pending `00000` unit.
+- Pending `00000` cannot identify a Filing Unit.
+- Evidence confirmation activates `00000` without changing Taxpayer identity.
+- A second effective head office is rejected.
+- Add branch suggests but does not reserve or confirm a code.
+- Evidence-backed gaps such as `00001` then `00004` are accepted.
+- Duplicate effective code is rejected transactionally.
+- Closure preserves history and does not recycle code automatically.
+- A legacy short suffix cannot file.
+- Facility Code cannot satisfy Branch Code requirements.
+- Two units of one natural person cannot satisfy filer/spouse distinctness.
+- TIN correction, Branch Code correction, RDO transfer, and closure produce
+  different audit events.
 
-### Filing scope
+### Planning and policy
 
-- Three-unit income-tax taxpayer resolves one `00000` obligation with exact
-  three-unit coverage.
-- Three-unit VAT taxpayer resolves one `00000` obligation.
-- Head-office-only percentage-tax registration resolves one consolidated 2551Q.
-- Separate percentage-tax registrations resolve the exact per-unit 2551Q set.
-- Verified LTS status produces the sourced mandatory consolidation override.
-- Withholding monthly, quarterly, annual, certificate, and alphalist scopes stay
-  consistent.
-- Periodic DST follows its verified registration policy; excise without site
-  context returns Review Required.
-- A real-property or instrument form never inherits the selected branch without
-  transaction context.
-- A change in permitted filing/payment venue does not change filing unit or
-  return coverage.
-- An attachment exactly inherits its parent return's coverage.
-- A mid-period registration change returns Review Required unless an explicit
-  effective policy models the split.
-- No source unit occurs in two obligations for the same tax family and period.
+- Three-unit income-tax/VAT cases resolve one confirmed `00000` obligation with
+  exact coverage.
+- Percentage tax resolves consolidated or exact per-unit obligations from
+  registrations and policy.
+- Verified LTS status applies only a sourced override.
+- Mid-period changes fail closed unless policy defines the outcome.
+- Transaction/property forms never inherit selected workspace without context.
+- Filing venue changes do not alter Filing Unit or coverage.
+- Supporting artifacts exactly inherit parent scope.
+- No Source Unit occurs in overlapping obligations for the same family/period.
+- Unknown policy always returns Review Required, never a fallback obligation.
+- Resolution hash is deterministic and changes when any governing revision
+  changes.
 
-### Drafts
+### Forms Set and UI
 
+- Inactive preference cannot hide a resolved required obligation.
+- Active preference cannot make a not-applicable form actionable.
+- Required, optional, covered, unsupported, historical, and Review Required are
+  visibly distinct.
+- Opening a consolidated form does not change global source-workspace selection.
+- Scope header shows Filing Unit and exact coverage.
+- Review Required exposes precise repair actions.
+
+### Projection and drafts
+
+- Every supported editor has an identity representation fixture.
 - Draft creation without a resolved obligation fails.
-- Draft identity contains filing unit, coverage, registrations, policy, and
-  evidence.
-- Reopening after a branch closes retains the saved historical scope.
-- Amendment creates a new resolution and preserves its predecessor.
-- Direct/stale UI actions rerun the resolver.
-- Exact 1701Q does not discard or truncate a five-digit branch code.
-
-### Calendar and UI
-
-- Consolidated forms create one taxpayer-calendar card, not one per unit.
-- Per-unit forms display distinct filing units without overlapping coverage.
-- A branch workspace labels consolidated forms as covered by head office.
-- Scope, filing unit, current source unit, and coverage remain visible in the
-  editor header.
-- Review Required explains the precise missing evidence and blocks launch.
-- Dirty draft switching is guarded.
-- All 51 catalog codes and all domain calendar codes have explicit capability
-  and policy disposition.
+- Draft copies exact taxpayer/unit/coverage/registration/policy/evidence
+  revisions without re-query.
+- Reopening after closure retains saved scope.
+- Amendment creates a new plan and links its predecessor.
+- Legacy unknown coverage/source attribution remains explicit.
+- Exact 1701Q never truncates a confirmed five-digit code.
 
 ### Migration
 
-- A fixture with old `...00000`, `...00001`, and `...00004` profiles maps to one
-  taxpayer and three units only after review.
-- Conflicting names or legal-person classes do not merge.
-- RDO/address differences map to unit revisions rather than taxpayer conflicts.
-- Legacy suffixes do not pad silently.
-- Old Forms Sets are not promoted to tax registrations.
-- Old drafts remain immutable and are marked `legacy_unknown` where coverage was
-  not recorded.
-- Dry-run and migration output are deterministic and idempotent.
+- Existing profile streams all receive a disposition.
+- A safe `00000`/`00001`/`00004` fixture maps one Taxpayer and three units.
+- Conflicting taxpayer-wide facts block merge.
+- Unit-specific RDO/address differences do not create taxpayer conflicts.
+- Taxpayer-year, Tax Form Profile, relationship, Forms Set, generic draft, and
+  exact draft histories remain referentially complete.
+- Old checkboxes never become Tax-Type Registrations.
+- Reports are deterministic, migrations idempotent, and crash checkpoints
+  atomic.
+- Rollback is tested before post-cutover writes; restore behavior after that
+  point is explicit.
+
+---
+
+## Rejected designs
+
+### One profile per branch plus `parent_profile_id`
+
+Rejected because taxpayer-wide facts and role identity remain duplicated and
+every caller must remember when to climb to a parent.
+
+### Branch list inside one taxpayer revision
+
+Rejected because units need independent histories, evidence, registrations,
+closure state, and draft references.
+
+### Static `is_consolidated` flag
+
+Rejected because scope depends on form revision, period, registrations, LTS,
+and special context.
+
+### Selected branch chooses Filing Unit
+
+Rejected because workspace selection cannot override policy.
+
+### App assigns sequential Branch Codes
+
+Rejected. The UI may suggest; BIR evidence confirms.
+
+### Silently pad legacy suffixes
+
+Rejected because padding manufactures identity.
+
+### Dual-write old and new identity models
+
+Rejected for this local SQLite application. Use a write-frozen, protected,
+transactional cutover with an explicit rollback point.
+
+### Persist resolved obligations as source truth
+
+Rejected. Obligations are derived from ledger, policy, period, and context.
+Only immutable draft snapshots become historical truth; other persisted results
+are invalidatable caches.
+
+### One cross-repository implementation plan
+
+Rejected. The guide and vocabulary are shareable; schema, module, migration, UI,
+and verification plans must be repository-specific.
 
 ---
 
 ## Verification commands for future implementation
 
-Run from the implementation worktree after editing source files:
+Run from the isolated implementation worktree after editing source files:
 
 ```sh
 rtk npm run generate
@@ -1073,33 +1160,39 @@ rtk just build
 rtk git diff --check
 ```
 
-For UI changes, rebuild and relaunch before trusting automation or screenshots.
-Inspect both desktop and phone representative states. Generated files must match
-their source fragments, and the final diff must not contain direct edits that
-the generator overwrites.
+Add dedicated commands for the schema-disposition report, read-only migration
+report, policy coverage generator, migration fault tests, and obligation-plan
+fixture suite before their milestones can pass.
 
-For migration work, add and run a read-only report against a disposable copy
-before any mutating command. Never test a migration against the user's only
-profile database.
+For UI changes, rebuild and relaunch before trusting screenshots. Inspect both
+desktop and phone representative states. Generated files must match source
+fragments; do not edit `src/app.native` directly.
+
+For migration work, use a protected disposable database copy created through
+the repository's storage policy. Never test against the user's only profile
+database, copy evidence into an unprotected temporary directory, or claim a
+feature flag is a complete rollback.
 
 ---
 
-## Definition of done for this initiative
+## Definition of done
 
 This initiative is complete only when:
 
-- the nine-digit taxpayer identity and five-digit registration-unit code are
-  separate in domain and persistence;
-- every current form code has an effective, evidence-linked scope policy or
-  explicit Review Required state;
-- all draft and calendar creation uses one resolver;
-- return coverage is immutable and auditable;
-- branch suggestions cannot masquerade as BIR-assigned codes;
-- legacy data is migrated only through reviewed, reversible decisions;
-- the exact 1701Q three-versus-five-digit conflict is resolved from official
-  artifact evidence;
-- all acceptance and repository verification gates pass;
+- `Tin9` and `BranchCode5` are separate in domain and persistence;
+- pending versus confirmed unit identity cannot be confused;
+- every persisted legacy stream has a reviewed disposition;
+- every actionable form revision has an evidence-linked policy;
+- all launch, calendar, library, and draft creation use one Filing Planner;
+- resolved obligations carry exact revision bindings and reproducible hashes;
+- form projections compose Taxpayer and Filing Unit facts losslessly;
+- required Source Attribution is explicit and non-overlapping;
+- Forms Set preferences cannot manufacture or hide legal obligations;
+- migration is reviewed, idempotent, transactional, and recoverable at its
+  documented rollback point;
+- exact form representation and all acceptance gates pass;
 - fileability and production-readiness claims remain separately gated.
 
-Until then, the safe product behavior is to block ambiguous filing scope rather
-than select the active branch or assume consolidation.
+Until then, safe behavior is to block ambiguous filing scope. The application
+must never use the currently selected branch, a suggested code, an enabled form,
+or a legacy combined TIN as a substitute for a Resolved Filing Plan.
