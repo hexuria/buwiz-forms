@@ -3613,6 +3613,52 @@ MEASURED_REFEREE_KEYS = {
     "measured_span_pt", "unmeasured_span_pt", "topology_coverage_pt",
     "ignored_slabs", "chosen_topology", "topology_superset_relations",
 }
+# The referee's third measured-source shape: the fail-closed partial-anchor
+# certificate (comb_referee.ACTIVE_PARTIAL_ANCHOR_CRITERION).  It deliberately
+# omits subject_gap_proofs/unproven_subject_gaps — those proofs are only
+# computed on the full-anchor path, and publishing empty lists here would
+# assert "no unproven gaps" for a test that never ran — and instead carries
+# the erased-anchor inventory plus the erasure certificate the gate
+# independently re-derives in _partial_anchor_referee_certificate_errors.
+PARTIAL_ANCHOR_REFEREE_KEYS = (
+    MEASURED_REFEREE_KEYS - {"subject_gap_proofs", "unproven_subject_gaps"}
+) | {"missing_anchor_x", "active_partial_anchor_certificate"}
+PARTIAL_ANCHOR_CRITERION = (
+    "active-full-band-partial-anchor-source-topology-v1"
+)
+PARTIAL_ANCHOR_CERTIFICATE_KEYS = {
+    "criterion", "valid", "ledger_state", "subject_ownership_basis",
+    "independent_source_enclosure_proven", "divider_count_basis",
+    "missing_anchor_basis", "anchor_corridor_clipped_paint_elements",
+    "anchor_corridor_unsupported_region_elements", "open_y0", "open_y1",
+    "coverage_pt", "source_divider_x", "observed_anchor_x",
+    "missing_anchor_x", "missing_anchor_proofs",
+}
+PARTIAL_ANCHOR_PROOF_KEYS = {
+    "layout_x", "corridor_x0", "corridor_x1", "proof_x0", "proof_x1",
+    "open_y0", "open_y1", "raw_anchor_rails", "raw_rail_identity_valid",
+    "proof_top_role_ambiguities", "erasure_slabs", "erasure_owner_roles",
+    "clipped_paint_elements", "final_target_tone_segments",
+    "unsupported_region_elements",
+}
+PARTIAL_ANCHOR_RAIL_KEYS = {
+    "element", "order", "kind", "x0", "x1", "center_x", "delta_pt",
+    "y0", "y1", "tone", "clipped",
+}
+PARTIAL_ANCHOR_SLAB_KEYS = {
+    "y0", "y1", "sample_y", "raw_rail_elements", "raw_intervals",
+    "final_owner_segments", "ambiguous_top_roles",
+}
+PARTIAL_ANCHOR_SEGMENT_KEYS = {
+    "x0", "x1", "element", "order", "kind", "tone", "clipped",
+}
+PARTIAL_ANCHOR_ROLE_KEYS = {"element", "order", "kind", "tone"}
+PARTIAL_ANCHOR_OWNERSHIP_BASIS = "active_unresolved lattice ledger"
+PARTIAL_ANCHOR_COUNT_BASIS = "final-composited Poppler vector topology"
+PARTIAL_ANCHOR_MISSING_BASIS = (
+    "raw target-tone rail exhaustively replaced by one supported "
+    "unclipped non-target final owner"
+)
 LEDGER_STATES = {
     "active_resolved", "active_unresolved", "retained_unresolved",
 }
@@ -4611,12 +4657,17 @@ FORM_SOURCE_KEYS = {"file", "sha256", "bytes", "page_count", "layout_pin"}
 HTML_GEOMETRY_EPSILON_PT = 0.0002
 REFEREE_POSITION_TOLERANCE_PT = 0.25
 REFEREE_ROUNDING_EPSILON_PT = 0.00001
+REFEREE_PARTIAL_ANCHOR_REASON = (
+    "ledger-owned active subject has full-band Poppler proof of erased "
+    "lattice anchors"
+)
 REFEREE_MEASURED_REASONS = {
     "one source topology contains every recognised anchor",
     (
         "one richer source topology contains every other slab and "
         "occupies a strict majority of the comb band"
     ),
+    REFEREE_PARTIAL_ANCHOR_REASON,
 }
 
 
@@ -4662,6 +4713,8 @@ def _measured_referee_certificate_errors(
     cell_id = cell.get("cell")
     label = f"{slug}/{cell_id}"
     errors: list[str] = []
+    if set(referee) == PARTIAL_ANCHOR_REFEREE_KEYS:
+        return _partial_anchor_referee_certificate_errors(slug, cell, referee)
     if set(referee) != MEASURED_REFEREE_KEYS:
         return [f"measured source certificate schema is unsupported: {label}"]
     reason = referee.get("reason")
@@ -4956,6 +5009,451 @@ def _measured_referee_certificate_errors(
             if "source_divider_x" in slab and not _finite_number_list(
                     slab["source_divider_x"]):
                 errors.append(f"ignored source topology is malformed: {label}")
+    return errors
+
+
+def _partial_anchor_referee_certificate_errors(
+        slug: str, cell: dict[str, Any], referee: dict[str, Any],
+        ) -> list[str]:
+    """Independently re-derive the partial-anchor acceptance proof.
+
+    The referee's third measured-source shape claims a lattice anchor is
+    ABSENT from the paper: the raw target-tone rail Poppler exposes at the
+    anchor is exhaustively erased by one supported, unclipped, non-target
+    final owner across the whole open band.  The gate must PROVE that claim
+    from the published SVG-derived evidence rather than accept the
+    certificate's own ``valid`` flag; every relation below is recomputed and
+    any gap fails closed.  ``anchors_complete: false`` and
+    ``positions_match: false`` are accepted for this kind ONLY — a declared
+    anchor with no source position cannot match, and the referee holds both
+    False deliberately.
+    """
+    cell_id = cell.get("cell")
+    label = f"{slug}/{cell_id}"
+    errors: list[str] = []
+    epsilon = REFEREE_ROUNDING_EPSILON_PT
+    if referee.get("reason") != REFEREE_PARTIAL_ANCHOR_REASON:
+        errors.append(f"partial-anchor source reason is not derived: {label}")
+    if cell.get("ledger_state") != "active_unresolved":
+        errors.append(
+            f"partial-anchor subject is not ledger-owned active: {label}")
+
+    lattice = cell.get("lattice_divider_x")
+    source = referee.get("source_divider_x")
+    extras = referee.get("extra_divider_x")
+    chosen = referee.get("chosen_topology")
+    missing = referee.get("missing_anchor_x")
+    compartments = referee.get("compartments")
+    if (not _finite_number_list(lattice)
+            or not _finite_number_list(source)
+            or not _finite_number_list(extras)
+            or not _finite_number_list(chosen)
+            or not _finite_number_list(missing)
+            or not _is_count(compartments)
+            or compartments < 2):
+        return [*errors,
+                f"partial-anchor source topology is malformed: {label}"]
+    lattice_values = [_rounded_six(value) for value in lattice]
+    source_values = [_rounded_six(value) for value in source]
+    chosen_values = [_rounded_six(value) for value in chosen]
+    missing_values = [_rounded_six(value) for value in missing]
+    if (any(float(value) != rounded for value, rounded in zip(
+                source, source_values))
+            or any(float(value) != rounded for value, rounded in zip(
+                chosen, chosen_values))
+            or any(float(value) != rounded for value, rounded in zip(
+                missing, missing_values))):
+        errors.append(
+            f"partial-anchor coordinates exceed fixed precision: {label}")
+    if (source_values != sorted(set(source_values))
+            or chosen_values != source_values
+            or compartments != len(source_values) + 1):
+        errors.append(
+            f"partial-anchor source topology relation is false: {label}")
+    if list(extras):
+        # The partial path maps every interior source group one-to-one to a
+        # declared anchor; an undeclared extra divider has no place here.
+        errors.append(
+            f"partial-anchor topology carries an extra divider: {label}")
+    if not missing_values or missing_values != sorted(set(missing_values)):
+        errors.append(
+            f"partial-anchor missing-anchor inventory is invalid: {label}")
+    bbox = cell.get("bbox")
+    if (_finite_number_list(bbox, length=4)
+            and any(not (float(bbox[0]) < value < float(bbox[2]))
+                    for value in source_values)):
+        errors.append(
+            f"partial-anchor source divider lies outside its owner: {label}")
+
+    anchor_matches = referee.get("anchor_matches")
+    matched_layout: list[float] = []
+    matched_sources: list[float] = []
+    if (not isinstance(anchor_matches, list)
+            or len(anchor_matches) + len(missing_values)
+            != len(lattice_values)):
+        return [*errors,
+                f"partial-anchor anchor inventory is incomplete: {label}"]
+    for match in anchor_matches:
+        if (not isinstance(match, dict)
+                or set(match) != {"layout_x", "source_x", "delta_pt"}
+                or not all(_finite_number(match.get(key)) for key in (
+                    "layout_x", "source_x", "delta_pt"))):
+            return [*errors,
+                    f"partial-anchor anchor evidence is malformed: {label}"]
+        layout_x = _rounded_six(match["layout_x"])
+        source_x = _rounded_six(match["source_x"])
+        delta = _rounded_six(match["delta_pt"])
+        if (float(match["layout_x"]) != layout_x
+                or float(match["source_x"]) != source_x
+                or float(match["delta_pt"]) != delta
+                or delta != _rounded_six(source_x - layout_x)
+                or abs(delta) > REFEREE_POSITION_TOLERANCE_PT):
+            errors.append(
+                f"partial-anchor anchor relation is false: {label}")
+        matched_layout.append(layout_x)
+        matched_sources.append(source_x)
+    observed_layout = sorted(matched_layout)
+    if (len(set(matched_layout)) != len(matched_layout)
+            or sorted({*matched_layout, *missing_values})
+            != lattice_values
+            or set(matched_layout) & set(missing_values)):
+        errors.append(
+            f"partial-anchor inventory does not partition the lattice: "
+            f"{label}")
+    if (len(set(matched_sources)) != len(matched_sources)
+            or sorted(matched_sources) != source_values):
+        errors.append(
+            f"partial-anchor source divider inventory is false: {label}")
+    if referee.get("anchors_complete") is not False:
+        errors.append(
+            f"partial-anchor completeness flag is not honest: {label}")
+    if referee.get("positions_match") is not False:
+        errors.append(
+            f"partial-anchor position verdict is not honest: {label}")
+
+    components = referee.get("components")
+    component_x: list[float] = []
+    component_tones: list[float] = []
+    if not isinstance(components, list) or not components:
+        errors.append(f"partial-anchor source components are missing: {label}")
+    else:
+        for component in components:
+            if (not isinstance(component, dict)
+                    or set(component) != {
+                        "x", "x0", "x1", "tone", "elements", "clipped"}
+                    or not all(_finite_number(component.get(key)) for key in (
+                        "x", "x0", "x1", "tone"))
+                    or not isinstance(component.get("elements"), list)
+                    or not component["elements"]
+                    or not all(isinstance(item, str) and item
+                               for item in component["elements"])
+                    or len(component["elements"])
+                    != len(set(component["elements"]))
+                    or component.get("clipped") is not False):
+                errors.append(
+                    f"partial-anchor source component is malformed: {label}")
+                continue
+            x = _rounded_six(component["x"])
+            x0 = _rounded_six(component["x0"])
+            x1 = _rounded_six(component["x1"])
+            tone = float(component["tone"])
+            if (x0 >= x1 or x != _rounded_six((x0 + x1) / 2)
+                    or not 0.0 <= tone <= 1.0):
+                errors.append(
+                    f"partial-anchor source component relation is false: "
+                    f"{label}")
+            component_x.append(x)
+            component_tones.append(tone)
+        if component_x != sorted(component_x):
+            errors.append(
+                f"partial-anchor source components are not ordered: {label}")
+        if (any(not any(abs(component - divider)
+                        <= REFEREE_POSITION_TOLERANCE_PT
+                        for divider in source_values)
+                for component in component_x)
+                or any(not any(abs(component - divider)
+                               <= REFEREE_POSITION_TOLERANCE_PT
+                               for component in component_x)
+                       for divider in source_values)):
+            errors.append(
+                f"partial-anchor components do not bind the topology: {label}")
+    if component_tones and any(
+            abs(tone - component_tones[0]) > 1e-8
+            for tone in component_tones):
+        errors.append(
+            f"partial-anchor divider tone is not singular: {label}")
+    divider_tone = component_tones[0] if component_tones else None
+
+    vertical_names = (
+        "y0", "y1", "contract_y0", "contract_y1", "open_y0", "open_y1",
+        "contract_span_pt", "seed_span_pt", "measured_span_pt",
+        "unmeasured_span_pt",
+    )
+    if not all(_finite_number(referee.get(name)) for name in vertical_names):
+        return [*errors,
+                f"partial-anchor span evidence is malformed: {label}"]
+    y0, y1, contract_y0, contract_y1, open_y0, open_y1 = (
+        float(referee[name]) for name in vertical_names[:6])
+    contract_span = float(referee["contract_span_pt"])
+    seed_span = float(referee["seed_span_pt"])
+    measured_span = float(referee["measured_span_pt"])
+    unmeasured_span = float(referee["unmeasured_span_pt"])
+    if (not contract_y0 <= open_y0 < open_y1 <= contract_y1
+            or not open_y0 <= y0 < y1 <= open_y1
+            or y1 - y0 <= REFEREE_POSITION_TOLERANCE_PT
+            or _rounded_six(contract_span)
+            != _rounded_six(contract_y1 - contract_y0)
+            or _rounded_six(seed_span) != _rounded_six(open_y1 - open_y0)
+            or measured_span <= 0
+            or measured_span > seed_span + epsilon
+            or _rounded_six(unmeasured_span)
+            != _rounded_six(max(0.0, seed_span - measured_span))):
+        errors.append(
+            f"partial-anchor span relation is false: {label}")
+    # The absence proof is only exhaustive over the COMPLETE open band:
+    # every slab measured, one topology, nothing ignored.
+    if (abs(measured_span - seed_span) > epsilon
+            or unmeasured_span > epsilon):
+        errors.append(
+            f"partial-anchor coverage is not the full band: {label}")
+    if referee.get("ignored_slabs") != []:
+        errors.append(
+            f"partial-anchor band has ignored slabs: {label}")
+    if referee.get("topology_superset_relations") != []:
+        errors.append(
+            f"partial-anchor topology relations are not singular: {label}")
+
+    coverage = referee.get("topology_coverage_pt")
+    chosen_key = _referee_topology_key(source_values)
+    if (not isinstance(coverage, dict)
+            or set(coverage) != {chosen_key}
+            or not _finite_number(coverage.get(chosen_key))
+            or abs(float(coverage[chosen_key]) - measured_span) > epsilon):
+        errors.append(
+            f"partial-anchor topology coverage is not singular: {label}")
+
+    certificate = referee.get("active_partial_anchor_certificate")
+    if (not isinstance(certificate, dict)
+            or set(certificate) != PARTIAL_ANCHOR_CERTIFICATE_KEYS):
+        return [*errors,
+                f"partial-anchor certificate schema is unsupported: {label}"]
+    fixed_relations = {
+        "criterion": PARTIAL_ANCHOR_CRITERION,
+        "valid": True,
+        "ledger_state": "active_unresolved",
+        "subject_ownership_basis": PARTIAL_ANCHOR_OWNERSHIP_BASIS,
+        "independent_source_enclosure_proven": False,
+        "divider_count_basis": PARTIAL_ANCHOR_COUNT_BASIS,
+        "missing_anchor_basis": PARTIAL_ANCHOR_MISSING_BASIS,
+        "anchor_corridor_clipped_paint_elements": [],
+        "anchor_corridor_unsupported_region_elements": [],
+        "open_y0": referee["open_y0"],
+        "open_y1": referee["open_y1"],
+        "coverage_pt": referee["measured_span_pt"],
+        "source_divider_x": source_values,
+        "observed_anchor_x": observed_layout,
+        "missing_anchor_x": missing_values,
+    }
+    for key, expected in fixed_relations.items():
+        if certificate.get(key) != expected:
+            errors.append(
+                f"partial-anchor certificate relation is false: "
+                f"{label}/{key}")
+
+    proofs = certificate.get("missing_anchor_proofs")
+    if (not isinstance(proofs, list)
+            or len(proofs) != len(missing_values)):
+        return [*errors,
+                f"partial-anchor erasure proofs are incomplete: {label}"]
+    for anchor, proof in zip(missing_values, proofs):
+        if not isinstance(proof, dict) or set(proof) != PARTIAL_ANCHOR_PROOF_KEYS:
+            errors.append(
+                f"partial-anchor erasure proof is malformed: {label}")
+            continue
+        if (proof.get("layout_x") != anchor
+                or proof.get("open_y0") != referee["open_y0"]
+                or proof.get("open_y1") != referee["open_y1"]
+                or proof.get("raw_rail_identity_valid") is not True
+                or proof.get("proof_top_role_ambiguities") != []
+                or proof.get("clipped_paint_elements") != []
+                or proof.get("final_target_tone_segments") != []
+                or proof.get("unsupported_region_elements") != []):
+            errors.append(
+                f"partial-anchor erasure proof relation is false: {label}")
+        if (not _finite_number(proof.get("corridor_x0"))
+                or not _finite_number(proof.get("corridor_x1"))
+                or not _finite_number(proof.get("proof_x0"))
+                or not _finite_number(proof.get("proof_x1"))
+                or abs(float(proof["corridor_x0"])
+                       - (anchor - REFEREE_POSITION_TOLERANCE_PT)) > epsilon
+                or abs(float(proof["corridor_x1"])
+                       - (anchor + REFEREE_POSITION_TOLERANCE_PT)) > epsilon):
+            errors.append(
+                f"partial-anchor corridor geometry is false: {label}")
+            continue
+        rails = proof.get("raw_anchor_rails")
+        if not isinstance(rails, list) or len(rails) != 1:
+            # The absence proof requires exactly one raw rail whose identity
+            # at the anchor is unambiguous.
+            errors.append(
+                f"partial-anchor raw rail is not singular: {label}")
+            continue
+        rail = rails[0]
+        if (not isinstance(rail, dict)
+                or set(rail) != PARTIAL_ANCHOR_RAIL_KEYS
+                or not all(_finite_number(rail.get(key)) for key in (
+                    "x0", "x1", "center_x", "delta_pt", "y0", "y1", "tone"))
+                or not isinstance(rail.get("element"), str)
+                or not rail["element"]
+                or not isinstance(rail.get("kind"), str) or not rail["kind"]
+                or not _is_count(rail.get("order"))):
+            errors.append(
+                f"partial-anchor raw rail is malformed: {label}")
+            continue
+        rail_x0 = float(rail["x0"])
+        rail_x1 = float(rail["x1"])
+        rail_tone = float(rail["tone"])
+        if (rail_x0 >= rail_x1
+                or abs(float(rail["center_x"]) - (rail_x0 + rail_x1) / 2)
+                > epsilon
+                or abs(float(rail["delta_pt"])
+                       - (float(rail["center_x"]) - anchor)) > epsilon
+                or abs(float(rail["center_x"]) - anchor)
+                > REFEREE_POSITION_TOLERANCE_PT
+                or rail.get("clipped") is not False
+                or not 0.0 <= rail_tone <= 1.0
+                or (divider_tone is not None
+                    and abs(rail_tone - divider_tone) > 1e-8)):
+            # The erased rail must sit at the missing anchor, unclipped, in
+            # the same target tone as the observed dividers.
+            errors.append(
+                f"partial-anchor raw rail relation is false: {label}")
+        if (float(rail["y0"]) > open_y0 + epsilon
+                or float(rail["y1"]) < open_y1 - epsilon):
+            errors.append(
+                f"partial-anchor raw rail does not span the open band: "
+                f"{label}")
+        if (abs(float(proof["proof_x0"])
+                - min(float(proof["corridor_x0"]), rail_x0)) > epsilon
+                or abs(float(proof["proof_x1"])
+                       - max(float(proof["corridor_x1"]), rail_x1))
+                > epsilon):
+            errors.append(
+                f"partial-anchor proof window is false: {label}")
+
+        slabs = proof.get("erasure_slabs")
+        if not isinstance(slabs, list) or not slabs:
+            errors.append(
+                f"partial-anchor erasure slabs are missing: {label}")
+            continue
+        owner_roles: set[tuple[str, int, str, float]] = set()
+        slabs_valid = True
+        previous_y1 = open_y0
+        for index, slab in enumerate(slabs):
+            if (not isinstance(slab, dict)
+                    or set(slab) != PARTIAL_ANCHOR_SLAB_KEYS
+                    or not _finite_number(slab.get("y0"))
+                    or not _finite_number(slab.get("y1"))
+                    or not _finite_number(slab.get("sample_y"))):
+                errors.append(
+                    f"partial-anchor erasure slab is malformed: {label}")
+                slabs_valid = False
+                continue
+            slab_y0 = float(slab["y0"])
+            slab_y1 = float(slab["y1"])
+            if (slab_y0 >= slab_y1
+                    or abs(slab_y0 - previous_y1) > epsilon
+                    or (index == len(slabs) - 1
+                        and abs(slab_y1 - open_y1) > epsilon)
+                    or abs(float(slab["sample_y"])
+                           - (slab_y0 + slab_y1) / 2) > epsilon):
+                # The slabs must tile the complete open band in order; a gap
+                # would leave a stretch of the rail with no erasure evidence.
+                errors.append(
+                    f"partial-anchor erasure slabs do not tile the band: "
+                    f"{label}")
+                slabs_valid = False
+            previous_y1 = slab_y1
+            if (slab.get("raw_rail_elements") != [rail["element"]]
+                    or slab.get("ambiguous_top_roles") != []):
+                errors.append(
+                    f"partial-anchor erasure slab evidence is false: {label}")
+                slabs_valid = False
+            intervals = slab.get("raw_intervals")
+            if (not isinstance(intervals, list) or len(intervals) != 1
+                    or not _finite_number_list(intervals[0], length=2)
+                    or abs(float(intervals[0][0]) - rail_x0) > epsilon
+                    or abs(float(intervals[0][1]) - rail_x1) > epsilon):
+                errors.append(
+                    f"partial-anchor raw interval is not the rail: {label}")
+                slabs_valid = False
+                continue
+            segments = slab.get("final_owner_segments")
+            if not isinstance(segments, list) or not segments:
+                errors.append(
+                    f"partial-anchor final owners are missing: {label}")
+                slabs_valid = False
+                continue
+            previous_x1 = rail_x0
+            slab_roles: set[tuple[str, int, str, float]] = set()
+            for position, segment in enumerate(segments):
+                if (not isinstance(segment, dict)
+                        or set(segment) != PARTIAL_ANCHOR_SEGMENT_KEYS
+                        or not _finite_number(segment.get("x0"))
+                        or not _finite_number(segment.get("x1"))
+                        or not _finite_number(segment.get("tone"))
+                        or not isinstance(segment.get("element"), str)
+                        or not segment["element"]
+                        or not isinstance(segment.get("kind"), str)
+                        or not segment["kind"]
+                        or not _is_count(segment.get("order"))):
+                    errors.append(
+                        f"partial-anchor final owner is malformed: {label}")
+                    slabs_valid = False
+                    continue
+                segment_x0 = float(segment["x0"])
+                segment_x1 = float(segment["x1"])
+                if (segment_x0 >= segment_x1
+                        or abs(segment_x0 - previous_x1) > epsilon
+                        or (position == len(segments) - 1
+                            and abs(segment_x1 - rail_x1) > epsilon)):
+                    # The final owners must tile the raw rail exhaustively;
+                    # an uncovered sliver means the rail reaches paper.
+                    errors.append(
+                        f"partial-anchor erasure does not cover the rail: "
+                        f"{label}")
+                    slabs_valid = False
+                previous_x1 = segment_x1
+                if (segment.get("clipped") is not False
+                        or abs(float(segment["tone"]) - rail_tone) <= 1e-8
+                        or int(segment["order"]) <= int(rail["order"])):
+                    # A clipped, target-tone, or underpainted owner does not
+                    # erase the rail.
+                    errors.append(
+                        f"partial-anchor final owner does not erase the "
+                        f"rail: {label}")
+                    slabs_valid = False
+                slab_roles.add((
+                    segment["element"], int(segment["order"]),
+                    segment["kind"], float(segment["tone"])))
+            if len(slab_roles) != 1:
+                errors.append(
+                    f"partial-anchor final owner is not singular: {label}")
+                slabs_valid = False
+            owner_roles.update(slab_roles)
+        if slabs_valid and len(owner_roles) != 1:
+            errors.append(
+                f"partial-anchor final owner is not singular: {label}")
+        expected_roles = [
+            {
+                "element": role[0], "order": role[1],
+                "kind": role[2], "tone": role[3],
+            }
+            for role in sorted(owner_roles)
+        ]
+        if slabs_valid and proof.get("erasure_owner_roles") != expected_roles:
+            errors.append(
+                f"partial-anchor owner roles are not derived: {label}")
     return errors
 
 
@@ -10781,6 +11279,276 @@ def self_test() -> int:
             forged_subset_relations):
         failures.append(
             "forged topology-superset evidence must still fail closed")
+
+    # The referee's third measured-source shape: the fail-closed
+    # partial-anchor certificate.  An active_unresolved subject proves a
+    # lattice anchor ABSENT because Poppler shows the raw rail exhaustively
+    # erased by one supported, unclipped, non-target final owner across the
+    # whole open band.  The gate re-derives that proof; it never accepts the
+    # certificate's own valid flag.
+    partial_anchor_cell = clone(report["forms"][0]["cells"][0])
+    partial_anchor_cell.update({
+        "ledger_state": "active_unresolved",
+        "latticed": 3,
+        "lattice_divider_x": [3.0, 7.0],
+    })
+    partial_anchor_referee = {
+        "status": "measured",
+        "reason": REFEREE_PARTIAL_ANCHOR_REASON,
+        "y0": 0.0,
+        "y1": 10.0,
+        "source_divider_x": [3.0],
+        "extra_divider_x": [],
+        "compartments": 2,
+        "anchor_matches": [{
+            "layout_x": 3.0, "source_x": 3.0, "delta_pt": 0.0,
+        }],
+        "positions_match": False,
+        "anchors_complete": False,
+        "missing_anchor_x": [7.0],
+        "components": [{
+            "x": 3.0, "x0": 2.9, "x1": 3.1, "tone": 0.0,
+            "elements": ["fixture-divider"], "clipped": False,
+        }],
+        "contract_y0": 0.0,
+        "contract_y1": 10.0,
+        "open_y0": 0.0,
+        "open_y1": 10.0,
+        "contract_span_pt": 10.0,
+        "seed_span_pt": 10.0,
+        "measured_span_pt": 10.0,
+        "unmeasured_span_pt": 0.0,
+        "topology_coverage_pt": {"3.0": 10.0},
+        "ignored_slabs": [],
+        "chosen_topology": [3.0],
+        "topology_superset_relations": [],
+        "active_partial_anchor_certificate": {
+            "criterion": PARTIAL_ANCHOR_CRITERION,
+            "valid": True,
+            "ledger_state": "active_unresolved",
+            "subject_ownership_basis": PARTIAL_ANCHOR_OWNERSHIP_BASIS,
+            "independent_source_enclosure_proven": False,
+            "divider_count_basis": PARTIAL_ANCHOR_COUNT_BASIS,
+            "missing_anchor_basis": PARTIAL_ANCHOR_MISSING_BASIS,
+            "anchor_corridor_clipped_paint_elements": [],
+            "anchor_corridor_unsupported_region_elements": [],
+            "open_y0": 0.0,
+            "open_y1": 10.0,
+            "coverage_pt": 10.0,
+            "source_divider_x": [3.0],
+            "observed_anchor_x": [3.0],
+            "missing_anchor_x": [7.0],
+            "missing_anchor_proofs": [{
+                "layout_x": 7.0,
+                "corridor_x0": 6.75,
+                "corridor_x1": 7.25,
+                "proof_x0": 6.75,
+                "proof_x1": 7.25,
+                "open_y0": 0.0,
+                "open_y1": 10.0,
+                "raw_anchor_rails": [{
+                    "element": "fixture-erased-rail",
+                    "order": 1,
+                    "kind": "stroke",
+                    "x0": 6.9,
+                    "x1": 7.1,
+                    "center_x": 7.0,
+                    "delta_pt": 0.0,
+                    "y0": 0.0,
+                    "y1": 10.0,
+                    "tone": 0.0,
+                    "clipped": False,
+                }],
+                "raw_rail_identity_valid": True,
+                "proof_top_role_ambiguities": [],
+                "erasure_slabs": [{
+                    "y0": 0.0,
+                    "y1": 10.0,
+                    "sample_y": 5.0,
+                    "raw_rail_elements": ["fixture-erased-rail"],
+                    "raw_intervals": [[6.9, 7.1]],
+                    "final_owner_segments": [{
+                        "x0": 6.9,
+                        "x1": 7.1,
+                        "element": "fixture-white-erasure",
+                        "order": 2,
+                        "kind": "fill",
+                        "tone": 1.0,
+                        "clipped": False,
+                    }],
+                    "ambiguous_top_roles": [],
+                }],
+                "erasure_owner_roles": [{
+                    "element": "fixture-white-erasure",
+                    "order": 2,
+                    "kind": "fill",
+                    "tone": 1.0,
+                }],
+                "clipped_paint_elements": [],
+                "final_target_tone_segments": [],
+                "unsupported_region_elements": [],
+            }],
+        },
+    }
+    partial_anchor_cell["referee"] = partial_anchor_referee
+    partial_accept_errors = _measured_referee_certificate_errors(
+        "partial-anchor-shape", partial_anchor_cell, partial_anchor_referee)
+    if partial_accept_errors:
+        failures.append(
+            "a proven partial-anchor certificate must be evaluable: "
+            + "; ".join(partial_accept_errors[:3]))
+
+    def partial_anchor_guard(
+            mutator: Callable[[dict[str, Any], dict[str, Any]], None],
+            ) -> list[str]:
+        mutated_cell = clone(partial_anchor_cell)
+        mutator(mutated_cell, mutated_cell["referee"])
+        return _measured_referee_certificate_errors(
+            "partial-anchor-guard", mutated_cell, mutated_cell["referee"])
+
+    def _first_proof(referee_value: dict[str, Any]) -> dict[str, Any]:
+        return referee_value["active_partial_anchor_certificate"][
+            "missing_anchor_proofs"][0]
+
+    def uncovered_rail(_cell: dict[str, Any],
+                       referee_value: dict[str, Any]) -> None:
+        # The SVG shows the final owner stopping short of the rail: an
+        # uncovered sliver of target-tone rail still reaches paper.
+        _first_proof(referee_value)["erasure_slabs"][0][
+            "final_owner_segments"][0]["x1"] = 7.0
+
+    def target_tone_owner(_cell: dict[str, Any],
+                          referee_value: dict[str, Any]) -> None:
+        # The final owner is itself target tone: nothing was erased.
+        proof = _first_proof(referee_value)
+        proof["erasure_slabs"][0]["final_owner_segments"][0]["tone"] = 0.0
+        proof["erasure_owner_roles"][0]["tone"] = 0.0
+
+    def clipped_owner(_cell: dict[str, Any],
+                      referee_value: dict[str, Any]) -> None:
+        _first_proof(referee_value)["erasure_slabs"][0][
+            "final_owner_segments"][0]["clipped"] = True
+
+    def underpainted_owner(_cell: dict[str, Any],
+                           referee_value: dict[str, Any]) -> None:
+        # An owner painted before the rail cannot be the final owner.
+        proof = _first_proof(referee_value)
+        proof["erasure_slabs"][0]["final_owner_segments"][0]["order"] = 1
+        proof["erasure_owner_roles"][0]["order"] = 1
+
+    def short_rail(_cell: dict[str, Any],
+                   referee_value: dict[str, Any]) -> None:
+        # The raw rail does not span the open band, so full-band absence
+        # was never shown.
+        _first_proof(referee_value)["raw_anchor_rails"][0]["y1"] = 6.0
+
+    def short_slab(_cell: dict[str, Any],
+                   referee_value: dict[str, Any]) -> None:
+        # The erasure slabs leave part of the band without evidence.
+        _first_proof(referee_value)["erasure_slabs"][0]["y1"] = 6.0
+
+    def partial_band_coverage(_cell: dict[str, Any],
+                              referee_value: dict[str, Any]) -> None:
+        # A minority band cannot prove absence, however self-consistent.
+        referee_value.update({
+            "y1": 6.0,
+            "measured_span_pt": 6.0,
+            "unmeasured_span_pt": 4.0,
+            "topology_coverage_pt": {"3.0": 6.0},
+        })
+        referee_value["active_partial_anchor_certificate"][
+            "coverage_pt"] = 6.0
+
+    def ineligible_ledger(cell_value: dict[str, Any],
+                          _referee_value: dict[str, Any]) -> None:
+        cell_value["ledger_state"] = "active_resolved"
+
+    def forged_position_verdict(_cell: dict[str, Any],
+                                referee_value: dict[str, Any]) -> None:
+        # The referee holds positions_match False deliberately for this
+        # kind: a declared anchor with no source position cannot match.
+        referee_value["positions_match"] = True
+
+    def no_missing_anchor(_cell: dict[str, Any],
+                          referee_value: dict[str, Any]) -> None:
+        referee_value["missing_anchor_x"] = []
+        referee_value["active_partial_anchor_certificate"].update({
+            "missing_anchor_x": [], "missing_anchor_proofs": [],
+        })
+
+    for guard_label, guard in (
+            ("an erasure the SVG does not support (uncovered rail)",
+             uncovered_rail),
+            ("a target-tone final owner", target_tone_owner),
+            ("a clipped final owner", clipped_owner),
+            ("an owner painted before the rail", underpainted_owner),
+            ("a raw rail short of the open band", short_rail),
+            ("erasure slabs short of the open band", short_slab),
+            ("partial band coverage", partial_band_coverage),
+            ("an ineligible ledger state", ineligible_ledger),
+            ("a forged position verdict", forged_position_verdict),
+            ("an empty missing-anchor inventory", no_missing_anchor)):
+        if not partial_anchor_guard(guard):
+            failures.append(
+                f"a partial-anchor certificate with {guard_label} "
+                "must fail closed")
+
+    # The same shape must also flow through the report totals: a
+    # partial-anchor cell disagrees with its lattice count, so the form and
+    # report mismatch totals recompute to 1/1 without any schema error.
+    partial_report = clone(report)
+    partial_form = partial_report["forms"][0]
+    report_partial_cell = clone(partial_anchor_cell)
+    report_partial_cell.update({
+        "ledger_blocks_gate": True,
+        "ledger_reason_codes": ["fixture-final-count-regression"],
+        "emitted": 3,
+        "transition_status": "blocked",
+        "transition_reason": (
+            "active unresolved ledger subject remains blocking while "
+            "comparison status is unevaluable"),
+        "four_way": {
+            "referee": 2, "lattice": 3, "audit": None, "emitted": 3,
+        },
+    })
+    partial_form["cells"][0] = report_partial_cell
+    partial_form["counts"].update({
+        "subjects_active_resolved": 0,
+        "subjects_active_unresolved": 1,
+        "ledger_blocking": 1,
+        "referee_layout_mismatches": 1,
+        "referee_layout_position_mismatches": 1,
+    })
+    partial_form["reason"] = (
+        "1 lattice-ledger blockers, audit evidence incomplete: "
+        f"{partial_form['audit_evidence']['reason']}, 1 combs unevaluable")
+    partial_report["totals"].update({
+        "subjects_active_resolved": 0,
+        "subjects_active_unresolved": 1,
+        "ledger_blocking": 1,
+        "referee_layout_mismatches": 1,
+        "referee_layout_position_mismatches": 1,
+    })
+    _resign_for_self_test(partial_report)
+    partial_report_errors, partial_report_stats = validate_comb_referee_report(
+        partial_report, child_exit=2, expected_forms=1, expected_subjects=1)
+    if (partial_report_errors
+            or partial_report_stats["referee_layout_mismatches"] != 1
+            or partial_report_stats["referee_layout_position_mismatches"]
+            != 1):
+        failures.append(
+            "a partial-anchor cell must recompute the report mismatch "
+            "totals: " + "; ".join(partial_report_errors[:3]))
+    forged_partial_totals = clone(partial_report)
+    forged_partial_totals["totals"]["referee_layout_mismatches"] = 0
+    _resign_for_self_test(forged_partial_totals)
+    if not any(
+            "referee_layout_mismatches" in error
+            for error in validate_comb_referee_report(
+                forged_partial_totals, child_exit=2,
+                expected_forms=1, expected_subjects=1)[0]):
+        failures.append(
+            "a forged partial-anchor mismatch total must be UNEVALUABLE")
     envelope_errors = validate_comb_referee_envelope(
         envelope, raw_payload, report, snapshot)
     if envelope_errors:

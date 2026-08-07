@@ -2118,6 +2118,14 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
             if not horizontal_rail:
                 slab_records.append(record)
 
+    # Paper-bearing coverage per topology, measured before the rail-only
+    # fallback below can substitute conflict evidence for selection slabs.
+    # Published with each evidence entry so a consumer can tell a topology
+    # that exists on paper from one proven only inside a horizontal rail.
+    paper_coverage: dict[tuple[float, ...], float] = collections.defaultdict(float)
+    for a, b, topology, _ in slab_records:
+        paper_coverage[topology] += b - a
+
     horizontal_rail_only = not slab_records and bool(evidence_slab_records)
     if horizontal_rail_only:
         # Preserve an already-published subject as unresolved evidence.  It
@@ -2181,6 +2189,7 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
         topology_evidence.append({
             "divider_x": list(topology),
             "coverage_pt": q(evidence_coverage[topology]),
+            "paper_coverage_pt": q(paper_coverage.get(topology, 0.0)),
             "runs": [[q(a), q(b)] for a, b in runs],
             "corridors_continuous": corridors_continuous,
         })
@@ -2350,7 +2359,21 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             reason_codes.append("unequal-two-slot-topology")
         if split_anchor_runs:
             reason_codes.append("split-anchor-run-topology")
-        if len(topology_evidence) > 1:
+        # A topology whose entire proof lies inside a full-width horizontal
+        # rail can neither win selection nor certify a comb (`endpoint_band`),
+        # so it cannot de-certify one either: inside the rail there is no
+        # paper on which its extra boundary could print.  2550M's knocked-out
+        # date-box tick survives only inside the row's bottom rule and would
+        # otherwise keep a printed two-compartment box unresolved forever.
+        # The rail-only topology stays published in the evidence below.  A
+        # band with no paper-bearing topology at all keeps the conservative
+        # comparison and is already unresolved via
+        # `horizontal-rail-only-topology`.
+        paper_topologies = [
+            evidence for evidence in topology_evidence
+            if float(evidence["paper_coverage_pt"]) > 0.0
+        ]
+        if len(paper_topologies or topology_evidence) > 1:
             reason_codes.append("competing-endpoint-topologies")
         if horizontal_rail_only:
             reason_codes.append("horizontal-rail-only-topology")
@@ -3213,6 +3236,66 @@ def boundary_topology_subset(left: Sequence[float],
     return True
 
 
+def erased_witness_rail_residue(
+        final_paint: FinalPaint, witness: dict[str, Any],
+        ) -> list[Interval] | None:
+    """Rail-covered residue completing a partial knockout's erasure proof.
+
+    ``FinalPaint.definitely_erased`` demands one known-later nonstructural
+    layer covering the witness's complete bbox.  2550M paints its Schedule
+    date-box knockout only down to the middle of the row's bottom rule, so a
+    0.36pt sliver of the stale tick survives the knockout -- wholly inside
+    the final-visible horizontal rail, where there is no paper on which the
+    sliver could print (the same no-paper contract
+    ``horizontal_rail_across`` documents).  On the composited page the mark
+    is then exactly as absent as a fully covered one.
+
+    Returns the rail-covered y intervals when one known-later nonstructural
+    rectangular layer covers everything else of the witness's own bbox, or
+    None when any part of it is neither covered nor inside a final-visible
+    horizontal rail across the witness's full width.  The single-layer
+    requirement, the strict paint-order requirement and the exact
+    rectangular-path restriction are ``definitely_erased``'s own; only the
+    no-paper residue is new, and every excused interval is returned so the
+    caller publishes what the rail absorbed.
+    """
+    x0, y0, x1, y1 = (
+        float(witness["x0"]), float(witness["y0"]),
+        float(witness["x1"]), float(witness["y1"]),
+    )
+    if x1 <= x0 or y1 <= y0:
+        return None
+    _ink_first, ink_last = paint_ordinal_range(witness)
+    best: list[Interval] | None = None
+    for paint in final_paint.paints:
+        if paint.get("role") == "structural":
+            continue
+        paint_first, _paint_last = paint_ordinal_range(paint)
+        if paint_first <= ink_last:
+            continue
+        px0, py0, px1, py1 = paint_bounds(paint)
+        if not (px0 <= x0 and px1 >= x1):
+            continue
+        cov0, cov1 = max(y0, py0), min(y1, py1)
+        if cov1 <= cov0:
+            continue
+        if "_path_layer" in paint and not exact_rectangular_path_fill_covers(
+                paint, x0, cov0, x1, cov1):
+            continue
+        residue = [
+            (lo, hi) for lo, hi in ((y0, cov0), (cov1, y1))
+            if hi - lo > JOIN_EPSILON_PT
+        ]
+        if not all(
+                final_paint.horizontal_rail_across(x0, x1, lo, hi)
+                for lo, hi in residue):
+            continue
+        if best is None or sum(hi - lo for lo, hi in residue) < sum(
+                hi - lo for lo, hi in best):
+            best = residue
+    return best
+
+
 def erased_legacy_divider_reduction_certificate(
         legacy_comb: dict[str, Any],
         final_comb: dict[str, Any],
@@ -3232,8 +3315,11 @@ def erased_legacy_divider_reduction_certificate(
     Every surviving final divider must be a one-to-one subset of the legacy
     positions at the established clustering tolerance.  Every omitted position
     must have its exact full-band raw witness, that witness must be covered by a
-    known-later nonstructural layer, and no final structural corridor may have
-    been repainted at the same position.  Anything partial, path-shaped,
+    known-later nonstructural layer -- except where the uncovered remainder
+    lies wholly inside a final-visible horizontal rail, which carries no paper
+    (``erased_witness_rail_residue``; 2550M's knockout stops at the middle of
+    the row's bottom rule) -- and no final structural corridor may have been
+    repainted at the same position.  Anything partial, path-shaped,
     source-order-ranged, multiply matched, or newly positioned fails closed.
     """
     raw_legacy_x = legacy_comb.get("divider_x") or ()
@@ -3375,19 +3461,32 @@ def erased_legacy_divider_reduction_certificate(
         if (float(witness["y0"]) > band_y0 + 1e-9
                 or float(witness["y1"]) < band_y1 - 1e-9
                 or later_structural_paths
-                or not final_paint.definitely_erased(witness)
                 or final_paint.structural_across_axis(
                     witness, band_y0, band_y1, "v")):
+            return None
+        # The complete-coverage proof, or the same proof with the un-covered
+        # remainder shown to lie wholly inside a final-visible horizontal
+        # rail -- where there is no paper the remainder could print on.  Any
+        # un-covered, un-railed portion fails closed exactly as before.
+        rail_residue: list[Interval] | None = (
+            [] if final_paint.definitely_erased(witness)
+            else erased_witness_rail_residue(final_paint, witness))
+        if rail_residue is None:
             return None
         witness_id = witness.get("id")
         if not isinstance(witness_id, str) or not witness_id:
             return None
-        erased.append({
+        entry: dict[str, Any] = {
             "divider_x": q(legacy_x[index]),
             "rule_id": witness_id,
             "paint_range": list(paint_ordinal_range(witness)),
             "band_y": [q(band_y0), q(band_y1)],
-        })
+        }
+        if rail_residue:
+            entry["rail_covered_residue_y"] = [
+                [q(lo), q(hi)] for lo, hi in rail_residue
+            ]
+        erased.append(entry)
 
     return {
         "criterion": "final-visible-erased-legacy-divider-reduction-v1",
@@ -6317,6 +6416,47 @@ def self_test(ir_path: pathlib.Path) -> int:
         ])) is None,
         "partial-width knockout coverage certified a count reduction")
 
+    # 2550M's mechanism: the knockout stops inside the row's bottom rule, so
+    # the stale tick's last sliver survives only where there is no paper.
+    # The proof must carry the rail-absorbed residue; without the rail, or
+    # with a residue reaching past the rail, it must fail closed exactly as
+    # the plain partial knockout does.
+    railed_partial_knockout = {
+        **reduction_knockout,
+        "y1": 9.4,
+    }
+    railed_partial_certificate = erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, railed_partial_knockout,
+            reduction_retained, reduction_bottom_rail,
+        ]))
+    check(
+        railed_partial_certificate is not None
+        and railed_partial_certificate.get("erased_dividers") == [{
+            "divider_x": 20.0,
+            "rule_id": "reduction-stale",
+            "paint_range": [1, 1],
+            "band_y": [5.0, 10.0],
+            "rail_covered_residue_y": [[9.4, 10.0]],
+        }],
+        f"a knockout stopping inside the bottom rail was not certified: "
+        f"{railed_partial_certificate}",
+    )
+    unrailed_residue_knockout = {
+        **reduction_knockout,
+        "y1": 8.5,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, unrailed_residue_knockout,
+            reduction_retained, reduction_bottom_rail,
+        ])) is None,
+        "a residue reaching past the bottom rail certified a count reduction")
+
     ranged_reduction_stale = {
         **reduction_stale,
         "paint_seq_max": 3,
@@ -6748,6 +6888,65 @@ def self_test(ir_path: pathlib.Path) -> int:
               "coverage winner silently resolved competing endpoint topologies")
         check(carried == {(10.0, 20.0), (10.0, 15.0, 20.0)},
               f"competing endpoint topology evidence was lost: {carried}")
+
+    # A competitor proven only inside a full-width horizontal rail exists on
+    # no paper, so it stays published as evidence without de-certifying the
+    # paper topology.  Give the same competitor one sliver of paper and the
+    # band must fall back to unresolved competing evidence -- the paper
+    # coverage test, not the evidence count, is what gates.
+    rail_competitor_rail = synthetic_horizontal(9.75, 0.0, 30.0, 0.5, 16)
+    rail_competitor_seed = synthetic_vertical(15, 0, 10, 0.2, 13)
+    rail_competitor_stale = synthetic_vertical(20, 0, 10, 0.2, 14)
+    railed_competitor_bands = comb_bands(
+        [rail_competitor_seed],
+        [rail_competitor_seed, rail_competitor_stale],
+        0.0, 30.0, (0.2, 0.2),
+        FinalPaint([
+            rail_competitor_seed, rail_competitor_stale,
+            {
+                **rail_competitor_stale,
+                "role": "knockout", "gray": 1.0,
+                "paint_seq": 15, "paint_seq_max": 15,
+                "y1": 9.5,
+            },
+            rail_competitor_rail,
+        ]))
+    check(bool(railed_competitor_bands)
+          and railed_competitor_bands[0]["divider_x"] == [15.0]
+          and railed_competitor_bands[0]["resolution"]["status"] == "resolved"
+          and "competing-endpoint-topologies"
+          not in railed_competitor_bands[0]["resolution"]["reason_codes"],
+          f"a rail-only competitor de-certified the paper topology: "
+          f"{railed_competitor_bands}")
+    if railed_competitor_bands:
+        railed_evidence = {
+            tuple(item["divider_x"]): float(item["paper_coverage_pt"])
+            for item in railed_competitor_bands[0]["resolution"].get(
+                "endpoint_topologies") or ()
+        }
+        check(railed_evidence.get((15.0,), 0.0) > 0.0
+              and railed_evidence.get((15.0, 20.0)) == 0.0,
+              f"rail-only evidence was not published with its paper "
+              f"coverage: {railed_evidence}")
+    paper_competitor_bands = comb_bands(
+        [rail_competitor_seed],
+        [rail_competitor_seed, rail_competitor_stale],
+        0.0, 30.0, (0.2, 0.2),
+        FinalPaint([
+            rail_competitor_seed, rail_competitor_stale,
+            {
+                **rail_competitor_stale,
+                "role": "knockout", "gray": 1.0,
+                "paint_seq": 15, "paint_seq_max": 15,
+                "y1": 9.0,
+            },
+            rail_competitor_rail,
+        ]))
+    check(bool(paper_competitor_bands)
+          and paper_competitor_bands[0]["resolution"]["status"] == "unresolved"
+          and "competing-endpoint-topologies"
+          in paper_competitor_bands[0]["resolution"]["reason_codes"],
+          "a competitor holding one sliver of paper was silently resolved")
     check(boundary_topology_subset(
         [10.2, 20.0], [10.0, 20.0, 30.0]),
         "near-identical physical boundaries were not matched as a subset")

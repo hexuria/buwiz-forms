@@ -167,8 +167,25 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # band as `writing_y0`/`writing_y1`/`writing_height_pt`. The restatement had
 # made 4,417 of 4,522 active combs source-unevaluable and failed the reviewed
 # control (G18).
+#
+# Re-pinned 2026-08-08 (r24) for G19/F184. (1)
+# `erased_witness_rail_residue`: `definitely_erased` demands one known-later
+# nonstructural layer covering the witness's COMPLETE bbox, but 2550M paints
+# its Schedule date-box knockout only down to the middle of the row's bottom
+# rule, so a sliver of the stale tick survives -- wholly inside the
+# final-visible horizontal rail, where there is no paper the sliver could
+# print on (the same no-paper contract `horizontal_rail_across` documents).
+# The erasure certificate now accepts that one shape, publishes every excused
+# interval as `rail_covered_residue_y`, and an un-covered un-railed portion
+# still fails closed -- both directions mutation-proven in the self-test.
+# (2) A competing endpoint topology proven ONLY inside a full-width
+# horizontal rail exists on no paper, so it no longer de-certifies the
+# paper-bearing topology; it stays published in the evidence with its new
+# `paper_coverage_pt`, and a competitor with any paper coverage still forces
+# `competing-endpoint-topologies` exactly as before. No tolerance constant
+# moved and no threshold moved.
 LATTICE_PRODUCER_SHA256 = (
-    "4d7ce578d8e987de283725de0ed5fed153dd68aa4574feeefa04f7b0baaf2567"
+    "a85b2151a00d7535a94a4583198c35ffd5fe3f3356425c76d278dcb72fadf460"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
