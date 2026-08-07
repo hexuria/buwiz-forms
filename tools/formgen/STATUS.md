@@ -325,7 +325,65 @@ names `guides.py`'s reflow as the owner. The blocker+major count moved 49 → 59
 partly for this reason, and a count that goes up because a wrong `fixed` was
 retracted is the ledger working.
 
-## Gate — r18 (2026-08-07 13:41, `191b683`, clean tree) — 9 of 12 PASS
+## Gate — r19 (2026-08-07 15:41, `d3e7a72`, clean tree) — 9 of 12 PASS
+
+**The authoritative run.** Same verdict count as r18 and the same three checks
+red. **No regression on any check, and the referee moved a long way.**
+
+| Check | r19 | r18 | Detail |
+| --- | --- | --- | --- |
+| self-tests | PASS | PASS | 10 modules (11 run by hand, `validate_tree` included) |
+| conversion | PASS | PASS | 53/53 unique tracked forms |
+| rules | PASS | PASS | clean on 53/53 |
+| paper | PASS | PASS | exact on 53/53 |
+| artwork | PASS | PASS | clean on 53/53 |
+| text | PASS | PASS | clean on 53/53 |
+| assertions | **FAIL** | FAIL | `inputs_over_printed_text` **20** (r18: 20); `comb_slots_match_printed` **22** (22); `inputs_span_no_printed_divider` **11** (11); `printed_box_peers_all_fillable` **14** (14). **Not one of the four moved by a single form** — r19 is guide-side and the assertions are form-side, which is the prediction and the confirmation |
+| findings | **FAIL** | FAIL | **55/126** blocker+major unresolved (r18: 59/125). Worst: 1701 5, 1701MS 3, 1707 3, 2553 3 |
+| tracked-files | PASS | PASS | no tracked deletion |
+| audit-refresh | PASS | PASS | fresh audit atomically published for 53 forms |
+| determinism | PASS | PASS | byte-identical, **`7a152bc88161`** (r18/r15/r14: `8ceeab9e506d`). The digest MOVED and had to: three guide documents legitimately changed. Two generations still compare byte-for-byte |
+| comb-referee | **UNEVALUABLE** | UNEVALUABLE | **52/53 forms, up from 40/53** — the four referee fixes above cleared twelve. One form still does not arrive: **2551Q**, and it is not a form defect. See below |
+
+**The three red checks are the three that were red at r13, r14, r17 and r18.**
+The two counts r19 could plausibly have disturbed — the four assertion
+populations — did not move by a single form, which is what a guide-side change
+should do and is the check that it did nothing else.
+
+### The one form the referee still cannot report, and why the pin stays put
+
+`2551q-2018` raises `RefereeError: 2551Q reviewed control changed: p2c5 != 14`.
+`REVIEWED_2551Q_EXPLICIT_COMPARTMENTS` is a **human-reviewed** control: p2c5 was
+reviewed as `measured` with 14 compartments. The referee now returns
+
+```
+status      unevaluable
+reason      source topology does not occupy a strict majority of the full comb band
+contract    y 108.26–125.96, span 17.70pt
+measured    6.96pt of that span; 10.74pt unmeasured
+```
+
+p2c80 (reviewed at 12) is refused the same way, 7.44pt measured of 18.78pt.
+
+**The pin was not moved and must not be.** Moving a reviewed control to match
+the producer that stopped satisfying it is the exact failure mode this project
+has already paid for twice (`EXPECTED_COMBS` at r14, `HTML_RUNTIME_SCRIPT_SHA256`
+at G17). It is filed as **G18**.
+
+**It is not r19's doing.** r19 changed `emit.py` and `guides.py` on the guide
+path only; 2551Q's `index.html`, its layout and its IR are byte-identical
+(`git status -- forms/` names three guide documents and nothing else), and the
+referee's verdict here is derived from the pinned PDF's Poppler geometry and the
+layout. What r19 changed is that 2551Q now *reaches* this check — the same
+"newly visible, not newly broken" shape as r18's two assertions.
+
+**Reaching PASS is further off than one form.** With 2551Q reporting, the
+referee would carry 53/53 and `combs_found` would be the full 4,538 — but
+`forms_ok` is **0** and 4,385 of 4,433 subjects are `source_unevaluable`, so the
+status would still be UNEVALUABLE. 52/53 buys a complete-corpus *report*, not a
+score.
+
+## Gate — r18 (2026-08-07 13:41, `191b683`, clean tree) — 9 of 12 PASS (superseded by r19 above)
 
 **The authoritative run.** Same verdict shape as r17: three red checks, the same
 three, for the same reasons on two of them and for one deliberately new reason.
@@ -614,19 +672,37 @@ actually type. No gate verdict changed on it — the check failed on 40 forms
 before and after — but the offender count is a debt, and the fix belongs in
 lattice.py's cell segmentation, not in relaxing the assertion.
 
-## Findings ledger (`review-findings.json`, 138 findings)
+## Findings ledger (`review-findings.json`, 183 findings) — r19
 
-| Severity | Open | Resolved |
-| --- | --- | --- |
-| blocker | 5 | 16 |
-| major | 21 | 42 |
-| minor | 36 | 4 |
-| cosmetic | 12 | 2 |
+| Severity | Open | Resolved | Total |
+| --- | --- | --- | --- |
+| blocker | 15 | 22 | 37 |
+| major | 40 | 49 | 89 |
+| minor | 39 | 4 | 43 |
+| cosmetic | 12 | 2 | 14 |
 
-The gate counts blocker+major only: **26 open of 84**, unchanged this
-increment.
+The gate counts blocker+major only: **55 open of 126** at r19 (r18: 59 of 125).
 
-## Comb referee — still UNEVALUABLE, still user-blocked
+Moved this increment, each on a measurement recorded in the finding's own
+`resolution`:
+
+| Finding | Severity | r18 | r19 | On what |
+| --- | --- | --- | --- | --- |
+| F127 | major | open (reopened) | **fixed** | 2551M: 0 of 15 ATC codes carried their official rate → 15 of 15 |
+| F167 | blocker | open | **fixed** | same measurement; the 19x4 table is 19x6 and PT 060 reads 2% |
+| F168 | major | open | **fixed** | 0605 tax-type table: `QP \| QUALIFYING FEES-PAGCOR \| VT \| VALUE-ADDED TAX \| \| WG \| WITHHOLDING TAX - VAT AND OTHER`, checked against the official page 2 |
+| F169 | major | open | **fixed** | 0605 Guidelines: the TIN branch-code rule is two cells per row, one per source column, instead of one zipped sentence |
+| F170 | minor | open | **open** | re-measured, not carried forward: the ATC region is still two tables and the 3-line header section cannot reach `MIN_COLUMN_SUPPORT` |
+| F182 | major | — | **filed and fixed** | the reflow was dropping text; 2200-AN shipped without `(To Part III, Item 16)` |
+| F183 | minor | — | **filed open** | 2551M's left `Tax Rate` label sits at x 237.60 against its column edge of 251.52 |
+
+## Comb referee — the state below is r13's and is SUPERSEDED by the r19 section near the top
+
+The `EXPECTED_HTML_STRUCTURE_SHA256` pins were refreshed at r14, which is what
+first let any form reach `audit_evidence` — and that is what made the r19
+tolerance defect visible. Read "The comb referee: four defects in the referee
+itself" above for the current picture; the paragraphs below are kept as the
+record of what was believed at r13.
 
 `EXPECTED_HTML_STRUCTURE_SHA256`'s 53 reviewed pins remain stale and were **not**
 touched: re-pinning them is a user-review action (see `GOAL.md` `## Blocked`).

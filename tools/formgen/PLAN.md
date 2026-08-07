@@ -36,23 +36,31 @@ table; the rows below carry only the per-defect numbers.
 | Gate-demanded assertions | **10** | unchanged at r19 |
 | Findings in `review-findings.json` | **183** | **55 blocker+major open of 126** at r19 (was 59 of 125): F127/F167/F168/F169 closed on the r19 rate measurement, **F182 filed and fixed** (the reflow was silently dropping text — 2200-AN shipped without `(To Part III, Item 16)`), **F183 filed open** (2551M's left `Tax Rate` header label). F170 was re-measured and deliberately left open. The 138 immutable baseline entries are untouched; the digest at `gate.py:8713` still matches |
 
-**The gate below is r18's. r19's gate runs on the commit that carries this
-line** — `gate.py` refuses an unclean worktree, so the change lands first and
-the verdict lands in the commit after it, which is the same two-step r18 used.
-
-**Gate — full clean-tree run r18 (2026-08-07 13:41, `191b683`). 9/12 PASS, the
-same three checks red as r17, no regression.** STATUS.md holds the full table
-and the analysis.
+**Gate — full clean-tree run r19 (2026-08-07 15:41, `d3e7a72`). 9/12 PASS, the
+same three checks red as r18, no regression on any check.** STATUS.md holds the
+full table and the analysis.
 
     PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
     PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
-    PASS  determinism 8ceeab9e506d  (the SAME digest as r14/r15 — no generator moved)
-    FAIL  assertions    inputs_over_printed_text 20/53   (r17: 20, unmoved)
-                        comb_slots_match_printed 22/53   (r17: 22, unmoved)
-                        inputs_span_no_printed_divider 11/53   NEW, 79 offenders
-                        printed_box_peers_all_fillable 14/53   NEW, 14 offenders
-    FAIL  findings      59/125 blocker+major open (r17: 49/116) — +9 filed, F127 reopened
-    UNEV  comb-referee  40/53; exactly r17's residue on 1604C, 1700, 1701MS, 1702EX
+    PASS  determinism 7a152bc88161  (moved from 8ceeab9e506d, and had to: three
+                                     guide documents changed. Two generations
+                                     still compare byte-for-byte)
+    FAIL  assertions    inputs_over_printed_text 20/53        (r18: 20, unmoved)
+                        comb_slots_match_printed 22/53        (r18: 22, unmoved)
+                        inputs_span_no_printed_divider 11/53  (r18: 11, unmoved)
+                        printed_box_peers_all_fillable 14/53  (r18: 14, unmoved)
+    FAIL  findings      55/126 blocker+major open (r18: 59/125) — 4 closed on
+                        measurement, F182 filed and fixed, F183 filed
+    UNEV  comb-referee  52/53 forms, up from 40/53. The one that does not arrive
+                        is 2551Q, on a reviewed control the pin refuses to move
+                        for — see G18
+
+**Not one of the four assertion populations moved by a single form.** That is
+the confirmation that a guide-side change did nothing form-side, and it is why
+"no regression" is a measurement here rather than a hope.
+
+*(r18's block, superseded: determinism `8ceeab9e506d`; assertions 20/22/11/14;
+findings 59/125; comb-referee 40/53.)*
 
 **The two new red rows are the point, not a regression.** Every one of their 93
 offenders was already in the shipped corpus at r14; what changed is that a check
@@ -132,6 +140,7 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | **G14** | A BIR-only control field is emitted as a taxpayer input | 1 confirmed (2026-08-07) | `lattice.py` field classification | open | F147 (0605 "BCS No./Item No. (To be filled up by the BIR)" = 253.0×17.5pt free text, no maxlength). The exclusion works on the same sheet for DLN/PSIC/PSOC, so this box was missed, not unhandled |
 | **G16** | **`audit.py`'s `comb_slots_match_printed` requires a comb's input indexes to run 0..N−1 with no gap, so it fails on every compartment G11 correctly refuses.** The emission contract changed; the assertion that owns it was not told | **76 offenders, 24 forms**, `slot-input-index-mismatch` + `invalid-emission` (r14). The other 167 of the assertion's 247 are the pre-existing `source-topology-unevaluable` population | `audit.py` `check_comb_slots_match_printed` | open | STATUS.md §"The two assertions". **The assertion must not be weakened.** The fix is to re-derive the constant from the SOURCE PDF's own text operators — where this assertion already reads from, so it stays independent of `emit.py` — and accept a gap exactly where the source printed one. This is the "a schema change is declared everywhere it is asserted, in the same commit" rule being paid late |
 | **G17** | **A reviewed emitter pin lives in a place no one has enumerated, and only the referee reads it — so it costs a full 60-minute gate run to discover.** `comb_referee.HTML_RUNTIME_SCRIPT_SHA256` is a third such pin, distinct from `EXPECTED_HTML_STRUCTURE_SHA256` and from the four producer SHAs | 5 forms UNEVALUABLE at r14, report partial 40/53; 2 of the pin's 3 hashes had moved | `comb_referee.py:535`, read at `comb_referee.py:2822` | open | The pin itself is re-pinned and **r15 confirms it** (all five emission-binding errors gone). The class stays open because the underlying defect is the enumeration, not this pin: the "census pins that must move together" list under **How we work** did not contain it, and does not name whatever else is like it. An inventory that a producer change can be checked against in seconds — rather than at the end of an hour — is the actual fix |
+| **G18** | **A human-reviewed referee control no longer holds, and it is the last thing between the referee and a complete corpus report.** `REVIEWED_2551Q_EXPLICIT_COMPARTMENTS` reviewed 2551Q `p2c5` as `measured` with 14 compartments and `p2c80` as 12; the referee now returns `unevaluable — source topology does not occupy a strict majority of the full comb band` for both | **52/53 forms report at r19** (r18: 40/53). 2551Q is the only one that errors, and it takes 105 subjects with it, which is also why `combs_found` is 4,433 against an expected 4,538. p2c5 measures 6.96pt of a 17.70pt band; p2c80 7.44pt of 18.78pt | `comb_referee.validate_2551q_referee_golden` vs whatever moved the majority rule under it | open | **The pin was NOT moved and must not be** — moving a reviewed control to match the producer that stopped satisfying it is the failure this project already paid for at `EXPECTED_COMBS` (r14) and `HTML_RUNTIME_SCRIPT_SHA256` (G17). Not caused by r19: 2551Q's `index.html`, layout and IR are byte-identical and only three *guide* documents changed; r19 merely made 2551Q reach the check. Same shape as G10's assertions — newly visible, not newly broken. **Reaching PASS is further off than this one form**: `forms_ok` is 0 and 4,385 of 4,433 subjects are `source_unevaluable`, so 53/53 would buy a complete report, not a score |
 | **G15** | **The `?debug=fields` overlay shipped in `forms/` is the OLD self-referential one; the fixed overlay exists only in `emit.py` and has never been regenerated into the corpus.** In the shipped legend blue dashed means "this input is fine"; in the fixed one it means "printed box with NO input" — the inverse | was 0 / 38; **now `printed box with no input` → 53 of 53, `no usable box` → 0** (r14, 2026-08-07) | `emit.py` overlay, unregenerated | **done** | F172 `fixed`. Nothing needed fixing — the corrected overlay already existed in `emit.py` and had simply never been written out. Regenerating the corpus at r14 shipped it. The Stage-1 definition of done is no longer blocked on the overlay |
 
 G10 is the one to read twice. It is why Stage 2's central guarantee is not yet
