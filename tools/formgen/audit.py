@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import bisect
 import collections
 import contextlib
 import copy
@@ -336,6 +337,77 @@ SOURCE_SHADING_MAX_TONE = 0.87
 SOURCE_SHADING_MIN_TONE = 0.15
 SOURCE_SHADING_MIN_COVERAGE = 0.70
 
+# --------------------------------------------------------------------------
+# The field-layer bounds (assertions 9 and 10).
+#
+# Both assertions exist because the audit was structurally blind to the FIELD
+# layer: 171 of 172 ledger findings carry `audit_blind: true`, and 137 of the
+# 138 defects a 51-form visual sweep found sat on pages this audit scored
+# 100% rules / 100% text / 0 missing / 0 extra.  The reason is stated once,
+# here, because it decides every bound below: the two assertions that come
+# closest to the field layer take their CANDIDATE POPULATION from the producer
+# that made the mistake.  `check_money_boxes_have_inputs` enumerates from
+# `b.layout_cells` and accepts only `kind == "field"`, so a printed box the
+# lattice mis-read as a label never enters the population -- and a `field` cell
+# with zero inputs occurs 0 times in 9,971, which is the mechanism, not a
+# clean bill of health.  `check_comb_slots_match_printed` opens with
+# `if b.layout is None: return broken(...)` and takes its inventory from the
+# layout's comb subjects, so a printed comb the lattice never recognised is not
+# in it.  Neither assertion below reads `b.layout`, `b.plan`, emit.py's
+# markers, or the IR: their whole expectation comes from the pinned PDF's own
+# composited paint stream (`ordered_vector_paints`) and its own text operators
+# (`drawn_glyph_boxes`), scored against the emitted DOM's `input_boxes`.
+#
+# A source vertical counts as a printed compartment divider when it is dark,
+# thin, materially taller than it is wide, and still visible after the page has
+# composited.  The visibility clause is not decoration: 2550M draws a comb tick
+# and then paints a white 44 x 13pt rectangle over it, and 2553, 2551M and 0605
+# do the same.  Dropping the clause inflates the offender count from 79 to 111
+# with 32 dividers that are not on the printed page at all.  The clause was
+# checked against the rasteriser rather than trusted: over 38,650 candidates on
+# 53 page-1s, the compositor's visible/not-visible verdict agrees with the
+# rendered raster 38,650 times and disagrees 0 times.
+DIVIDER_MAX_TONE = 0.5
+DIVIDER_MAX_WIDTH_PT = 1.6
+DIVIDER_MIN_HEIGHT_PT = 2.0
+# Anisotropy, not height alone: a 1.5 x 2.2pt speck is not a divider.
+DIVIDER_MIN_ANISOTROPY_PT = 2.0
+# How far inside an input's own edges a divider must lie before it is a
+# divider the input SPANS rather than the input's own wall.  A box drawn
+# edge-to-edge over its printed frame must never be reported against itself.
+DIVIDER_INTERIOR_PT = 0.5
+DIVIDER_MIN_Y_OVERLAP_PT = 1.0
+
+# The source-derived printed-box inventory (assertion 10).  A box is four
+# covered sides around white paper: grid lines are clustered from thin dark
+# paint, a side counts as drawn when no gap along it exceeds
+# PRINTED_BOX_SIDE_MAX_GAP_PT, and the box survives only if its inset interior
+# holds no source glyph and is overwhelmingly paper.  The glyph and paper
+# clauses are what keep a caption cell and an official grey "no entry applies"
+# band out of a population that says "a taxpayer should be able to type here".
+PRINTED_RULE_MAX_TONE = 0.5
+PRINTED_RULE_MAX_THICKNESS_PT = 2.5
+PRINTED_RULE_MIN_LENGTH_PT = 2.0
+PRINTED_RULE_CLUSTER_PT = 1.0
+PRINTED_BOX_SIDE_MAX_GAP_PT = 1.2
+PRINTED_BOX_MIN_SIDE_PT = 5.0
+PRINTED_BOX_MAX_SIDE_PT = 400.0
+PRINTED_BOX_INSET_PT = 1.0
+PRINTED_BOX_PAPER_MIN_TONE = 0.95
+PRINTED_BOX_PAPER_MIN_FRACTION = 0.95
+PRINTED_BOX_SAMPLE_PITCH_PT = 1.5
+PRINTED_BOX_SAMPLE_MAX = 8
+# When does an emitted input "fill" a printed box?  Measured against the
+# SMALLER of the two areas, so a comb's individual slot counts (the slot lies
+# wholly inside the box) and a single wide input spanning several boxes counts
+# for each of them (the box lies wholly inside the input) -- a taxpayer can
+# type in both.  Per-input width fractions do not work: 2316's RDO comb fills
+# its box with three 12.6pt slots inside a 38pt box and would read as empty.
+PRINTED_BOX_FILL_MIN_FRACTION = 0.5
+# Bucket edge for the point-tone index.  Purely a lookup granularity; it can
+# never change a composited answer, only how many paints are considered.
+TONE_BUCKET_PT = 24.0
+
 # Default offender preview limit. Assertions that need exhaustive evidence may
 # opt out explicitly; the comb assertion does because its full disagreement set
 # is the evidence the referee needs.
@@ -354,6 +426,8 @@ ASSERTION_KEYS = (
     "reflow_rate_without_description",
     "image_transform_applied",
     "no_invented_codepoints",
+    "inputs_span_no_printed_divider",
+    "printed_box_peers_all_fillable",
 )
 
 INPUT_MANIFEST_SCHEMA = "formgen-audit-input-manifest-v1"
@@ -4671,6 +4745,227 @@ def drawn_glyph_boxes(page) -> tuple[SourceGlyph, ...]:
     return tuple(glyphs)
 
 
+class PointToneIndex:
+    """Composited final tone at an arbitrary point of one source page.
+
+    A bucketed view over `VectorPage.paints` so a point query does not rescan
+    the page.  The bucket is a lookup device only: `_final_tone` is handed
+    every paint whose rectangle contains the point, which is the same set it
+    would receive from a full scan, so the answer it returns is identical --
+    `_stable_source_verticals` already narrows its `active` list the same way.
+
+    `None` means the page cannot be composited at that point (one operation
+    with conflicting tone or opacity).  Every caller treats `None` as
+    unevaluable and publishes it; none treats it as paper.
+    """
+
+    __slots__ = ("_buckets",)
+
+    def __init__(self, paints: Sequence[VectorPaint]) -> None:
+        buckets: dict[tuple[int, int], list[VectorPaint]] = (
+            collections.defaultdict(list))
+        for paint in paints:
+            for bx in range(int(paint.x0 // TONE_BUCKET_PT),
+                            int(paint.x1 // TONE_BUCKET_PT) + 1):
+                for by in range(int(paint.y0 // TONE_BUCKET_PT),
+                                int(paint.y1 // TONE_BUCKET_PT) + 1):
+                    buckets[(bx, by)].append(paint)
+        self._buckets = dict(buckets)
+
+    def tone(self, x: float, y: float) -> float | None:
+        candidates = self._buckets.get(
+            (int(x // TONE_BUCKET_PT), int(y // TONE_BUCKET_PT)))
+        if not candidates:
+            return 1.0
+        active = [paint for paint in candidates
+                  if paint.x0 <= x <= paint.x1 and paint.y0 <= y <= paint.y1]
+        if not active:
+            return 1.0
+        try:
+            return _final_tone(active, x, y)
+        except ValueError:
+            return None
+
+
+def source_printed_dividers(
+        page: VectorPage, tones: PointToneIndex,
+        ) -> tuple[tuple[float, VectorPaint], ...]:
+    """Every compartment divider the SOURCE page still shows, by x centre.
+
+    Dark, thin, materially taller than wide, and -- the clause that matters --
+    still visible once the page has composited.  See the DIVIDER_* block for
+    why the visibility clause is load bearing and how it was checked against
+    the rasteriser rather than assumed.
+    """
+    out: list[tuple[float, VectorPaint]] = []
+    for paint in page.paints:
+        if paint.tone > DIVIDER_MAX_TONE:
+            continue
+        width = paint.x1 - paint.x0
+        height = paint.y1 - paint.y0
+        if width > DIVIDER_MAX_WIDTH_PT or height < DIVIDER_MIN_HEIGHT_PT:
+            continue
+        if height - width < DIVIDER_MIN_ANISOTROPY_PT:
+            continue
+        centre_x = (paint.x0 + paint.x1) / 2.0
+        tone = tones.tone(centre_x, (paint.y0 + paint.y1) / 2.0)
+        if tone is None or tone > DIVIDER_MAX_TONE:
+            continue
+        out.append((centre_x, paint))
+    out.sort(key=lambda item: (item[0], item[1].y0, item[1].y1, item[1].order))
+    return tuple(out)
+
+
+def _covered_without_gap(spans: Sequence[tuple[float, float]],
+                         low: float, high: float,
+                         gap: float = PRINTED_BOX_SIDE_MAX_GAP_PT) -> bool:
+    """Is [low, high] drawn by `spans`, leaving no gap wider than `gap`?"""
+    cursor = low
+    for span_low, span_high in spans:
+        if span_high <= cursor:
+            continue
+        if span_low > high:
+            break
+        if span_low > cursor + gap:
+            return False
+        cursor = max(cursor, span_high)
+        if cursor >= high:
+            return True
+    return cursor >= high - gap
+
+
+def _source_grid_lines(
+        page: VectorPage,
+        ) -> tuple[tuple[tuple[float, list[tuple[float, float]]], ...],
+                   tuple[tuple[float, list[tuple[float, float]]], ...]]:
+    """Clustered horizontal and vertical source rule lines, with their extents.
+
+    A "line" is every thin dark paint sharing a coordinate to within
+    PRINTED_RULE_CLUSTER_PT, and its extent is the union of those paints'
+    spans.  Rules are drawn in pieces -- a table's top edge is one operation
+    per column on most of these sheets -- so the union, not any single paint,
+    is what says whether a side exists.
+    """
+    horizontal: list[tuple[float, float, float]] = []
+    vertical: list[tuple[float, float, float]] = []
+    for paint in page.paints:
+        if paint.tone > PRINTED_RULE_MAX_TONE:
+            continue
+        width = paint.x1 - paint.x0
+        height = paint.y1 - paint.y0
+        if (height <= PRINTED_RULE_MAX_THICKNESS_PT
+                and width >= PRINTED_RULE_MIN_LENGTH_PT and width > height):
+            horizontal.append(((paint.y0 + paint.y1) / 2.0, paint.x0, paint.x1))
+        elif (width <= PRINTED_RULE_MAX_THICKNESS_PT
+                and height >= PRINTED_RULE_MIN_LENGTH_PT and height > width):
+            vertical.append(((paint.x0 + paint.x1) / 2.0, paint.y0, paint.y1))
+
+    def cluster(items: list[tuple[float, float, float]]
+                ) -> tuple[tuple[float, list[tuple[float, float]]], ...]:
+        groups: list[list[Any]] = []
+        for coord, low, high in sorted(items):
+            if groups and coord - groups[-1][0] <= PRINTED_RULE_CLUSTER_PT:
+                groups[-1][0] = coord
+                groups[-1][1].append((low, high))
+            else:
+                groups.append([coord, [(low, high)]])
+        return tuple((round(coord, 4), _merge_intervals(spans, 0.0))
+                     for coord, spans in groups)
+
+    return cluster(horizontal), cluster(vertical)
+
+
+def source_printed_boxes(
+        page: VectorPage, glyphs: Sequence[SourceGlyph],
+        tones: PointToneIndex,
+        ) -> tuple[tuple[Rect, ...], int]:
+    """Blank enclosed boxes the SOURCE page draws, and how many were unevaluable.
+
+    Minimal by construction: for each top-left grid intersection the first
+    right edge and then the first bottom edge that close a fully drawn
+    rectangle win, so a box is never reported nested inside a larger one that
+    shares its corner.  Survivors must be blank -- no source glyph inside the
+    1pt inset interior, and at least PRINTED_BOX_PAPER_MIN_FRACTION of the
+    sampled interior at paper tone.  Both clauses are about the claim the
+    inventory makes: these are boxes a taxpayer is meant to write in, not
+    captions and not the official grey bands that say no entry applies.
+
+    The second return value counts boxes whose interior could not be
+    composited.  They are excluded from the inventory and published, never
+    silently treated as paper.
+    """
+    horizontal, vertical = _source_grid_lines(page)
+    boxes: list[Rect] = []
+    unevaluable = 0
+    for i in range(len(vertical) - 1):
+        x0, left = vertical[i]
+        for j in range(len(horizontal) - 1):
+            y0, top = horizontal[j]
+            closed: tuple[float, float] | None = None
+            for k in range(i + 1, len(vertical)):
+                x1, right = vertical[k]
+                if x1 - x0 < PRINTED_BOX_MIN_SIDE_PT:
+                    continue
+                if x1 - x0 > PRINTED_BOX_MAX_SIDE_PT:
+                    break
+                if not _covered_without_gap(
+                        right, y0, y0 + PRINTED_BOX_MIN_SIDE_PT):
+                    continue
+                for m in range(j + 1, len(horizontal)):
+                    y1, bottom = horizontal[m]
+                    if y1 - y0 < PRINTED_BOX_MIN_SIDE_PT:
+                        continue
+                    if y1 - y0 > PRINTED_BOX_MAX_SIDE_PT:
+                        break
+                    if (_covered_without_gap(top, x0, x1)
+                            and _covered_without_gap(bottom, x0, x1)
+                            and _covered_without_gap(left, y0, y1)
+                            and _covered_without_gap(right, y0, y1)):
+                        closed = (x1, y1)
+                        break
+                if closed is not None:
+                    break
+            if closed is None:
+                continue
+            x1, y1 = closed
+            ix0 = x0 + PRINTED_BOX_INSET_PT
+            iy0 = y0 + PRINTED_BOX_INSET_PT
+            ix1 = x1 - PRINTED_BOX_INSET_PT
+            iy1 = y1 - PRINTED_BOX_INSET_PT
+            if ix1 <= ix0 or iy1 <= iy0:
+                continue
+            if any(glyph.x1 > ix0 and glyph.x0 < ix1
+                   and glyph.y1 > iy0 and glyph.y0 < iy1 for glyph in glyphs):
+                continue
+            columns = min(PRINTED_BOX_SAMPLE_MAX, max(
+                2, int((ix1 - ix0) // PRINTED_BOX_SAMPLE_PITCH_PT) + 1))
+            rows = min(PRINTED_BOX_SAMPLE_MAX, max(
+                2, int((iy1 - iy0) // PRINTED_BOX_SAMPLE_PITCH_PT) + 1))
+            sampled = paper = 0
+            broke = False
+            for column in range(columns):
+                for row in range(rows):
+                    tone = tones.tone(
+                        ix0 + (ix1 - ix0) * (column + 0.5) / columns,
+                        iy0 + (iy1 - iy0) * (row + 0.5) / rows)
+                    if tone is None:
+                        broke = True
+                        break
+                    sampled += 1
+                    if tone >= PRINTED_BOX_PAPER_MIN_TONE:
+                        paper += 1
+                if broke:
+                    break
+            if broke:
+                unevaluable += 1
+                continue
+            if not sampled or paper / sampled < PRINTED_BOX_PAPER_MIN_FRACTION:
+                continue
+            boxes.append((x0, y0, x1, y1))
+    boxes.sort()
+    return tuple(boxes), unevaluable
+
+
 @dataclasses.dataclass(frozen=True)
 class SourceSlotOracle:
     """Which comb compartments the SOURCE has already filled in, and how.
@@ -7072,6 +7367,221 @@ def check_no_invented_codepoints(b: Bundle) -> dict[str, Any]:
     return held(characters_examined=examined)
 
 
+# --------------------------------------------------------------------------
+# assertion 9 -- no input spans a printed compartment divider
+# --------------------------------------------------------------------------
+
+
+def check_inputs_span_no_printed_divider(b: Bundle) -> dict[str, Any]:
+    """C5's other half: one wide box where the sheet printed several.
+
+    `comb_slots_match_printed` cannot see this, and the reason is structural
+    rather than a tuning miss: its inventory is the LAYOUT's comb subjects, so
+    a printed comb the lattice never recognised as one is not in the
+    population at all.  This assertion has no inventory.  It walks the
+    emitted inputs and asks the pinned PDF whether it drew a compartment
+    divider inside any of them -- 2550Q's `p1c41` is a single 437pt input
+    lying across 30 printed compartments, and nothing in the layout says so.
+
+    A divider is counted only when its x centre is more than
+    DIVIDER_INTERIOR_PT inside BOTH of the input's edges, so an input drawn
+    edge-to-edge over its own printed frame is never reported against its own
+    walls, and only when it shares at least DIVIDER_MIN_Y_OVERLAP_PT of the
+    input's height, so the tick of the row above does not count.
+
+    The offender is the INPUT, not the divider: one box across thirty
+    compartments is one defect, and publishing thirty would bury it.
+    """
+    if b.form_html is None:
+        return broken("no emitted form document to check",
+                      inputs_checked=0, printed_dividers_detected=0)
+    if b.doc is None:
+        return broken(
+            "source PDF not resolved; printed compartment dividers unknown",
+            inputs_checked=0, printed_dividers_detected=0)
+    binding_issues = emitted_cell_binding_issues(b)
+    if binding_issues:
+        return broken(
+            f"{len(binding_issues)} emitted cell binding issue(s)",
+            binding_issues,
+            offender_limit=None,
+            inputs_checked=0,
+            printed_dividers_detected=0,
+            emitted_cell_binding_issues=len(binding_issues),
+        )
+    per_page: dict[int, tuple[tuple[tuple[float, VectorPaint], ...],
+                              list[float]]] = {}
+    detected = 0
+    checked = 0
+    offenders: list[dict[str, Any]] = []
+    for cell in b.cells:
+        page = b.vector_pages.get(cell.page)
+        if page is None:
+            continue
+        if cell.page not in per_page:
+            dividers = source_printed_dividers(page, PointToneIndex(page.paints))
+            per_page[cell.page] = (dividers, [x for x, _ in dividers])
+            detected += len(dividers)
+        dividers, centres = per_page[cell.page]
+        for box in input_boxes(cell):
+            checked += 1
+            low = bisect.bisect_left(centres, box[0] + DIVIDER_INTERIOR_PT)
+            high = bisect.bisect_right(centres, box[2] - DIVIDER_INTERIOR_PT)
+            spanned = [
+                round(centre, 2) for centre, paint in dividers[low:high]
+                if min(box[3], paint.y1) - max(box[1], paint.y0)
+                >= DIVIDER_MIN_Y_OVERLAP_PT
+            ]
+            if spanned:
+                offenders.append({
+                    "cell": cell.id,
+                    "page": cell.page,
+                    "input": [round(value, 2) for value in box],
+                    "printed_dividers_spanned": len(spanned),
+                    "divider_x": spanned[:8],
+                })
+    if offenders:
+        return broken(
+            f"{len(offenders)} input(s) span a printed compartment divider",
+            offenders,
+            inputs_checked=checked,
+            printed_dividers_detected=detected,
+            emitted_cell_binding_issues=0,
+        )
+    return held(
+        inputs_checked=checked,
+        printed_dividers_detected=detected,
+        emitted_cell_binding_issues=0,
+    )
+
+
+# --------------------------------------------------------------------------
+# assertion 10 -- a printed box whose row peers are fillable must be fillable
+# --------------------------------------------------------------------------
+
+
+def check_printed_box_peers_all_fillable(b: Bundle) -> dict[str, Any]:
+    """C4/G03: the box the lattice called a label, so no input was ever made.
+
+    `money_boxes_have_inputs` cannot see this one either, and again for a
+    structural reason: it enumerates candidates from `b.layout_cells` and
+    accepts only `layout_cell["kind"] == "field"`, so a printed box the
+    lattice mis-classified as `label` never enters its population.  A `field`
+    cell with zero inputs occurs 0 times in 9,971 -- the population is clean
+    because the mistake removes its members from it.
+
+    So the population here comes from the source instead
+    (`source_printed_boxes`), and the expectation comes from the source's own
+    layout: if a row of the sheet draws several identical blank boxes -- same
+    top edge, same bottom edge -- and some of them carry an emitted input,
+    then a taxpayer is plainly meant to be able to write in all of them.  A
+    row where NONE is fillable proves nothing and is not reported: it may
+    legitimately be Bureau-only, and this assertion refuses to guess.  That
+    self-denial is what makes the ones it does report unambiguous -- the two
+    that opened this class, 0619-E and 0620's Amended-Return YES box, are the
+    single offender on their whole sheet.
+    """
+    if b.form_html is None:
+        return broken("no emitted form document to check",
+                      printed_boxes_checked=0, peer_rows_checked=0)
+    if b.doc is None:
+        return broken("source PDF not resolved; printed boxes unknown",
+                      printed_boxes_checked=0, peer_rows_checked=0)
+    binding_issues = emitted_cell_binding_issues(b)
+    if binding_issues:
+        return broken(
+            f"{len(binding_issues)} emitted cell binding issue(s)",
+            binding_issues,
+            offender_limit=None,
+            printed_boxes_checked=0,
+            peer_rows_checked=0,
+            boxes_unevaluable=0,
+            emitted_cell_binding_issues=len(binding_issues),
+        )
+    inputs_by_page: dict[int, list[tuple[str, Rect]]] = (
+        collections.defaultdict(list))
+    for cell in b.cells:
+        for box in input_boxes(cell):
+            inputs_by_page[cell.page].append((cell.id, box))
+    offenders: list[dict[str, Any]] = []
+    checked = 0
+    peer_rows = 0
+    unevaluable = 0
+    for page_index in sorted(b.pages):
+        page = b.vector_pages.get(page_index)
+        if page is None:
+            continue
+        glyphs = b.source_glyphs.get(page_index)
+        if glyphs is None:
+            return broken(
+                f"page {page_index} draws text this audit cannot place; "
+                "printed boxes unknown",
+                printed_boxes_checked=checked,
+                peer_rows_checked=peer_rows,
+                boxes_unevaluable=unevaluable,
+            )
+        boxes, page_unevaluable = source_printed_boxes(
+            page, glyphs, PointToneIndex(page.paints))
+        unevaluable += page_unevaluable
+        checked += len(boxes)
+        emitted = inputs_by_page.get(page_index, ())
+        filled_by: dict[Rect, str | None] = {}
+        for box in boxes:
+            box_area = (box[2] - box[0]) * (box[3] - box[1])
+            owner: str | None = None
+            for cell_id, rect in emitted:
+                width = min(box[2], rect[2]) - max(box[0], rect[0])
+                height = min(box[3], rect[3]) - max(box[1], rect[1])
+                if width <= 0 or height <= 0:
+                    continue
+                smaller = min(box_area,
+                              (rect[2] - rect[0]) * (rect[3] - rect[1]))
+                if (smaller > 0
+                        and width * height
+                        >= PRINTED_BOX_FILL_MIN_FRACTION * smaller):
+                    owner = cell_id
+                    break
+            filled_by[box] = owner
+        rows: dict[tuple[float, float], list[Rect]] = (
+            collections.defaultdict(list))
+        for box in boxes:
+            rows[(round(box[1], 2), round(box[3], 2))].append(box)
+        for key in sorted(rows):
+            group = rows[key]
+            if len(group) < 2:
+                continue
+            peer_rows += 1
+            filled = [box for box in group if filled_by[box] is not None]
+            if not filled:
+                continue
+            for box in group:
+                if filled_by[box] is not None:
+                    continue
+                offenders.append({
+                    "page": page_index,
+                    "box": [round(value, 2) for value in box],
+                    "row_peers": len(group),
+                    "row_peers_with_input": len(filled),
+                    "peer_with_input": filled_by[filled[0]],
+                })
+    if offenders:
+        return broken(
+            f"{len(offenders)} printed box(es) have no input while a row peer "
+            "does",
+            offenders,
+            printed_boxes_checked=checked,
+            peer_rows_checked=peer_rows,
+            boxes_unevaluable=unevaluable,
+            emitted_cell_binding_issues=0,
+        )
+    return held(
+        printed_boxes_checked=checked,
+        peer_rows_checked=peer_rows,
+        boxes_unevaluable=unevaluable,
+        emitted_cell_binding_issues=0,
+    )
+
+
 CHECKS = {
     "inputs_over_printed_text": check_inputs_over_printed_text,
     "comb_slots_match_printed": check_comb_slots_match_printed,
@@ -7081,12 +7591,16 @@ CHECKS = {
     "reflow_rate_without_description": check_reflow_rate_without_description,
     "image_transform_applied": check_image_transform_applied,
     "no_invented_codepoints": check_no_invented_codepoints,
+    "inputs_span_no_printed_divider": check_inputs_span_no_printed_divider,
+    "printed_box_peers_all_fillable": check_printed_box_peers_all_fillable,
 }
-assert tuple(CHECKS) == ASSERTION_KEYS, "GOAL.md names these eight, in this order"
+assert tuple(CHECKS) == ASSERTION_KEYS, (
+    "GOAL.md names the first eight, in this order; the two field-layer "
+    "assertions follow them")
 
 
 def evaluate_assertions(bundle: Bundle) -> dict[str, Any]:
-    """Run all eight and flatten them into the per-form record.
+    """Run every assertion and flatten it into the per-form record.
 
     A raising check is a failing check. It cannot be a passing one: an assertion
     that throws has not looked at the form, and "we did not look" is the exact
@@ -8253,10 +8767,11 @@ def self_test() -> int:
     # 6: the guide's only row has an empty description and a 3% rate.
     check("reflow_rate_without_description must fail on a rate with no description",
           results["reflow_rate_without_description"] is False)
-    # 2, 7, 8 need the source PDF, which this fixture deliberately lacks:
-    # unevaluable must read as failure, not as a pass.
+    # 2, 7, 8, 9 and 10 need the source PDF, which this fixture deliberately
+    # lacks: unevaluable must read as failure, not as a pass.
     for key in ("comb_slots_match_printed", "image_transform_applied",
-                "no_invented_codepoints"):
+                "no_invented_codepoints", "inputs_span_no_printed_divider",
+                "printed_box_peers_all_fillable"):
         check(f"{key} must fail when the source PDF cannot be resolved",
               results[key] is False and "not resolved" in results["assertions"][key]["reason"])
     check("every assertion must name offenders or a reason",
@@ -12769,6 +13284,182 @@ def self_test() -> int:
         source_page(*many), comb_subject(x1=88.0))
     check("printed divider evidence is exhaustive beyond sixteen entries",
           many_count == 21 and many_xs == [float(x) for x in range(4, 84, 4)])
+
+    # ----------------------------------------------------------------------
+    # assertions 9 and 10 -- the field layer.
+    #
+    # These two fixtures are built as a REAL PDF and run through the real
+    # `ordered_vector_paints` / `drawn_glyph_boxes` / `input_boxes` path,
+    # because the whole point of both assertions is that their expectation
+    # comes from the source file's own operators.  A hand-built VectorPage
+    # would let the fixture agree with the assertion about what the source
+    # says, which is the defect class this file keeps finding.
+    #
+    # The page draws, at y 20..40:
+    #   A  10..60   an enclosed blank box with ONE printed compartment
+    #               divider at x=30
+    #   B  80..110  an enclosed blank box, no divider
+    #   C  130..160 an enclosed blank box whose divider at x=145 is then
+    #               painted over in white -- present in the operator stream,
+    #               absent from the page
+    # and at y 60..80:
+    #   D  10..60   an enclosed box with the glyphs "TOTAL" inside it
+    #   E  80..110  an enclosed box filled mid grey
+    # A, B and C are row peers.  D and E are the false-positive guards for
+    # the inventory: a caption box and an official "no entry applies" band
+    # must never be claimed as boxes a taxpayer should be able to type in.
+    field_doc = fitz.open()
+    field_page = field_doc.new_page(width=200, height=100)
+    field_shape = field_page.new_shape()
+    for frame in (fitz.Rect(10, 20, 60, 40), fitz.Rect(80, 20, 110, 40),
+                  fitz.Rect(130, 20, 160, 40), fitz.Rect(10, 60, 60, 80),
+                  fitz.Rect(80, 60, 110, 80)):
+        field_shape.draw_rect(frame)
+    field_shape.finish(color=(0.0, 0.0, 0.0), width=0.5)
+    field_shape.draw_line(fitz.Point(30, 32), fitz.Point(30, 40))
+    field_shape.draw_line(fitz.Point(145, 32), fitz.Point(145, 40))
+    field_shape.finish(color=(0.0, 0.0, 0.0), width=0.72)
+    field_shape.draw_rect(fitz.Rect(131, 21, 159, 39))
+    field_shape.finish(color=None, fill=(1.0, 1.0, 1.0))
+    field_shape.draw_rect(fitz.Rect(81, 61, 109, 79))
+    field_shape.finish(color=None, fill=(0.6, 0.6, 0.6))
+    # A 1.4 x 3.0pt dark speck inside box B. Dark and narrow, but not
+    # materially taller than it is wide, so it is not a compartment divider.
+    # 109 paints across 15 corpus forms are excluded by exactly this clause.
+    field_shape.draw_rect(fitz.Rect(94.3, 28.0, 95.7, 31.0))
+    field_shape.finish(color=None, fill=(0.0, 0.0, 0.0))
+    field_shape.commit()
+    field_page.insert_text(fitz.Point(20, 74), "TOTAL", fontsize=8)
+    field_pdf = field_doc.tobytes()
+    field_doc.close()
+
+    def field_ir() -> dict[str, Any]:
+        return {
+            "form": {"code": "FIELD", "revision": "0000"},
+            "source": {"file": "external:none.pdf", "sha256": "0" * 64},
+            "paper": {"width_pt": 200.0, "height_pt": 100.0},
+            "pages": [{
+                "index": 1, "width_pt": 200.0, "height_pt": 100.0,
+                "rotation": 0, "rules": [], "area_fills": [], "images": [],
+                "text_runs": [], "stats": {},
+            }],
+        }
+
+    def field_cell(cell_id: str, rect: Rect, inner: str) -> str:
+        left, top, right, bottom = rect
+        return (
+            f'<div id="{cell_id}" class="c f" data-cell-kind="field" '
+            f'data-field-kind="text" style="left:{left}pt;top:{top}pt;'
+            f'width:{right - left}pt;height:{bottom - top}pt">{inner}</div>')
+
+    def field_input(cell_id: str, rect: Rect, inset: Rect) -> str:
+        top, right, bottom, left = inset
+        return field_cell(cell_id, rect, (
+            f'<input type="text" class="fi" id="{cell_id}-i" name="{cell_id}" '
+            f'style="inset:{top}pt {right}pt {bottom}pt {left}pt">'))
+
+    def field_bundle(cells: Sequence[tuple[str, Rect, str]]) -> Bundle:
+        return Bundle(
+            slug="field-fixture", ir=field_ir(),
+            layout={"pages": [{"index": 1, "cells": [
+                {"id": cell_id, "x0": rect[0], "y0": rect[1],
+                 "x1": rect[2], "y1": rect[3],
+                 "border": {"top": {}, "bottom": {}, "left": {}, "right": {}},
+                 "is_empty": True, "rectangular": True, "kind": "field",
+                 "text_run_ids": []}
+                for cell_id, rect, _ in cells]}]},
+            plan={"inline": []},
+            form_html=(
+                '<div class="page page-1" id="page-1" '
+                'style="width:200pt;height:100pt">'
+                + "".join(markup for _, _, markup in cells)
+                + '</div>'),
+            guide_html=None, pdf=field_pdf)
+
+    # The three peers, each with its own input.  A1 must hold (no input
+    # reaches inside A's divider), and A2 must hold (every peer is fillable).
+    clean_cells = [
+        ("p1c0", (10.0, 20.0, 29.4, 40.0),
+         field_input("p1c0", (10.0, 20.0, 29.4, 40.0), (2.0, 1.0, 2.0, 1.0))),
+        ("p1c1", (30.6, 20.0, 60.0, 40.0),
+         field_input("p1c1", (30.6, 20.0, 60.0, 40.0), (2.0, 1.0, 2.0, 1.0))),
+        ("p1c2", (80.0, 20.0, 110.0, 40.0),
+         field_input("p1c2", (80.0, 20.0, 110.0, 40.0), (0.0, 0.0, 0.0, 0.0))),
+        ("p1c3", (130.0, 20.0, 160.0, 40.0),
+         field_input("p1c3", (130.0, 20.0, 160.0, 40.0), (0.0, 0.0, 0.0, 0.0))),
+    ]
+    clean_bundle = field_bundle(clean_cells)
+    clean_divider = check_inputs_span_no_printed_divider(clean_bundle)
+    clean_peers = check_printed_box_peers_all_fillable(clean_bundle)
+    check(
+        "a comb split at its printed divider holds, and the divider is seen",
+        clean_divider["holds"] is True
+        and clean_divider["inputs_checked"] == 4
+        and clean_divider["printed_dividers_detected"] >= 3,
+    )
+    # p1c2's input is drawn edge to edge over box B's own printed frame and
+    # over the speck inside it, and p1c3's over box C's white-knocked-out
+    # divider.  None of the three may be reported: an input is not guilty of
+    # its own walls, a blob is not a divider, and a divider the page does not
+    # show is not a divider.
+    check(
+        "an input over its own printed frame is not its own offender",
+        clean_divider["holds"] is True,
+    )
+    check(
+        "three fillable printed peers hold, and captions and grey bands are "
+        "not in the inventory",
+        clean_peers["holds"] is True
+        and clean_peers["printed_boxes_checked"] == 3
+        and clean_peers["peer_rows_checked"] == 1
+        and clean_peers["boxes_unevaluable"] == 0,
+    )
+
+    # One input across the whole of box A: it spans A's printed divider.
+    spanning_cells = list(clean_cells)
+    spanning_cells[0:2] = [(
+        "p1c0", (10.0, 20.0, 60.0, 40.0),
+        field_input("p1c0", (10.0, 20.0, 60.0, 40.0), (2.0, 2.0, 2.0, 2.0)))]
+    spanning = check_inputs_span_no_printed_divider(field_bundle(spanning_cells))
+    check(
+        "inputs_span_no_printed_divider must fail on one box over two "
+        "printed compartments",
+        spanning["holds"] is False
+        and spanning["offender_count"] == 1
+        and spanning["offenders"][0]["cell"] == "p1c0"
+        and spanning["offenders"][0]["printed_dividers_spanned"] == 1
+        and spanning["offenders"][0]["divider_x"] == [30.0],
+    )
+
+    # Box B loses its own input and keeps only the neighbouring cell's, which
+    # clips 2 of its 30pt.  An input next door is not an input in this box --
+    # if it were, the assertion would report nothing on any crowded sheet.
+    unfilled_cells = [row for row in clean_cells if row[0] != "p1c2"]
+    unfilled_cells.append((
+        "p1c4", (74.0, 20.0, 82.0, 40.0),
+        field_input("p1c4", (74.0, 20.0, 82.0, 40.0), (0.0, 0.0, 0.0, 0.0))))
+    unfilled = check_printed_box_peers_all_fillable(
+        field_bundle(unfilled_cells))
+    check(
+        "printed_box_peers_all_fillable must fail on a printed peer with no "
+        "input",
+        unfilled["holds"] is False
+        and unfilled["offender_count"] == 1
+        and unfilled["offenders"][0]["box"] == [80.0, 20.0, 110.0, 40.0]
+        and unfilled["offenders"][0]["row_peers"] == 3
+        and unfilled["offenders"][0]["row_peers_with_input"] == 2,
+    )
+
+    # The false-positive guard that decides whether this assertion can be
+    # trusted at all: a row where NOTHING is fillable proves nothing about
+    # the Bureau's intent, and must be silent rather than opinionated.
+    silent = check_printed_box_peers_all_fillable(field_bundle([]))
+    check(
+        "a printed row with no fillable peer at all is not an offence",
+        silent["holds"] is True
+        and silent["printed_boxes_checked"] == 3
+        and silent["peer_rows_checked"] == 1,
+    )
 
     for name in failures:
         print(f"FAIL {name}", file=sys.stderr)

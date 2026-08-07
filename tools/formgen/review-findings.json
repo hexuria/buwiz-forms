@@ -1669,8 +1669,8 @@
       "evidence": "Screenshotted the guide. The heading \"ATC Percentage Tax On: Tax Rate\" is emitted, then the body is one paragraph: \"PT 010 Persons exempt from VAT under Sec. 109z (Sec. 116) 3% PT 040 Domestic carriers and keepers of garages 3% PT 041 International Carriers 3% PT 060 Franchises on electric utilities, gas and water utility 2% PT 070 Franchises on radio/TV broadcasting companies whose\" / \"annual gross receipts do not exceed P 10 M 3% Tax on banks and non-bank financial intermediaries\". Later: \"basis of the remaining maturities of the instrument 5%,3%,1%,0% PT 102 2) On dividends 0% PT 103 3) On royalties, rentals of property, real or personal, profits from exchange and all other gross income 5%\". The sibling form 2551Q, whose ATC table was detected as cells, renders a proper two-column table - so this is a per-form regression, not an intended presentation.",
       "audit_blind": true,
       "cause": "C9",
-      "status": "fixed",
-      "resolution": "The prose flattening this finding names is gone: build/html/2551m-2002.guide.html page 2 now carries data-flow='table,prose' with one 19-row gl-table in which each ATC code sits in its own row and column beside its description ('PT 010 | Persons exempt from VAT under Sec. 109z...'), verified 2026-08-06 after regeneration. The reflow_rate_without_description assertion was extended to read multi-section pages and scan gl-table rows content-wise (a row whose only filled cells are bare rate/code values fails), and it passes with rows checked, guarded by four new audit self-tests including a prose-flattening fixture that still fails. Residual, documented in the prior resolution note and unchanged: with no ruled grid in the source band, the rate and the two-up table's second half can share the description cell -- a presentation shortfall, not the lost code-to-rate association this finding is about."
+      "status": "open",
+      "resolution": "REOPENED 2026-08-07 (r18). The 2026-08-06 closure was wrong, and the way it was wrong is the point: it measured the symptom it named (prose flattening) and declared the finding fixed, while the association this finding says was DESTROYED -- ATC code to tax rate -- is still destroyed. Re-measured against the shipped bundle at r18: forms/2551m-2002/guide.html emits '<td>PT 060</td><td>Franchises on electric utilities, gas and water utility 2% performing quasi-banking functions</td><td></td><td>5%</td>', so PT 060 carries a Tax Rate of 5%. Re-derived independently from the pinned source (~/Downloads/forms/2551M/2551m.pdf, sha256 f678be684558b8fb15a026b70a7c473f904fd07d49df64e0345fe1c0f81de71e, matching provenance.json) with PyMuPDF text operators: page 2 y 202.0-210.0 is ONE scanline carrying TWO source rows, 'PT 060 Franchises on electric utilities, gas and water utility' with its rate '2%' at x=251.5 in the LEFT rate column, and 'PT 112 2) On interest, commissions and discounts paid from their loan ... 5%' at x=549.1 in the RIGHT rate column. The reflow has no column detection, so it binds the right half's 5% to the left half's code. Officially 2%; we print 5%. The rate table F127 describes is still mis-bound, so the finding is open again and stays open. F167 (blocker) carries the same defect as its own row and names the producer fix; F127 is reopened rather than left closed because a `fixed` status on a still-defective table is exactly the failure mode this ledger exists to prevent. The prose flattening itself IS gone and that part of the 2026-08-06 resolution stands -- it was not sufficient, and the assertion that closed it (reflow_rate_without_description) is structurally unable to see a rate bound to the wrong code."
     },
     {
       "id": "F128",
@@ -2256,6 +2256,123 @@
       "cause": null,
       "audit_blind": true,
       "resolution": "Fixed by regenerating the corpus at r14, which is all this ever needed -- the corrected overlay already existed in emit.py and had simply never been written out. Measured on the r14 tree: `grep -l 'printed box with no input' forms/*/index.html forms/extra/*/index.html` returns 53 of 53 bundles (it returned 0 when the finding was raised), and `grep -l 'no usable box' ...` returns 0 (it returned 38). Every shipped bundle now carries the overlay in which a blue dashed outline means 'printed box with NO input' rather than 'this input is fine'."
+    },
+    {
+      "id": "F173",
+      "form": "1701-2018",
+      "page": 1,
+      "severity": "blocker",
+      "what": "Item 6/7 ATC selection: the checkbox for ATC II016 'Mixed Income - 8% IT Rate' has no input, so a mixed-income filer electing the 8% rate cannot state their ATC. The other three boxes on the same printed row are all fillable.",
+      "where": "forms/1701-2018/, page 1. Four printed boxes share the exact row y 185.88-197.40: x 31.68-44.64 (II011 Compensation Income), 155.16-168.12 (II015 Business Income - 8%), 300.12-313.25 (II017 Income from Profession - 8%) and 460.44-473.40 (II016 Mixed Income - 8%). The first three carry emitted inputs (peer named by the assertion: p1c32); the fourth carries none.",
+      "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [460.44, 185.88, 473.40, 197.40]; row_peers 4, row_peers_with_input 3. Labels re-derived from the pinned source's text operators: the box at 460.44 is immediately left of 'II016 Mixed Income - 8% IT Rate' at x 480. The ATC drives which rate schedule applies, so an unselectable ATC is a wrong-tax hazard, not a cosmetic one.",
+      "cause": "C4",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F174",
+      "form": "1701ms-2024",
+      "page": 1,
+      "severity": "major",
+      "what": "Item 17 'Method of Deduction': the SECOND (spouse) 'Optional Standard Deduction (OSD) [40% of Gross Sales/Revenues/Fees]' checkbox has no input, so the spouse column cannot record an OSD election. The taxpayer column's identical box is fillable.",
+      "where": "forms/1701ms-2024/, page 1. Two printed boxes share row y 370.10-380.15: x 209.40-220.20 (taxpayer OSD, emitted input p1c80) and x 403.25-414.43 (spouse OSD, no input).",
+      "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [403.25, 370.10, 414.43, 380.15]; row_peers 2, row_peers_with_input 1. Both boxes are followed by the identical label 'Optional Standard Deduction (OSD) [40% of Gross Sales/Revenues/Fees] [Sec. 34(K), NIRC]' in the source's own words, which is what proves they are the same control drawn twice rather than two different things.",
+      "cause": "C4",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F175",
+      "form": "1706-2018",
+      "page": 1,
+      "severity": "blocker",
+      "what": "Item 11 'Are you availing of tax relief under an International Tax Treaty?': the 'No' checkbox has no input, so the question cannot be answered in the negative. 'Yes' is fillable, as are both boxes of item 10 on the same printed row.",
+      "where": "forms/1706-2018/, page 1. Four printed boxes share row y 383.88-395.04: x 85.56-97.92 (item 10 Yes), 129.60-141.96 (item 10 No), 261.00-273.48 (item 11 Yes) and 297.00-309.48 (item 11 No, no input). Peer named by the assertion: p1c78.",
+      "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [297.00, 383.88, 309.48, 395.04]; row_peers 4, row_peers_with_input 3. The 'No' label sits at x 313 immediately right of the offending box, and 'If yes, specify' follows it, so the pairing is unambiguous in the source.",
+      "cause": "C4",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F176",
+      "form": "2200m-2018",
+      "page": 1,
+      "severity": "blocker",
+      "what": "Item 12 'Are you availing of tax relief under Special Law or International Tax Treaty?': the 'No' checkbox has no input. 'Yes' is fillable.",
+      "where": "forms/2200m-2018/, page 1. Two printed boxes share row y 322.01-333.48: x 151.56-165.00 (Yes, emitted input p1c52) and x 209.16-222.60 (No, no input).",
+      "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [209.16, 322.01, 222.60, 333.48]; row_peers 2, row_peers_with_input 1. Same defect and same shape as F175 on 1706, on a different form and a different item -- which is the signal that the cause is in `lattice.py` cell classification and not in any one sheet.",
+      "cause": "C4",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F177",
+      "form": "2550q-2024",
+      "page": 1,
+      "severity": "blocker",
+      "what": "Item 3 'Quarter': the 2nd-quarter checkbox has no input, so a second-quarter VAT return cannot be marked as one. 1st, 3rd and 4th are all fillable, as are item 1's Calendar and Fiscal boxes on the same printed row.",
+      "where": "forms/2550q-2024/, page 1. Six printed boxes share row y 110.50-122.70: x 74.00-87.70 (Calendar), 141.20-154.80 (Fiscal), 434.60-448.78 (1st), 470.40-484.10 (2nd, NO INPUT), 512.60-526.20 (3rd), 554.30-567.90 (4th). Peer named by the assertion: p1c8.",
+      "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [470.40, 110.50, 484.10, 122.70]; row_peers 6, row_peers_with_input 5. The labels '1st'@434.6, '2nd'@470.4, '3rd'@512.6, '4th'@554.3 were re-derived from the source's text operators and each sits immediately right of its own box, so the dead box is the 2nd quarter and not an ambiguous neighbour. Same class as F135 (2553 3rd quarter) on a different form: one quarter of the year is unfileable.",
+      "cause": "C4",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F178",
+      "form": "1600wp-2010",
+      "page": 1,
+      "severity": "blocker",
+      "what": "Six inputs each lie across printed compartment dividers, including item 5 TIN: the TIN's printed compartments are covered by four wide free-text inputs rather than one slot per compartment, so digits do not land in their printed boxes. Item 3 'No. of Sheet/s Attached' and item 6 'RDO Code' have the same defect.",
+      "where": "forms/1600wp-2010/, page 1. p1c10 [53.97,139.94,93.33,155.97] spans dividers at x 65.64/79.92; p1c12 [109.83,...] spans 122.52/136.68; p1c14 [165.03,...] spans 177.72/189.48; p1c16 [219.28,...] spans 232.68/247.68/260.28 (all item 5 TIN); p1c17 [360.14,...] spans 375.24/390.96 (item 6 RDO Code); p1c7 [431.19,105.03,470.61,121.05] spans 451.68 (item 3).",
+      "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 6 offenders of 149 inputs checked on this bundle, against 197 printed dividers detected. `comb_slots_match_printed` also fails on this form but cannot see these cells, because its inventory is the layout's comb subjects and the lattice never made these combs. Item labels re-derived from the pinned source: 'Part I 5 TIN' left of p1c10/p1c16, '6 RDO Code' left of p1c17, '2 Amended Return? 3 No. of Sheet/s Attached' left of p1c7.",
+      "cause": "C5",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F179",
+      "form": "1604cf-2008",
+      "page": 1,
+      "severity": "major",
+      "what": "Twenty-two inputs lie across printed compartment dividers. On page 1 the 'If yes, specify the date of refund' date group and item 13 'Month of First Crediting of Compensation' are covered by wide inputs instead of one slot per printed compartment; on page 2 seven Schedule rows each emit one 93.6pt input across a printed column divider, merging two separate data columns into one box.",
+      "where": "forms/1604cf-2008/. Page 1: p1c24 [530.88,199.68,574.80,213.12] spans x 540.72/552.00/564.00; p1c298/303/304 span 509.52/497.28/520.08; p1c29 [380.40,218.40,394.56,231.84] spans 386.16. Page 2: p2c10/19/28/37/46/55/64, each [175.44,*,269.04,*], each spanning the printed divider at x 243.12.",
+      "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 22 offenders of 846 inputs checked, 12 published (the default preview limit), against 498 printed dividers detected. This bundle has no other open finding, so without this assertion the defect had no record at all. The page-2 population is the more serious half: one input across a column divider means two officially separate values share a single box.",
+      "cause": "C5",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F180",
+      "form": "2550m-2007",
+      "page": 1,
+      "severity": "major",
+      "what": "Eight inputs lie across printed compartment dividers, including item 1 'For the Month of (MM/YYYY)': the four printed year compartments are covered by one 60.7pt free-text input. Item 32 'Others' 32C and six Schedule rows on page 2 have the same defect, the page-2 rows each spanning two printed column dividers.",
+      "where": "forms/2550m-2007/. Page 1: p1c2 [209.28,90.72,270.00,102.48] spans x 223.44/240.00/255.84 (item 1); p1c104 [246.96,858.34,263.52,870.48] spans 260.40 (item 32 Others). Page 2: p2c86/89/92/124/127/130, each [78.00,*,466.32,*], each spanning 248.52 and 336.60.",
+      "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 8 offenders of 256 inputs checked, against 342 printed dividers detected. p1c2 is the case STATUS.md has carried as G02a since 2026-08-06 -- 'four printed compartments, one free-text input' -- diagnosed by hand and, until this assertion, invisible to every gate check. The independent diagnosis and the assertion agree on the same cell, which is the first cross-check this defect has ever had.",
+      "cause": "C5",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F181",
+      "form": "2553-1999",
+      "page": 1,
+      "severity": "blocker",
+      "what": "Four inputs lie across printed compartment dividers, including item 6 TIN and item 7 RDO Code: each is covered by one wide free-text input rather than one slot per printed compartment. Item 10 Telephone Number and item 12 Zip Code have the same defect.",
+      "where": "forms/2553-1999/, page 1. p1c21 [172.92,190.08,204.72,208.08] spans x 182.88/194.16 (item 6 TIN); p1c13 [258.24,188.88,301.92,207.84] spans 272.16/287.04 (item 7 RDO Code); p1c25 [485.76,221.04,587.76,239.76] spans 499.68/514.56/530.16/545.28/559.44/572.64 (item 10 Telephone Number); p1c29 [540.00,251.34,587.76,269.52] spans 552.24/564.00/576.00 (item 12 Zip Code).",
+      "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 4 offenders of 97 inputs checked, against 215 printed dividers detected. Item labels re-derived from the pinned source's text operators ('6 TIN' left of p1c21, '7 RDO Code' left of p1c13, '10 Telephone Number' above p1c25, '12 Zip Code' left of p1c29). A TIN that does not land in its printed compartments is the same filing hazard as F111 (2316) and F163 (0605), on a form that had no comb finding at all.",
+      "cause": "C5",
+      "audit_blind": false,
+      "status": "open",
+      "resolution": null
     }
   ]
 }

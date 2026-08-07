@@ -149,9 +149,19 @@ SELF_TEST_MODULES = (
 )
 SELF_SUPERVISING_SELF_TEST_MODULES = frozenset({"comb_referee", "gate"})
 
-# The eight assertions from GOAL.md. gate.py does not implement them: audit.py
+# The assertions the gate demands. gate.py does not implement them: audit.py
 # owns them, and the gate's job is to demand them. Each maps to the key audit.py
 # must publish per form in its record.
+#
+# GOAL.md named eight. The last two are G10's, and they exist because the other
+# eight are structurally blind to the FIELD layer: 171 of 172 ledger findings
+# carry `audit_blind: true`, and a 51-form visual sweep found 138 defects of
+# which 137 sat on pages this gate scored 100% rules / 100% text / 0 missing /
+# 0 extra. The two assertions that came closest each take their candidate
+# population from the producer that made the mistake -- `money_boxes_have_inputs`
+# enumerates from the layout's `field` cells, `comb_slots_match_printed` from
+# the layout's comb subjects -- so a printed box the lattice mis-read is not in
+# either population. The two below take their population from the pinned PDF.
 REQUIRED_ASSERTIONS = {
     "inputs_over_printed_text": "No <input> overlaps a pre-printed text run's bbox",
     "comb_slots_match_printed": "Every comb's slot count equals its printed compartment count",
@@ -161,6 +171,8 @@ REQUIRED_ASSERTIONS = {
     "reflow_rate_without_description": "No relocated table row has an empty description and a rate",
     "image_transform_applied": "Every non-positive-diagonal image transform is emitted",
     "no_invented_codepoints": "No IR run holds a character the source did not state",
+    "inputs_span_no_printed_divider": "No <input> spans a compartment divider the source printed inside it",
+    "printed_box_peers_all_fillable": "No printed box lacks an input while an identical row peer has one",
 }
 AUDIT_DEPENDENT_CHECKS = {
     "rules", "paper", "artwork", "text", "assertions",
@@ -6668,6 +6680,17 @@ BASIC_ASSERTION_COUNT_FIELDS = {
     "reflow_rate_without_description": (("rate_tables",), ("rows_checked",)),
     "image_transform_applied": (("placements",), ("relocated_placements",)),
     "no_invented_codepoints": (("characters_examined",), ()),
+    # Required = the counts every return path of the producer publishes, so a
+    # record that omits one is a producer that did not run the check. Both
+    # of G10's assertions publish their denominators unconditionally; only the
+    # two early source-unresolved returns drop `boxes_unevaluable` and the
+    # binding-issue count, which is why those two are optional.
+    "inputs_span_no_printed_divider": (
+        ("inputs_checked", "printed_dividers_detected"),
+        ("emitted_cell_binding_issues",)),
+    "printed_box_peers_all_fillable": (
+        ("printed_boxes_checked", "peer_rows_checked"),
+        ("boxes_unevaluable", "emitted_cell_binding_issues")),
 }
 BASIC_ASSERTION_PUBLICATION_KEYS = {
     "offender_count", "offenders_published", "offenders_omitted",
@@ -9653,6 +9676,12 @@ def _synthetic_audit_record(
         "image_transform_applied": {
             "placements": 0, "relocated_placements": 0},
         "no_invented_codepoints": {"characters_examined": 0},
+        "inputs_span_no_printed_divider": {
+            "inputs_checked": 0, "printed_dividers_detected": 0,
+            "emitted_cell_binding_issues": 0},
+        "printed_box_peers_all_fillable": {
+            "printed_boxes_checked": 0, "peer_rows_checked": 0,
+            "boxes_unevaluable": 0, "emitted_cell_binding_issues": 0},
     }
     assertions = {
         key: (comb_assertion if key == "comb_slots_match_printed" else {
@@ -10012,9 +10041,17 @@ def self_test() -> int:
     if summarise([Result("probe", Verdict.PASS, "x")]) != 0:
         failures.append("an all-PASS run must exit 0")
 
-    if len(REQUIRED_ASSERTIONS) != 8:
-        failures.append(f"GOAL.md names 8 assertions, gate has "
+    # 8 from GOAL.md + G10's two field-layer assertions. The literal is here so
+    # that adding a name to REQUIRED_ASSERTIONS without declaring its count
+    # contract and its fixture entry fails the self-test rather than a 60-minute
+    # gate run.
+    if len(REQUIRED_ASSERTIONS) != 10:
+        failures.append(f"GOAL.md names 8 assertions and G10 adds 2, gate has "
                         f"{len(REQUIRED_ASSERTIONS)}")
+    if set(REQUIRED_ASSERTIONS) - set(BASIC_ASSERTION_COUNT_FIELDS) != {
+            "comb_slots_match_printed"}:
+        failures.append("every non-comb required assertion needs a declared "
+                        "count contract")
     if "comb_referee" not in SELF_TEST_MODULES:
         failures.append("comb_referee.py must be included in module self-tests")
 

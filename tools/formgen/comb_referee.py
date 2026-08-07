@@ -104,8 +104,16 @@ LATTICE_PRODUCER_SHA256 = (
     "37ba7e1bdf6e385ef737916155f5c0029a94d5c822e31ba72733c8881f9b8866"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
+# Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
+# assertions, `inputs_span_no_printed_divider` and
+# `printed_box_peers_all_fillable`, taking ASSERTION_KEYS from 8 to 10. Neither
+# reads `b.layout`, `b.plan`, emit.py's markers or the IR -- their whole
+# expectation comes from the pinned PDF's own composited paint stream
+# (`ordered_vector_paints`) and its own text operators (`drawn_glyph_boxes`) --
+# so no derivation this referee adjudicates changed. No comb constant moved and
+# no existing assertion's code path was touched.
 AUDIT_PRODUCER_SHA256 = (
-    "d31b4d7a3e4b0449d1e4f3f5f327f7f3eb03ca021bf603a57df39199147d9add"
+    "8d22a9572d675c67c4888a39fdb8cddbbe0adae6faaf89c657ca26b9393fdf8f"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     "tools/formgen/extract.py": (

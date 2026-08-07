@@ -5,26 +5,198 @@ same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
 Measured 2026-08-07 over the 53-form corpus, on branch `gol/form-correction`,
-regenerated at the r14 producer bytes. Assertion counts are from a corpus-wide
+regenerated at the r18 producer bytes. Assertion counts are from a corpus-wide
 `audit.py` run over that regeneration; the findings tally is recomputed from
 `review-findings.json`.
 
-## Corpus census — r14
+## Corpus census — r18 (nothing moved, and that was the prediction)
 
-| Quantity | r14 | previous | Note |
+**No census pin moved this increment, and none should have.** r18 changed
+`audit.py` (two new assertions), `gate.py` (their names and count contracts) and
+`comb_referee.py` (the audit producer pin). None of those three is a generator:
+`extract.py`, `lattice.py`, `guides.py` and `emit.py` are byte-identical to r14.
+`batch.py` re-converted 53/53 and `git status -- forms/` is empty — every one of
+the 53 bundles, plus `forms/index.html` regenerated from the fresh batch report,
+came out byte-identical. The prediction was made before the run and is recorded
+here because a census that moves when nothing generative changed would be the
+defect, not the reassurance.
+
+| Quantity | r18 | r14 | Note |
 | --- | --- | --- | --- |
 | Bundles / unique codes | 53 / 50 | 53 / 50 | 38 direct + 15 under `forms/extra` |
 | Pages | 116 | 116 | |
-| Lattice cells | 20,688 (10,002 `field`) | 20,797 (10,401) | 51 cells `field` → `shaded` |
-| Comb cells | **4,521** | 4,540 (pinned) / 4,521 (actual) | the pin was stale AT HEAD; see below |
-| Emitted inputs | **45,583** | 45,915 | −332 |
-| Comb slot divs | 40,008 | 40,008 | unchanged — slots stay, inputs go |
-| Comb slots with no input | **281** | 0 | the compartments the source already filled in |
-| Editable slots on a short pre-printed constant | **0** | 175 | G11's own metric |
-| `mixed` cells still carrying an input | 156 of 180 | 180 of 180 | correct — money combs, printed ink is the decimal decoration (C4) |
-| Findings | 172 | 172 | **49 blocker+major open of 116** (was 58 of 116) |
+| Lattice cells | 20,688 (10,002 `field`) | 20,688 | unchanged |
+| Comb cells | 4,521 | 4,521 | unchanged; pin still matches |
+| Emitted inputs | 45,583 | 45,583 | unchanged |
+| Comb slot divs | 40,008 | 40,008 | unchanged |
+| Comb slots with no input | 281 | 281 | the compartments the source already filled in |
+| Editable slots on a short pre-printed constant | 0 | 0 | G11's own metric |
+| `mixed` cells still carrying an input | 156 of 180 | 156 of 180 | correct — money combs, printed ink is the decimal decoration (C4) |
+| Assertions demanded by the gate | **10** | 8 | `audit.ASSERTION_KEYS` and `gate.REQUIRED_ASSERTIONS` both |
+| Findings | **181** | 172 | **59 blocker+major open of 125** (was 49 of 116) — 9 appended, 1 reopened; see below |
 
-## Gate — r14
+## The field layer stopped being invisible — G10's first two assertions (r18)
+
+This is the increment's whole point, so its numbers come first.
+
+**Why:** 171 of 172 ledger findings carried `audit_blind: true`. The 51-form
+visual sweep found 138 defects and **137 sat on pages this gate scored rules
+100% / text 100% / 0 missing / 0 extra**. The two existing assertions that come
+closest each take their candidate population from the producer that made the
+mistake, so the mistake removes its own members from the population:
+`money_boxes_have_inputs` enumerates from `b.layout_cells` and accepts only
+`kind == "field"` (a `field` cell with zero inputs occurs **0 times in 9,971** —
+that is the mechanism, not a clean bill of health), and
+`comb_slots_match_printed` opens with `if b.layout is None` and inventories the
+layout's comb subjects. Neither of the two new assertions reads `b.layout`,
+`b.plan`, `build/layout/*.json`, emit.py's markers or the IR. Their whole
+expectation comes from the pinned PDF's own composited paint stream
+(`ordered_vector_paints`) and its own text operators (`drawn_glyph_boxes`),
+scored against `input_boxes(cell)` from the emitted DOM.
+
+| New assertion | Forms failing | Offenders | Denominator |
+| --- | --- | --- | --- |
+| `inputs_span_no_printed_divider` | **11 of 53** | **79** | 44,536 emitted inputs walked |
+| `printed_box_peers_all_fillable` | **14 of 53** | **14** | 7,223 printed boxes recovered from the source |
+
+**These are newly-VISIBLE defects, not new defects and not a regression.** Every
+one of the 93 offenders was already in the shipped corpus at r14, r15 and r17;
+what changed is that a check can now see them. An assertion that catches real
+defects on day one is the point of writing it.
+
+**The strongest evidence that they measure the right thing is that they land on
+findings a human found by eye, at the same coordinates.** `printed_box_peers_all_fillable`
+reports 0619-E's offender at box `[276.05, 134.64, 289.08, 146.16]`; F152, filed
+by a reviewer on 2026-08-07, records "the printed box is at (276.0, 135.0)
+12.5 x 10.5 pt". 0620 matches F153 the same way. Both are blockers, both were
+`audit_blind: true`, and neither is blind any more. `inputs_span_no_printed_divider`
+reports 2550M `p1c2` at `[209.28, 90.72, 270.00, 102.48]` spanning three printed
+dividers — the case STATUS.md has carried since 2026-08-06 as G02a, diagnosed by
+hand against `lineCap`, and until now invisible to every gate check.
+
+**Nine of the 93 offenders were on populations no open finding covered, and the
+ledger now carries them: F173–F181** (5 dead checkboxes, 4 comb-spanning input
+groups). The rest map onto open findings already filed — F152, F153, F106, F135,
+F150, F049/F054/F058/F062, F041, F073, F111, F115, F163, F164, F165, F166 — so
+the two assertions independently re-derive 16 existing human findings from the
+source PDF alone.
+
+The five dead checkboxes are worth naming because each one makes a legally
+required election unstateable:
+
+| Finding | Form | The box that cannot be ticked | Peers on the same printed row that can |
+| --- | --- | --- | --- |
+| F173 | 1701 | ATC **II016 Mixed Income – 8% IT Rate** | II011, II015, II017 |
+| F174 | 1701MS | item 17 spouse **Optional Standard Deduction** | the taxpayer's identical OSD box |
+| F175 | 1706 | item 11 International Tax Treaty **No** | item 11 Yes, item 10 Yes/No |
+| F176 | 2200M | item 12 Special Law / Treaty **No** | item 12 Yes |
+| F177 | 2550Q | item 3 quarter **2nd** | Calendar, Fiscal, 1st, 3rd, 4th |
+
+Each was confirmed against the pinned source's own text operators before it was
+filed: the label immediately right of the offending box was re-derived from the
+PDF, so "the dead one is the 2nd quarter" is a measurement and not a guess.
+
+### What the two assertions deliberately refuse to say
+
+Both are narrow on purpose, and the narrowness is the reason to trust them.
+
+- A9 counts a divider only when it is dark (tone ≤ 0.5), thin (≤ 1.6pt),
+  materially taller than wide, **still visible after the page composites**, more
+  than 0.5pt inside BOTH of the input's own edges, and sharing ≥ 1pt of the
+  input's height. The visibility clause is not decoration: 2550M draws a comb
+  tick and then paints a white 44 × 13pt rectangle over it, and dropping the
+  clause inflates the count from 79 to 111 with 32 dividers that are not on the
+  printed page at all.
+- A9 reports the **input**, not the divider. 2550Q `p1c41` is one 437pt input
+  over 30 printed compartments; publishing 30 rows would bury the one defect.
+- A10 stays silent on a row where **nothing** is fillable. Such a row may
+  legitimately be Bureau-only, and guessing there is exactly what would make the
+  assertion untrustworthy. It speaks only when the sheet itself has already said
+  these boxes are the same kind of thing, by giving at least one of them an
+  input.
+
+### gate.py had to change too, and it was declared in one commit
+
+`gate.REQUIRED_ASSERTIONS` and `gate.BASIC_ASSERTION_COUNT_FIELDS` are exact
+allowlists: an assertion name the gate does not know makes the record
+`unsupported basic assertion`, and a published count field it does not know makes
+it `detail has unsupported fields`. Both grew by two, the synthetic fixture
+`_synthetic_audit_record` declares both new keys' counts, and the self-test's
+literal `8` became `10` **plus a new invariant** — every non-comb name in
+`REQUIRED_ASSERTIONS` must have a declared count contract — so the next agent who
+adds an assertion without declaring its contract fails a 3-second self-test
+instead of a 60-minute gate. That is G17's lesson paid forward rather than
+restated.
+
+`comb_referee.AUDIT_PRODUCER_SHA256` re-pinned `d31b4d7a` → `8d22a957`, with the
+reasoning recorded at the constant: the new assertions add derivation the referee
+does not adjudicate and touch no existing assertion's code path.
+
+## PT 060 still reads 5%. It is officially 2%. NOT FIXED at r18.
+
+**Report this loudly rather than quietly: the guide reflow fix did not land, so
+2551M's ATC table still binds the wrong tax rate to the wrong ATC code.** The
+work was done and measured in a separate track and was explicitly reported as
+`fixed: false`; `guides.py` is byte-identical to r14 at r18 (`git log
+-- tools/formgen/guides.py` ends at `1e4da29`, a census pin), and the shipped
+bundle proves it.
+
+Measured at r18, two ways that do not share a producer:
+
+| Source | PT 060 |
+| --- | --- |
+| `forms/2551m-2002/guide.html`, first `gl-table` | description cell `"Franchises on electric utilities, gas and water utility 2% performing quasi-banking functions"`, **Tax Rate column `5%`** |
+| Pinned PDF `2551m.pdf` sha256 `f678be68…` (matches `provenance.json`), page 2, PyMuPDF text operators | row y 202.0–210.0 is ONE scanline carrying TWO source rows: `PT 060 … water utility` with its rate **`2%` at x 251.5** in the LEFT rate column, and `PT 112 2) On interest, commissions and discounts paid from their loan … 5%` at **x 549.1** in the RIGHT rate column |
+
+The reflow has no column detection, so it binds the right half's 5% onto the
+left half's code. **A reader picking an ATC from this table can file a franchise
+tax at 5% where the statute says 2%.**
+
+**F127 is therefore REOPENED**, with the retraction recorded in its own
+`resolution` field. The 2026-08-06 closure measured the symptom it named — prose
+flattening, which really is gone — and declared the finding fixed while the
+association the finding says was destroyed is still destroyed. The assertion that
+closed it, `reflow_rate_without_description`, is structurally unable to see a rate
+bound to the wrong code: it asks whether a row has a rate and no description, and
+this row has both. F167 (blocker) carries the same defect as its own row and
+names `guides.py`'s reflow as the owner. The blocker+major count moved 49 → 59
+partly for this reason, and a count that goes up because a wrong `fixed` was
+retracted is the ledger working.
+
+## Gate — r18 (2026-08-07 13:41, `191b683`, clean tree) — 9 of 12 PASS
+
+**The authoritative run.** Same verdict shape as r17: three red checks, the same
+three, for the same reasons on two of them and for one deliberately new reason.
+**No regression.**
+
+| Check | r18 | r17 | Detail |
+| --- | --- | --- | --- |
+| self-tests | PASS | PASS | 10 modules (11 run by hand, `validate_tree` included) |
+| conversion | PASS | PASS | 53/53 unique tracked forms |
+| rules | PASS | PASS | clean on 53/53 |
+| paper | PASS | PASS | exact on 53/53 |
+| artwork | PASS | PASS | clean on 53/53 |
+| text | PASS | PASS | clean on 53/53 |
+| assertions | **FAIL** | FAIL | `inputs_over_printed_text` **20** (r17: 20); `comb_slots_match_printed` **22** (r17: 22); **`inputs_span_no_printed_divider` 11 — NEW**; **`printed_box_peers_all_fillable` 14 — NEW** |
+| findings | **FAIL** | FAIL | **59/125** blocker+major unresolved (r17: 49/116). Worst: 1701 5, 0605 4, 2551M 4, 1701MS 3 |
+| tracked-files | PASS | PASS | no tracked deletion |
+| audit-refresh | PASS | PASS | fresh audit atomically published for 53 forms |
+| determinism | PASS | PASS | byte-identical, **`8ceeab9e506d`** — the SAME digest as r14/r15, which is the independent confirmation that no generator moved |
+| comb-referee | **UNEVALUABLE** | UNEVALUABLE | 40/53, **exactly the r17 residue and no more**: `source frame/unframed partition is false` + `form audit relation contains errors` on 1604C, 1700, 1701MS, 1702EX |
+
+**Neither pre-existing assertion count moved by a single form.** That is the
+result to read twice: adding two assertions to `audit.py` did not perturb the
+eight already there, and the determinism digest is character-for-character the
+r14/r15 value, so the corpus under measurement is provably the same corpus.
+The two new red rows are the two new assertions doing their job on day one.
+
+**The referee's UNEVALUABLE is unchanged and still undiagnosed.** r17 named
+1604C, 1700, 1701MS and 1702EX; r18 names the same four and nothing else. This
+increment neither cleared it nor worsened it, and it was not expected to —
+nothing here touches the referee's derivation. It stays open as G16's shadow
+plus whatever the `source frame/unframed partition` complaint turns out to be.
+
+## Gate — r14 (superseded by r18 above)
 
 Runs r14 (04:22, `8defe23`) and **r15 (05:35, `e38672f`)**, both complete clean-tree
 runs. **9 of 12 PASS** in both. r15 is the authoritative one.

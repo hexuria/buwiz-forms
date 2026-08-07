@@ -15,8 +15,8 @@ regression against it.
 
 ## Where we are
 
-Measured 2026-08-07 at r14, worktree `.claude/worktrees/form-correction`,
-branch `gol/form-correction`. STATUS.md holds the r14 census and the gate
+Measured 2026-08-07 at r18, worktree `.claude/worktrees/form-correction`,
+branch `gol/form-correction`. STATUS.md holds the r18 census and the gate
 table; the rows below carry only the per-defect numbers.
 
 **Corpus census — every number carries its denominator.**
@@ -29,22 +29,31 @@ table; the rows below carry only the per-defect numbers.
 | Codes we carry that BIR does not list | 6 | 0620, 1621, 1709, 2000-DST, 2316, 2550-DS — the user asked to keep them |
 | BIR codes still missing | 7 | 1600, 1601-E, 1601-F, 1602, 1603, 1704, 2000 |
 | Pages | 116 | across 53 bundles |
-| Lattice cells | 20,688 (10,002 classified `field`) | r14; 51 cells `field` → `shaded` |
-| Emitted inputs | 45,583 | r14; −332. 40,008 comb slot divs, of which **281 carry no input** |
-| Comb cells | 4,521 | the pin said 4,540 and was stale at HEAD, not here |
-| Findings in `review-findings.json` | 172 | **49 blocker+major open of 116** at r14 (was 58). The 138 immutable baseline entries are untouched; the digest at `gate.py:8713` still matches |
+| Lattice cells | 20,688 (10,002 classified `field`) | unchanged at r18 |
+| Emitted inputs | 45,583 | unchanged at r18. 40,008 comb slot divs, of which **281 carry no input** |
+| Comb cells | 4,521 | unchanged at r18; pin still matches |
+| Gate-demanded assertions | **10** | 8 → 10 at r18: G10's two field-layer assertions |
+| Findings in `review-findings.json` | **181** | **59 blocker+major open of 125** at r18 (was 49 of 116): **+9 appended** (F173–F181, the populations the two new assertions exposed that no open finding covered) and **F127 REOPENED** — its `fixed` was wrong and 2551M still binds a 5% rate to PT 060. The 138 immutable baseline entries are untouched; the digest at `gate.py:8713` still matches |
 
-**Gate — full runs r14 (04:22, `8defe23`) and r15 (05:35, `e38672f`), both
-clean-tree. 9/12 PASS in both; r15 is authoritative.** STATUS.md holds the full
-table and the analysis.
+**Gate — full clean-tree run r18 (2026-08-07 13:41, `191b683`). 9/12 PASS, the
+same three checks red as r17, no regression.** STATUS.md holds the full table
+and the analysis.
 
     PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
     PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
-    PASS  determinism 8ceeab9e506d
-    FAIL  assertions    inputs_over_printed_text 20/53 forms (was 40)
-                        comb_slots_match_printed 36/53 forms (was 22) — G16
-    FAIL  findings      49/116 blocker+major open (was 58)
-    UNEV  comb-referee  40/53; at r15 every residual error is G16's shadow
+    PASS  determinism 8ceeab9e506d  (the SAME digest as r14/r15 — no generator moved)
+    FAIL  assertions    inputs_over_printed_text 20/53   (r17: 20, unmoved)
+                        comb_slots_match_printed 22/53   (r17: 22, unmoved)
+                        inputs_span_no_printed_divider 11/53   NEW, 79 offenders
+                        printed_box_peers_all_fillable 14/53   NEW, 14 offenders
+    FAIL  findings      59/125 blocker+major open (r17: 49/116) — +9 filed, F127 reopened
+    UNEV  comb-referee  40/53; exactly r17's residue on 1604C, 1700, 1701MS, 1702EX
+
+**The two new red rows are the point, not a regression.** Every one of their 93
+offenders was already in the shipped corpus at r14; what changed is that a check
+can see them. Neither pre-existing assertion moved by a single form, and the
+determinism digest is character-for-character the r14/r15 value, so the corpus
+under measurement is provably unchanged.
 
 Same three checks red as r13, and no longer for stale reasons. **r14's referee
 UNEVALUABLE was a THIRD reviewed emitter pin nobody had counted** —
@@ -111,10 +120,10 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | **G07** | Text run mis-positioned or reordered | 3 open findings | emit text placement / run ordering | open | F070 (1707A "Calendar" 4pt high); F102 (2200P header 5pt high); F060 (1702Q guide: superscript reordered, corrupts two sentences) |
 | **G08** | Guide reflow orphans ATC codes from their industry | F120 | `guides.py` reflow | open | ledger |
 | **G09** | Oversized leading comb slot | 29 groups at ≥1.10× median, 17 at ≥1.25× (corpus, 2026-08-06) | `lattice.comb_bands` | open | re-measured this session |
-| **G10** | 137 of 138 findings carry `audit_blind: true` — the audit is structurally blind to the field layer | 137/138 (171 of 172 at 2026-08-07) | `audit.py` assertions | open | F028: live inputs over 1700's statutory tax brackets, on a form scoring rules 100% / text 100% / 0 missing / 0 extra |
+| **G10** | 137 of 138 findings carry `audit_blind: true` — the audit is structurally blind to the field layer | was 171 of 172; **the first two field-layer assertions landed at r18** and catch **93 offenders across 22 of 53 forms** — `inputs_span_no_printed_divider` 11 forms / 79 offenders (44,536 inputs walked), `printed_box_peers_all_fillable` 14 forms / 14 offenders (7,223 printed boxes recovered from the source). 9 of the 93 were on populations no open finding covered (F173–F181); the rest independently re-derive **16 existing human findings** from the pinned PDF alone | `audit.py` assertions; `gate.py` allowlists | **fixing** | 0619-E's A10 offender box `[276.05, 134.64, 289.08, 146.16]` is F152's `(276.0, 135.0) 12.5 x 10.5` to the point; 2550M's A9 offender `p1c2 [209.28, 90.72, 270.00, 102.48]` is G02a, hand-diagnosed on 2026-08-06 and invisible to every check until now. Neither assertion reads `b.layout`, `b.plan`, emit.py's markers or the IR — only `ordered_vector_paints` and `drawn_glyph_boxes` — which is why they can see what `money_boxes_have_inputs` and `comb_slots_match_printed` structurally cannot. **Not `done`:** these bound two field-layer questions (a box the source drew but nobody made fillable; an input laid across a divider the source printed). "Does an input match its printed box" and "is a printed constant overtypeable" are still unbound |
 | **G11** | **A cell the lattice itself marks `mixed` — meaning it knows pre-printed glyph ink is inside — is emitted with a full set of editable comb slots, so the taxpayer can type on a pre-printed constant.** `emit.py`'s `PrePrintedInk` guard (F028's second guard) applies to plain text cells only and has no effect on comb slots | **the defect's own metric is 0**: editable compartments sitting on a short pre-printed constant go **175 → 0** (r14, 2026-08-07). 281 compartments refused across 26 forms. 156 of the 180 `mixed` cells still carry inputs and should — they are money combs whose printed ink is the decimal decoration (C4) | `emit.py` `comb_slot_verdicts()`, per slot | **done** | F139–F146 all `fixed`. Verdict is per COMPARTMENT: a slot is refused when the source printed exactly one alphanumeric glyph **wholly inside that slot's walls**, or shaded it at the unchanged 0.87 threshold. Per-slot is forced by the corpus — 1600-PT prints the century in the *leading* two boxes and 1702EX the branch code in the *trailing* three, so no rule over the group tells the two apart. `II 011`, `XC 010`, `2 0` and `0 0 0 0 0` are no longer typeable; 2000-DST's money grid keeps all 14 compartments including the printed decimal bullet (C4 intact). Rasters in the session scratchpad `preprinted/` |
 | **G12** | A caption and the writable blank beside it are segmented into one `label` cell, so the blank gets **no input at all**. Same root cause as G05, opposite symptom — G05 is the case where the merged cell *does* get an input | 2 confirmed (2026-08-07) | `lattice.py` cell segmentation | open | F148 (1701 p4 item 9 "(specify)", `p4c89` 312.90×14.76pt label, 0 inputs), F149 (1701A p2 item 63) |
-| **G13** | **A multi-column guide source is reflowed scanline-by-scanline, interleaving the columns and binding values to the wrong key.** On 2551M this puts the wrong tax rate against an ATC code | 2 forms confirmed (2026-08-07); 2551M header row carries 5 source column labels in 3 cells | `guides.py` reflow — no column detection | open | F167 (2551M, **blocker**: PT 060 emitted with Tax Rate 5%, officially 2%), F168/F169/F170 (0605 tax-type table and the two-column Guidelines). **F127 is marked `fixed` and this table is still wrong** — that fix removed prose flattening only, and `reflow_rate_without_description` cannot see a rate bound to the wrong code |
+| **G13** | **A multi-column guide source is reflowed scanline-by-scanline, interleaving the columns and binding values to the wrong key.** On 2551M this puts the wrong tax rate against an ATC code | 2 forms confirmed (2026-08-07); 2551M header row carries 5 source column labels in 3 cells. **STILL NOT FIXED at r18** | `guides.py` reflow — no column detection | open | F167 (2551M, **blocker**: PT 060 emitted with Tax Rate 5%, officially 2%), F168/F169/F170 (0605 tax-type table and the two-column Guidelines). **F127 was marked `fixed` and is REOPENED at r18** — that fix removed prose flattening only, and `reflow_rate_without_description` cannot see a rate bound to the wrong code. Re-measured at r18 against the pinned PDF (`f678be68…`): page 2 row y 202.0–210.0 is one scanline carrying two source rows, PT 060's own rate is `2%` at x 251.5 and the `5%` we bind to it is PT 112's at x 549.1. `guides.py` is byte-identical to r14 — the reflow work was measured in a separate track and reported `fixed: false`, so nothing landed |
 | **G14** | A BIR-only control field is emitted as a taxpayer input | 1 confirmed (2026-08-07) | `lattice.py` field classification | open | F147 (0605 "BCS No./Item No. (To be filled up by the BIR)" = 253.0×17.5pt free text, no maxlength). The exclusion works on the same sheet for DLN/PSIC/PSOC, so this box was missed, not unhandled |
 | **G16** | **`audit.py`'s `comb_slots_match_printed` requires a comb's input indexes to run 0..N−1 with no gap, so it fails on every compartment G11 correctly refuses.** The emission contract changed; the assertion that owns it was not told | **76 offenders, 24 forms**, `slot-input-index-mismatch` + `invalid-emission` (r14). The other 167 of the assertion's 247 are the pre-existing `source-topology-unevaluable` population | `audit.py` `check_comb_slots_match_printed` | open | STATUS.md §"The two assertions". **The assertion must not be weakened.** The fix is to re-derive the constant from the SOURCE PDF's own text operators — where this assertion already reads from, so it stays independent of `emit.py` — and accept a gap exactly where the source printed one. This is the "a schema change is declared everywhere it is asserted, in the same commit" rule being paid late |
 | **G17** | **A reviewed emitter pin lives in a place no one has enumerated, and only the referee reads it — so it costs a full 60-minute gate run to discover.** `comb_referee.HTML_RUNTIME_SCRIPT_SHA256` is a third such pin, distinct from `EXPECTED_HTML_STRUCTURE_SHA256` and from the four producer SHAs | 5 forms UNEVALUABLE at r14, report partial 40/53; 2 of the pin's 3 hashes had moved | `comb_referee.py:535`, read at `comb_referee.py:2822` | open | The pin itself is re-pinned and **r15 confirms it** (all five emission-binding errors gone). The class stays open because the underlying defect is the enumeration, not this pin: the "census pins that must move together" list under **How we work** did not contain it, and does not name whatever else is like it. An inventory that a producer change can be checked against in seconds — rather than at the end of an hour — is the actual fix |
@@ -231,6 +240,23 @@ Process rules earned the hard way. Each one cost a day or a 60-minute gate run.
   of a 60-minute gate, because only the referee reads it and the referee runs
   last. **This list has been wrong every time it has been consulted — treat it
   as a starting point, not an inventory. That is G17.**
+- **Adding an assertion touches four places, not one** (added r18, and it is
+  now self-enforcing): `audit.ASSERTION_KEYS` + `audit.CHECKS`;
+  `gate.REQUIRED_ASSERTIONS`; `gate.BASIC_ASSERTION_COUNT_FIELDS` (an exact
+  allowlist — an undeclared published count field reads as
+  `detail has unsupported fields`); and the `basic_counts` block of
+  `gate._synthetic_audit_record`, which every gate self-test fixture is built
+  from. `gate.self_test` now asserts that every non-comb name in
+  `REQUIRED_ASSERTIONS` has a declared count contract, so omitting the third
+  step fails in 3 seconds instead of at the end of an hour. `comb_referee`'s
+  `AUDIT_PRODUCER_SHA256` re-pins with it.
+- **`gate.py` does not allowlist assertion-detail SHAPES for the basic
+  assertions, only names and count-field names.** The `broken`/`held` contract
+  (`holds`, `reason`, `offenders`, `offender_count`, `offenders_published`,
+  `offenders_omitted`, `offenders_complete`) is validated structurally and needs
+  no change for a new assertion that uses it. Only
+  `_normalise_outer_comb_assertion` / `_normalise_outer_offender` are
+  shape-exact, and they apply to `comb_slots_match_printed` alone.
 - **A check that cannot be evaluated is a FAILURE**, never a pass. UNEVALUABLE
   is a red verdict.
 - **Determinism cannot certify a correction applier** — it runs the writer twice
@@ -313,6 +339,44 @@ Condensed to what changes behaviour.
 
 Newest first. One line each.
 
+- **2026-08-07 (r18)** — **The audit can see the field layer. G10 moves from
+  `open` to `fixing` with its first two assertions.** `inputs_span_no_printed_divider`
+  walks 44,536 emitted inputs and asks the pinned PDF whether it drew a
+  compartment divider inside one: **79 offenders on 11 of 53 forms**.
+  `printed_box_peers_all_fillable` recovers 7,223 printed boxes from the source's
+  own paint stream and reports a box with no input whose identical row peer has
+  one: **14 offenders on 14 of 53 forms**. Neither reads the layout, the plan,
+  emit.py's markers or the IR — the population that was blind was blind precisely
+  because the two nearest existing assertions enumerate from the producer that
+  made the mistake. **These 93 offenders are newly VISIBLE, not new**; every one
+  was in the shipped corpus at r14. 16 of them independently re-derive existing
+  human findings at the same coordinates (0619-E's A10 box matches F152's
+  reviewer-measured `(276.0, 135.0) 12.5 x 10.5`; 2550M's A9 `p1c2` is G02a), and
+  **9 were on populations no open finding covered: F173–F181** — five checkboxes
+  that make a required election unstateable (1701 ATC II016 Mixed Income 8%;
+  1701MS spouse OSD; 1706 item 11 treaty "No"; 2200M item 12 treaty "No"; 2550Q
+  **2nd quarter**) and four comb-spanning input groups including the TINs of
+  1600WP and 2553. `gate.py` grew its two allowlists, its fixture and its count
+  literal (8 → 10) in the same commit, plus a new self-test invariant so the next
+  assertion cannot be added without its count contract.
+  `comb_referee.AUDIT_PRODUCER_SHA256` `d31b4d7a` → `8d22a957`. **No census pin
+  moved and none should have** — no generator changed, `batch.py` re-converted
+  53/53 byte-identical and `forms/index.html` regenerated byte-identical.
+  **Reported loudly: PT 060 still reads 5% and is officially 2%.** The guide
+  reflow fix did not land (`guides.py` byte-identical to r14; the work was
+  reported `fixed: false`), so **F127 is REOPENED** with the retraction in its own
+  resolution — its closure measured prose flattening, which really is gone, while
+  the code-to-rate association it says was destroyed still is. Blocker+major open
+  49/116 → **59/125**, and going up for these two reasons is the ledger working.
+  One cosmetic defect found and NOT fixed here because `audit.py` is another
+  agent's file: `audit.py:13516` prints `assertions {n}/8` from a literal, so the
+  console now reads `10/8`. Console-only, no check reads it, but it is a stale
+  census literal of exactly the G01 shape and should derive from
+  `len(ASSERTION_KEYS)`. **Gate r18: 9/12, three red, the same three as r17 —
+  determinism `8ceeab9e506d`, identical to r14/r15; both pre-existing assertion
+  counts unmoved at 20 and 22; the referee's UNEVALUABLE is exactly r17's
+  residue on 1604C, 1700, 1701MS, 1702EX, neither cleared nor worsened, and
+  still undiagnosed.**
 - **2026-08-07 (r14)** — **G11 fixed and G15 closed; 332 inputs removed across
   35 of 53 bundles.** `emit.comb_slot_verdicts` decides per COMPARTMENT, never
   per group: a slot is refused when the source printed exactly one alphanumeric
