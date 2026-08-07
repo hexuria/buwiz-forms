@@ -16,6 +16,15 @@ be the expected one -- a mutation that trips two means a check is standing in
 for another, and a mutation that trips none means the fixture never carried the
 property.
 
+One case reaches past make_fixtures.py, and says so. The clip check's subject is
+not a form but a page extract.py writes itself: ten painting ops, three of them
+drawn outside their own scissor. Nothing in the corpus feeds it, so no fixture
+can break it -- and a fixture that carried a clip would be ink no check reads,
+which is the decoration this file exists to catch. That case patches the probe
+page's own source instead. It is still a mutation of the PDF a check measures
+rather than of the evidence that PDF produced, which is the property the rest of
+this file rests on.
+
 Five of extract.py's checks are deliberately NOT reachable this way; see
 CONTRACT_ONLY. They are statements about the extractor's own output contract
 rather than about corpus content, and no PDF can violate them. Naming them here
@@ -116,7 +125,34 @@ def mutate_bar_like() -> None:
     fixtures.LEAN_OFFSET_PT = 0.0
 
 
-# (the check that must trip, what was done to the corpus, how)
+def mutate_clips() -> None:
+    """Build the probe page with no scissor: every `W n` becomes a plain `n`.
+
+    The path is still constructed and still discarded, so the page paints the
+    same ten ops in the same order; only the clipping is gone. The three ops it
+    draws outside their scissors are then ink like any other, which is exactly
+    what the extractor did before it read the clip stack at all -- 1701 page 1's
+    fill at x 602.16, beyond a clip ending at 598.32, printed as a black bar
+    where the official sheet is blank.
+
+    Counted rather than replaced blind: a pattern that stopped matching would
+    mutate nothing, and a case that mutates nothing proves nothing.
+    """
+    stream = extract.CLIP_PROBE_STREAM
+    found = stream.count(b" re W n")
+    if found != PROBE_SCISSORS:
+        raise SystemExit(f"the clip probe states {found} scissors, "
+                         f"expected {PROBE_SCISSORS}")
+    extract.CLIP_PROBE_STREAM = stream.replace(b" re W n", b" re n")
+
+
+# The probe page's two nested scissors. Named so the mutation above fails loudly
+# if the page is rewritten, rather than quietly patching a stream it no longer
+# understands.
+PROBE_SCISSORS = 2
+
+
+# (the check that must trip, what was done to the source, how)
 CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
     ("paper", "every sheet is built Letter-height", mutate_paper),
     ("paths", "one filled triangle is never drawn", mutate_paths),
@@ -125,14 +161,19 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
     ("codepoints", "the unmappable glyph is not emitted", mutate_codepoints),
     ("tone", "both decorative greys are painted black", mutate_tone),
     ("is-bar-like", "the separators are drawn exactly vertical", mutate_bar_like),
+    ("clips", "the probe page's scissors are never established", mutate_clips),
 )
 
-# Everything a mutation is allowed to reach into, captured before the first one
-# runs and restored before each. Patching a module global and forgetting to put
-# it back would leak into the next case and misattribute its result.
-PATCHABLE = ("PAGE_HEIGHT_PT", "LEAN_OFFSET_PT", "GREY_LIGHT", "GREY_MID",
-             "right_triangle", "checkerboard", "flip_placement",
-             "insert_unmappable_glyph")
+# Everything a mutation is allowed to reach into, as (module, attribute),
+# captured before the first one runs and restored before each. Patching a module
+# global and forgetting to put it back would leak into the next case and
+# misattribute its result. The clip probe's stream is on this list for that
+# reason and no other: it is the one subject that does not live in the corpus.
+PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
+             (fixtures, "GREY_LIGHT"), (fixtures, "GREY_MID"),
+             (fixtures, "right_triangle"), (fixtures, "checkerboard"),
+             (fixtures, "flip_placement"), (fixtures, "insert_unmappable_glyph"),
+             (extract, "CLIP_PROBE_STREAM"))
 
 
 def profile_over(root: pathlib.Path) -> extract.SelfTestProfile:
@@ -178,7 +219,8 @@ def prove(stream: Any) -> int:
             f"cannot have one; unaccounted={sorted(declared - accounted)} "
             f"invented={sorted(accounted - declared)}")
 
-    pristine = {name: getattr(fixtures, name) for name in PATCHABLE}
+    pristine = [(module, name, getattr(module, name))
+                for module, name in PATCHABLE]
     with tempfile.TemporaryDirectory() as scratch:
         root = pathlib.Path(scratch)
         fixtures.build_all(root / "clean")
@@ -189,8 +231,8 @@ def prove(stream: Any) -> int:
               f"nothing trips", file=stream)
 
         for expected, description, mutate in CASES:
-            for name, value in pristine.items():
-                setattr(fixtures, name, value)
+            for module, name, value in pristine:
+                setattr(module, name, value)
             mutate()
             out = root / expected
             fixtures.build_all(out)
@@ -202,8 +244,8 @@ def prove(stream: Any) -> int:
                     f"tripped {tripped}")
             print(f"  {expected:<12} {'OK' if good else 'WEAK':<5} "
                   f"{description}", file=stream)
-        for name, value in pristine.items():
-            setattr(fixtures, name, value)
+        for module, name, value in pristine:
+            setattr(module, name, value)
 
     for name in sorted(CONTRACT_ONLY):
         print(f"  {name:<12} n/a   not reachable from corpus content: "
