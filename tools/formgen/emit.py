@@ -85,6 +85,10 @@ import tempfile
 import urllib.parse
 from typing import Any, Iterable, Iterator, Sequence
 
+_HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE))
+import guides  # noqa: E402 - a sibling stage; used for its text-table column grid
+
 SCHEMA_VERSION = 1
 
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -3068,6 +3072,19 @@ def _table_markup(runs: Sequence[dict[str, Any]],
                 index += 1
                 continue
             span, group = cells[index]
+            # A colspan may not reach a column that owns a cell of its own.
+            # `span` is how many columns the widest run in this cell overlaps,
+            # and a run can overlap a column that a *later* run on the same
+            # line starts in -- a long description whose last word crosses into
+            # the rate column, say. Unclamped, the walk below then steps from
+            # this cell straight past that start index and never emits it, so
+            # its runs leave the document altogether. That is a text loss, and
+            # emit.py's own "carries every run of its own extraction" check is
+            # the thing that says so. Narrowing the span is the only correct
+            # repair: the printed columns are the printed columns, and two
+            # cells cannot occupy one of them.
+            span = min(span, min((start for start in cells if start > index),
+                                 default=len(grid)) - index)
             attribute = f' colspan="{span}"' if span > 1 else ""
             markup = _render_pieces(
                 _line_pieces(sorted(group, key=lambda r: float(r["origin_x"]))))
@@ -3302,7 +3319,21 @@ def reflow_page(page_ir: dict[str, Any], split: PageSplit,
             flows.append("lattice")
             parts.append(markup)
             continue
-        grid, flow = _column_bands(section_runs)
+        # The column *grid* of an unruled reference table comes from where the
+        # source starts its cells, not from a coverage histogram. On 2551M p2
+        # the real gutter between the left description and the left rate sits
+        # at 4-5 runs against a peak of 18, so `_coverage_gutters` called it
+        # occupied, emitted 4 columns where the sheet prints 6, and merged two
+        # independent source rows that share a scanline -- binding PT 060 to
+        # the right half's 5% against an official 2%. `guides.table_columns`
+        # asks the unambiguous question instead ("where does a cell start"),
+        # and guides.py's self-test pins its answer on both real unruled pages.
+        #
+        # `flow` -- the dissolved reading columns -- is unchanged and still
+        # comes from `_column_bands`, so the prose path and `_is_prose`'s own
+        # classification move for no region. The ruled-lattice path above never
+        # reaches here at all.
+        grid, flow = guides.table_columns(section_runs), _column_bands(section_runs)[1]
         prose = _is_prose(section_runs, flow)
         flows.append("prose" if prose else "table")
         parts.append(_prose_markup(section_runs, flow) if prose
@@ -6085,6 +6116,27 @@ def print_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     _check('data-converted="true"' in converted and "<object" not in converted,
            "a converted guide PDF is reflowed text, not an embedded viewer",
            f"{len(converted)} bytes", failures)
+
+    # The colspan clamp, asserted at the function rather than only through the
+    # whole-document run census above. A description whose last word crosses
+    # into the next printed column overlaps two columns and would claim a
+    # colspan of 2; the rate that starts in that second column owns a cell
+    # there. Unclamped, the row walk steps from the first cell past the second
+    # cell's index and that rate leaves the document -- silently, and with the
+    # row still looking well formed. This is the narrowest statement of the
+    # loss, and it is a loss of exactly the kind of token this table exists to
+    # publish.
+    def _cell_run(text: str, x0: float, x1: float) -> dict[str, Any]:
+        return {"text": text, "x0": x0, "x1": x1, "origin_x": x0,
+                "baseline_y": 100.0, "size_pt": 8.0}
+
+    crossing = _table_markup(
+        [_cell_run("description", 0.0, 150.0), _cell_run("2%", 110.0, 190.0)],
+        [(0.0, 100.0), (100.0, 200.0), (200.0, 300.0)])
+    _check("description" in crossing and "2%" in crossing
+           and 'colspan="2"' not in crossing,
+           "a run crossing into an occupied column does not swallow its cell",
+           crossing, failures)
     url = esc_attr(urllib.parse.quote(f"guides/{name}"))
     _check(f'<p class="gl-download">Source PDF: <a href="{url}">' in converted,
            "a converted guide PDF is still linked as the pinned artefact",

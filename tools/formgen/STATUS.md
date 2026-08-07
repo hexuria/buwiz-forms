@@ -5,35 +5,197 @@ same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
 Measured 2026-08-07 over the 53-form corpus, on branch `gol/form-correction`,
-regenerated at the r18 producer bytes. Assertion counts are from a corpus-wide
+regenerated at the r19 producer bytes. Assertion counts are from a corpus-wide
 `audit.py` run over that regeneration; the findings tally is recomputed from
 `review-findings.json`.
 
-## Corpus census — r18 (nothing moved, and that was the prediction)
+## PT 060 reads 2%. It is officially 2%. FIXED at r19.
 
-**No census pin moved this increment, and none should have.** r18 changed
-`audit.py` (two new assertions), `gate.py` (their names and count contracts) and
-`comb_referee.py` (the audit producer pin). None of those three is a generator:
-`extract.py`, `lattice.py`, `guides.py` and `emit.py` are byte-identical to r14.
-`batch.py` re-converted 53/53 and `git status -- forms/` is empty — every one of
-the 53 bundles, plus `forms/index.html` regenerated from the fresh batch report,
-came out byte-identical. The prediction was made before the run and is recorded
-here because a census that moves when nothing generative changed would be the
-defect, not the reassurance.
+**This is the third time this claim has been made and the first time it is
+measured on the tree that was written.** r17 closed it wrongly, r18 retracted
+that closure and reported `fixed: false`, and r19 lands it.
 
-| Quantity | r18 | r14 | Note |
+`forms/2551m-2002/guide.html`, first `gl-table`, the PT 060 row, verbatim from
+the shipped bytes:
+
+```html
+<tr><td>PT 060</td><td>Franchises on electric utilities, gas and water utility</td><td>2%</td><td></td><td>performing quasi-banking functions</td><td>5%</td></tr>
+```
+
+The table is 19 x 6 where it was 19 x 4. PT 060 carries **2%** in its own Tax
+Rate column, and the `5%` that used to sit against it is back in the RIGHT
+half's rate column where the source printed it — it belongs to PT 111.
+
+**Scored by a checker that shares no producer with `emit.py` or `guides.py`**
+(`scratchpad/r19_rate_check.py`, written for this closure; it reads the shipped
+HTML and compares against the 15 rates read independently out of
+`~/Downloads/forms/2551M/2551m.pdf` sha256 `f678be68…` page 2 with
+`pdftotext -layout`):
+
+| | ATC codes carrying exactly their official rate |
+| --- | --- |
+| shipped bytes at r18 (`HEAD:forms/2551m-2002/guide.html`) | **0 of 15** — the table had four columns, so no code→rate association existed at all |
+| shipped bytes at r19 | **15 of 15** |
+
+Token census across the same two files: **1,283 tokens before, 1,283 after; 20
+percent-tokens before, 20 after.** Nothing was added and nothing was dropped —
+only re-associated.
+
+### The owner named in G13, STATUS.md and F167 was wrong, and that is why it failed twice
+
+All three named **`guides.py`'s reflow**. `BLOCKER-PLAN.md` C9 named `emit.py`
+and was right. The defect is `emit.py:reflow_page` → `_column_bands` →
+`_table_markup`. So r18's proof that "`guides.py` is byte-identical" proved
+nothing about this defect, and the misattribution is the reason the fix did not
+land twice.
+
+**Mechanism, measured.** 2551M page 2's ATC schedule has exactly one horizontal
+rule in its whole 170pt band — the table foot — so `lattice.py` can offer only a
+single 568 x 185pt `label` cell and the ruled-grid path has nothing to rebuild
+from. The column grid then came from `_coverage_gutters`, which calls a 1pt bin
+a gutter below 12% of peak coverage. On this page the real gutter between the
+left description and the left rate sits at 4–5 runs against a peak of 18 — it is
+not empty, because the descriptions run to x 252.96 and two page-wide titles
+cross the sheet. All four missing boundaries were bins the histogram called
+occupied.
+
+**The fix asks the unambiguous question instead: where does a *cell* start.**
+`guides.table_columns` clusters the x at which lines begin cells and keeps a
+column only where at least two lines agree. `emit.py` now takes the table grid
+from it. `flow` — the dissolved reading columns the prose path uses — still
+comes from `_column_bands`, so no prose region moves and no `_is_prose` verdict
+changes.
+
+**Three bundles changed and only three**: `2551m-2002`, `0605-1999`,
+`extra/2200an-2018` (`git status -- forms/`). 0605's tax-type table and its
+two-column Guidelines are now real columns (F168, F169 closed on the same
+measurement), and 2200-AN's Schedule 1A now binds `XG021 | Up to P600,000 | 4%`
+across three cells where it used to merge all three into one.
+
+**A declared blast radius of two was wrong, and the reason is worth keeping.**
+The separate reflow track measured "exactly two bundles change" over a rebuild
+that called `emit.main` without `--guide-source`. That flag is what converts a
+standalone guide PDF into reflowed text, and it is the only path 2200-AN's
+tables come from — so that rebuild never exercised the case that moved. A
+blast-radius measurement has to use `batch.py`'s own argv.
+
+## The reflow was silently dropping text, and nothing had ever noticed (F182)
+
+Found by landing the change above, and it is the more serious of the two
+defects because it was losing content rather than misplacing it.
+
+`_table_markup` gave each cell a colspan equal to the number of grid columns
+its widest run overlaps, then walked the row with `index += span`. When a run
+crossed into a column that a **later run on the same line started in**, the walk
+stepped straight past that column's index and the cell was never emitted — its
+runs left the document, with the row still well formed.
+
+- **How it surfaced:** `emit.py --self-test`, "a converted guide PDF carries
+  every run of its own extraction" — `310 runs, 21 missing` — the moment the
+  r19 grid made columns narrow enough to expose it. That check has been in the
+  file all along; the old grid was simply too coarse to trip it.
+- **What was shipping:** `forms/extra/2200an-2018/guide.html` was missing
+  **`(To Part III, Item 16)`** — the pointer telling a filer where Schedule 1C's
+  total goes — plus two `t` glyphs. Dense-character diff across the fix: **three
+  insertions, zero deletions, 13,228 → 13,248**.
+- **The fix** clamps a colspan so it cannot reach a column that owns a cell of
+  its own. Content is never dropped; only the span narrows.
+- **Isolated:** rebuilding 2200-AN with and without the clamp gives identical
+  table shapes (79 and 74 rows either way); the clamped build is 836 bytes
+  larger. So the shape change is the grid, and the 836 bytes are the text that
+  was being lost.
+- A new unit assertion in `emit.py`'s self-test now drives the exact shape,
+  independent of any corpus form: *a run crossing into an occupied column does
+  not swallow its cell*.
+
+## Corpus census — r19
+
+**Exactly one census pin moved, it is a guide-document count, and it moved for
+a declared reason.** r19 changed `emit.py` (the table grid and the colspan
+clamp) and `guides.py` (the new `table_columns` producer and its self-test).
+Neither touches the lattice, the IR, the layout or the form document, so every
+*form*-side census is unchanged and was predicted to be before the run.
+`batch.py` re-converted 53/53; `git status -- forms/` names three guide
+documents and nothing else, and `forms/index.html` regenerated byte-identical.
+
+The comb census pin changed shape too, but not because anything generated moved
+— see "the ledger denominator" below: `EXPECTED_COMBS` is the *subject*
+denominator (4,538) and the *active comb cell* count (4,521) is now derived from
+it rather than confused with it. Re-derived from the fresh `build/layout` for
+all 53 forms: 4,538 subjects, 4,521 active, 17 retained, and every per-slug
+retained pin matches.
+
+| Quantity | r19 | r18 | Note |
 | --- | --- | --- | --- |
 | Bundles / unique codes | 53 / 50 | 53 / 50 | 38 direct + 15 under `forms/extra` |
 | Pages | 116 | 116 | |
-| Lattice cells | 20,688 (10,002 `field`) | 20,688 | unchanged |
-| Comb cells | 4,521 | 4,521 | unchanged; pin still matches |
+| Lattice cells | 20,688 (10,002 `field`) | 20,688 | unchanged — r19 is guide-side only |
+| Comb ledger subjects | **4,538** | 4,521 (pin was wrong) | the `EXPECTED_COMBS` denominator: active + `retained_unresolved` |
+| Active comb cells | 4,521 | 4,521 | unchanged; now `EXPECTED_ACTIVE_COMBS`, derived, never a literal |
+| Retained (suppressed) subjects | 17 | 17 (uncounted) | now pinned per slug in `EXPECTED_RETAINED_SUBJECTS_BY_SLUG` |
 | Emitted inputs | 45,583 | 45,583 | unchanged |
 | Comb slot divs | 40,008 | 40,008 | unchanged |
 | Comb slots with no input | 281 | 281 | the compartments the source already filled in |
 | Editable slots on a short pre-printed constant | 0 | 0 | G11's own metric |
 | `mixed` cells still carrying an input | 156 of 180 | 156 of 180 | correct — money combs, printed ink is the decimal decoration (C4) |
-| Assertions demanded by the gate | **10** | 8 | `audit.ASSERTION_KEYS` and `gate.REQUIRED_ASSERTIONS` both |
-| Findings | **181** | 172 | **59 blocker+major open of 125** (was 49 of 116) — 9 appended, 1 reopened; see below |
+| Assertions demanded by the gate | 10 | 10 | unchanged at r19 |
+| Guide documents changed | **3 of 36** | — | `2551m-2002`, `0605-1999`, `extra/2200an-2018` |
+| Findings | **183** | 181 | **55 blocker+major open of 126** (was 59 of 125) — F127/F167/F168/F169 closed on measurement, F182 filed and fixed, F183 filed open |
+
+## The comb referee: four defects in the referee itself, none of them a producer regression (r19)
+
+The referee has scored `UNEVALUABLE` on every run it has ever made. r19 lands
+four fixes to the **referee's own** derivation. None of them weakens a check;
+three of them make the referee ask for *more* than it did.
+
+**1 — One tolerance was pinned to five relations that do not share it.**
+`validate_audit_position_evidence` demanded `HTML_GEOMETRY_EPSILON_PT`
+(0.0002) from all five published position relations. Two of them
+(`emission_layout_position`, `emission_layout_outer_position`) compare two of
+our own four-decimal serialisations and really are exact to 0.0002. The other
+three carry `source` in their names and cross into raw source geometry;
+`audit.py` binds exactly those three to `POSITION_TOL_PT` (0.25) and documents
+why at its declaration, and `comb_referee.py` already carried the same 0.25
+under the same name for its own Poppler work. So **every offender the audit has
+ever published failed to parse**, was dropped from `dimensions_by_cell`, and the
+re-derived partition collapsed to zero — producing the tolerance error plus two
+downstream errors. Each relation is still pinned to exactly one fixed constant;
+swapping them in either direction is still rejected. `git log -S` shows the code
+unchanged since the landing commit `abb0c1e`; the referee's own self-test
+fixtures published 0.0002 on all five fields, a record no producer emits, which
+is why it never fired.
+
+**2 — The ledger denominator was moved by a count of a different thing.**
+r14 measured comb *cells* (4,521) and subtracted the difference from
+`EXPECTED_COMBS`, which is the *subject* denominator — compared against
+`len(published_subjects)` and `len(cells)`, both of which enumerate
+`retained_unresolved` subjects too. A comb that stops being a writing surface
+does not leave the ledger; that is the ledger's whole purpose. **Bisected:**
+running `21e0630^`'s `lattice.py` over the unchanged `build/ir` for all 53 forms
+yields a ledger identical to HEAD's, form for form — 4,538 subjects, 4,521
+active, 17 retained. `21e0630`'s shaded-paper fix moved neither census. Exactly
+two subjects were genuinely stale (1700-2018, 143 → 141), and they were already
+stale before it. The two quantities are now pinned separately and the active
+count is *derived*, so they can never be added or subtracted from each other
+again.
+
+**3 — Mixed paper was refused outright.** `bind_artifacts` demanded
+`paper.uniform is True`, which failed 1604-CF — whose page 3 really is landscape
+in the pinned source (`pdfinfo`: 612x1008, 612x1008, **1008x612**, 612x1008).
+A form the referee cannot evaluate scores the same as a broken one. The paper
+contract is now bound per page against an exhaustive, canonically ordered
+`distinct_sizes` inventory, with `uniform` required to be the true derived
+claim — **strictly more than the old check asked of the 52 uniform forms**: a
+false `distinct_sizes` used to pass and now does not.
+
+**4 — Named `@page` rules read as grammar violations.** A mixed-size document
+emits one `@page page-N` per page plus a `.page-N{page:page-N}` binding; the old
+contract demanded a single page size outright, so 1604-CF's four correct named
+rules read as thirteen violations — and `slot_records` folds
+`invalid_bindings` into every cell's `valid`, so all ten of its combs were
+published as emission disagreements they are not. A uniform document must now
+carry **no** named rules, and a mixed one exactly one per emitted page bound to
+that page's own geometry and its own selector.
 
 ## The field layer stopped being invisible — G10's first two assertions (r18)
 
@@ -132,7 +294,7 @@ restated.
 reasoning recorded at the constant: the new assertions add derivation the referee
 does not adjudicate and touch no existing assertion's code path.
 
-## PT 060 still reads 5%. It is officially 2%. NOT FIXED at r18.
+## PT 060 still reads 5%. It is officially 2%. NOT FIXED at r18. (SUPERSEDED by r19 — kept as the record of two failed landings)
 
 **Report this loudly rather than quietly: the guide reflow fix did not land, so
 2551M's ATC table still binds the wrong tax rate to the wrong ATC code.** The

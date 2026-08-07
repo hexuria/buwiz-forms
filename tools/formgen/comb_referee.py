@@ -83,16 +83,26 @@ REPO = HERE.parent.parent
 
 REPORT_VERSION = 2
 EXPECTED_FORMS = 53
-# 4540 -> 4521 (2026-08-07, r14). NOT this session's change: re-running the
-# HEAD (21e0630) lattice over the unchanged IR yields 4,521 as well, so the pin
-# went stale in 21e0630 itself -- "shaded paper is not a writing surface" made
-# 19 cells across 13 forms stop being writing surface, and therefore stop being
-# combs, without the census moving with it. This is the G01 landmine repeating
-# one commit later, and it would have failed r14 on its own constants. The 13
-# slugs that moved: 0605-1999 -3; 1604cf-2008, 1700-2018, 1707a-2021,
-# 2000-ot-2018 -2 each; 1600wp-2010, 1604f-2018, 1707-2021, 1800-2018,
-# 2200c-2018, 2550m-2007, 2551m-2002, 2553-1999 -1 each.
-EXPECTED_COMBS = 4521
+# 4540 -> 4521 (r14, 1e4da29) -> 4538 (2026-08-07, this change). r14's move was
+# WRONG, and the retraction is here rather than in a note because the number is
+# the evidence. This pin is the LEDGER SUBJECT denominator: `validate_comb_ledger`
+# compares it to `len(published_subjects)` and the form report compares it to
+# `len(cells)`, and BOTH enumerate every subject the ledger publishes -- active
+# and `retained_unresolved` alike. A comb that stops being a writing surface does
+# not leave the ledger; that is the ledger's entire purpose ("a retained subject
+# remains published even though no active cell is allowed to emit it"). r14
+# measured comb CELLS, found 4,521, and subtracted the difference from a
+# denominator that does not count cells, so 12 forms failed the referee outright
+# and the corpus report has been partial at 40/53 ever since.
+#
+# Re-measured 2026-08-07 by running 21e0630^'s lattice.py over the unchanged
+# build/ir for all 53 forms and diffing the ledgers against HEAD's: they are
+# IDENTICAL, form for form -- 4,538 subjects, 4,521 active comb cells, 17
+# retained. 21e0630's shaded-paper fix moved neither census. What was genuinely
+# stale at r14 was exactly TWO subjects, both 1700-2018 (143 -> 141), and they
+# were already stale before 21e0630. The other 17 "missing" subjects are the 17
+# retained ones, which never moved at all.
+EXPECTED_COMBS = 4538
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # Re-pinned 2026-08-07 (r14): `topmost_covering_fill` became
 # `covering_shading_band`, so `on_shaded_paper` asks whether ONE connected,
@@ -219,22 +229,22 @@ COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
 # parser and decision rules. A substituted/missing form must not pass merely
 # because the replacement keeps the two aggregate counts unchanged.
 EXPECTED_COMBS_BY_SLUG = {
-    "0605-1999": 18,
+    "0605-1999": 21,
     "0619e-2018": 60,
     "0619f-2018": 64,
     "0620-2019": 60,
     "1600-pt-2018": 95,
     "1600-vt-2018": 95,
-    "1600wp-2010": 15,
+    "1600wp-2010": 16,
     "1601-fq-2020": 106,
     "1601c-2018": 132,
     "1601eq-2019": 99,
     "1602q-2019": 175,
     "1603q-2018": 78,
     "1604c-2018": 19,
-    "1604cf-2008": 10,
+    "1604cf-2008": 12,
     "1604e-2018": 15,
-    "1604f-2018": 15,
+    "1604f-2018": 16,
     "1606-2018": 76,
     "1621-2019": 69,
     "1700-2018": 141,
@@ -250,32 +260,71 @@ EXPECTED_COMBS_BY_SLUG = {
     "1702q-2018": 106,
     "1702rt-2018c": 205,
     "1706-2018": 81,
-    "1707-2021": 112,
-    "1707a-2021": 95,
+    "1707-2021": 113,
+    "1707a-2021": 97,
     "1709-2020": 19,
-    "1800-2018": 107,
+    "1800-2018": 108,
     "1801-2018": 102,
     "2000-dst-2018": 131,
-    "2000-ot-2018": 73,
+    "2000-ot-2018": 75,
     "2200a-2020": 42,
     "2200an-2018": 87,
-    "2200c-2018": 39,
+    "2200c-2018": 40,
     "2200m-2018": 86,
     "2200p-2020": 42,
     "2200s-2018": 66,
     "2200t-2022": 90,
     "2316-2021": 28,
     "2550-ds-2025": 77,
-    "2550m-2007": 22,
+    "2550m-2007": 23,
     "2550q-2024": 144,
-    "2551m-2002": 14,
+    "2551m-2002": 15,
     "2551q-2018": 105,
     "2552-2018": 73,
-    "2553-1999": 15,
+    "2553-1999": 16,
 }
 if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
         or sum(EXPECTED_COMBS_BY_SLUG.values()) != EXPECTED_COMBS):
     raise RuntimeError("comb referee corpus pins are internally inconsistent")
+
+# The second half of the census, pinned separately so that the two quantities
+# r14 conflated can never be added or subtracted from each other again. The
+# ledger denominator above is active + retained; this is the retained half, per
+# slug, and the difference is the ACTIVE comb-cell count. A retained subject is
+# a comb the lattice can no longer own a rectangle for: it blocks the gate, it
+# emits nothing, and it stays in the ledger as continuity evidence. Slugs absent
+# from this table are pinned at zero -- retention appearing on a new form is a
+# census move that must be declared here, exactly like a comb count moving.
+# Measured 2026-08-07 over build/layout, and identical under 21e0630^'s lattice.
+EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
+    "0605-1999": 3,
+    "1600wp-2010": 1,
+    "1604cf-2008": 2,
+    "1604f-2018": 1,
+    "1707-2021": 1,
+    "1707a-2021": 2,
+    "1800-2018": 1,
+    "2000-ot-2018": 2,
+    "2200c-2018": 1,
+    "2550m-2007": 1,
+    "2551m-2002": 1,
+    "2553-1999": 1,
+}
+EXPECTED_RETAINED_SUBJECTS = sum(EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
+# The number r14 mistook for the ledger denominator. It is derived here, never
+# written as a literal, so the two can only ever disagree by a declared change.
+EXPECTED_ACTIVE_COMBS = EXPECTED_COMBS - EXPECTED_RETAINED_SUBJECTS
+if (set(EXPECTED_RETAINED_SUBJECTS_BY_SLUG) - set(EXPECTED_COMBS_BY_SLUG)
+        or EXPECTED_ACTIVE_COMBS != sum(
+            EXPECTED_COMBS_BY_SLUG[slug]
+            - EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(slug, 0)
+            for slug in EXPECTED_COMBS_BY_SLUG)
+        or any(count <= 0
+               for count in EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
+        or any(EXPECTED_RETAINED_SUBJECTS_BY_SLUG[slug]
+               > EXPECTED_COMBS_BY_SLUG[slug]
+               for slug in EXPECTED_RETAINED_SUBJECTS_BY_SLUG)):
+    raise RuntimeError("comb referee retained-subject pins are inconsistent")
 
 # Reviewed from report payload
 # 15b6454ef9c156435fc33d47b177ff4b2db379207fa694bbcdb87200bb341ca4.
@@ -306,6 +355,29 @@ _SUBJECT_KEY_RE = re.compile(
 # emit.py serialises point geometry to four decimal places.  Two independently
 # rounded endpoints can differ by at most two ten-thousandths of a point.
 HTML_GEOMETRY_EPSILON_PT = 0.0002
+# The five published position relations do NOT share one tolerance, and pinning
+# them all to HTML_GEOMETRY_EPSILON_PT was a category error that made every
+# offender record unparseable.  `emission_layout*` compares two of OUR OWN
+# four-decimal serialisations, so it is exact to HTML_GEOMETRY_EPSILON_PT.  The
+# three relations whose name carries `source` cross into raw source geometry,
+# whose floats are not that serialisation; audit.py binds exactly those three
+# to POSITION_TOL_PT and says so at its own declaration ("it applies only to
+# comparisons that cross representations into raw source geometry ... every
+# same-representation emitted/layout comparison keeps EMITTED_GEOMETRY_EPS_PT"),
+# and this file already carries POSITION_TOL_PT under the same name for its own
+# Poppler-space work.  Each relation is still pinned to exactly one fixed
+# constant -- neither is a knob -- and swapping them in either direction is
+# still rejected.
+AUDIT_POSITION_TOLERANCE_PT = {
+    "emission_layout_position": HTML_GEOMETRY_EPSILON_PT,
+    "emission_layout_outer_position": HTML_GEOMETRY_EPSILON_PT,
+    "emission_source_position": POSITION_TOL_PT,
+    "emission_source_outer_position": POSITION_TOL_PT,
+    "layout_source_outer_position": POSITION_TOL_PT,
+}
+if set(AUDIT_POSITION_TOLERANCE_PT) != set(AUDIT_POSITION_FIELDS):
+    raise RuntimeError(
+        "every audit position relation needs exactly one pinned tolerance")
 SVG_INLINE_STYLE_PROPERTIES = frozenset({
     "clip-path",
     "display",
@@ -2161,6 +2233,12 @@ class SlotParser(html.parser.HTMLParser):
             tuple[str, str, str]
         ] = set()
         self.stylesheet_page_sizes: list[tuple[float, float]] = []
+        # A form whose source mixes page sizes (1604-CF) is emitted with one
+        # named `@page page-N` per page plus a `.page-N{page:page-N}` binding.
+        # They are recorded separately so the contract can bind each named rule
+        # to that page's own emitted geometry instead of collapsing them.
+        self.stylesheet_named_page_sizes: dict[int, tuple[float, float]] = {}
+        self.stylesheet_named_page_selectors: set[int] = set()
         self.script_depth = 0
         self.script_attrs: tuple[tuple[str, str | None], ...] | None = None
         self.script_parts: list[str] = []
@@ -2731,6 +2809,23 @@ class SlotParser(html.parser.HTMLParser):
                     assert size is not None
                     self.stylesheet_page_sizes.append((
                         float(size.group(1)), float(size.group(2))))
+                named_page = re.fullmatch(
+                    r"@page page-(\d+)", normalized_selector)
+                if named_page is not None and key == "size":
+                    size = re.fullmatch(
+                        rf"({_NUMBER})pt ({_NUMBER})pt", value)
+                    assert size is not None
+                    index = int(named_page.group(1))
+                    if index in self.stylesheet_named_page_sizes:
+                        self.invalid_bindings.append(
+                            "HTML stylesheet declares a named @page twice")
+                    self.stylesheet_named_page_sizes[index] = (
+                        float(size.group(1)), float(size.group(2)))
+                page_binding = re.fullmatch(
+                    r"\.page-(\d+)", normalized_selector)
+                if page_binding is not None and key == "page":
+                    self.stylesheet_named_page_selectors.add(
+                        int(page_binding.group(1)))
                 if declaration in HTML_STYLESHEET_STRUCTURAL_DECLARATIONS:
                     self.stylesheet_structural_declarations.add(declaration)
 
@@ -2760,6 +2855,22 @@ class SlotParser(html.parser.HTMLParser):
                 and float(values.group(1)) > 0
                 and float(values.group(2)) > 0
             )
+        named_page = re.fullmatch(r"@page page-(\d+)", selector)
+        if named_page is not None:
+            if key == "margin":
+                return value == "0"
+            if key != "size":
+                return False
+            values = re.fullmatch(
+                rf"({_NUMBER})pt ({_NUMBER})pt", value)
+            return (
+                values is not None
+                and float(values.group(1)) > 0
+                and float(values.group(2)) > 0
+            )
+        page_binding = re.fullmatch(r"\.page-(\d+)", selector)
+        if page_binding is not None:
+            return key == "page" and value == f"page-{page_binding.group(1)}"
         return False
 
     def _validate_script(
@@ -2849,16 +2960,44 @@ def slot_records(
         if tuple(parser.runtime_script_hashes) != HTML_RUNTIME_SCRIPT_SHA256:
             parser.invalid_bindings.append(
                 "HTML runtime scripts disagree with the reviewed emitter")
-        page_sizes = {
-            (width, height)
-            for _index, width, height in parser.page_geometry
+        geometry_by_index = {
+            index: (width, height)
+            for index, width, height in parser.page_geometry
         }
+        page_sizes = set(geometry_by_index.values())
         if (len(parser.stylesheet_page_sizes) != 1
-                or len(page_sizes) != 1
-                or parser.stylesheet_page_sizes[0] != next(
-                    iter(page_sizes), None)):
+                or not geometry_by_index
+                or parser.stylesheet_page_sizes[0] != geometry_by_index[
+                    min(geometry_by_index)]):
             parser.invalid_bindings.append(
                 "HTML @page size disagrees with emitted page geometry")
+        # A single-size document must NOT carry named page rules, and a
+        # mixed-size one must carry exactly one per emitted page, each bound to
+        # that page's own geometry and to its own `.page-N{page:page-N}`. The
+        # old contract demanded `len(page_sizes) == 1` outright, which made
+        # 1604-CF's four correct named rules read as thirteen grammar
+        # violations -- and `slot_records` folds `parser.invalid_bindings` into
+        # every cell's `valid`, so all ten of its combs were published as
+        # emission disagreements they are not.
+        named_sizes = parser.stylesheet_named_page_sizes
+        named_selectors = parser.stylesheet_named_page_selectors
+        if len(page_sizes) == 1:
+            if named_sizes or named_selectors:
+                parser.invalid_bindings.append(
+                    "HTML declares named page rules for uniform paper")
+        elif (named_selectors != set(named_sizes)
+              or not set(geometry_by_index) <= set(named_sizes)
+              or any(named_sizes[index] != geometry_by_index[index]
+                     for index in geometry_by_index)
+              or any(index in parser.pages
+                     for index in set(named_sizes) - set(geometry_by_index))):
+            # Every page this document renders must carry a named rule bound to
+            # its own geometry. A named rule may survive for a page the guide
+            # reclaimed (1604-CF's page 4 prints from guide.html), but only if
+            # nothing in this document is bound to it -- an unreferenced rule
+            # cannot move a page that is here, and a referenced one is checked.
+            parser.invalid_bindings.append(
+                "HTML named @page rules disagree with emitted page geometry")
         parser.document_contract_checked = True
     missing_stylesheet_contract = (
         HTML_REQUIRED_STYLESHEET_DECLARATIONS
@@ -3909,6 +4048,17 @@ def validate_comb_ledger(
     retained = sum(
         subject["state"] == "retained_unresolved"
         for subject in published_subjects)
+    expected_retained = EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(slug, 0)
+    if retained != expected_retained:
+        raise RefereeError(
+            f"{slug}: subject ledger retains {retained} suppressed subjects, "
+            f"expected pinned {expected_retained}")
+    expected_active = expected_total - expected_retained
+    if active_resolved + active_unresolved != expected_active:
+        raise RefereeError(
+            f"{slug}: subject ledger has "
+            f"{active_resolved + active_unresolved} active combs, "
+            f"expected pinned {expected_active}")
     blockers = sum(
         subject["blocks_gate"] for subject in published_subjects
     ) + len(published_inferences)
@@ -5499,9 +5649,13 @@ def validate_audit_position_evidence(
     comparable = value["comparable"]
     if not isinstance(comparable, bool):
         raise RefereeError(f"audit offender {name}.comparable is not boolean")
+    expected_tolerance = AUDIT_POSITION_TOLERANCE_PT.get(name)
+    if expected_tolerance is None:
+        raise RefereeError(
+            f"audit offender {name} has no pinned position tolerance")
     tolerance = finite_number(
         value["tolerance_pt"], f"audit offender {name}.tolerance_pt")
-    if abs(tolerance - HTML_GEOMETRY_EPSILON_PT) > 1e-12:
+    if abs(tolerance - expected_tolerance) > 1e-12:
         raise RefereeError(
             f"audit offender {name} changes the fixed position tolerance")
     actual = _audit_number_list(
@@ -7425,12 +7579,35 @@ def bind_artifacts(slug: str, layout: dict[str, Any], ir: dict[str, Any],
     source = layout.get("source") or {}
     if int(source.get("page_count", -1)) != len(layout_pages):
         raise RefereeError(f"{slug}: pinned source page count disagrees")
+    # The paper contract is bound PER PAGE, not collapsed to one size. Demanding
+    # `uniform is True` refused 1604-CF outright, and its page 3 really IS
+    # landscape in the pinned source (`pdfinfo`: 612x1008, 612x1008, 1008x612,
+    # 612x1008). A form the referee cannot evaluate is a red verdict, so an
+    # unsupported-but-correct source was scoring the same as a broken one, and
+    # the per-page SVG geometry is checked against `page["width_pt"]` anyway --
+    # uniformity was never what made the measurement sound. Every page is still
+    # bound to the declared inventory, the inventory must be exhaustive and
+    # canonically ordered, and `uniform` must be the true derived claim. That is
+    # strictly MORE than the old check asked of the 52 uniform forms: a false
+    # `distinct_sizes` used to pass and now does not.
     paper = layout.get("paper") or {}
-    if paper.get("uniform") is not True:
-        raise RefereeError(f"{slug}: non-uniform paper is unsupported")
-    if any(abs(width - float(paper.get("width_pt", -1))) > 1e-8
-           or abs(height - float(paper.get("height_pt", -1))) > 1e-8
-           for _, width, height in layout_pages):
+    if set(paper) != {"uniform", "width_pt", "height_pt", "distinct_sizes"}:
+        raise RefereeError(f"{slug}: paper contract schema is unsupported")
+    declared_sizes = paper.get("distinct_sizes")
+    if (not isinstance(declared_sizes, list) or not declared_sizes
+            or declared_sizes != sorted(declared_sizes)
+            or len(declared_sizes) != len(set(declared_sizes))):
+        raise RefereeError(f"{slug}: paper size inventory is not canonical")
+    observed_sizes = sorted({
+        f"{width}x{height}" for _, width, height in layout_pages})
+    if declared_sizes != observed_sizes:
+        raise RefereeError(
+            f"{slug}: paper size inventory does not enumerate the pages")
+    if paper.get("uniform") is not (len(observed_sizes) == 1):
+        raise RefereeError(f"{slug}: paper uniformity claim is false")
+    first_width, first_height = layout_pages[0][1], layout_pages[0][2]
+    if (abs(float(paper.get("width_pt", -1)) - first_width) > 1e-8
+            or abs(float(paper.get("height_pt", -1)) - first_height) > 1e-8):
         raise RefereeError(f"{slug}: layout pages disagree with paper contract")
     form = layout.get("form") or {}
     root = parser.root
@@ -9678,6 +9855,62 @@ def self_test() -> int:
     slot_records(page_size_parser)
     assert any("@page size disagrees" in error
                for error in page_size_parser.invalid_bindings)
+    def named_page_parser(
+            geometry: list[tuple[int, float, float]],
+            named: dict[int, tuple[float, float]],
+            selectors: set[int] | None = None,
+            pages: list[int] | None = None,
+            unnamed: tuple[float, float] = (612.0, 1008.0),
+            ) -> SlotParser:
+        value = SlotParser()
+        value.doctype_count = 1
+        value.style_count = 1
+        value.band_data_scripts = 1
+        value.runtime_script_hashes = list(HTML_RUNTIME_SCRIPT_SHA256)
+        value.page_geometry = list(geometry)
+        value.pages = (
+            [index for index, _w, _h in geometry] if pages is None
+            else list(pages))
+        value.stylesheet_page_sizes = [unnamed]
+        value.stylesheet_named_page_sizes = dict(named)
+        value.stylesheet_named_page_selectors = (
+            set(named) if selectors is None else set(selectors))
+        slot_records(value)
+        return value
+
+    # 1604-CF's real shape: three emitted pages, one of them landscape, plus a
+    # surviving rule for the page the guide reclaimed.
+    mixed_geometry = [(1, 612.0, 1008.0), (2, 612.0, 1008.0),
+                      (3, 1008.0, 612.0)]
+    mixed_named = {1: (612.0, 1008.0), 2: (612.0, 1008.0),
+                   3: (1008.0, 612.0), 4: (612.0, 1008.0)}
+    def page_rule_errors(value: SlotParser) -> list[str]:
+        return [
+            error for error in value.invalid_bindings
+            if "@page" in error or "named page rules" in error
+        ]
+
+    assert not page_rule_errors(
+        named_page_parser(mixed_geometry, mixed_named))
+    for label, geometry, named, selectors, pages in (
+        ("wrong-named-size", mixed_geometry,
+         {**mixed_named, 3: (612.0, 1008.0)}, None, None),
+        ("missing-named-rule", mixed_geometry,
+         {k: v for k, v in mixed_named.items() if k != 2}, None, None),
+        ("selector-without-rule", mixed_geometry, mixed_named,
+         {1, 2, 3, 4, 5}, None),
+        ("rule-without-selector", mixed_geometry, mixed_named,
+         {1, 2, 3}, None),
+        ("referenced-extra-page", mixed_geometry, mixed_named, None,
+         [1, 2, 3, 4]),
+        ("named-rules-on-uniform-paper",
+         [(1, 612.0, 1008.0), (2, 612.0, 1008.0)],
+         {1: (612.0, 1008.0), 2: (612.0, 1008.0)}, None, None),
+    ):
+        broken_pages = named_page_parser(
+            geometry, named, selectors, pages)
+        assert page_rule_errors(broken_pages), label
+
     no_doctype_parser = SlotParser()
     no_doctype_parser.style_count = 1
     no_doctype_parser.band_data_scripts = 1
@@ -9766,10 +9999,17 @@ def self_test() -> int:
                 int(item["comb"]["cells"]) for item in comb_cells_value),
         }
 
+    # The all-active ledger fixtures below are pinned to a slug whose retained
+    # count is zero, so "how many subjects does this form publish" and "how many
+    # of them are suppressed" stay separable in the self-test too. The retained
+    # census gets its own fixture further down, on a slug that really has one.
+    ledger_fixture_slug = "1604e-2018"
+    assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(ledger_fixture_slug, 0) == 0
+
     def synthetic_ledger_layout() -> dict[str, Any]:
         cells_value: list[dict[str, Any]] = []
         subjects_value: list[dict[str, Any]] = []
-        for index in range(EXPECTED_COMBS_BY_SLUG["0605-1999"]):
+        for index in range(EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug]):
             x0 = float(index * 3)
             x1 = x0 + 2.0
             bbox_value = [x0, 0.0, x1, 10.0]
@@ -9815,13 +10055,13 @@ def self_test() -> int:
     lattice_producer_bytes = (HERE / "lattice.py").read_bytes()
     ledger_fixture = synthetic_ledger_layout()
     ledger_result = validate_comb_ledger(
-        "0605-1999", ledger_fixture, lattice_producer_bytes)
+        ledger_fixture_slug, ledger_fixture, lattice_producer_bytes)
     # Derived from the corpus pin, never restated as a literal. The fixture is
-    # built by looping `range(EXPECTED_COMBS_BY_SLUG["0605-1999"])` above, so a
+    # built by looping `range(EXPECTED_COMBS_BY_SLUG[slug])` above, so a
     # literal here is a second copy of one number in one file -- the shape that
     # made 4442 and 4540 disagree, and that made this very assertion the last
     # thing standing between r14 and a 60-minute gate run on stale constants.
-    fixture_subjects = EXPECTED_COMBS_BY_SLUG["0605-1999"]
+    fixture_subjects = EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug]
     assert ledger_result["counts"] == {
         "subjects": fixture_subjects,
         "active": fixture_subjects,
@@ -9882,13 +10122,15 @@ def self_test() -> int:
         mutate(broken_ledger)
         try:
             validate_comb_ledger(
-                "0605-1999", broken_ledger, lattice_producer_bytes)
+                ledger_fixture_slug, broken_ledger,
+                lattice_producer_bytes)
         except RefereeError:
             pass
         else:
             raise AssertionError(f"invalid comb ledger passed: {name}")
     try:
-        validate_comb_ledger("0605-1999", ledger_fixture, b"stale lattice")
+        validate_comb_ledger(
+            ledger_fixture_slug, ledger_fixture, b"stale lattice")
     except RefereeError:
         pass
     else:
@@ -9904,7 +10146,7 @@ def self_test() -> int:
     refresh_ledger_stats(reverse_mismatch)
     try:
         validate_comb_ledger(
-            "0605-1999", reverse_mismatch, lattice_producer_bytes)
+            ledger_fixture_slug, reverse_mismatch, lattice_producer_bytes)
     except RefereeError:
         pass
     else:
@@ -9924,7 +10166,7 @@ def self_test() -> int:
     })
     refresh_ledger_stats(unresolved_ledger)
     unresolved_result = validate_comb_ledger(
-        "0605-1999", unresolved_ledger, lattice_producer_bytes)
+        ledger_fixture_slug, unresolved_ledger, lattice_producer_bytes)
     assert unresolved_result["counts"]["active_unresolved"] == 1
     assert unresolved_result["counts"]["blocking"] == 1
 
@@ -9949,7 +10191,7 @@ def self_test() -> int:
     })
     refresh_ledger_stats(inference_ledger)
     inference_result = validate_comb_ledger(
-        "0605-1999", inference_ledger, lattice_producer_bytes)
+        ledger_fixture_slug, inference_ledger, lattice_producer_bytes)
     assert inference_result["counts"]["inferences_suppressed"] == 1
     assert inference_result["counts"]["blocking"] == 1
 
@@ -9983,8 +10225,36 @@ def self_test() -> int:
         "blocks_gate": True,
     })
     refresh_ledger_stats(retained_ledger)
+    # A ledger carrying one suppressed subject is only valid on a slug whose
+    # retained census is one. Both slugs publish the same number of subjects, so
+    # the same fixture shape exercises retained-zero and retained-one, and the
+    # assertion below fails loudly if a future census move breaks that pairing.
+    retained_fixture_slug = "2551m-2002"
+    assert (EXPECTED_COMBS_BY_SLUG[retained_fixture_slug]
+            == EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug])
+    assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG[retained_fixture_slug] == 1
+    for wrong_slug in (ledger_fixture_slug, "0605-1999"):
+        try:
+            validate_comb_ledger(
+                wrong_slug, retained_ledger, lattice_producer_bytes)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(
+                f"retained census was not enforced for {wrong_slug}")
+    # And the inverse, which is the exact shape of the r14 census fault: a
+    # ledger whose total is right but which publishes no suppressed subject at
+    # all must not validate against a slug that is pinned to retain one.
+    try:
+        validate_comb_ledger(
+            retained_fixture_slug, ledger_fixture, lattice_producer_bytes)
+    except RefereeError:
+        pass
+    else:
+        raise AssertionError(
+            "a ledger missing its pinned retained subject was accepted")
     retained_result = validate_comb_ledger(
-        "0605-1999", retained_ledger, lattice_producer_bytes)
+        retained_fixture_slug, retained_ledger, lattice_producer_bytes)
     assert retained_result["counts"]["retained_unresolved"] == 1
     retained_emission = {
         subject["cell_id"]: {"valid": True}
@@ -9998,11 +10268,15 @@ def self_test() -> int:
     assert retained_inventory["retained_emitted_cell_ids"] == [
         retained_cell["id"]]
 
-    def unavailable_position(*, outer: bool) -> dict[str, Any]:
-        axis = "outer" if outer else "internal"
+    def unavailable_position(field: str) -> dict[str, Any]:
+        # The fixture derives BOTH the axis and the tolerance from the field,
+        # never from a literal.  Publishing HTML_GEOMETRY_EPSILON_PT on all
+        # five here is what let the tolerance category error survive: no
+        # producer has ever emitted that record.
+        axis = "outer" if AUDIT_POSITION_FIELDS[field][1] else "internal"
         return {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": AUDIT_POSITION_TOLERANCE_PT[field],
             f"actual_{axis}_edges_x": [1.0, 2.0],
             f"expected_{axis}_edges_x": None,
             "count_matches": None,
@@ -10078,8 +10352,8 @@ def self_test() -> int:
             "failure_kinds": ["source-topology-unevaluable"],
             "why": "self-test source topology is unavailable",
         }
-        for field, (_kind, outer) in AUDIT_POSITION_FIELDS.items():
-            item[field] = unavailable_position(outer=outer)
+        for field in AUDIT_POSITION_FIELDS:
+            item[field] = unavailable_position(field)
         item["effective_emission_state"] = "physical-slots"
         return item
 
@@ -10101,7 +10375,8 @@ def self_test() -> int:
         })
         item["emission_layout_position"] = {
             "comparable": True,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_layout_position"]),
             "actual_internal_edges_x": [1.0],
             "expected_internal_edges_x": [1.0],
             "count_matches": True,
@@ -10110,7 +10385,8 @@ def self_test() -> int:
         }
         item["emission_layout_outer_position"] = {
             "comparable": True,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_layout_outer_position"]),
             "actual_outer_edges_x": [0.0, 2.0],
             "expected_outer_edges_x": [0.0, 2.0],
             "count_matches": True,
@@ -10119,7 +10395,8 @@ def self_test() -> int:
         }
         item["emission_source_position"] = {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_source_position"]),
             "actual_internal_edges_x": [1.0],
             "expected_internal_edges_x": [],
             "count_matches": None,
@@ -10129,7 +10406,8 @@ def self_test() -> int:
         }
         item["emission_source_outer_position"] = {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_source_outer_position"]),
             "actual_outer_edges_x": [0.0, 2.0],
             "expected_outer_edges_x": [0.0, 2.0],
             "count_matches": None,
@@ -10139,7 +10417,8 @@ def self_test() -> int:
         }
         item["layout_source_outer_position"] = {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["layout_source_outer_position"]),
             "actual_outer_edges_x": [0.0, 2.0],
             "expected_outer_edges_x": [0.0, 2.0],
             "count_matches": None,
@@ -10567,6 +10846,31 @@ def self_test() -> int:
         "assertions": {
             "comb_slots_match_printed": false_position_assertion},
     })["assertion_valid"]
+
+    # Each of the five position relations is pinned to its OWN constant, and
+    # the referee must reject a swap in either direction: an audit that widened
+    # a same-representation emitted/layout comparison to the source tolerance
+    # would be hiding real emission drift, and one that narrowed a source
+    # comparison to the emitted epsilon would be inventing mismatches. The
+    # positive case is covered by the corpus itself -- every published offender
+    # carries POSITION_TOL_PT on the three `source` relations.
+    for swap_field, pinned in AUDIT_POSITION_TOLERANCE_PT.items():
+        other = (
+            POSITION_TOL_PT if pinned == HTML_GEOMETRY_EPSILON_PT
+            else HTML_GEOMETRY_EPSILON_PT)
+        assert other != pinned
+        swapped = clone(one_offender)
+        swapped[swap_field]["tolerance_pt"] = other
+        swapped_assertion = clone(broken_assertion)
+        swapped_assertion["offenders"] = [swapped]
+        swapped_result = audit_evidence({
+            "comb_slots_match_printed": False,
+            "assertions": {"comb_slots_match_printed": swapped_assertion},
+        }, self_owner_binding(["p1c1"]))
+        assert not swapped_result["assertion_valid"], swap_field
+        assert any(
+            "changes the fixed position tolerance" in message
+            for message in swapped_result["errors"]), swap_field
 
     missing_without_offender = comb_assertion(
         [], expected_ids=["p1c1"], emitted_ids=[])
@@ -11141,8 +11445,23 @@ def self_test() -> int:
         "form": {"code": "X", "revision": "1"},
         "source": {"file": "external:x.pdf", "sha256": "abc",
                    "page_count": 1},
-        "paper": {"uniform": True, "width_pt": 100.0, "height_pt": 100.0},
+        "paper": {
+            "uniform": True, "width_pt": 100.0, "height_pt": 100.0,
+            "distinct_sizes": ["100.0x100.0"],
+        },
         "pages": [{"index": 1, "width_pt": 100.0, "height_pt": 100.0}],
+    }
+    mixed_artifact = {
+        **artifact,
+        "paper": {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0", "200.0x100.0"],
+        },
+        "source": {**artifact["source"], "page_count": 2},
+        "pages": [
+            {"index": 1, "width_pt": 100.0, "height_pt": 200.0},
+            {"index": 2, "width_pt": 200.0, "height_pt": 100.0},
+        ],
     }
     ir = {**artifact, "schema_version": 2}
     guide = {"form": artifact["form"], "inline": [], "stats": {"pages": 1}}
@@ -11151,6 +11470,51 @@ def self_test() -> int:
         "data-source-sha256": "abc", "data-schema-version": "1",
     }
     bind_artifacts("x-1", artifact, ir, guide, parser)
+    # A genuinely mixed-orientation source (1604-CF) is EVALUABLE, and every
+    # falsifiable part of its paper contract is still bound.
+    mixed_guide = {**guide, "stats": {"pages": 2}}
+    mixed_parser = SlotParser()
+    mixed_parser.root = dict(parser.root)
+    mixed_parser.pages = [1, 2]
+    mixed_parser.page_geometry = [
+        (1, 100.0, 200.0), (2, 200.0, 100.0)]
+    bind_artifacts(
+        "x-2", mixed_artifact, {**mixed_artifact, "schema_version": 2},
+        mixed_guide, mixed_parser)
+    for label, broken_paper in (
+        ("false-uniform", {
+            "uniform": True, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0", "200.0x100.0"]}),
+        ("false-uniform-single", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 100.0,
+            "distinct_sizes": ["100.0x100.0"]}),
+        ("short-inventory", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0"]}),
+        ("unsorted-inventory", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["200.0x100.0", "100.0x200.0"]}),
+        ("undeclared-size", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0", "300.0x400.0"]}),
+        ("wrong-first-page", {
+            "uniform": False, "width_pt": 200.0, "height_pt": 100.0,
+            "distinct_sizes": ["100.0x200.0", "200.0x100.0"]}),
+        ("missing-inventory", {
+            "uniform": True, "width_pt": 100.0, "height_pt": 100.0}),
+    ):
+        base = (
+            artifact if label == "false-uniform-single" else mixed_artifact)
+        broken = {**base, "paper": broken_paper}
+        try:
+            bind_artifacts(
+                "x-3", broken, {**broken, "schema_version": 2},
+                mixed_guide if base is mixed_artifact else guide,
+                mixed_parser if base is mixed_artifact else parser)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(f"false paper contract accepted: {label}")
     bad_ir = {**ir, "source": {**ir["source"], "sha256": "changed"}}
     try:
         bind_artifacts("x-1", artifact, bad_ir, guide, parser)
