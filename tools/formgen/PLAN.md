@@ -15,9 +15,19 @@ regression against it.
 
 ## Where we are
 
-Measured 2026-08-07 at r19, worktree `.claude/worktrees/form-correction`,
-branch `gol/form-correction`. STATUS.md holds the r19 census and the gate
-table; the rows below carry only the per-defect numbers.
+Measured 2026-08-07 at r20, worktree `.claude/worktrees/form-correction`,
+branch `gol/form-correction`. STATUS.md holds the r20 census, the four
+user-visible screenshot checks and the gate table; the rows below carry only
+the per-defect numbers.
+
+**One of the four red assertion rows is green, honestly.**
+`printed_box_peers_all_fillable` goes 14 offenders on 14 of 53 forms to 0 on 0
+with `audit.py` byte-identical throughout. `inputs_span_no_printed_divider`
+falls 79 → 67 offenders on the same 11 forms.
+`comb_slots_match_printed` got **worse by 3** (185 → 188) and that is reported
+in full in STATUS.md rather than netted off: two genuine position mismatches
+were fixed, and five money-comb cells on 2550M now claim a compartment the
+sheet does not print, which is the new finding F184.
 
 **Corpus census — every number carries its denominator.**
 
@@ -29,12 +39,12 @@ table; the rows below carry only the per-defect numbers.
 | Codes we carry that BIR does not list | 6 | 0620, 1621, 1709, 2000-DST, 2316, 2550-DS — the user asked to keep them |
 | BIR codes still missing | 7 | 1600, 1601-E, 1601-F, 1602, 1603, 1704, 2000 |
 | Pages | 116 | across 53 bundles |
-| Lattice cells | 20,688 (10,002 classified `field`) | unchanged at r19 — r19 is guide-side only |
-| Emitted inputs | 45,583 | unchanged at r19. 40,008 comb slot divs, of which **281 carry no input** |
-| Comb ledger subjects | **4,538** | the `EXPECTED_COMBS` denominator (active + `retained_unresolved`). r14 moved it by an *active comb cell* count and broke 12 forms; re-derived at r19 from the fresh layouts: 4,538 subjects, **4,521 active**, 17 retained |
-| Guide documents changed at r19 | **3 of 36** | `2551m-2002`, `0605-1999`, `extra/2200an-2018` — and nothing else in `forms/` |
-| Gate-demanded assertions | **10** | unchanged at r19 |
-| Findings in `review-findings.json` | **183** | **55 blocker+major open of 126** at r19 (was 59 of 125): F127/F167/F168/F169 closed on the r19 rate measurement, **F182 filed and fixed** (the reflow was silently dropping text — 2200-AN shipped without `(To Part III, Item 16)`), **F183 filed open** (2551M's left `Tax Rate` header label). F170 was re-measured and deliberately left open. The 138 immutable baseline entries are untouched; the digest at `gate.py:8713` still matches |
+| Lattice cells | **20,704** (10,050 classified `field`) | r20: +16 cells, +48 `field` — the two `lattice.py` fixes and the cap model |
+| Emitted inputs | **45,643** | r20: **+60 and nothing deleted**. 40,017 comb slot divs, of which **281 carry no input** (unmoved) |
+| Comb ledger subjects | **4,543** | the `EXPECTED_COMBS` denominator (active + `retained_unresolved`). r20: 4,543 subjects, **4,522 active**, **21 retained**, moving on six slugs. `gate.EXPECTED_COMB_SUBJECTS` moves with it 4,521 → 4,543 — it was ALREADY WRONG at HEAD, because r19 moved the referee's twin and not it |
+| Form documents changed at r20 | **25 of 53** | plus `forms/index.html`; **0 guide documents**. Tag inventory across them: +60 `<input>`, +29 `<div>`, +3 `<rect>`, zero deletions, visible text token-identical |
+| Gate-demanded assertions | **10** | unchanged at r20 |
+| Findings in `review-findings.json` | **185** | **42 blocker+major open of 128** at r20 (was 55 of 126): 15 closed on measurement (F049, F054, F058, F062, F106, F135, F150, F152, F153, F173–F177, F180), **F184 filed open** (2550M money combs claim a compartment the paper does not print) and **F185 filed open** (11 comb-spanning inputs the cap model made visible). The 138 immutable baseline entries are untouched; the digest at `gate.py:8752` still matches, re-verified at r20 |
 
 **Gate — full clean-tree run r19 (2026-08-07 15:41, `d3e7a72`). 9/12 PASS, the
 same three checks red as r18, no regression on any check.** STATUS.md holds the
@@ -133,7 +143,7 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | **G07** | Text run mis-positioned or reordered | 3 open findings | emit text placement / run ordering | open | F070 (1707A "Calendar" 4pt high); F102 (2200P header 5pt high); F060 (1702Q guide: superscript reordered, corrupts two sentences) |
 | **G08** | Guide reflow orphans ATC codes from their industry | F120 | `guides.py` reflow | open | ledger |
 | **G09** | Oversized leading comb slot | 29 groups at ≥1.10× median, 17 at ≥1.25× (corpus, 2026-08-06) | `lattice.comb_bands` | open | re-measured this session |
-| **G10** | 137 of 138 findings carry `audit_blind: true` — the audit is structurally blind to the field layer | was 171 of 172; **the first two field-layer assertions landed at r18** and catch **93 offenders across 22 of 53 forms** — `inputs_span_no_printed_divider` 11 forms / 79 offenders (44,536 inputs walked), `printed_box_peers_all_fillable` 14 forms / 14 offenders (7,223 printed boxes recovered from the source). 9 of the 93 were on populations no open finding covered (F173–F181); the rest independently re-derive **16 existing human findings** from the pinned PDF alone | `audit.py` assertions; `gate.py` allowlists | **fixing** | 0619-E's A10 offender box `[276.05, 134.64, 289.08, 146.16]` is F152's `(276.0, 135.0) 12.5 x 10.5` to the point; 2550M's A9 offender `p1c2 [209.28, 90.72, 270.00, 102.48]` is G02a, hand-diagnosed on 2026-08-06 and invisible to every check until now. Neither assertion reads `b.layout`, `b.plan`, emit.py's markers or the IR — only `ordered_vector_paints` and `drawn_glyph_boxes` — which is why they can see what `money_boxes_have_inputs` and `comb_slots_match_printed` structurally cannot. **Not `done`:** these bound two field-layer questions (a box the source drew but nobody made fillable; an input laid across a divider the source printed). "Does an input match its printed box" and "is a printed constant overtypeable" are still unbound |
+| **G10** | 137 of 138 findings carry `audit_blind: true` — the audit is structurally blind to the field layer | was 171 of 172; **the first two field-layer assertions landed at r18** and catch **93 offenders across 22 of 53 forms** — `inputs_span_no_printed_divider` 11 forms / 79 offenders (44,536 inputs walked), `printed_box_peers_all_fillable` 14 forms / 14 offenders (7,223 printed boxes recovered from the source). 9 of the 93 were on populations no open finding covered (F173–F181); the rest independently re-derive **16 existing human findings** from the pinned PDF alone | `audit.py` assertions; `gate.py` allowlists | **fixing** — the first of the two now PASSES (r20: `printed_box_peers_all_fillable` 14 forms → 0, `audit.py` byte-identical) | 0619-E's A10 offender box `[276.05, 134.64, 289.08, 146.16]` is F152's `(276.0, 135.0) 12.5 x 10.5` to the point; 2550M's A9 offender `p1c2 [209.28, 90.72, 270.00, 102.48]` is G02a, hand-diagnosed on 2026-08-06 and invisible to every check until now. Neither assertion reads `b.layout`, `b.plan`, emit.py's markers or the IR — only `ordered_vector_paints` and `drawn_glyph_boxes` — which is why they can see what `money_boxes_have_inputs` and `comb_slots_match_printed` structurally cannot. **Not `done`:** these bound two field-layer questions (a box the source drew but nobody made fillable; an input laid across a divider the source printed). "Does an input match its printed box" and "is a printed constant overtypeable" are still unbound |
 | **G11** | **A cell the lattice itself marks `mixed` — meaning it knows pre-printed glyph ink is inside — is emitted with a full set of editable comb slots, so the taxpayer can type on a pre-printed constant.** `emit.py`'s `PrePrintedInk` guard (F028's second guard) applies to plain text cells only and has no effect on comb slots | **the defect's own metric is 0**: editable compartments sitting on a short pre-printed constant go **175 → 0** (r14, 2026-08-07). 281 compartments refused across 26 forms. 156 of the 180 `mixed` cells still carry inputs and should — they are money combs whose printed ink is the decimal decoration (C4) | `emit.py` `comb_slot_verdicts()`, per slot | **done** | F139–F146 all `fixed`. Verdict is per COMPARTMENT: a slot is refused when the source printed exactly one alphanumeric glyph **wholly inside that slot's walls**, or shaded it at the unchanged 0.87 threshold. Per-slot is forced by the corpus — 1600-PT prints the century in the *leading* two boxes and 1702EX the branch code in the *trailing* three, so no rule over the group tells the two apart. `II 011`, `XC 010`, `2 0` and `0 0 0 0 0` are no longer typeable; 2000-DST's money grid keeps all 14 compartments including the printed decimal bullet (C4 intact). Rasters in the session scratchpad `preprinted/` |
 | **G12** | A caption and the writable blank beside it are segmented into one `label` cell, so the blank gets **no input at all**. Same root cause as G05, opposite symptom — G05 is the case where the merged cell *does* get an input | 2 confirmed (2026-08-07) | `lattice.py` cell segmentation | open | F148 (1701 p4 item 9 "(specify)", `p4c89` 312.90×14.76pt label, 0 inputs), F149 (1701A p2 item 63) |
 | **G13** | **A multi-column guide source is reflowed scanline-by-scanline, interleaving the columns and binding values to the wrong key.** On 2551M this puts the wrong tax rate against an ATC code | **2551M: 0 of 15 ATC codes carried their official rate → 15 of 15** (r19, measured on the written tree by a checker sharing no producer with the emitter). 3 guide bundles changed, 0605 and 2200-AN with it | **`emit.py`** `reflow_page` → `_column_bands` → `_table_markup`, using the new `guides.table_columns` — **NOT `guides.py`'s reflow, which is what this row, STATUS.md and F167 all said, and is why the fix failed to land twice**. `BLOCKER-PLAN.md` C9 named `emit.py` and was right | **done for the rate binding; F170 and F183 remain** | F127, F167, F168, F169 all `fixed` at r19 on the measurement above; **F170 stays open** (0605's ATC region is still cut into two tables, so its 3-line header section cannot reach `MIN_COLUMN_SUPPORT`) and **F183 is newly filed** (2551M's left `Tax Rate` label is set at x 237.60 against its own column edge of 251.52, so the label — not any rate — falls one cell left). The old grid came from `_coverage_gutters`, which calls a 1pt bin a gutter below 12% of peak; on 2551M p2 the real gutter sits at 4–5 runs against a peak of 18, so all four missing boundaries were bins the histogram called occupied. `guides.table_columns` asks where a *cell starts* instead and keeps a column only where two lines agree |
@@ -141,6 +151,7 @@ the table. `S` = status: `open` / `diag` (diagnosed, unfixed) / `fixing` /
 | **G16** | **`audit.py`'s `comb_slots_match_printed` requires a comb's input indexes to run 0..N−1 with no gap, so it fails on every compartment G11 correctly refuses.** The emission contract changed; the assertion that owns it was not told | **76 offenders, 24 forms**, `slot-input-index-mismatch` + `invalid-emission` (r14). The other 167 of the assertion's 247 are the pre-existing `source-topology-unevaluable` population | `audit.py` `check_comb_slots_match_printed` | open | STATUS.md §"The two assertions". **The assertion must not be weakened.** The fix is to re-derive the constant from the SOURCE PDF's own text operators — where this assertion already reads from, so it stays independent of `emit.py` — and accept a gap exactly where the source printed one. This is the "a schema change is declared everywhere it is asserted, in the same commit" rule being paid late |
 | **G17** | **A reviewed emitter pin lives in a place no one has enumerated, and only the referee reads it — so it costs a full 60-minute gate run to discover.** `comb_referee.HTML_RUNTIME_SCRIPT_SHA256` is a third such pin, distinct from `EXPECTED_HTML_STRUCTURE_SHA256` and from the four producer SHAs | 5 forms UNEVALUABLE at r14, report partial 40/53; 2 of the pin's 3 hashes had moved | `comb_referee.py:535`, read at `comb_referee.py:2822` | open | The pin itself is re-pinned and **r15 confirms it** (all five emission-binding errors gone). The class stays open because the underlying defect is the enumeration, not this pin: the "census pins that must move together" list under **How we work** did not contain it, and does not name whatever else is like it. An inventory that a producer change can be checked against in seconds — rather than at the end of an hour — is the actual fix |
 | **G18** | **A human-reviewed referee control no longer holds, and it is the last thing between the referee and a complete corpus report.** `REVIEWED_2551Q_EXPLICIT_COMPARTMENTS` reviewed 2551Q `p2c5` as `measured` with 14 compartments and `p2c80` as 12; the referee now returns `unevaluable — source topology does not occupy a strict majority of the full comb band` for both | **52/53 forms report at r19** (r18: 40/53). 2551Q is the only one that errors, and it takes 105 subjects with it, which is also why `combs_found` is 4,433 against an expected 4,538. p2c5 measures 6.96pt of a 17.70pt band; p2c80 7.44pt of 18.78pt | `comb_referee.validate_2551q_referee_golden` vs whatever moved the majority rule under it | open | **The pin was NOT moved and must not be** — moving a reviewed control to match the producer that stopped satisfying it is the failure this project already paid for at `EXPECTED_COMBS` (r14) and `HTML_RUNTIME_SCRIPT_SHA256` (G17). Not caused by r19: 2551Q's `index.html`, layout and IR are byte-identical and only three *guide* documents changed; r19 merely made 2551Q reach the check. Same shape as G10's assertions — newly visible, not newly broken. **Reaching PASS is further off than this one form**: `forms_ok` is 0 and 4,385 of 4,433 subjects are `source_unevaluable`, so 53/53 would buy a complete report, not a score |
+| **G19** | **A comb slot boundary is taken from a divider the page's own `comb_divider_final_visible_ids` excludes, so a money box claims a compartment the paper does not print.** The lattice already computes the right answer and records it beside the wrong one; `legacy-continuity` outranks it | 5 cells on 2550M (r20), plus the 2 on 1707/1707A that pre-date r20 — the `layout-printed-mismatch` half of `comb_slots_match_printed`, 2 → 7 | `lattice.py` comb band, `legacy_dividers` / `frame_dividers` vs `dividers` | open | **F184.** 2550M `p1c89` is the MM box of a Schedule row: the source strokes ticks at x 260.40 and 263.52, then paints a white fill over the whole box (seqno 477) AFTER the 263.52 tick (seqno 419), so one tick survives to the paper. `slot_x` is `[246.96, 260.40, 263.52, 273.84]` — a 3.12pt compartment. The cell's own `comb.resolution` reads `final_visible_candidate_cells: 2`, `[final-visible-count-regression, legacy-continuity-only]`, so it is already `active_unresolved` and already blocks the gate. **Not patched at r20 on purpose**: dropping a legacy topology is the reviewed `retired_proven_false` transition, which needs independent evidence and a human |
 | **G15** | **The `?debug=fields` overlay shipped in `forms/` is the OLD self-referential one; the fixed overlay exists only in `emit.py` and has never been regenerated into the corpus.** In the shipped legend blue dashed means "this input is fine"; in the fixed one it means "printed box with NO input" — the inverse | was 0 / 38; **now `printed box with no input` → 53 of 53, `no usable box` → 0** (r14, 2026-08-07) | `emit.py` overlay, unregenerated | **done** | F172 `fixed`. Nothing needed fixing — the corrected overlay already existed in `emit.py` and had simply never been written out. Regenerating the corpus at r14 shipped it. The Stage-1 definition of done is no longer blocked on the overlay |
 
 G10 is the one to read twice. It is why Stage 2's central guarantee is not yet
@@ -150,8 +161,13 @@ successor is **G16**, which is that fix's unpaid half — the assertion that own
 the emission contract was not told the contract changed.
 
 **Not measured / not yet diagnosed:**
-- How many of the 626 both-endpoints-unsupported borders have a round or
-  projecting cap — i.e. how far the `lineCap` fix moves G02. **NOT MEASURED.**
+- ~~How many of the 626 both-endpoints-unsupported borders have a round or
+  projecting cap.~~ **MEASURED at r20: 625, not 626, and 98 of them (15.7%)
+  carry a round or projecting cap; 527 are butt-capped, where modelling the cap
+  changes nothing by construction.** Stroke census behind it: of 569 OPEN
+  stroked subpaths, 229 butt / 270 round / 70 projecting; every open subpath in
+  the corpus is a single `l` op, and the 133 multi-`l`-op paths are all CLOSED
+  rectangles, which must not be capped.
 - Why neither failing assertion moved when the painted-wall fix widened 131
   cells and created 95. **NOT DIAGNOSED.** A number that does not move when it
   should deserves the same suspicion as one that moves wrongly.
@@ -353,6 +369,43 @@ Condensed to what changes behaviour.
 
 Newest first. One line each.
 
+- **2026-08-07 (r20)** — **`printed_box_peers_all_fillable` PASSES, 14 of 53
+  forms → 0, with `audit.py` byte-identical (`8d22a957…`) throughout.** Two
+  producer bugs in `lattice.py`: `GroupGeometry.span` filtered a cluster's
+  coverage by distance to the cluster's own *mean* centre and so could drop a
+  rule that is itself a member (0619-E's Amended-YES wall, 0.35 against a 0.30
+  tolerance, merged the box into its caption); and `assign_points` placed a text
+  run by its bounding-box centre, which is the run's ADVANCE, so the whitespace
+  in `Calendar        Fiscal` counted as printed text inside the checkbox drawn
+  in the gap. `glyph_ink_spans` reads the per-character origins the IR already
+  carries. **`extract.py` now models PDF 32000-1 §8.4.3.3 line caps** — 340 of
+  569 open strokes in this corpus carry a round or projecting cap and were being
+  published 0.36pt short at each end, which is how 2550M's four year boxes
+  reached the taxpayer as one input — proven by a written-here 200×200 probe
+  page with 13 asserted cases and a mutation that restores the old behaviour.
+  **15 findings closed on measurement** (F049, F054, F058, F062, F106, F135,
+  F150, F152, F153, F173–F177, F180), each against its own coordinates in the
+  shipped bytes and by a checker that never consults the r20 audit, so a box
+  that cleared because its row *peer* lost an input would still read as
+  uncovered. 55/126 → **42/128** blocker+major open. **Reported loudly:**
+  `comb_slots_match_printed` got worse by 3 — five money-comb cells on 2550M
+  claim a compartment the sheet does not print, filed as **F184** / new row
+  **G19**, and deliberately not patched because the fix is the reviewed
+  `retired_proven_false` transition. **F185** files the 11 comb-spanning inputs
+  the cap model made visible. A third `lattice.py` fix was needed on the way:
+  the first regeneration made that assertion worse by 13, not 3, because a
+  suppressed subject's `mapped_partition_cell_ids` is a partition and nothing
+  enforced it — 2550M's `p1c7` nests inside `p1c6` and both claimed three cells,
+  which correctly invalidated the whole form's owner registry.
+  `resolve_retained_partition_overlaps` gives a contested cell to the smallest
+  claiming area; corpus-wide 3 cells, one page, one form, no mapping emptied.
+  **Census: `EXPECTED_COMBS` 4,538 → 4,543, retained 17 → 21 on six slugs, 25 of
+  53 `EXPECTED_HTML_STRUCTURE_SHA256`, both producer SHAs — and
+  `gate.EXPECTED_COMB_SUBJECTS` 4,521 → 4,543, which was ALREADY WRONG at HEAD**
+  because r19 moved its twin and not it. `comb_referee`'s own self-test caught
+  the census move exactly as designed (its retained-one fixture slug 2551M went
+  to retained-three), so the fixture rotated to 1604-CF and 2551M became the
+  retained-many negative control. No check, tolerance or assertion was weakened.
 - **2026-08-07 (r18)** — **The audit can see the field layer. G10 moves from
   `open` to `fixing` with its first two assertions.** `inputs_span_no_printed_divider`
   walks 44,536 emitted inputs and asks the pinned PDF whether it drew a

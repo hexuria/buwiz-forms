@@ -81,7 +81,14 @@ EXPECTED_EXTRA_FORMS = 15
 # and its 13 per-slug values. The cause is 21e0630's shaded-paper fix, which was
 # committed without its census: the HEAD lattice already produced 4,521 before
 # this session touched anything. See the note on comb_referee.EXPECTED_COMBS.
-EXPECTED_COMB_SUBJECTS = 4521
+# 4521 -> 4543 (2026-08-07, r20). TWO causes, and the first one was already live
+# at HEAD: r19 corrected comb_referee.EXPECTED_COMBS to 4,538 and did NOT move
+# this twin, so validate_comb_referee_report was comparing the referee's
+# `combs_expected` of 4,538 against 4,521 and could only ever have failed. That
+# is the very defect this comment describes, repeating in the same pair of
+# files, one revision later. The second cause is r20's own: extract.py's
+# line-cap model takes the measured ledger denominator to 4,543.
+EXPECTED_COMB_SUBJECTS = 4543
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
 COMB_REFEREE_SCOPE = "formgen-comb-referee-application-v1"

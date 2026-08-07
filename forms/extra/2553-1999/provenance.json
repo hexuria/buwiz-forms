@@ -25,8 +25,8 @@
   "rules": 409,
   "text_runs": 271,
   "images": 1,
-  "cells": 231,
-  "comb_cells": 15,
+  "cells": 230,
+  "comb_cells": 16,
   "growables": [],
   "sources": [
     {
@@ -72,7 +72,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 244897,
+  "html_bytes": 247073,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

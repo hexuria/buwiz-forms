@@ -1639,8 +1639,24 @@ class GroupGeometry:
         self.ink_hi = q(max(r[far] for r in rules))
         # Coverage is measured against this cluster's own centre, so fusing two
         # clusters later cannot move the span of either one.
-        self.span = union_intervals((r[along[0]], r[along[1]]) for r in all_ink
-                                    if abs(centre(r) - self.position) <= CLUSTER_TOL_PT)
+        #
+        # A cluster's OWN rules count whatever their distance from that centre,
+        # exactly as `line_thickness_gray` already counts them for weight and
+        # tone. `cluster_collinear` chains by *adjacency*, so a cluster is wider
+        # than the tolerance whenever three or more fragments step across it,
+        # and its centre is a mean the outermost member need not sit within.
+        # Filtering on distance alone then drops a defining rule from the
+        # coverage of the very line it defines: on 0619-E the "Amended Return?
+        # Yes" checkbox's left wall (x centre 275.64) is one of ten fragments in
+        # the cluster at 275.99, so the column claimed no ink over the box's own
+        # 12pt and the box merged leftward into the caption -- a printed box a
+        # taxpayer must tick, with nowhere to tick it. A drawn rule is evidence
+        # of a boundary where it was drawn; which side of a mean it falls on is
+        # not a fact about the paper.
+        own = union_intervals((r[along[0]], r[along[1]]) for r in rules)
+        near_centre = union_intervals((r[along[0]], r[along[1]]) for r in all_ink
+                                      if abs(centre(r) - self.position) <= CLUSTER_TOL_PT)
+        self.span = union_intervals([*own, *near_centre])
 
 
 def bars_over(bars: Sequence[Bar], where: Sequence[Interval]) -> list[Bar]:
@@ -4614,7 +4630,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
 
     assigned, unplaced = assign_points(
         cells, [((r["x0"] + r["x1"]) / 2.0, (r["y0"] + r["y1"]) / 2.0, index)
-                for index, r in enumerate(text_runs)])
+                for index, r in enumerate(text_runs)],
+        [glyph_ink_spans(r) for r in text_runs])
     for cell, members in zip(cells, assigned):
         cell["text_run_ids"] = [f"p{page_index}t{i}" for i in sorted(members)]
     unassigned = [f"p{page_index}t{i}" for i in sorted(unplaced)]
@@ -4646,6 +4663,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             cell["is_empty"], cell["border_count"], "comb" in cell, sliver,
             shaded)
         cell.pop("_component_root")
+    resolve_retained_partition_overlaps(subject_ledger)
     # The gate binds the reviewed active-owner registry to the exact order of
     # the current layout cell stream.  Legacy subjects are discovered in
     # legacy-bbox order, but a repaired lattice can split/reuse those subjects
@@ -4667,8 +4685,94 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
     return cells, unassigned, subject_ledger, inference_ledger
 
 
+def resolve_retained_partition_overlaps(
+        subject_ledger: list[dict[str, Any]]) -> None:
+    """A suppressed subject's partition mapping is a partition, not a cover.
+
+    A `painted-edge-partition` subject records which of today's cells its area
+    became, and `audit.validate_comb_owner_registry` requires each such cell to
+    be claimed exactly once: a cell owned by two suppressed subjects is not a
+    partition of either, and the audit invalidates the whole form's registry
+    rather than guess.  Nothing enforced that here, because until a legacy comb
+    subject nested inside another one lost its rectangular owner too, no two
+    partition subjects ever overlapped.  2550M page 1 now has exactly that --
+    `p1c7` (66.00, 118.80, 99.84, 134.40) sits wholly inside the row band
+    `p1c6` (28.80, 117.12, 582.72, 136.32), and both enumerated `p1c116`,
+    `p1c122` and `p1c123`.
+
+    The contested cell goes to the SMALLEST claiming area, which is the most
+    specific claim on it: those three cells are what `p1c7` became, and `p1c6`
+    still records the nineteen that are its own.  Ties cannot occur between
+    distinct subjects with the same bbox -- the registry rejects duplicate
+    identities before it gets here -- but the order is fully stated anyway so
+    the ledger cannot depend on dict insertion.  A subject is never emptied:
+    that would be a subject whose every cell lies inside strictly smaller
+    subjects, and the audit refuses an empty mapping, so it must fail closed
+    rather than be papered over here.  Measured over the 53-form corpus at r20:
+    3 cells contested, on one page of one form, and no mapping emptied.
+    """
+    claims: dict[str, list[int]] = {}
+    for index, subject in enumerate(subject_ledger):
+        if subject.get("state") != "retained_unresolved":
+            continue
+        if "painted-edge-partition" not in (subject.get("reason_codes") or ()):
+            continue
+        for cell_id in subject.get("mapped_partition_cell_ids") or ():
+            claims.setdefault(str(cell_id), []).append(index)
+
+    def specificity(index: int) -> tuple[float, tuple[float, ...], str]:
+        subject = subject_ledger[index]
+        x0, y0, x1, y1 = (float(value) for value in subject["legacy_bbox"])
+        return ((x1 - x0) * (y1 - y0),
+                tuple(float(value) for value in subject["legacy_bbox"]),
+                str(subject["subject_key"]))
+
+    drop: dict[int, set[str]] = {}
+    for cell_id, owners in claims.items():
+        if len(owners) < 2:
+            continue
+        keeper = min(owners, key=specificity)
+        for index in owners:
+            if index != keeper:
+                drop.setdefault(index, set()).add(cell_id)
+    for index, dropped in drop.items():
+        subject = subject_ledger[index]
+        kept = [(cell_id, key) for cell_id, key
+                in zip(subject["mapped_partition_cell_ids"],
+                       subject["mapped_partition_subject_keys"])
+                if str(cell_id) not in dropped]
+        if not kept:
+            continue
+        subject["mapped_partition_cell_ids"] = [cell_id for cell_id, _ in kept]
+        subject["mapped_partition_subject_keys"] = [key for _, key in kept]
+
+
+def glyph_ink_spans(run: dict[str, Any]) -> list[Interval]:
+    """The x extents the run's non-blank characters actually mark.
+
+    A text run's bounding box is its *advance*, not its ink: the run
+    "Calendar        Fiscal" reserves the paper between the two words, and a
+    caption laid out that way with a checkbox drawn in the gap owns none of the
+    paper the box encloses. Every run in the corpus carries per-character
+    origins and advances, so the marked spans are read off the source rather
+    than estimated.
+    """
+    origin = float(run.get("origin_x", run["x0"]))
+    offsets = run.get("char_origin_offsets_pt") or ()
+    advances = run.get("char_advances_pt") or ()
+    text = run.get("text") or ""
+    if len(offsets) != len(text) or len(advances) != len(text):
+        return [(float(run["x0"]), float(run["x1"]))]
+    marked = [(origin + float(o), origin + float(o) + float(a))
+              for ch, o, a in zip(text, offsets, advances) if ch.strip()]
+    if not marked:
+        return []
+    return union_intervals(marked)
+
+
 def assign_points(cells: Sequence[dict[str, Any]],
-                  points: Sequence[tuple[float, float, Any]]
+                  points: Sequence[tuple[float, float, Any]],
+                  ink: Sequence[Sequence[Interval]] | None = None
                   ) -> tuple[list[list[Any]], list[Any]]:
     """Give each point to exactly one cell -- the smallest one containing it.
 
@@ -4677,6 +4781,17 @@ def assign_points(cells: Sequence[dict[str, Any]],
     necessarily overlaps a neighbour; without the smallest-area rule those
     overlaps double-count, which is how a page reported more comb slots than it
     had dividers. Area then reading order makes the choice deterministic.
+
+    `ink` states, per point, where the thing being placed actually marks the
+    paper. The point stays the anchor -- a run whose home cell holds any of its
+    ink does not move -- but a home cell holding NONE of it is not the run's
+    cell at all, only the cell its advance happens to be centred over. The run
+    then goes to the cell carrying the most of its ink on that line. Nine of the
+    fourteen `printed_box_peers_all_fillable` offenders are this: a two-word
+    caption ("Calendar    Fiscal", "Yes      No", " 2nd      3rd") whose gap is
+    exactly where the source drew the box to be ticked, so the box counted as
+    printed text and was classified `label` -- unfillable -- on ink it does not
+    contain. Without `ink` the placement is unchanged.
     """
     order = sorted(range(len(cells)),
                    key=lambda n: ((cells[n]["x1"] - cells[n]["x0"])
@@ -4684,14 +4799,31 @@ def assign_points(cells: Sequence[dict[str, Any]],
                                   cells[n]["y0"], cells[n]["x0"]))
     buckets: list[list[Any]] = [[] for _ in cells]
     unplaced: list[Any] = []
-    for cx, cy, payload in points:
-        for n in order:
-            cell = cells[n]
-            if cell["x0"] <= cx <= cell["x1"] and cell["y0"] <= cy <= cell["y1"]:
-                buckets[n].append(payload)
-                break
-        else:
+    for index, (cx, cy, payload) in enumerate(points):
+        spans = list(ink[index]) if ink is not None else []
+        home = next((n for n in order
+                     if cells[n]["x0"] <= cx <= cells[n]["x1"]
+                     and cells[n]["y0"] <= cy <= cells[n]["y1"]), None)
+        if home is None:
             unplaced.append(payload)
+            continue
+        if spans and overlap_length([(cells[home]["x0"], cells[home]["x1"])],
+                                    spans) <= 0:
+            best = None
+            for n in order:
+                cell = cells[n]
+                if not (cell["y0"] <= cy <= cell["y1"]):
+                    continue
+                held = overlap_length([(cell["x0"], cell["x1"])], spans)
+                if held <= 0:
+                    continue
+                key = (-held, (cell["x1"] - cell["x0"]) * (cell["y1"] - cell["y0"]),
+                       cell["y0"], cell["x0"], n)
+                if best is None or key < best[0]:
+                    best = (key, n)
+            if best is not None:
+                home = best[1]
+        buckets[home].append(payload)
     return buckets, unplaced
 
 

@@ -102,7 +102,15 @@ EXPECTED_FORMS = 53
 # stale at r14 was exactly TWO subjects, both 1700-2018 (143 -> 141), and they
 # were already stale before 21e0630. The other 17 "missing" subjects are the 17
 # retained ones, which never moved at all.
-EXPECTED_COMBS = 4538
+#
+# 4538 -> 4543 (2026-08-07, r20), re-measured over the regenerated layouts by
+# counting every published subject -- active and retained alike -- exactly as
+# `validate_comb_ledger` does. Six slugs move and no others: 0605 21 -> 19,
+# 1600WP 16 -> 17, 1604CF 12 -> 15, 2550M 23 -> 21, 2551M 15 -> 18, 2553 16 ->
+# 18. All six are extract.py's line-cap model reaching a rail it used to stop
+# short of, which is a divider appearing or a band closing, and each moves the
+# retained half of the census below with it.
+EXPECTED_COMBS = 4543
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # Re-pinned 2026-08-07 (r14): `topmost_covering_fill` became
 # `covering_shading_band`, so `on_shaded_paper` asks whether ONE connected,
@@ -110,8 +118,28 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # the cell after occlusion is resolved, instead of asking a single fill's own
 # rectangle. Neither SHADED_PAPER_MAX_GRAY (0.87) nor
 # SHADED_PAPER_MIN_COVERAGE (0.70) moved.
+#
+# Re-pinned 2026-08-07 (r20) for G03/G10: two producer bugs behind
+# `printed_box_peers_all_fillable`. (1) `GroupGeometry.span` filtered coverage
+# by distance to the cluster's mean centre and so could exclude a rule that is
+# itself a member of that cluster -- `line_thickness_gray` already exempts a
+# cluster's own rules and `span` now does the same, so a drawn wall counts as
+# coverage of the line it defines. (2) `assign_points` placed a text run by its
+# bounding-box centre, which is the run's ADVANCE; `glyph_ink_spans` reads the
+# per-character origins the IR already carries, so a run whose home cell holds
+# none of its ink moves to the cell holding the most of it, and a caption's
+# inter-word gap no longer makes the checkbox drawn in it "printed text".
+# CLUSTER_TOL_PT (0.3) did not move and no classification threshold moved.
+# (3) `resolve_retained_partition_overlaps`: a suppressed subject's
+# `mapped_partition_cell_ids` is a partition, and nothing enforced that. Once
+# 2550M's `p1c7` lost its rectangular owner too, it and the row band `p1c6` that
+# contains it both claimed the same three cells, and
+# `validate_comb_owner_registry` correctly invalidated the whole form -- taking
+# all 17 of its comb subjects to `source-topology-unevaluable`. The contested
+# cell now goes to the smallest claiming area. Corpus-wide this contests 3 cells
+# on one page of one form and empties no mapping.
 LATTICE_PRODUCER_SHA256 = (
-    "37ba7e1bdf6e385ef737916155f5c0029a94d5c822e31ba72733c8881f9b8866"
+    "5fcf51fe7f4934562e71d27b09be2761d575c7460512389a2112e9232c441246"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -126,8 +154,16 @@ AUDIT_PRODUCER_SHA256 = (
     "8d22a9572d675c67c4888a39fdb8cddbbe0adae6faaf89c657ca26b9393fdf8f"
 )
 AUDIT_DEPENDENCY_SHA256 = {
+    # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
+    # line caps. A round (1) or projecting (2) cap inks half a stroke width past
+    # the declared endpoint of an OPEN subpath, so the IR was publishing 340 of
+    # this corpus's 569 open strokes short of their own ink. Caps are applied to
+    # the two ends of a reconstructed subpath only -- never to `re`/`qu`, never
+    # to a polyline that returns to its start, never to an interior join -- and
+    # a new written-here probe page (`CAP_PROBE_STREAM`) asserts all thirteen
+    # cases with a mutation that restores the old behaviour.
     "tools/formgen/extract.py": (
-        "d0876d1d10ba7dff94a07cbe543e17718fef8f1b387c5a39e1360bcbf460acbc"
+        "079ea3c90d67deda371343b51445f13141a88bef3066fbb33a55c07b46e99f98"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -229,20 +265,20 @@ COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
 # parser and decision rules. A substituted/missing form must not pass merely
 # because the replacement keeps the two aggregate counts unchanged.
 EXPECTED_COMBS_BY_SLUG = {
-    "0605-1999": 21,
+    "0605-1999": 19,
     "0619e-2018": 60,
     "0619f-2018": 64,
     "0620-2019": 60,
     "1600-pt-2018": 95,
     "1600-vt-2018": 95,
-    "1600wp-2010": 16,
+    "1600wp-2010": 17,
     "1601-fq-2020": 106,
     "1601c-2018": 132,
     "1601eq-2019": 99,
     "1602q-2019": 175,
     "1603q-2018": 78,
     "1604c-2018": 19,
-    "1604cf-2008": 12,
+    "1604cf-2008": 15,
     "1604e-2018": 15,
     "1604f-2018": 16,
     "1606-2018": 76,
@@ -276,12 +312,12 @@ EXPECTED_COMBS_BY_SLUG = {
     "2200t-2022": 90,
     "2316-2021": 28,
     "2550-ds-2025": 77,
-    "2550m-2007": 23,
+    "2550m-2007": 21,
     "2550q-2024": 144,
-    "2551m-2002": 15,
+    "2551m-2002": 18,
     "2551q-2018": 105,
     "2552-2018": 73,
-    "2553-1999": 16,
+    "2553-1999": 18,
 }
 if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
         or sum(EXPECTED_COMBS_BY_SLUG.values()) != EXPECTED_COMBS):
@@ -296,19 +332,27 @@ if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
 # from this table are pinned at zero -- retention appearing on a new form is a
 # census move that must be declared here, exactly like a comb count moving.
 # Measured 2026-08-07 over build/layout, and identical under 21e0630^'s lattice.
+# Re-measured 2026-08-07 (r20) over the regenerated layouts: 17 -> 21 retained,
+# on the same six slugs whose subject totals moved. The cause is extract.py's
+# line-cap model (see AUDIT_DEPENDENCY_SHA256): a round-capped tick that reaches
+# its rail is a divider, so bands that were single unbroken rows become combs,
+# and a legacy comb subject that can no longer be given one rectangle is
+# retained rather than dropped. 0605 3 -> 1 and 1604CF 2 -> 1 move the other way
+# for the same reason -- their retained subjects found rectangular owners once
+# the ticks reached.
 EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
-    "0605-1999": 3,
-    "1600wp-2010": 1,
-    "1604cf-2008": 2,
+    "0605-1999": 1,
+    "1600wp-2010": 2,
+    "1604cf-2008": 1,
     "1604f-2018": 1,
     "1707-2021": 1,
     "1707a-2021": 2,
     "1800-2018": 1,
     "2000-ot-2018": 2,
     "2200c-2018": 1,
-    "2550m-2007": 1,
-    "2551m-2002": 1,
-    "2553-1999": 1,
+    "2550m-2007": 4,
+    "2551m-2002": 3,
+    "2553-1999": 2,
 }
 EXPECTED_RETAINED_SUBJECTS = sum(EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
 # The number r14 mistook for the ledger denominator. It is derived here, never
@@ -729,63 +773,90 @@ HTML_ALLOWED_TAGS = frozenset({
 #   PDF to confirm the band really is grey and the P2.50 row below it really is
 #   white. Rasters in the session scratchpad under preprinted/.
 #
+# 25 of the 53 refreshed 2026-08-07 (r20) -- the other 28 documents are
+# byte-identical and their pins were not touched. Reviewed the same way, and the
+# review is again the point rather than the regeneration:
+#
+#   Tag inventory across the 25 changed documents moves in ONE direction:
+#   +60 <input>, +29 <div>, +3 <rect>, and nothing of any kind deleted (2551M's
+#   -1 div is a comb container replaced by its slots). Visible text is
+#   token-for-token identical in every document -- the only text-length changes,
+#   2550M +3,767 and 1604CF -1, are entirely inside the embedded band-data
+#   <script>, which encodes the comb bands and therefore has to grow when a form
+#   gains combs.
+#
+#   The 60 inputs are the two producer fixes, at coordinates: 14 checkboxes and
+#   comb groups a printed-box assertion named (0619-E and 0620 item 3 Amended
+#   YES, 2550Q item 3 2nd quarter, 1701 ATC II016, 2200M item 12, 2200S x3, and
+#   the rest), and 46 compartments on combs the source draws with round-capped
+#   ticks (2550M's year comb, 2553, 1604CF, 2551M).
+#
+#   The 3 new rects were checked against the sheet rather than counted: all
+#   three are on 2550M page 2 at x 574.92, y 568.32/656.16/670.32 -- the LAST
+#   THREE segments of the right-hand column rule, whose mirror image at x 452.28
+#   (v285, v286, v287) was already painted at HEAD and still is. The source
+#   strokes them with a round cap that stopped 0.36pt short of its rails. Every
+#   other rule in the corpus moved by exactly half its stroke width at a capped
+#   end and by nothing at a butt-capped one, which is `check_stroke_caps`'s
+#   probe restated over real artwork.
+#
 # This pin still hashes every emitted byte, so it still invalidates on every
 # legitimate producer change; the design tension recorded in GOAL.md §Blocked is
 # unresolved and this refresh does not resolve it.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "51cc167124c11590708af794d43d75723250067763406ceb30d0f572d3f88110",
-    "0619e-2018": "6e312c4e097e5fd4af459f86f097d214cbe09472a7b1e81d928183a78131ceb5",
+    "0605-1999": "fa321c89b7d52e9a2c115f8e823dcbb6e6b557ac46421e9c033ce7014ad81ae9",
+    "0619e-2018": "eab986a03a97c81c4de511d5e6d6d226c88bef7aa831da79173541031a192099",
     "0619f-2018": "1d73c117c370ba2635a790fffb24fcc5ca5ed731921eda37525750fd6880c8c1",
-    "0620-2019": "a95c25d8def33d01c4fdcdb4f71ad61fea1e1c455d426d32f105c51cd25b5c1c",
+    "0620-2019": "5c1fa7181a3cdbd88efe302363bff2ac9620be54dc4526402dd7a4c53e07618a",
     "1600-pt-2018": "f8f3e28b8120aba3c7456f6ea665d67d7b6f5ea7fa8d230c58aba07ea39d69bd",
     "1600-vt-2018": "dae7516503767ae9b4d8bc87135e054274cced91e7ddcad3fd28ec5163b7c1ae",
-    "1600wp-2010": "7621b6555396953663bb272f83eb3e23164fea72e13c60302425e12b8caf866c",
+    "1600wp-2010": "87fa90cbcc38ac9429d5e8699756fbc8281e423b2289cd4469ad34b2c553d96a",
     "1601-fq-2020": "54f581b0874e6da686806221bf1c29a46055e823164c656d3dc952508838b6b4",
-    "1601c-2018": "c87d24ba52b43feec3f1e8cac9ca3f35f559e04d5db28ecfdd67cb65234efc13",
+    "1601c-2018": "31d8ee09c59f343027e615e84f22d2701a56f7b635540be1f1b6541c7f36e598",
     "1601eq-2019": "74886837c796ec19ac56514ffa3b5ace429a4fffb31c8c68ef1d0f49416eeefe",
     "1602q-2019": "25fe05a1a7189f6a7c6f2e5cbe30fe516b1b888995edcf31669973640ed7e694",
     "1603q-2018": "95d6b18dd21b2463d7637724452ae56669371ee655cfa0e5ddc3d9526092c79b",
-    "1604c-2018": "bd857edf50ff0822d9920eeed1d702564dc9429f2285a8c8f6cbdb45c494a39d",
-    "1604cf-2008": "052b5a19db9ba7d9f3981dc9d76dd53c1756e50ab2280b2e643c2b6c5e8b524e",
+    "1604c-2018": "be5e08c12477a2210f14272643952f5d6fd7489965d7bb68314d02dc5611ea5a",
+    "1604cf-2008": "f4a2434eefeb406201bad1a9e02fd7cfe9ec3582829f2af301efe61dd50fcff7",
     "1604e-2018": "8960362c0cba23e6edce5751a78f8a1ce2e416b8e453d3ac88faabf33cce61f2",
     "1604f-2018": "aa6a8869cc7893886cc1548f07a8d9db5cffbd6e066bc2013acd39b1fbd04e98",
     "1606-2018": "14ea5824bcfccd2ecf39ca0c66ded941f16bc5745ac8294c1219fa0083d507d3",
     "1621-2019": "a5efb8ad61225676537865d22458a55cbed83ce87716fb6cbc04a77bc6bdb9a4",
     "1700-2018": "7ab3f172dbad486ade7525a796ce3cf03fa62125cb13e1f7be488d7c090945aa",
-    "1701-2018": "2f4accb6825e2caa6047c348d4d916ab6b39d98f760b6c0954525ab8c9510aa2",
+    "1701-2018": "1b5d68dc8e389014da44f4b69bf90d405eaa91501d35871de1aa193365814333",
     "1701-2018-attachment": "51c3cc5471d9996bb32571300d7e8e9aa9d1a78630f686485fc44668d545f1e7",
     "1701-2018-conso": "ee6460b88319fca960bc6a6d696f43115b3eeace6c858ef3b139f3b648928d3b",
     "1701a-2018": "1787b1eb21c5269ca6c547419cec8f0f04656f0d1c0fa812034eedef939029ad",
-    "1701ms-2024": "21a0172c06ba0ffc1f3b5bf0614acab38734ae9d5ca10da7ab657c190f3fdd58",
+    "1701ms-2024": "1d5d859a539a9f80d928f5a8c9230d915245cb917c7e26c0b71b959d499082d1",
     "1701q-2018": "2ab2da4b39f4cea77ad1a6baa96ee8a1b73115ad174541f98456d21af3414f21",
-    "1702ex-2018": "edea6c841cc22ac29628a27221b9e1fab3ed2ca5f9d6e4b5195393d297bd047d",
-    "1702mx-2018c": "e38855f7d3ddb061580bd4ddf447bacf5f81f128e4291789d86f9d9e25fe057e",
+    "1702ex-2018": "f0eb90b8b7137a4868535fa5daaf9ce3152c3e24149e9b10bc5125fcd2ef8d66",
+    "1702mx-2018c": "7c2c26d79b37de266bef68ea93aacf199f9387ceaf24e46d3a7db5559acfe1be",
     "1702mx-2018c-attachment": "fa94174dfe4c8bee14085e0cda823461b95ff50bbf280da00379dc5818424f96",
-    "1702q-2018": "327acf54dd86035a4efea583672cf54733755f3de6acb9ceb3074f1bb8def0a8",
-    "1702rt-2018c": "520aeabe42a4fee94148b2a27ebba3ec1dca22e168362abacbd45a35a82b82ab",
-    "1706-2018": "7431a2ddc413f33fc32cb70551103cff8570f40f5c00aef30582915683fba55c",
-    "1707-2021": "37fcb98d14bd78ed114a612b2ad161aed580ed80d222d5b037def2ae640c9ef6",
+    "1702q-2018": "304f8a7e509e5854f82544b5062cda49af6cadddc9bada138e324d1216943b3e",
+    "1702rt-2018c": "6b492e6bae472a92cbc1d5ad9539d56592caec0a2f1dd422db967c2fcb96baf9",
+    "1706-2018": "01e9e65ff0379f41db670fbda5cede30eba7a8af90f7b716ffa3fd0a41417ab4",
+    "1707-2021": "9ccb14f47b79d950139364e0be1e22621a8e7078da73f683cbc7c2a8b42a857b",
     "1707a-2021": "8268bde7581c4261fcb040b03ff7b2e4eecd979f80471159b0788d48ea91e134",
     "1709-2020": "206b9b87a260e18ae7cc1ebdf062d6626a4facbdc52bf01097034f411e635ae3",
     "1800-2018": "733f9a14da504cc7120b227d6a2e8d78b7e94293377fcaf71f3a0ce5cd9b0ef2",
-    "1801-2018": "9d5d739dc3835341f286d653c9e8d3fa229f778926344191234c4dc56123d1ea",
+    "1801-2018": "c81a43320037236a34d50430285ff37f48a6c76802c08723669e493de4a44b7e",
     "2000-dst-2018": "0833c3f222a8da9e8c6bfad5de47d049659a0d6a53ef2d96d6da4984a1e8a021",
     "2000-ot-2018": "7da7f3a3ed0a29c6df2b3c9bccfe9c5b58113bc472f7070a24428da245922b5c",
     "2200a-2020": "f6d6354240e94b9bb5a6befb8fcb4ab3f733929cfcc7700df2dc87f983e775ef",
-    "2200an-2018": "6e581aa4919a370e3aa43b91a09740bae97d6de2ac45c3cbeb610872410a3ec3",
+    "2200an-2018": "bf3adae5dfb209a2c2e68d9990290eea2e9ada99ef3f3f19d529c963b6ed6eb0",
     "2200c-2018": "210312c0168cdac356e31f1eeddb00b693732ab059c6270256dbfaa8f8dc58f7",
-    "2200m-2018": "c2b4eed26336c444476e4b5642dbc73cf205576fbc200277082e66dc82467384",
+    "2200m-2018": "dbd52ec2dd675bec3fbddf30f2261cc5825f0d778581a298720c699fc36365e3",
     "2200p-2020": "6acc10faca9eee26e31942d30f041ccd5976984895425e80281326cecae44590",
-    "2200s-2018": "7fe8db666992a706561c6d7252dac0b10f69a2a9ed7476146177f3bcad25dc8f",
-    "2200t-2022": "1c70914d0f42d5f6f4ea9b4f7e568c225dc77d42d85f9bb3ded6d99b77add9fc",
-    "2316-2021": "951097d6e9004d39010fbdf03e1b3d84cf7857f941c0b788fab4c70b4bf45211",
+    "2200s-2018": "5cdabc979edbb52dd9a47813c5f59b33a9c4e7fe0b6c615b8cfaf8142a5bf22d",
+    "2200t-2022": "e7f24c309245959389fba2d50351c100f4a722998f664b0343c3e6a66e22662c",
+    "2316-2021": "1c0931866c78c78a261ccdc4f84ff25814eac1b71e783c68e24ce3f06c3610df",
     "2550-ds-2025": "6429458bdb76c2afc1dc1b79d3fb9fb41e121d3fc308123579e540d69c847579",
-    "2550m-2007": "d76301c506bc110d9e5dfa9240cfdad439159c25cde6fc65978d01ffba121f13",
-    "2550q-2024": "f347e598f8b840736aca42d043a17e136345c93b856cfbbc2570d64b4b9d5743",
-    "2551m-2002": "393d7bcc0b489ecf5546bf76387fbb1cd3252fa13e8f32c8703eae6e175b6170",
+    "2550m-2007": "3030be20b51373b3924a389d14c3ed0f30ebc83daf5e8131ab78a98f3d4f4460",
+    "2550q-2024": "f31a4e06fa6c600b20e5e32b085ea733a661bd1d6802b318cc6f60ef187abc7f",
+    "2551m-2002": "0d6429f9ff0aa924c3bcc247e9f5e70181ee8daf82d66d3571ff955a771f7178",
     "2551q-2018": "cafd4edab3ae185d8ec0b2e21958ba82afe816725cdaacb0816365df025b82f4",
     "2552-2018": "6b4cac3a60f59f88176a76d31aaf18a4ba836c040f221837bf2e6e28033be2d9",
-    "2553-1999": "3057ddea16ef39ae69f9ecfbfdde659a48cf70d8cff292eafa8ecbc7e7e6f8b1",
+    "2553-1999": "1e06b3fd0af85bb484f36f45b4e868235865a7dfc3dbb6094ff1b6f7ce892492",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
@@ -10229,11 +10300,22 @@ def self_test() -> int:
     # retained census is one. Both slugs publish the same number of subjects, so
     # the same fixture shape exercises retained-zero and retained-one, and the
     # assertion below fails loudly if a future census move breaks that pairing.
-    retained_fixture_slug = "2551m-2002"
+    #
+    # It did exactly that at r20, which is the check working: 2551M went 15 -> 18
+    # subjects and 1 -> 3 retained, so it is no longer paired with 1604-E and no
+    # longer a retained-ONE slug. 1604-CF replaces it -- 15 subjects, exactly one
+    # retained, the same pairing on today's measured census -- and 2551M is
+    # promoted to the retained-MANY negative control below, where 0605 used to
+    # sit. 0605 had to move for the same reason: it went 3 -> 1 retained, so it
+    # would now reject this fixture on its total alone and stop testing the
+    # retained census at all. Neither the fixture nor the rule was weakened;
+    # only the slugs that satisfy them were re-measured.
+    retained_fixture_slug = "1604cf-2008"
     assert (EXPECTED_COMBS_BY_SLUG[retained_fixture_slug]
             == EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug])
     assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG[retained_fixture_slug] == 1
-    for wrong_slug in (ledger_fixture_slug, "0605-1999"):
+    assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG["2551m-2002"] > 1
+    for wrong_slug in (ledger_fixture_slug, "2551m-2002"):
         try:
             validate_comb_ledger(
                 wrong_slug, retained_ledger, lattice_producer_bytes)

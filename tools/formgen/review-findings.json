@@ -655,8 +655,8 @@
       "evidence": "Tinted 3x crop shows the Calendar box filled pink with a blue outline and the Fiscal box plain white. DOM query over y 128-148 returns exactly one input (p1c9 at x 50.20, y 132.59, 12.56 x 11.18) - the Calendar box. The IR lists two white knockouts on that row, at x 49.80 and x 106.08.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The Fiscal box at x 106.08-119.52 -> cell p1c8, 1 input (HEAD: kind `label`, 0 inputs). This is the assign_points half of the fix stated exactly: the source prints the caption as ONE run, \"Calendar        Fiscal\", whose bounding-box centre 107.7 lands inside the checkbox drawn at 106.08-119.52 in the gap between the two words, so the box counted as printed text. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F050",
@@ -720,8 +720,8 @@
       "evidence": "Tinted 3x crop: Calendar box pink, Fiscal box plain white. IR knockouts on the row are x 49.80 (has an input) and x 106.08 (has none).",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The Fiscal box at x 106.08-119.52, y 134.28-146.16 -> cell p1c7, 1 input (HEAD: `label`, 0). Same single-run caption as 1702-EX. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F055",
@@ -772,8 +772,8 @@
       "evidence": "Tinted-field render of page 1 shows \"1 For [pink box] Calendar [white box] Fiscal\" — the asymmetry is visible to the eye. DOM query confirms p1c9 has data-cell-kind=\"label\" and 0 inputs while p1c10 has data-cell-kind=\"field\" and 1 input. It is the only box-sized cell on the form without an input.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The Fiscal box at (106.08, 123.12)-(119.52, 135.00) -> cell p1c7, 1 input (HEAD: p1c9 `label`, 0). Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F059",
@@ -824,8 +824,8 @@
       "evidence": "DOM sweep of all box-sized (9-17 pt square) cells on the form returns exactly one with zero inputs: p1c9, the Fiscal box. Visible in the tinted render as one pink and one white checkbox on the same row.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "The Fiscal box at (106.08, 128.88)-(119.52, 140.76) -> cell p1c7, 1 input (HEAD: p1c9 `label`, 0). Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F063",
@@ -1396,8 +1396,8 @@
       "evidence": "Red-outline input overlay at DPR2: the item 2 \"No\" box, item 14 Yes/No and item 16 are outlined; item 2 \"Yes\", item 15 and item 17 are bare. Only 4 checkbox-sized inputs exist on the page (p1c12, p1c48, p1c49, p1c54) for 7 printed boxes. In build/layout/2200s-2018.layout.json the three unfilled boxes are p1c11, p1c53, p1c57, all kind=\"label\", is_empty=false. The IR shows why: run p1t17 is '?        ' spanning x 347.47-373.87 and p1t69/p1t73 are '15        '/'17        ' spanning x 28.56-60.24 - the trailing-space advance runs straight through the checkbox rect, so lattice.py never classifies it as a field.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "All THREE boxes, each checked separately against HEAD: item 2 Yes [358.68, 108.12, 372.00, 119.64] -> p1c11, 1 input; item 15 (43.08, 387.96) 13.32 x 11.52 -> p1c53, kind `label` 0 inputs at HEAD, kind `field` 1 input at r20; item 17 (43.56, 406.56) 13.44 x 11.52 -> p1c57, same transition. Only the first was in the assertion's population; the other two were probed by hand at this finding's own coordinates. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F107",
@@ -1773,8 +1773,8 @@
       "evidence": "Red-outline overlay at DPR2: the boxes before 1st, 2nd and 4th are outlined; the box before 3rd is bare white. build/layout/2553-1999.layout.json has p1c10 at that rect with kind=\"label\", is_empty=false, and no input in the 100-input DOM intersects it.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Box [269.76, 156.24, 284.88, 166.08], which is this finding's own measured (269.8,156.2)-(284.8,166.1) -> cell p1c9, 1 input. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F136",
@@ -1963,13 +1963,13 @@
       "form": "2551m-2002",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Item 23A 'Surcharge' has no input: the printed money box is classified 'label', so a filer cannot enter the surcharge component of item 23 Penalties. 23B Interest and 23C Compromise beside it are both fillable.",
       "where": "p1c64, kind 'label', (111.84, 566.16) 95.52 x 19.20 pt, 0 inputs. p1c65 (Interest, x=228.48) and p1c66 (Compromise, x=343.92) each carry one input.",
       "evidence": "DOM cell dump, confirmed against the official raster at /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2551m-2002/EVIDENCE-item23A-Surcharge-has-no-input.png where 23B and 23C carry field outlines and 23A carries none. Corpus context: 160 'label' cells of at least 40 x 9 pt and 600 pt^2 contain no text run at all and no input, across 38 of 53 forms - the candidate population for this class, measured 2026-08-07.",
       "cause": "C4",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Box [111.84, 566.16, 207.36, 585.36], which is this finding's own measured (111.84,566.16) 95.52 x 19.20 -> cell p1c61, 1 input. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F151",
@@ -1989,26 +1989,26 @@
       "form": "0619e-2018",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "Item 3 'Amended Return?' - the YES checkbox has no input, so an amended 0619-E cannot be flagged as amended. Only the NO box is fillable.",
       "where": "The printed box is at (276.0, 135.0) 12.5 x 10.5 pt with a uniform interior tone of 255 (a real empty white checkbox). The three checkbox inputs on that row are p1c22-i at x=319.93 (3-No), p1c23-i at x=377.51 (4-Yes) and p1c24-i at x=421.31 (4-No). Nothing exists at x~276.",
       "evidence": "Batch-1 measurement taken off the official raster alone for the box and off the DOM alone for the inputs, then confirmed by fill test: /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0619e-2018/EVIDENCE-item3-Yes-checkbox-missing-and-item6-grey-fillable.png. Sister form 0619-F has all four checkboxes, so this is a per-form regression inside one layout family.",
       "cause": "C4",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Box [276.05, 134.64, 289.08, 146.16] -> cell p1c22 [275.94, 134.49, 289.08, 145.98], 1 input. Screenshot with an X typed into the YES box: scratchpad/blockers/F152-0619e-item3-amended-yes.png. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F153",
       "form": "0620-2019",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "Item 3 'Amended Return?' - the YES checkbox has no input, same defect as 0619-E.",
       "where": "Printed box at (276.0, 140.5) 12.5 x 10.5 pt, interior tone uniform 255. Checkbox inputs present: p1c22-i (x=319.93), p1c23-i (x=377.51), p1c24-i (x=421.31). Nothing at x~276.",
       "evidence": "Batch-1 official-raster box detection plus fill test: /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0620-2019/EVIDENCE-item3-Yes-checkbox-missing-and-item6-grey-fillable.png.",
       "cause": "C4",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Box [276.05, 140.40, 289.08, 151.92] -> cell p1c22, 1 input. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F154",
@@ -2267,8 +2267,8 @@
       "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [460.44, 185.88, 473.40, 197.40]; row_peers 4, row_peers_with_input 3. Labels re-derived from the pinned source's text operators: the box at 460.44 is immediately left of 'II016 Mixed Income - 8% IT Rate' at x 480. The ATC drives which rate schedule applies, so an unselectable ATC is a wrong-tax hazard, not a cosmetic one.",
       "cause": "C4",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Box [460.44, 185.88, 473.40, 197.40] (ATC II016 Mixed Income 8%) -> cell p1c35, 1 input. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F174",
@@ -2280,8 +2280,8 @@
       "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [403.25, 370.10, 414.43, 380.15]; row_peers 2, row_peers_with_input 1. Both boxes are followed by the identical label 'Optional Standard Deduction (OSD) [40% of Gross Sales/Revenues/Fees] [Sec. 34(K), NIRC]' in the source's own words, which is what proves they are the same control drawn twice rather than two different things.",
       "cause": "C4",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Box [403.25, 370.10, 414.43, 380.15] (spouse OSD) -> cell p1c82 [402.08, 370.02, 413.20, 380.07], 1 input. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F175",
@@ -2293,8 +2293,8 @@
       "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [297.00, 383.88, 309.48, 395.04]; row_peers 4, row_peers_with_input 3. The 'No' label sits at x 313 immediately right of the offending box, and 'If yes, specify' follows it, so the pairing is unambiguous in the source.",
       "cause": "C4",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Box [297.00, 383.88, 309.48, 395.04] (item 11 treaty No) -> cell p1c79, 1 input. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F176",
@@ -2306,8 +2306,8 @@
       "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [209.16, 322.01, 222.60, 333.48]; row_peers 2, row_peers_with_input 1. Same defect and same shape as F175 on 1706, on a different form and a different item -- which is the signal that the cause is in `lattice.py` cell classification and not in any one sheet.",
       "cause": "C4",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Box [209.16, 322.01, 222.60, 333.48] (item 12 special-law No) -> cell p1c53, 1 input. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F177",
@@ -2319,8 +2319,8 @@
       "evidence": "Caught by `printed_box_peers_all_fillable` (audit.py assertion 10), r18, on the r18 corpus. The assertion takes its population from the pinned PDF -- `source_printed_boxes` reads the page's own composited paint stream and its own text operators -- so a printed box the lattice mis-classified as `label` is still in it. It reports a box only when at least one box sharing its EXACT printed top and bottom edge does carry an emitted input, which is what makes the verdict unambiguous: the sheet itself says these boxes are the same kind of thing. Offender box [470.40, 110.50, 484.10, 122.70]; row_peers 6, row_peers_with_input 5. The labels '1st'@434.6, '2nd'@470.4, '3rd'@512.6, '4th'@554.3 were re-derived from the source's text operators and each sits immediately right of its own box, so the dead box is the 2nd quarter and not an ambiguous neighbour. Same class as F135 (2553 3rd quarter) on a different form: one quarter of the year is unfileable.",
       "cause": "C4",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Box [470.40, 110.50, 484.10, 122.70] (2nd quarter) -> cell p1c11 [470.4, 110.1, 484.1, 122.3], 1 input. Screenshot with an X typed into the 2nd-quarter box, all four quarters present: scratchpad/blockers/F177-2550q-item3-quarter-2nd.png. Measured at r20 on the tree that was written, by a checker that reads the SOURCE-derived offender box out of the r19 audit and the inputs out of the shipped index.html, and never consults the r20 audit -- so a box that cleared because its row PEER lost an input would still read as uncovered. The assertion that owns this population, `printed_box_peers_all_fillable`, goes 14 offenders on 14 of 53 forms -> 0 on 0, and audit.py is byte-identical (sha256 8d22a957...), so nothing about the check moved. Corpus input count went UP by 60; nothing was deleted. Cause: two producer bugs in lattice.py -- `GroupGeometry.span` excluded a cluster's own defining rule from its coverage, and `assign_points` placed a text run by its bounding-box centre (the run's ADVANCE), so the whitespace between \"Calendar\" and \"Fiscal\" counted as printed text inside the checkbox drawn in that gap. `glyph_ink_spans` now reads the per-character origins the IR already carries."
     },
     {
       "id": "F178",
@@ -2358,8 +2358,8 @@
       "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 8 offenders of 256 inputs checked, against 342 printed dividers detected. p1c2 is the case STATUS.md has carried as G02a since 2026-08-06 -- 'four printed compartments, one free-text input' -- diagnosed by hand and, until this assertion, invisible to every gate check. The independent diagnosis and the assertion agree on the same cell, which is the first cross-check this defect has ever had.",
       "cause": "C5",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "All EIGHT named inputs are gone from `inputs_span_no_printed_divider`'s offender list (79 -> 67 corpus-wide, and this form 8 -> 4 with four DIFFERENT cells; the four new ones are filed as F185). Item 1 'For the Month of (MM/YYYY)': p1c2 [208.56, 90.00, 270.72, 103.20] was one free-text input at HEAD and is now data-comb-slots=\"4\" with 4 inputs, one per printed compartment -- screenshot with 2 0 2 7 typed into the four boxes, divider ticks visible between them: scratchpad/blockers/F180-2550m-item1-year-comb.png. This is the user's original 'four year boxes rendered as one big box'. Cause: extract.py did not model PDF 32000-1 8.4.3.3 line caps, so a round-capped comb tick was published at its declared endpoints and stopped 0.36pt short of the rail it lands on; `lattice.split_verticals` then filed it as a box border and the compartment disappeared. `cap_extension_pt` and `open_stroke_ends` model it, and a written-here probe page (CAP_PROBE_STREAM, 13 asserted cases, plus a mutation that restores the old behaviour) proves both directions -- an unmodelled cap and an over-applied one."
     },
     {
       "id": "F181",
@@ -2399,6 +2399,30 @@
       "audit_blind": true,
       "status": "open",
       "resolution": null
+    },
+    {
+      "id": "F184",
+      "form": "2550m-2007",
+      "page": 1,
+      "severity": "major",
+      "status": "open",
+      "what": "Five money-comb cells claim one more compartment than the sheet prints, because a slot boundary is taken from a divider the page's OWN `comb_divider_final_visible_ids` excludes. p1c89 is the MM box of a Schedule row: the source strokes two ticks in it, at x 260.40 and x 263.52, but paints a white fill over the whole box (seqno 477) AFTER the 263.52 tick (seqno 419) and before the 260.40 one, so only one tick survives to the paper. The layout emits slot_x [246.96, 260.40, 263.52, 273.84] -- a 3.12pt compartment no character fits in.",
+      "where": "forms/2550m-2007/, page 1: p1c89, p1c90, p1c94, p1c95, p1c102. Each has comb.cells 3 against `printed` 2. Invisible dividers on the page: v199, v200, v201, v217, v218, v219 (6 of 43).",
+      "evidence": "`comb_slots_match_printed` offenders of kind (layout-printed-mismatch, emission-printed-mismatch): 2 -> 7 at r20, the five new ones all on this form. The layout ALREADY records the right answer beside the wrong one -- p1c89's comb.resolution is {status: unresolved, method: legacy-continuity, reason_codes: [final-visible-count-regression, legacy-continuity-only], final_visible_candidate_cells: 2} -- so the subject is active_unresolved and already blocks the gate. Paint order read from the pinned PDF (sha256 9fb4101a...) with get_drawings(); the 30x raster of x 252-276, y 834-845 shows ONE tick: scratchpad/blockers/2550m-p1c89-ticks.png. NOT FIXED at r20 and deliberately not patched here: dropping the legacy topology is the reviewed `retired_proven_false` transition, which needs independent evidence and a human, not an integration-time edit.",
+      "audit_blind": false,
+      "cause": "lattice-comb-legacy-continuity-outranks-final-visibility"
+    },
+    {
+      "id": "F185",
+      "form": "2550m-2007",
+      "page": 1,
+      "severity": "major",
+      "status": "open",
+      "what": "Eleven further inputs lie across printed compartment dividers that extract.py under-reported until r20 modelled line caps. These are newly VISIBLE, not newly broken: the divider was always on the paper, and the wide input has always covered it. Same class as F178-F181.",
+      "where": "2550M p1c3 [524.40,90.24,574.32,102.96] spans 549.36; p1c21 [526.56,171.36,574.32,184.80] spans 536.64/549.36/561.12; p1c116 [66.72,119.52,99.12,133.68] spans 77.04/87.36; p1c118 [273.36,119.04,324.00,133.68] spans 289.68/306.96. 1604CF p2c82/91/100/109/118, each [175.44,*,269.04,*], each spanning 243.12 (the same Schedule rows F179 names by their old ids). 2551M p2c17 and p2c21, each [24.48,*,249.12,*], each spanning 93.36.",
+      "evidence": "`inputs_span_no_printed_divider` offender-set diff r19 -> r20, computed per form on the published offender records. The assertion's total falls 79 -> 67 and its form count is unmoved at 11 of 53; 24 offenders cleared (F180's 8, F179's page-1 5, F181's p1c25, and 2551M's page-1 group) and these 11 appeared. audit.py is byte-identical, so the assertion did not move.",
+      "audit_blind": false,
+      "cause": "extract-line-cap-underreported-divider"
     }
   ]
 }

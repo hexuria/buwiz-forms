@@ -436,6 +436,80 @@ def is_bar_like(p0: fitz.Point, p1: fitz.Point, thickness: float) -> bool:
     return lean <= max(thickness, AXIS_EPSILON_PT)
 
 
+def cap_extension_pt(item: dict[str, Any]) -> float:
+    """How far this path's stroke inks past an open end of its own geometry.
+
+    PDF 32000-1 8.4.3.3. A butt cap (0) stops the ink at the endpoint. A round
+    cap (1) adds a semicircle of radius half the stroke width and a projecting
+    square cap (2) adds a half-width square, so both extend the painted bar by
+    exactly half a stroke width -- the same half-width the perpendicular axis
+    already gets. Reporting only the declared endpoints therefore publishes an
+    IR that is short of the ink on both counts for two thirds of this corpus's
+    open strokes (340 of 569 carry a round or projecting cap).
+
+    Only a path that actually strokes has caps: a fill paints the region its
+    subpaths enclose and stops there.
+    """
+    if str(item.get("type", "")) not in ("s", "fs"):
+        return 0.0
+    if item.get("color") is None:
+        return 0.0
+    width = float(item.get("width") or 0.0)
+    if width <= 0.0:
+        return 0.0
+    cap = item.get("lineCap")
+    style = int(cap[0]) if cap else 0
+    return width / 2.0 if style in (1, 2) else 0.0
+
+
+def open_stroke_ends(items: Sequence[Sequence[Any]]) -> dict[int, tuple[bool, bool]]:
+    """Which ops own a start cap, an end cap, or both.
+
+    A cap exists at exactly two places on a subpath, and only if the subpath is
+    open: `re` and `qu` are closed by definition, a polyline that returns to its
+    own start is closed by measurement, and every interior vertex of an open
+    polyline is a *join*, not a cap. Capping per op instead would grow a
+    rectangle drawn as four `l` ops by half a stroke on all four sides -- 133 of
+    them in this corpus, 12 with a round cap.
+
+    Subpaths are reconstructed exactly as subpaths_of does, on the same
+    quantised coincidence test, so the two views of one path can never disagree
+    about where it starts and ends.
+    """
+    groups: list[list[int]] = []
+    current: list[int] | None = None
+    cursor: fitz.Point | None = None
+
+    for index, op in enumerate(items):
+        kind = op[0]
+        if kind in ("re", "qu"):
+            current, cursor = None, None
+            continue
+        if kind not in ("l", "c"):
+            raise SystemExit(f"unknown path op {kind!r}")
+        points = list(op[1:])
+        first, last = points[0], points[-1]
+        if (current is None or cursor is None
+                or abs(first.x - cursor.x) > AXIS_EPSILON_PT
+                or abs(first.y - cursor.y) > AXIS_EPSILON_PT):
+            current = []
+            groups.append(current)
+        current.append(index)
+        cursor = last
+
+    ends: dict[int, tuple[bool, bool]] = {}
+    for group in groups:
+        start = items[group[0]][1]
+        finish = items[group[-1]][-1]
+        if (q(start.x), q(start.y)) == (q(finish.x), q(finish.y)):
+            continue
+        head = ends.get(group[0], (False, False))
+        ends[group[0]] = (True, head[1])
+        tail = ends.get(group[-1], (False, False))
+        ends[group[-1]] = (tail[0], True)
+    return ends
+
+
 def is_rectilinear(item: dict[str, Any]) -> bool:
     """Whether every op in this path is representable as an axis-aligned bar.
 
@@ -530,19 +604,37 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
         gray = to_gray(fill)
         rgb = tuple(round(float(c), 4) for c in fill[:3]) if len(fill) >= 3 else None
 
-        for op in item["items"]:
+        # Caps live on the open ends of the path's own subpaths, so both are
+        # settled once per path rather than guessed per op.
+        cap_extension = cap_extension_pt(item)
+        cap_ends = open_stroke_ends(item["items"]) if cap_extension > 0.0 else {}
+
+        for op_index, op in enumerate(item["items"]):
             if op[0] == "re":
                 rect = op[1]
             elif op[0] == "l":
                 # A zero-area line: give it the path's stroke width as thickness.
                 p0, p1 = op[1], op[2]
                 width = float(item.get("width") or 0.0) or 0.24
+                # A capped end paints half a stroke width past the coordinate
+                # the source states; see cap_extension_pt. `lead` belongs to p0
+                # and `trail` to p1, and which of those is the low coordinate is
+                # the segment's direction, not its geometry.
+                head, tail = cap_ends.get(op_index, (False, False))
+                lead = cap_extension if head else 0.0
+                trail = cap_extension if tail else 0.0
                 if abs(p0.y - p1.y) <= abs(p0.x - p1.x):
-                    rect = fitz.Rect(min(p0.x, p1.x), p0.y - width / 2,
-                                     max(p0.x, p1.x), p0.y + width / 2)
+                    forward = p0.x <= p1.x
+                    low = min(p0.x, p1.x) - (lead if forward else trail)
+                    high = max(p0.x, p1.x) + (trail if forward else lead)
+                    rect = fitz.Rect(low, p0.y - width / 2,
+                                     high, p0.y + width / 2)
                 else:
-                    rect = fitz.Rect(p0.x - width / 2, min(p0.y, p1.y),
-                                     p0.x + width / 2, max(p0.y, p1.y))
+                    forward = p0.y <= p1.y
+                    low = min(p0.y, p1.y) - (lead if forward else trail)
+                    high = max(p0.y, p1.y) + (trail if forward else lead)
+                    rect = fitz.Rect(p0.x - width / 2, low,
+                                     p0.x + width / 2, high)
             else:
                 continue
 
@@ -1788,15 +1880,14 @@ CLIP_PROBE_RULES: tuple[tuple[tuple[float, float, float, float], str], ...] = (
 CLIP_PROBE_DROPPED = 3
 
 
-def clip_probe_pdf() -> bytes:
-    """Assemble the probe page into a PDF, offsets and all."""
+def probe_pdf(stream: bytes) -> bytes:
+    """Assemble a 200x200 probe page into a PDF, offsets and all."""
     objects = [
         b"<</Type/Catalog/Pages 2 0 R>>",
         b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
         b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]"
         b"/Contents 4 0 R/Resources<<>>>>",
-        b"<</Length %d>>stream\n%s\nendstream" % (
-            len(CLIP_PROBE_STREAM), CLIP_PROBE_STREAM),
+        b"<</Length %d>>stream\n%s\nendstream" % (len(stream), stream),
     ]
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
@@ -1811,6 +1902,84 @@ def clip_probe_pdf() -> bytes:
     out += b"trailer\n<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (
         len(objects) + 1, start)
     return bytes(out)
+
+
+def clip_probe_pdf() -> bytes:
+    """The clip probe as a PDF."""
+    return probe_pdf(CLIP_PROBE_STREAM)
+
+
+# A second written-here page, for the same reason the clip probe is written
+# here: a line cap is a property of the `J` operator, not of any BIR form, and
+# a check that only runs where the official PDFs live is the green tick this
+# project has already shipped once. No fixture in either corpus draws a round
+# or projecting cap, so without this page the cap model would ship unproven.
+#
+# Page is 200x200 and PDF y counts up from the bottom, so an IR y is the
+# 200-complement. Stroke width is 1.2pt throughout -- under
+# MAX_RULE_THICKNESS_PT so every bar stays a rule -- which puts the half-width,
+# and therefore each cap's extension, at exactly 0.6pt.
+CAP_PROBE_STREAM = b"""0 G
+1.2 w
+0 J
+20 40 m 20 100 l S
+1 J
+40 40 m 40 100 l S
+2 J
+60 40 m 60 100 l S
+1 J
+80 100 m 80 40 l S
+1 J
+100 40 m 160 40 l S
+1 J
+120 100 m 180 100 l 180 130 l 150 130 l 150 160 l 120 160 l 120 100 l S
+1 J
+20 30 m 80 30 l 80 10 l S
+"""
+
+# (x0, y0, x1, y1) in IR coordinates, and what each one is here to settle.
+# Anything the probe page paints and this table does not name is a failure, in
+# both directions: an unmodelled cap and an over-applied one look the same on a
+# single bar and opposite on the corpus.
+CAP_PROBE_RULES: tuple[tuple[tuple[float, float, float, float], str], ...] = (
+    ((19.4, 100.0, 20.6, 160.0),
+     "butt cap: the ink stops at the declared endpoints, length 60.0"),
+    ((39.4, 99.4, 40.6, 160.6),
+     "round cap: 0.6pt past each endpoint, length 61.2"),
+    ((59.4, 99.4, 60.6, 160.6),
+     "projecting square cap: the same 0.6pt, length 61.2"),
+    ((79.4, 99.4, 80.6, 160.6),
+     "round cap on a segment drawn upwards: direction cannot move the ink"),
+    ((99.4, 159.4, 160.6, 160.6),
+     "round cap on the other axis: the extension follows the long axis"),
+    ((120.0, 99.4, 180.0, 100.6),
+     "closed subpath: no cap anywhere on it, length 60.0"),
+    ((179.4, 70.0, 180.6, 100.0), "closed subpath, second edge"),
+    ((150.0, 69.4, 180.0, 70.6), "closed subpath, third edge"),
+    ((149.4, 40.0, 150.6, 70.0), "closed subpath, fourth edge"),
+    ((120.0, 39.4, 150.0, 40.6), "closed subpath, fifth edge"),
+    ((119.4, 40.0, 120.6, 100.0), "closed subpath, the edge that closes it"),
+    ((19.4, 169.4, 80.0, 170.6),
+     "open polyline, first leg: its free end is capped and its corner is not"),
+    ((79.4, 170.0, 80.6, 190.6),
+     "open polyline, second leg: the shared corner is a join, the far end a cap"),
+)
+
+
+def cap_probe_ir() -> dict[str, Any]:
+    """The cap probe page's rules, and how its subpaths were read."""
+    doc = fitz.open(stream=probe_pdf(CAP_PROBE_STREAM), filetype="pdf")
+    page = doc[0]
+    drawings = list(page.get_drawings())
+    ir = extract_page(page, doc, 1)
+    caps = [
+        {"extension_pt": q(cap_extension_pt(item)),
+         "capped_ops": sorted(open_stroke_ends(item["items"]).items())}
+        for item in drawings
+    ]
+    doc.close()
+    return {"rules": ir["rules"], "area_fills": ir["area_fills"],
+            "paths": ir["paths"], "caps": caps}
 
 
 def clip_probe_ir() -> dict[str, Any]:
@@ -1874,6 +2043,8 @@ def gather_evidence(profile: SelfTestProfile,
         # to interrogate one operator, not a form, and the corpus-wide checks
         # must not read it as one.
         "clip_probe": clip_probe_ir(),
+        # Same reasoning, for the `J` operator.
+        "cap_probe": cap_probe_ir(),
     }
     for code, (relative, revision, digest) in profile.fixtures.items():
         path = source_root / relative
@@ -2332,6 +2503,51 @@ def check_clips(evidence: dict[str, Any]) -> list[str]:
     return failures
 
 
+def check_stroke_caps(evidence: dict[str, Any]) -> list[str]:
+    """A stroke's ink runs exactly as far past its endpoints as its cap says.
+
+    Under-reporting is the shipped defect: a round-capped comb tick published at
+    its declared endpoints stops short of the rail it lands on, so
+    lattice.split_verticals files it as a box border and the compartment it was
+    dividing disappears. Over-reporting would be worse and quieter -- capping a
+    closed rectangle or an interior polyline vertex grows real structure by half
+    a stroke on sides the source never inked -- so both are asserted here, on
+    one page whose whole purpose is to state every case of `J` at once.
+    """
+    probe = evidence["cap_probe"]
+    failures: list[str] = []
+
+    want = {box: why for box, why in CAP_PROBE_RULES}
+    got = {(rule["x0"], rule["y0"], rule["x1"], rule["y1"])
+           for rule in probe["rules"]}
+    for box, why in want.items():
+        if box not in got:
+            failures.append(f"cap probe lost the rule at {box} ({why})")
+    for box in sorted(got - set(want)):
+        failures.append(f"cap probe painted a rule at {box} that no cap on its "
+                        f"page can account for")
+    if probe["area_fills"] or probe["paths"]:
+        failures.append(
+            f"cap probe diverted ink away from `rules`: "
+            f"{len(probe['area_fills'])} area fill(s), {len(probe['paths'])} path(s)")
+
+    # The measured extension, stated independently of the geometry above so a
+    # coincidence in one bar cannot stand in for the rule.
+    extensions = [entry["extension_pt"] for entry in probe["caps"]]
+    if extensions != [0.0, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6]:
+        failures.append(f"cap probe measured extensions {extensions}, expected "
+                        f"0.0 for the butt cap and 0.6 for every other stroke")
+    closed = probe["caps"][5]["capped_ops"] if len(probe["caps"]) > 5 else None
+    if closed != []:
+        failures.append(f"cap probe capped the closed subpath's ops {closed}; "
+                        f"a closed subpath has joins everywhere and no cap")
+    polyline = probe["caps"][6]["capped_ops"] if len(probe["caps"]) > 6 else None
+    if polyline != [(0, (True, False)), (1, (False, True))]:
+        failures.append(f"cap probe read the open polyline's ends as {polyline}; "
+                        f"only its first and last points are caps")
+    return failures
+
+
 def check_codepoints(evidence: dict[str, Any]) -> list[str]:
     """No run holds a character the source did not state.
 
@@ -2470,6 +2686,7 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("paths", check_paths),
     ("tone", check_tone),
     ("clips", check_clips),
+    ("stroke-caps", check_stroke_caps),
     ("codepoints", check_codepoints),
     ("is-bar-like", check_bar_like),
 )
@@ -2579,6 +2796,22 @@ def mutate_codepoints(evidence: dict[str, Any]) -> None:
     raise AssertionError("codepoints mutation found no unmapped glyph")
 
 
+def mutate_stroke_caps(evidence: dict[str, Any]) -> None:
+    """Publish the round-capped bar at its declared endpoints.
+
+    This is not an invented failure: it is what this module did until the cap
+    model landed, and it is the state in which 2550M's four year boxes reached
+    the taxpayer as one wide input.
+    """
+    probe = evidence["cap_probe"]
+    for rule in probe["rules"]:
+        if (rule["x0"], rule["y0"], rule["x1"], rule["y1"]) == (
+                39.4, 99.4, 40.6, 160.6):
+            rule.update(y0=100.0, y1=160.0, length_pt=60.0)
+            return
+    raise AssertionError("stroke-caps mutation found no round-capped bar")
+
+
 def mutate_bar_like(evidence: dict[str, Any]) -> None:
     """Divert one leaning separator to paths, as exact alignment would have."""
     code = evidence["profile"].bar_like_form
@@ -2605,6 +2838,8 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
     ("paths", "one filled triangle is dropped", mutate_paths),
     ("tone", "a decorative grey rule is reported as structural", mutate_tone),
     ("clips", "a bar drawn outside its scissor is painted anyway", mutate_clips),
+    ("stroke-caps", "a round-capped bar is published at its declared endpoints",
+     mutate_stroke_caps),
     ("codepoints", "an unmappable glyph prints as a section sign", mutate_codepoints),
     ("is-bar-like", "a leaning separator loses its rule", mutate_bar_like),
 )

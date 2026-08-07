@@ -5,9 +5,116 @@ same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
 Measured 2026-08-07 over the 53-form corpus, on branch `gol/form-correction`,
-regenerated at the r19 producer bytes. Assertion counts are from a corpus-wide
+regenerated at the r20 producer bytes. Assertion counts are from a corpus-wide
 `audit.py` run over that regeneration; the findings tally is recomputed from
 `review-findings.json`.
+
+## r20 — a printed box a taxpayer must tick now has somewhere to tick
+
+**`printed_box_peers_all_fillable` goes 14 offenders on 14 of 53 forms to ZERO
+on zero, and `audit.py` is byte-identical while it happens** (sha256
+`8d22a957…`, the r18 pin, unmoved). The assertion was not read, referenced,
+narrowed or re-pinned by either producer fix. It is the first of the four red
+assertion rows to go green since it was written.
+
+The other three did not go green, and one moved the wrong way. All four, r19 →
+r20, forms of 53 and offenders:
+
+| Assertion | r19 | r20 | |
+| --- | --- | --- | --- |
+| `printed_box_peers_all_fillable` | 14 / 14 | **0 / 0** | **PASSES** |
+| `inputs_span_no_printed_divider` | 11 / 79 | 11 / **67** | 24 offenders cleared, 11 appeared; form count unmoved |
+| `inputs_over_printed_text` | 20 / 149 | 20 / 149 | unmoved, offender-for-offender |
+| `comb_slots_match_printed` | 22 / 185 | 22 / **188** | **+3, reported loudly below** |
+
+### The two producer bugs behind the checkbox class (`lattice.py`)
+
+**1 — a lattice line did not count its own defining rule as coverage.**
+`cluster_collinear` chains rules by pairwise *adjacency*, so a cluster can be
+wider than `CLUSTER_TOL_PT` (0.3) and its position is the *mean* of its
+members' centres. `GroupGeometry.span` then filtered `all_ink` by distance to
+that mean and could therefore drop a rule that is itself a member. On 0619-E
+the "Amended Return? Yes" checkbox's left wall (centre 275.64) is one of ten
+fragments in the cluster at 275.99 — 0.35 > 0.30 — so the column claimed no ink
+over the box's own 12pt and the box merged leftward into the caption.
+`line_thickness_gray` already exempts a cluster's own rules for weight and
+tone and says so in its docstring; `span` now does the same.
+
+**2 — a text run's WHITESPACE was counted as printed text inside a printed
+box.** `assign_points` placed a run by its bounding-box centre, and a bounding
+box is the run's *advance*, not its ink. `Calendar        Fiscal ` spans
+66.5–148.92; its centre 107.7 lands inside the checkbox drawn at 106.08–119.52
+**in the gap between the two words**, so the box held "text", was not
+`is_empty`, and `classify_cell` returned `label`. The other eight are the same
+sentence: `Yes      No` (1706, 2200M), ` 2nd      3rd` (2553), `?        `
+(2200S), `        23B` (2551M). `glyph_ink_spans` now reads the per-character
+origins and advances every run in the corpus already carries and returns the
+extents of the NON-BLANK characters; a run whose home cell holds any of its ink
+does not move, so the 1,575 runs whose centre merely falls between two letters
+are untouched.
+
+### The comb class (`extract.py`): PDF 32000-1 §8.4.3.3 was not modelled
+
+A round (`J 1`) or projecting (`J 2`) cap inks **half a stroke width past the
+declared endpoint** of an open subpath. The IR published those strokes at their
+declared endpoints, so a comb tick stopped 0.36pt short of the rail it lands on
+and `lattice.split_verticals` filed it as a box border — the compartment
+disappeared. 340 of this corpus's 569 open strokes carry such a cap.
+
+`cap_extension_pt` and `open_stroke_ends` model it, applied to the two ends of
+a **reconstructed subpath** only: never to `re`/`qu`, never to a polyline that
+returns to its own start, never to an interior join — capping per op would have
+grown 133 rectangles-drawn-as-four-`l`-ops by half a stroke on all four sides.
+No fixture in either corpus draws a round cap, so a written-here probe page
+(`CAP_PROBE_STREAM`, 200×200, 13 asserted cases) proves both directions, with a
+mutation that restores exactly the old behaviour.
+
+**What it bought, on the paper:** 2550M item 1 `For the Month of (MM/YYYY)` —
+the user's original "four year boxes rendered as one big box" — is now four
+compartments with one input each, screenshotted with `2 0 2 7` typed into them
+(`scratchpad/blockers/F180-2550m-item1-year-comb.png`). All eight of F180's
+named inputs left the offender list.
+
+### Reported loudly: `comb_slots_match_printed` got worse by 3
+
+Not hidden and not explained away. The move is four separate things:
+
+    -1  emission-source-position-mismatch          (2550M, genuinely fixed)
+    -1  emission/layout-source-outer-position      (2550M, genuinely fixed)
+    -1  source-topology-unevaluable                (181 -> 180)
+    +5  layout-printed-mismatch + emission-printed-mismatch   (2550M, NEW)
+
+The +5 is one mechanism and it is now finding **F184**. 2550M's Schedule money
+boxes get one more compartment than the sheet prints, because a slot boundary
+is taken from a divider the page's own `comb_divider_final_visible_ids`
+excludes: the source strokes two ticks in the MM box (x 260.40 and x 263.52),
+then paints a **white fill over the whole box** (seqno 477) after the 263.52
+tick (seqno 419) and before the other, so only one tick survives to the paper.
+A 30× raster of the pinned PDF shows one tick
+(`scratchpad/blockers/2550m-p1c89-ticks.png`). The layout already records the
+right answer beside the wrong one — `final_visible_candidate_cells: 2`,
+`reason_codes: [final-visible-count-regression, legacy-continuity-only]` — so
+the subject is `active_unresolved` and already blocks the gate. **Deliberately
+not patched here:** dropping a legacy comb topology is the reviewed
+`retired_proven_false` transition, which needs independent evidence and a human,
+not an integration-time edit to another agent's file.
+
+### A registry invalidation found on the way, and fixed (`lattice.py`)
+
+The first r20 regeneration made `comb_slots_match_printed` worse by **13**, not
+3. Cause: a suppressed subject's `mapped_partition_cell_ids` is a *partition*,
+and nothing enforced it. Once 2550M's `p1c7` (66.00, 118.80, 99.84, 134.40)
+lost its rectangular owner too, it and the row band `p1c6` (28.80, 117.12,
+582.72, 136.32) that contains it both claimed `p1c116`, `p1c122`, `p1c123` —
+and `audit.validate_comb_owner_registry` correctly invalidated the **whole
+form**, taking all 17 of its comb subjects to `source-topology-unevaluable`.
+`resolve_retained_partition_overlaps` gives a contested cell to the smallest
+claiming area. Corpus-wide: 3 cells contested, on one page of one form, no
+mapping emptied, and the registry-invalid offender count is back to 0.
+
+Attributed by bisection over the two producers, both directions:
+`new extract + old lattice` reproduces it exactly; `old extract + new lattice`
+does not. So the trigger is the cap model and the defect is the ledger's.
 
 ## PT 060 reads 2%. It is officially 2%. FIXED at r19.
 
@@ -107,6 +214,54 @@ runs left the document, with the row still well formed.
 - A new unit assertion in `emit.py`'s self-test now drives the exact shape,
   independent of any corpus form: *a run crossing into an occupied column does
   not swallow its cell*.
+
+## The four user-visible checks, looked at rather than counted (r20)
+
+Screenshots in the session scratchpad under `blockers/`, taken with Playwright
+against the shipped `forms/` tree over a local static server, 3× device scale.
+
+| Check | Verdict | Evidence |
+| --- | --- | --- |
+| 0619-E item 3 "Amended Return?" YES is tickable (F152) | **YES** | `F152-0619e-item3-amended-yes.png` — an X typed into the YES box. Input `p1c22-i` in cell `[275.94, 134.49, 289.08, 145.98]`, which is the assertion's offender box `[276.05, 134.64, 289.08, 146.16]` |
+| 2550Q item 3 second-quarter box is tickable (F177) | **YES** | `F177-2550q-item3-quarter-2nd.png` — X in the 2nd box, all four quarters present. Input `p1c11-i` at `[470.4, 110.1, 484.1, 122.3]` |
+| 2316 item 3 TIN shows 14 character boxes (F111) | **NO — and unchanged** | `F111-2316-item3-tin.png`. The row is one 37.92pt free-text input + combs of 3, 3 and 5 = **12** boxes where the sheet prints 3-3-3-5 = 14. The first group is the uncombed one. Byte-compared against `HEAD:forms/2316-2021/index.html`: the slot census of that row is **identical** — same four containers, same 3/3/5, same widths. F111 stays open; r20 neither fixed nor worsened it. (The finding's "8" is itself stale: HEAD renders 12, not 8.) |
+| 0605 "BCS No./Item No. (To be filled up by the BIR)" is not a taxpayer input (F147) | **NO — and unchanged** | `F147-0605-bcs-bir-only.png`. `p1c17`, 254.51 × 18.96pt at (321.61, 185.88), one free-text input, holds the X. Identical at HEAD, same cell, same rect, one input. **The check as posed is false at HEAD too** — the box has always been fillable, which is what F147 (blocker, open) says. Not worse; not better |
+
+## Corpus census — r20
+
+Re-derived from the regenerated `build/layout` and the shipped `forms/` tree.
+**Six census pins moved and one of them was already wrong at HEAD** — r19 took
+`comb_referee.EXPECTED_COMBS` to 4,538 and left `gate.EXPECTED_COMB_SUBJECTS`
+at 4,521, so `validate_comb_referee_report` was comparing 4,538 against 4,521
+and could only ever have failed. That is G01 repeating in the same pair of
+files one revision later. Both now say 4,543.
+
+| Quantity | r20 | r19 | Note |
+| --- | --- | --- | --- |
+| Bundles / unique codes | 53 / 50 | 53 / 50 | unchanged |
+| Pages | 116 | 116 | |
+| Lattice cells | **20,704** (10,050 `field`) | 20,688 (10,002) | +16 cells, +48 `field` |
+| Comb ledger subjects | **4,543** | 4,538 | six slugs move: 0605 21→19, 1600WP 16→17, 1604CF 12→15, 2550M 23→21, 2551M 15→18, 2553 16→18 |
+| Retained (suppressed) subjects | **21** | 17 | same six slugs |
+| Active comb cells | 4,522 | 4,521 | derived, never a literal |
+| Emitted inputs | **45,643** | 45,583 | +60, and **nothing deleted** |
+| Comb slot divs | **40,017** | 40,008 | +9 |
+| Comb slots with no input | 281 | 281 | unchanged — the compartments the source already filled in |
+| Form documents changed | **25 of 53** | — | plus `forms/index.html`; **0 guide documents** |
+| Assertions demanded by the gate | 10 | 10 | unchanged |
+| Findings | **185** | 183 | **42 blocker+major open of 128** (was 55 of 126) — 15 closed on measurement, F184 and F185 filed open |
+
+**The 25 changed documents were reviewed, not rubber-stamped**, before their
+`EXPECTED_HTML_STRUCTURE_SHA256` pins were refreshed (the other 28 are
+byte-identical and were not touched). Tag inventory moves in one direction —
+**+60 `<input>`, +29 `<div>`, +3 `<rect>`, zero elements deleted** — and
+visible text is **token-for-token identical in every document**; the only
+text-length changes, 2550M +3,767 and 1604CF −1, are entirely inside the
+embedded band-data `<script>`. The three new rects were checked against the
+sheet rather than counted: all three are 2550M page 2 at x 574.92, the last
+three segments of the right-hand column rule, whose mirror at x 452.28 was
+already painted at HEAD. Every other rule moved by exactly half its stroke
+width at a capped end and by nothing at a butt-capped one.
 
 ## Corpus census — r19
 
