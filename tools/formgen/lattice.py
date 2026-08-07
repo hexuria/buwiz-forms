@@ -215,23 +215,176 @@ def supported_at(y: float, x: float, horizontals: Sequence[dict[str, Any]]) -> b
                for h in horizontals)
 
 
+def bottom_guide_tick_baseline(rule: dict[str, Any],
+                               verticals: Sequence[dict[str, Any]],
+                               horizontals: Sequence[dict[str, Any]]
+                               ) -> dict[str, Any] | None:
+    """The baseline rule a short bottom guide tick lands on, or None.
+
+    Official artwork draws compartment guides as deliberately short verticals
+    at the FOOT of a walled writing box, and it does not always run the stroke
+    into the baseline's ink: 2316's first TIN group stops 0.25pt above its box
+    bottom (tick y1 137.62 against ink 137.87-138.32) and 1600WP item 5 stops
+    0.345pt short, so `supported_at` -- which demands the endpoint inside the
+    ink -- files both as borders supported at neither end, the group loses its
+    compartments, and the TIN reaches the taxpayer as one unbounded input
+    (F111, F178, F181).
+
+    The recognition here is a PATTERN, not a widened tolerance -- a blanket
+    y-tolerance was tried and refuted (it flipped 45 real combs).  Every clause
+    is a physical statement about the bottom-guide-tick artwork:
+
+      * the tick hangs from nothing: unsupported above, and not even a
+        near-touch above (an almost-touching rule overhead makes it a broken
+        column fragment, not a hanging guide);
+      * it lands ON a baseline: the paper between the tick's end and the
+        baseline's ink is thinner than the tick's own stroke -- the exact
+        ink-versus-paper principle `distinct_boundary`/`band_ink` already use
+        to decide when two marks are one boundary.  A 0.24pt hairline gets
+        0.24pt of grace, never a corpus constant;
+      * it sits in a walled band: on each side, inside the baseline's own
+        span, one FULL-HEIGHT stroke lands on the same baseline, rises above
+        the tick's top, and is itself supported at its own top.  The rise is
+        what makes the tick SHORT -- a guide inside a taller box -- and the
+        top support is what makes the wall a wall: without it, a neighbouring
+        hanging divider could stand in as the "wall" and hide the gap
+        disorder that refuses a stale mark (0605's knocked-out 3pt mark sits
+        3.12pt from a genuine centavo divider that would otherwise wall it
+        in);
+      * sibling ticks landing on the same baseline between the same walls
+        corroborate each other: either a sibling shares this tick's exact y
+        extent (dividers of one comb are drawn by the same loop -- the same
+        signature `comb_bands` groups on), or the landing siblings run at
+        uniform pitch.  Wall-to-tick gaps are deliberately excluded from the
+        pitch: the corpus prints oversized leading slots (G09), and 1600WP's
+        branch-code box prints its three same-loop ticks at 14.15/15.00/12.59pt
+        -- the loop signature is the ground truth there, not the spacing.
+
+    Existing comb dividers cannot reach this function (their landing endpoint
+    is already inside the baseline ink), so the comb->border flip direction is
+    structurally empty: recognition only ever adds dividers.
+    """
+    x = centre(rule)
+    y0, y1 = float(rule["y0"]), float(rule["y1"])
+    thickness = float(rule["thickness_pt"])
+    if thickness <= 0.0:
+        return None
+    spanning = [
+        h for h in horizontals
+        if h["x0"] - CLUSTER_TOL_PT <= x <= h["x1"] + CLUSTER_TOL_PT
+    ]
+    # A near-touch overhead is a broken border, not a hanging guide.
+    if any(0.0 <= y0 - float(h["y1"]) <= thickness for h in spanning):
+        return None
+    baselines = sorted(
+        (h for h in spanning if 0.0 < float(h["y0"]) - y1 <= thickness),
+        key=lambda h: (float(h["y0"]), float(h["x0"])))
+    for baseline in baselines:
+        base_top = float(baseline["y0"])
+        base_x0 = float(baseline["x0"]) - CLUSTER_TOL_PT
+        base_x1 = float(baseline["x1"]) + CLUSTER_TOL_PT
+
+        def lands(v: dict[str, Any]) -> bool:
+            return (float(v["y1"])
+                    >= base_top - float(v["thickness_pt"])
+                    and float(v["y0"]) < base_top)
+
+        members = [
+            v for v in verticals
+            if v is not rule and base_x0 <= centre(v) <= base_x1
+        ]
+        positions: list[list[dict[str, Any]]] = []
+        for v in sorted(members, key=lambda v: (centre(v), v["y0"], v["y1"])):
+            if positions and abs(centre(positions[-1][0]) - centre(v)) \
+                    <= CLUSTER_TOL_PT:
+                positions[-1].append(v)
+            else:
+                positions.append([v])
+        # A wall is one full-height stroke: it reaches this baseline, rises
+        # above the tick's top, and its own top hangs from a rule -- all in
+        # the SAME member.  Anything weaker lets a neighbouring hanging
+        # divider stand in as a "wall" (0605's centavo divider would wall in
+        # the stale mark beside it and hide the gap disorder that refuses it).
+        wall_xs = [
+            centre(group[0]) for group in positions
+            if any(
+                lands(v)
+                and float(v["y0"]) < y0 - CLUSTER_TOL_PT
+                and supported_at(float(v["y0"]), centre(v), horizontals)
+                for v in group
+            )
+        ]
+        left_walls = [wx for wx in wall_xs if wx < x - CLUSTER_TOL_PT]
+        right_walls = [wx for wx in wall_xs if wx > x + CLUSTER_TOL_PT]
+        if not left_walls or not right_walls:
+            continue
+        wall_left, wall_right = max(left_walls), min(right_walls)
+        landing = [
+            v for group in positions for v in group
+            if wall_left + CLUSTER_TOL_PT < centre(v)
+            < wall_right - CLUSTER_TOL_PT
+            and lands(v)
+        ]
+        same_loop = any(
+            abs(float(v["y0"]) - y0) <= JOIN_EPSILON_PT
+            and abs(float(v["y1"]) - y1) <= JOIN_EPSILON_PT
+            for v in landing
+        )
+        # Gap-order corroboration applies from TWO interior positions up,
+        # measured WALL TO WALL: every landing boundary between the walls
+        # plus the walls themselves.  A stale mark beside a genuine divider
+        # is only detectable as gap disorder when both are present -- 0605
+        # prints a knocked-out 3pt mark 3.12pt from its centavo divider,
+        # turning the run 14.16/3.12/10.32, and is refused -- whereas a
+        # SINGLETON guide has no run to be disordered in: its corroboration
+        # is the pattern itself (hangs, lands within its own ink, walled),
+        # and demanding that it halve its box within the pitch tolerance
+        # would refuse 1600WP's genuine item-2 guide over a 21.24/19.68
+        # split.  Same-loop runs are already corroborated by their extent.
+        interior = {q(centre(v)) for v in landing} | {q(x)}
+        siblings = sorted(interior | {q(wall_left), q(wall_right)})
+        gaps = [b - a for a, b in zip(siblings, siblings[1:])]
+        if (not same_loop
+                and len(interior) >= 2
+                and gaps and max(gaps) - min(gaps) > PITCH_TOL_PT):
+            continue
+        return baseline
+    return None
+
+
 def split_verticals(verticals: Sequence[dict[str, Any]],
-                    horizontals: Sequence[dict[str, Any]]
+                    horizontals: Sequence[dict[str, Any]],
+                    guide_tick_pool: Sequence[dict[str, Any]] | None = None,
                     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Partition structural verticals into (comb dividers, box borders).
 
     The discriminator is geometric support, never thickness. A comb divider
     hangs from nothing and lands on its row's baseline rule; anything else --
     supported at both ends, or a fragment of a border interrupted by a comb
-    band -- is a border.
+    band -- is a border.  One exception is a recognition, not a tolerance: a
+    rule supported at neither end can still be a BOTTOM GUIDE TICK whose
+    stroke stops a hair short of the baseline it visibly sits on -- see
+    `bottom_guide_tick_baseline` for the pattern and its evidence.
+
+    ``guide_tick_pool`` supplies the page's full vertical inventory when the
+    caller classifies a subset (`split_final_vertical_corridors` classifies
+    one rule at a time); the tick pattern needs the surrounding walls.
     """
+    pool = verticals if guide_tick_pool is None else guide_tick_pool
     combs: list[dict[str, Any]] = []
     borders: list[dict[str, Any]] = []
     for rule in verticals:
         x = centre(rule)
         top = supported_at(rule["y0"], x, horizontals)
         bottom = supported_at(rule["y1"], x, horizontals)
-        (combs if bottom and not top else borders).append(rule)
+        if bottom and not top:
+            combs.append(rule)
+        elif (not top and not bottom
+              and bottom_guide_tick_baseline(
+                  rule, pool, horizontals) is not None):
+            combs.append(rule)
+        else:
+            borders.append(rule)
     return combs, borders
 
 
@@ -265,7 +418,8 @@ def split_final_vertical_corridors(
     borders: list[dict[str, Any]] = []
 
     def old_role(rule: dict[str, Any]) -> None:
-        old_combs, old_borders = split_verticals([rule], horizontals)
+        old_combs, old_borders = split_verticals(
+            [rule], horizontals, guide_tick_pool=verticals)
         combs.extend(old_combs)
         borders.extend(old_borders)
 
@@ -302,7 +456,7 @@ def split_final_vertical_corridors(
             continue
 
         parent_combs, _parent_borders = split_verticals(
-            [rule], horizontals)
+            [rule], horizontals, guide_tick_pool=verticals)
         parent_was_comb = bool(parent_combs)
 
         breakpoints = {y0, y1}
@@ -3389,22 +3543,33 @@ def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
 
 def comb_on_writing_surface(comb: dict[str, Any],
                             surface: tuple[float, float]) -> dict[str, Any]:
-    """Restate one comb contract's vertical extent as its writing surface.
+    """Attach the writing surface to a comb contract, beside the measured band.
 
-    The tick band stays published as `divider_band_y0`/`divider_band_y1`: it is
-    the measurement the boundaries came from and the provenance any independent
-    re-derivation of those boundaries needs.  What changes is only which extent
-    the contract calls its own -- the box, not the guide.
+    `y0`/`y1`/`height_pt` are the SOURCE DIVIDER BAND -- the vertical extent
+    the measured boundaries actually span.  That is the meaning every
+    adjudicator of this contract binds to: `comb_referee.classify_band` seeds
+    its open-compartment search from these two keys and demands that the
+    source topology occupy a strict majority of that band, and its
+    human-reviewed control (`REVIEWED_2551Q_EXPLICIT_COMPARTMENTS`) was signed
+    against exactly that reading -- 2551Q p2c5 measures 14 compartments over
+    its 6.96pt tick band, and can never measure anything over the 17.70pt
+    writing box a previous revision published here (6.96 <= 17.70/2, so the
+    majority rule correctly refuses the wider claim).  Restating the box into
+    `y0`/`y1`, as that revision did, made 4,417 of 4,522 active combs
+    source-unevaluable and failed the reviewed control.
+
+    The writing box is still a real fact the emitter needs -- a guide tick is
+    short ON PURPOSE and the taxpayer writes in the walled box above it -- so
+    it is published beside the band as `writing_y0`/`writing_y1`/
+    `writing_height_pt`, computed by `comb_writing_surface` from the cell's
+    own walls with `emit.field_box`'s inset.  Two questions, two sets of keys;
+    neither reading overwrites the other.
     """
     surface_y0, surface_y1 = surface
     resolved = dict(comb)
-    resolved["divider_band_y0"] = q(float(comb["y0"]))
-    resolved["divider_band_y1"] = q(float(comb["y1"]))
-    resolved["divider_band_height_pt"] = q(
-        float(comb["y1"]) - float(comb["y0"]))
-    resolved["y0"] = surface_y0
-    resolved["y1"] = surface_y1
-    resolved["height_pt"] = q(surface_y1 - surface_y0)
+    resolved["writing_y0"] = surface_y0
+    resolved["writing_y1"] = surface_y1
+    resolved["writing_height_pt"] = q(surface_y1 - surface_y0)
     return resolved
 
 

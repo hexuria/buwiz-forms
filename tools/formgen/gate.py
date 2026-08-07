@@ -88,7 +88,10 @@ EXPECTED_EXTRA_FORMS = 15
 # is the very defect this comment describes, repeating in the same pair of
 # files, one revision later. The second cause is r20's own: extract.py's
 # line-cap model takes the measured ledger denominator to 4,543.
-EXPECTED_COMB_SUBJECTS = 4543
+# 4543 -> 4583 (2026-08-07, r21), moved in the same commit as its twin
+# comb_referee.EXPECTED_COMBS: lattice.py's bottom-guide-tick recognition adds
+# 40 subjects on nine slugs (see the cause note at that pin).
+EXPECTED_COMB_SUBJECTS = 4583
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
 COMB_REFEREE_SCOPE = "formgen-comb-referee-application-v1"

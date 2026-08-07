@@ -24,8 +24,8 @@
   "rules": 1232,
   "text_runs": 407,
   "images": 3,
-  "cells": 470,
-  "comb_cells": 144,
+  "cells": 448,
+  "comb_cells": 150,
   "growables": [],
   "sources": [
     {
@@ -65,7 +65,7 @@
       "2550Q guidelines April 2024_final.pdf"
     ]
   },
-  "html_bytes": 731781,
+  "html_bytes": 738010,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

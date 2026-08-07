@@ -551,8 +551,8 @@
       "evidence": "Filling every input with its maxLength and screenshotting: rows 10A, 10B, 10D, 11, 12, 13 show one character per comb cell at the correct size, while rows 8 and 10C show a continuous unspaced string in a visibly larger face that runs past the right edge of the B column and is clipped. Tinted view shows one continuous pink block spanning the whole comb on those two rows.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Items 8 and 10C are now 9-slot combs matching their sibling rows: p2c36/p2c37 (item 8, y 268.3-283.1) and p2c49/p2c50 (item 10C, y 338.3-353.1) each carry comb 9 with one input per compartment, identical in kind to rows 10A/10B/10D/11/12/13 beside them (all comb 9 in the same table, read from build/layout). The single wide free-text inputs at x 327.98/462.55 are gone, so entered amounts can no longer overflow the cell or ignore the comb guides. Same producer fix as F111."
     },
     {
       "id": "F042",
@@ -1461,8 +1461,8 @@
       "evidence": "I filled every input with a distinct letter via Playwright and screenshotted. Group 1 renders 'MNOPQRS' (7 chars) crammed across all three printed cells and overflowing past the group edge into the '-' separator; group 2 shows only E and F for 3 cells with E straddling a divider; group 3 shows only G and H for 3 cells; group 4 shows I J K L for 5 cells, each sitting on a divider rather than centred. The PDF crop of the same band shows a clean 3-3-3-5 = 14-cell comb. Same test on 2200M item 1 produced a correct 2+2+4 layout, so this is form-specific, not a harness artefact.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "All three TIN rows (items 3, 12, 16) now print 4 comb groups of 3+3+3+5 = 14 compartments, each compartment its own maxlength-1 input: p1c17/p1c12/p1c14/p1c16 (item 3), p1c59/p1c54/p1c56/p1c58 (item 12), p1c74/p1c76/p1c78/p1c80 (item 16), read from build/layout and the shipped DOM. Screenshot with digits typed one per compartment, group separators printed between: scratchpad blockers2/F111-2316-item3-tin-r21.png (14 inputs filled, one glyph per printed cell, no character on a divider). Cause: the first TIN group's guide ticks stop 0.25pt above the box bottom (tick y1 137.62 against baseline ink 137.87), so `supported_at` filed them as borders supported at neither end and the group lost its compartments. `lattice.bottom_guide_tick_baseline` (r21) recognises the bottom-guide-tick pattern -- hangs from nothing, lands within its own stroke width of a baseline, walled on both sides on that baseline, corroborated by same-loop siblings or uniform pitch -- and classifies them as comb dividers. No tolerance was widened; a blanket y-tolerance was tried and refuted (it flips 45 real combs)."
     },
     {
       "id": "F112",
@@ -1513,8 +1513,8 @@
       "evidence": "Filled every input and cropped x 295-400 / y 115-140 at 7x for filled-HTML, plain-HTML and PDF. The plain HTML and the PDF both show the same comb dividers. The filled HTML shows one red-outlined box spanning the whole group with '888888888888' running continuously across and past the dividers. By contrast item 6 Return Period and item 8 TIN on the same page correctly received per-cell single-character inputs, so this is an isolated comb-segmentation miss.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Item 4 'Year Ended (MM/YYYY)' is now p1c10 comb 2 + p1c11 comb 4 (x 305.5-390.4, y 116.2-133.3) -- the printed six compartments, one maxlength-1 input each, in the shipped DOM. The single wide free-text input is gone. Same producer fix as F111."
     },
     {
       "id": "F116",
@@ -1924,13 +1924,13 @@
       "form": "0605-1999",
       "page": 1,
       "severity": "blocker",
-      "status": "open",
+      "status": "fixed",
       "what": "The 'BCS No./Item No. (To be filled up by the BIR)' box is a taxpayer input: a 253.0 x 17.5 pt free-text field with no maxlength covering the whole box, so a taxpayer can write into a Bureau-only control field.",
       "where": "p1c17-i at (322.36, 186.62), 253.0 x 17.5 pt, maxlength absent.",
       "evidence": "Batch-1 fill test (every input set to X, controls tinted, screenshotted): /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0605-1999/EVIDENCE-BCS-BIR-only-box-fillable-and-item7-comb-merge.png. The exclusion demonstrably exists elsewhere on the same sheet - DLN, PSIC and PSOC, the other '(To be filled up by the BIR)' area, are correctly not fillable - so this box was missed rather than unhandled.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "p1c17 is emitted with NO input and `data-preprinted=\"bureau\"`; the exclusion is published in FieldPlan's warnings ('reserved for the Bureau by the sheet's own caption'). Screenshot: scratchpad blockers2/F147-0605-bcs-r21.png -- the white BCS knockout under the caption carries no typing surface, while the taxpayer boxes beside it keep theirs. Cause and fix: emit.BureauReservation (r21) reads the sheet's own caption ('To be filled up by the BIR', including the official sheet's missing-'by' typo) and binds it to the ruled compartment it is printed in -- nearest flanking v-walls spanning caption through blank, adjacency bounded by the caption's own height, a ruled separator between caption and blank breaking the binding. The taxpayer's Return Period boxes on the same grey band, under captions on the same caption row, are structurally identical and are NOT blocked, which is the self-test's own probe."
     },
     {
       "id": "F148",
@@ -2132,26 +2132,26 @@
       "form": "0605-1999",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Twenty-two printed comb compartments are rendered as eight unbounded inputs, so the TIN and the return period cannot be captured per compartment and none of them is length-limited. A 12-digit TIN can be entered as anything.",
       "where": "Item 5 No. of Sheets Attached: p1c12-i (465.0, 150.3) w=29.2 covers 2 compartments. Item 7 Return Period: p1c14-i (41.3, 186.6) w=29.9 covers 2, p1c15-i (72.8) w=30.1 covers 2, p1c16-i (104.3) w=60.7 covers 4. Item 9 TIN: p1c23-i (31.0, 246.9) w=37.2, p1c25-i (82.2) w=38.6, p1c27-i (134.9) w=37.0, p1c29-i (183.8) w=40.3, three compartments each. All eight carry maxlength absent.",
       "evidence": "Batch-1 counted the official comb ticks falling inside each of our input rectangles, reading the ticks off the official raster and the rectangles off the DOM. Evidence /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0605-1999/EVIDENCE-item9-TIN-comb-merge.png, /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0605-1999/EVIDENCE-item5-sheets-comb-merge.png. Item 10 RDO Code on the same sheet is correctly split 3-up, so the splitter works and these eight were missed.",
       "cause": "C5",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "All 22 printed compartments are now comb slots with one maxlength-1 input each, read from build/layout and the shipped DOM: item 5 p1c12 comb 2 (x 464.3-495.0); item 7 Return Period p1c14 comb 2, p1c15 comb 2, p1c16 comb 4 (x 40.6-165.7); item 9 TIN p1c23/p1c25/p1c27/p1c29 comb 3 each plus p1c30 comb 3 (y 246.1-265.1). The eight unbounded free-text inputs are gone; a 12-digit TIN can no longer be entered as anything. Same producer fix as F111 (`lattice.bottom_guide_tick_baseline`): 0605's guide ticks stop a hair above their baselines and were filed as borders."
     },
     {
       "id": "F164",
       "form": "2551m-2002",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Item 2 'Year Ended' is covered by a single input spanning the printed compartments instead of one slot per compartment.",
       "where": "The item 2 comb below the Calendar/Fiscal row; the official prints six compartments, our DOM emits one input across them.",
       "evidence": "Official vs ours with the ?debug=fields outlines: /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2551m-2002/EVIDENCE-item2-YearEnded-6-compartments-1-input.png. Same class as F115 (2550-DS item 4) which is still open.",
       "cause": "C5",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Item 2 'Year Ended' is now two comb groups totalling the printed six compartments -- p1c4 comb 2 (x 96.7-120.5) and p1c5 comb 4 (x 120.5-175.0) at y 149.3-168.7, with 2 and 4 maxlength-1 inputs in the shipped DOM. Same producer fix as F111 (`lattice.bottom_guide_tick_baseline`); 2551M's subject census moves 18 -> 25 with it and one new subject is retained (see comb_referee.EXPECTED_RETAINED_SUBJECTS_BY_SLUG)."
     },
     {
       "id": "F165",
@@ -2332,8 +2332,8 @@
       "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 6 offenders of 149 inputs checked on this bundle, against 197 printed dividers detected. `comb_slots_match_printed` also fails on this form but cannot see these cells, because its inventory is the layout's comb subjects and the lattice never made these combs. Item labels re-derived from the pinned source: 'Part I 5 TIN' left of p1c10/p1c16, '6 RDO Code' left of p1c17, '2 Amended Return? 3 No. of Sheet/s Attached' left of p1c7.",
       "cause": "C5",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "All six cited inputs are gone; every cited divider is now a compartment wall. Item 5 TIN: p1c10/p1c12/p1c14 comb 3 (dividers 65.64/79.92, 122.52/136.68, 177.72/189.48 all interior walls now), p1c16 comb 4 (232.68/247.68/260.28); item 6 RDO Code p1c17 comb 3 (375.24/390.96); item 3 p1c7 comb 2 (451.68). Read from build/layout and the shipped DOM; digits land one per printed box. Cause: 1600WP item 5's ticks stop 0.345pt short of the baseline -- the same bottom-guide-tick artwork as F111, recognised by `lattice.bottom_guide_tick_baseline` at r21."
     },
     {
       "id": "F179",
@@ -2371,8 +2371,8 @@
       "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 4 offenders of 97 inputs checked, against 215 printed dividers detected. Item labels re-derived from the pinned source's text operators ('6 TIN' left of p1c21, '7 RDO Code' left of p1c13, '10 Telephone Number' above p1c25, '12 Zip Code' left of p1c29). A TIN that does not land in its printed compartments is the same filing hazard as F111 (2316) and F163 (0605), on a form that had no comb finding at all.",
       "cause": "C5",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "All four cited groups are combs in the shipped DOM: item 6 TIN now three comb-3 groups (p1c18/p1c20/p1c22, x 57.8-167.4) plus p1c24 comb 3; item 7 RDO Code p1c16 comb 3 (x 258.0-302.2, dividers 272.16/287.04); item 10 Telephone p1c27 comb 7 (x 485.5-588.0, all six cited dividers now walls); item 12 Zip Code p1c30 comb 4 (x 539.8-588.0, dividers 552.24/564.00/576.00). One maxlength-1 input per compartment; the four wide free-text inputs are gone. Same producer fix as F111 (`lattice.bottom_guide_tick_baseline`); 2553's subject census moves 18 -> 21 with it."
     },
     {
       "id": "F182",
@@ -2424,6 +2424,19 @@
       "evidence": "`inputs_span_no_printed_divider` offender-set diff r19 -> r20, computed per form on the published offender records. The assertion's total falls 79 -> 67 and its form count is unmoved at 11 of 53; 24 offenders cleared (F180's 8, F179's page-1 5, F181's p1c25, and 2551M's page-1 group) and these 11 appeared. audit.py is byte-identical, so the assertion did not move.",
       "audit_blind": false,
       "cause": "C5",
+      "resolution": ""
+    },
+    {
+      "id": "F186",
+      "form": "all-forms",
+      "page": 0,
+      "severity": "major",
+      "what": "Every comb compartment's input is laid out on the divider TICK BAND rather than the walled writing box above it, so on forms whose guide ticks are short stubs the typing surface collapses -- 2550M item 1's year boxes offer a 3.84pt-tall strip at the foot of a 15.6pt box and the typed year renders at a 2.8pt face where r20 gave it 14.16pt and an 8.25pt face. Corpus-wide every one of the 40,000+ comb slot divs sits on its band; the harm is visible wherever the band is much shorter than the box.",
+      "where": "Every comb slot div in every bundle. Worst measured: forms/2550m-2007/ p1c9 slots at height:3.84pt (writing box 14.16pt), p1c2 at 3.6pt; screenshot scratchpad blockers2/2550m-item1-slot-height-cost-r21.png shows '2 0 2 7' rendered at the foot of the printed boxes while the 3-slot RDO comb beside it (band nearly box-height) renders correctly.",
+      "evidence": "r21 integration measurement. lattice.comb_on_writing_surface stopped restating the writing box into the contract's y0/y1 because that restatement broke the comb referee's reviewed 2551Q control and made 4,417 of 4,522 active combs source-unevaluable (G18): classify_band and the human-signed REVIEWED_2551Q_EXPLICIT_COMPARTMENTS bind y0/y1 to the SOURCE DIVIDER BAND. The writing box is still published, as writing_y0/writing_y1/writing_height_pt, and emit.comb_slot_verdicts already consumes it (that is what keeps G11's refused constants refused) -- but emit.comb_slot_markup and cell_json still lay the slot divs out from y0/height_pt, and the comb referee's emitted_geometry_contract binds the emitted slot boxes to the same two keys, so the emitter cannot move alone.",
+      "cause": "C5",
+      "audit_blind": true,
+      "status": "open",
       "resolution": ""
     }
   ]

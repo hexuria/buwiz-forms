@@ -1542,11 +1542,182 @@ class DecorativeShading:
         return gray is not None and float(gray) <= DECORATIVE_GRAY_MAX
 
 
+# The captions with which BIR reserves a box for its own officers, normalised
+# to single-space lowercase. These are the sheet's own words, not ours: the
+# corpus states a reservation in exactly four voices, and the DLN/PSIC/PSOC
+# line at the top of every legacy sheet is already inert for a different
+# reason -- it has no ruled box at all, so the lattice never makes a cell
+# there. What that protection cannot cover is a reserved blank that IS boxed,
+# which is F147's defect: 0605's "BCS No./Item No. (To be filled up by the
+# BIR)" satisfies the box detector exactly as a taxpayer blank does, because
+# nothing at the box-model stage reads the caption the source set against it.
+#
+# Substrings, because 0605 embeds the phrase at the end of a longer caption
+# run; and "to be filled up the bir" is not a typo of ours -- it is the
+# official sheet's own missing "by", printed at the top of 0605 page 1, and a
+# match list that silently corrected it would not match the paper.
+BUREAU_RESERVED_SUBSTRINGS = (
+    "to be filled up by the bir",
+    "to be filled up the bir",
+    "for bir use only",
+)
+# Prefixes, not substrings: guide prose discusses these boxes mid-sentence
+# ("The machine validation shall reflect the date of payment...") and a
+# substring match would make a paragraph a reservation. A caption STARTS with
+# its subject; prose does not.
+BUREAU_RESERVED_PREFIXES = (
+    "machine validation",
+    "stamp of receiving",
+    "stamp of authorized",
+)
+
+
+def _bureau_caption(text: str) -> bool:
+    """Whether this run is a caption reserving a box for the Bureau."""
+    normalised = " ".join(text.split()).lower()
+    return (any(phrase in normalised for phrase in BUREAU_RESERVED_SUBSTRINGS)
+            or any(normalised.startswith(prefix)
+                   for prefix in BUREAU_RESERVED_PREFIXES))
+
+
+class BureauReservation:
+    """Which blanks the sheet's own captions reserve for the Bureau, per page.
+
+    The evidence is the SOURCE's, twice over: the caption text comes from the
+    IR's runs, and the box it governs is bound structurally rather than by
+    proximity -- a caption governs the ruled compartment it is printed in, and
+    nothing outside it. Both halves are needed. A keyword rule alone has
+    already burned this corpus once ("Add: Penalties"), and pure geometry
+    cannot tell 0605's Bureau-reserved BCS blank from the taxpayer's Return
+    Period boxes beside it: both are white knockouts on the same grey band,
+    under captions on the same caption row, drawn by the same operators. The
+    caption is the only thing on the paper that distinguishes them, so the
+    caption is the evidence -- anchored to the walls the source drew.
+
+    Two bindings, each measured against the corpus (build/ir + build/layout +
+    the shipped documents, 53 bundles, 2026-08-07; 96 caption runs match, and
+    the two bindings together claim 7 inputs, every one verified against the
+    official raster by a human in F147's fix):
+
+      * **The caption is printed inside the blank** -- at least half of the
+        caption's own height lies in the rect's y-band and its x-centre is
+        inside the rect. This is the bottom-of-sheet shape: 2200-A/C/P draw
+        one wide band split by a dashed rule into "Machine Validation/..."
+        and "Stamp of Receiving Office/AAB...", each box carrying its caption
+        at its top edge. (The lattice reads that band as a 2-slot comb, which
+        is why the slot resolution exists.)
+      * **The caption is printed directly above the blank, in the same ruled
+        compartment.** Adjacency is bounded by the caption's own height -- a
+        caption is set against the blank it governs, one line of separation
+        at most, and 0605's measures 4.4pt against a 9.0pt line. The
+        compartment is the nearest pair of v-walls flanking the CAPTION that
+        span from the caption down through the rect, and the rect must lie
+        between them; a h-wall spanning the compartment between caption and
+        rect breaks the binding, because a ruled separator means the caption
+        governs a section header's row, not this blank. Both constraints are
+        load-bearing: without the walls, the "For BIR Use Only" corner stack
+        on 2200S would claim the whole header band below it, and without the
+        separator test, 1701MS page 2's "PART VI ... (For BIR Use Only)"
+        header would claim the ruled money row beneath -- a real reservation
+        on the paper, but one a header-scope rule must claim over different
+        evidence, reviewed on its own.
+
+    Walls are the page's rules plus its thin structural fills, merged along
+    their line: BIR draws its outer frames as filled rectangles and breaks
+    inner rules wherever text sits on them, so an unmerged segment list would
+    find no wall where the paper plainly draws one.
+    """
+
+    __slots__ = ("_captions", "_h_walls", "_v_walls")
+
+    WALL_FILL_MAX_PT = 3.0
+    WALL_LINE_EPSILON_PT = 0.6
+    WALL_SPAN_GAP_PT = 1.0
+
+    def __init__(self, runs: Sequence[dict[str, Any]],
+                 rules: Sequence[dict[str, Any]],
+                 fills: Sequence[dict[str, Any]]) -> None:
+        self._captions = [
+            (float(run["x0"]), float(run["y0"]),
+             float(run["x1"]), float(run["y1"]))
+            for run in runs if _bureau_caption(run["text"])]
+        self._h_walls: list[tuple[float, float, float]] = []
+        self._v_walls: list[tuple[float, float, float]] = []
+        if not self._captions:
+            return
+        segments: dict[str, list[tuple[float, float, float]]] = {"h": [], "v": []}
+        for rule in rules:
+            if rule["axis"] == "h":
+                segments["h"].append(((float(rule["y0"]) + float(rule["y1"])) / 2.0,
+                                      float(rule["x0"]), float(rule["x1"])))
+            else:
+                segments["v"].append(((float(rule["x0"]) + float(rule["x1"])) / 2.0,
+                                      float(rule["y0"]), float(rule["y1"])))
+        for fill in fills:
+            if fill.get("role") != "structural":
+                continue
+            width = float(fill["x1"]) - float(fill["x0"])
+            height = float(fill["y1"]) - float(fill["y0"])
+            if height <= self.WALL_FILL_MAX_PT < width:
+                segments["h"].append(((float(fill["y0"]) + float(fill["y1"])) / 2.0,
+                                      float(fill["x0"]), float(fill["x1"])))
+            elif width <= self.WALL_FILL_MAX_PT < height:
+                segments["v"].append(((float(fill["x0"]) + float(fill["x1"])) / 2.0,
+                                      float(fill["y0"]), float(fill["y1"])))
+        for axis, walls in (("h", self._h_walls), ("v", self._v_walls)):
+            lines: list[tuple[float, list[list[float]]]] = []
+            for mid, lo, hi in sorted(segments[axis]):
+                if lines and abs(lines[-1][0] - mid) <= self.WALL_LINE_EPSILON_PT:
+                    lines[-1][1].append([lo, hi])
+                else:
+                    lines.append((mid, [[lo, hi]]))
+            for mid, spans in lines:
+                spans.sort()
+                merged = [spans[0]]
+                for lo, hi in spans[1:]:
+                    if lo <= merged[-1][1] + self.WALL_SPAN_GAP_PT:
+                        merged[-1][1] = max(merged[-1][1], hi)
+                    else:
+                        merged.append([lo, hi])
+                walls.extend((mid, lo, hi) for lo, hi in merged)
+
+    def blocks(self, x0: float, y0: float, x1: float, y1: float) -> bool:
+        """Whether a Bureau caption reserves this rect, by either binding."""
+        for rx0, ry0, rx1, ry1 in self._captions:
+            height = ry1 - ry0
+            if height <= 0.0:
+                continue
+            centre = (rx0 + rx1) / 2.0
+            if (min(y1, ry1) - max(y0, ry0) >= 0.5 * height
+                    and x0 <= centre <= x1):
+                return True
+            if not (-0.5 <= y0 - ry1 <= height):
+                continue
+            lo, hi = ry0 + 1.0, y1 - 1.0
+            left = max((w for w in self._v_walls
+                        if w[0] <= rx0 + 0.5 and w[1] <= lo and w[2] >= hi),
+                       key=lambda w: w[0], default=None)
+            right = min((w for w in self._v_walls
+                         if w[0] >= rx1 - 0.5 and w[1] <= lo and w[2] >= hi),
+                        key=lambda w: w[0], default=None)
+            if left is None or right is None:
+                continue
+            if x0 < left[0] - 1.0 or x1 > right[0] + 1.0:
+                continue
+            if any(ry1 - 0.5 < w[0] < y0 + 0.5
+                   and w[1] <= left[0] + 1.5 and w[2] >= right[0] - 1.5
+                   for w in self._h_walls):
+                continue
+            return True
+        return False
+
+
 def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
-                  shading: DecorativeShading | None) -> tuple[bool, str]:
+                  shading: DecorativeShading | None,
+                  reservation: "BureauReservation | None") -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Three rules, in this order, and the order is the point:
+    Four rules, in this order, and the order is the point:
 
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
@@ -1578,6 +1749,13 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         precisely to say NO RATE APPLIES and type 999,999.00 into it. The tone
         is in the IR -- `extract.classify_tone` computed it from the content
         stream operand -- and was simply discarded at the box-model stage.
+      * **A blank the sheet's own caption reserves for the Bureau is not the
+        taxpayer's.** F147: 0605's "BCS No./Item No. (To be filled up by the
+        BIR)" blank is a white knockout under a caption, structurally
+        identical to the taxpayer's Return Period boxes on the same row --
+        the caption is the only distinguishing ink on the paper, so it is the
+        evidence, bound to the ruled compartment it is printed in. See
+        `BureauReservation` for the two bindings and their measured corpus.
 
     This function is the independent belt to `lattice.classify_cell`'s brace,
     so it asks the IR itself rather than trusting the cell kind the lattice
@@ -1607,11 +1785,16 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
         return False, "pre-printed"
     if shading is not None and shading.blocks(cell):
         return False, "shading"
+    if reservation is not None and reservation.blocks(
+            float(cell["x0"]), float(cell["y0"]),
+            float(cell["x1"]), float(cell["y1"])):
+        return False, "bureau"
     return True, "field"
 
 
 def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
-                       shading: DecorativeShading | None) -> dict[int, str]:
+                       shading: DecorativeShading | None,
+                       reservation: "BureauReservation | None") -> dict[int, str]:
     """Which of a comb's compartments the source already filled in, and why.
 
     `field_verdict` settles the cell; a comb cell is N compartments and they do
@@ -1622,8 +1805,9 @@ def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
     the lattice had already marked `mixed`) or editable nowhere (which would
     delete the year).
 
-    Two kinds of evidence, the same two `field_verdict` uses, re-asked of the
-    slot's own rectangle rather than the cell's:
+    Three kinds of evidence, the same three `field_verdict` uses, re-asked of
+    the slot's own rectangle rather than the cell's (the third, a Bureau
+    caption printed in the slot, is documented at its branch below):
 
       * **Glyph ink that is a constant of the form** -- `slot_constant`, which
         is where the decoration-versus-constant discrimination lives.
@@ -1658,8 +1842,24 @@ def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
     if not comb:
         return {}
     slot_x = [float(value) for value in comb["slot_x"]]
-    y0 = float(comb.get("y0", cell["y0"]))
-    y1 = y0 + float(comb.get("height_pt", float(cell["y1"]) - float(cell["y0"])))
+    # The verdicts are questions about the COMPARTMENT -- did the source print
+    # a constant into this box, shade this box, caption this box for the
+    # Bureau -- so they are asked of the compartment's writing rectangle
+    # (`writing_y0`/`writing_y1`, published by `lattice.comb_on_writing_surface`
+    # beside the band), never of the divider tick band that `y0`/`y1` measure.
+    # Asking them of the band regressed G11 on the r21 integration: 1702EX's
+    # branch-code `00000` sits mid-compartment, stopped being "wholly inside"
+    # the 3.84pt band, and 145 refused constants corpus-wide came back as live
+    # inputs over statutory ink. The EMITTED slot geometry is a different
+    # question and stays on `y0`/`y1`, which is what `comb_slot_markup` lays
+    # out and the comb referee's `emitted_geometry_contract` binds.
+    if "writing_y0" in comb and "writing_y1" in comb:
+        y0 = float(comb["writing_y0"])
+        y1 = float(comb["writing_y1"])
+    else:
+        y0 = float(comb.get("y0", cell["y0"]))
+        y1 = y0 + float(comb.get("height_pt",
+                                 float(cell["y1"]) - float(cell["y0"])))
     verdicts: dict[int, str] = {}
     for index in range(len(slot_x) - 1):
         x0, x1 = slot_x[index], slot_x[index + 1]
@@ -1670,6 +1870,13 @@ def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
         elif shading is not None and shading.blocks(
                 {"x0": x0, "y0": y0, "x1": x1, "y1": y1}):
             verdicts[index] = "shading"
+        elif reservation is not None and reservation.blocks(x0, y0, x1, y1):
+            # The bottom-of-sheet shape: 2200-A/C/P's "Machine Validation" /
+            # "Stamp of Receiving Office" band reads to the lattice as one
+            # 2-slot comb, so the Bureau's two boxes surface here, each
+            # carrying its own caption. Slot resolution for the same reason
+            # ink and shading get it -- the compartments do not share answers.
+            verdicts[index] = "bureau"
     return verdicts
 
 
@@ -1719,13 +1926,18 @@ class FieldPlan:
                        for page in (ir or {}).get("pages", ())}
         shading_by_page = {int(page["index"]): DecorativeShading(page["area_fills"])
                            for page in (ir or {}).get("pages", ())}
+        reservation_by_page = {
+            int(page["index"]): BureauReservation(
+                page["text_runs"], page["rules"], page["area_fills"])
+            for page in (ir or {}).get("pages", ())}
         for page in layout["pages"]:
             ink = ink_by_page.get(int(page["index"]))
             shading = shading_by_page.get(int(page["index"]))
+            reservation = reservation_by_page.get(int(page["index"]))
             for cell in page["cells"]:
-                fillable, reason = field_verdict(cell, ink, shading)
+                fillable, reason = field_verdict(cell, ink, shading, reservation)
                 if not fillable:
-                    if reason in ("pre-printed", "shading"):
+                    if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
                     continue
                 box = field_box(cell, face)
@@ -1738,7 +1950,7 @@ class FieldPlan:
                 comb = cell.get("comb")
                 if comb:
                     self.slot_count += max(len(comb["slot_x"]) - 1, 0)
-                    filled = comb_slot_verdicts(cell, ink, shading)
+                    filled = comb_slot_verdicts(cell, ink, shading, reservation)
                     if filled:
                         self.blocked_slots[cell["id"]] = filled
         # Sorted through an explicit key: the tracking is None for a field whose
@@ -1755,6 +1967,13 @@ class FieldPlan:
         # either. An exclusion has to publish what it excluded.
         printed = sorted(i for i, why in self.blocked.items() if why == "pre-printed")
         shaded = sorted(i for i, why in self.blocked.items() if why == "shading")
+        reserved = sorted(i for i, why in self.blocked.items() if why == "bureau")
+        if reserved:
+            warnings.append(
+                f"{len(reserved)} cell(s) the box detector called blank are reserved "
+                f"for the Bureau by the sheet's own caption and get no typing surface "
+                f"({self._sample(reserved)}); a taxpayer must not be able to fill a "
+                f"box the form says the BIR fills")
         if printed:
             warnings.append(
                 f"{len(printed)} cell(s) the box detector called blank are filled with "
@@ -1777,6 +1996,15 @@ class FieldPlan:
         shaded_slots = sorted(
             f"{cell_id}[{index}]" for cell_id, slots in self.blocked_slots.items()
             for index, why in slots.items() if why == "shading")
+        reserved_slots = sorted(
+            f"{cell_id}[{index}]" for cell_id, slots in self.blocked_slots.items()
+            for index, why in slots.items() if why == "bureau")
+        if reserved_slots:
+            warnings.append(
+                f"{len(reserved_slots)} of {self.slot_count} comb slot(s) are boxes "
+                f"the sheet's own caption reserves for the Bureau and get no input "
+                f"({self._sample(reserved_slots)}); they are the Machine Validation "
+                f"and Stamp of Receiving Office boxes the lattice reads as a comb")
         if printed_slots:
             warnings.append(
                 f"{len(printed_slots)} of {self.slot_count} comb slot(s) already carry "
@@ -2036,11 +2264,15 @@ def cell_markup(cell: dict[str, Any], fields: FieldPlan | None = None,
     # over this blank, so it is not one" -- and its value names WHICH evidence
     # said so. `"true"` is kept for glyph ink rather than renamed: three
     # resolved findings quote it verbatim, and a shaded cell is as literally
-    # pre-printed as a bracket of statutory text is.
+    # pre-printed as a bracket of statutory text is. A Bureau-reserved cell
+    # says `"bureau"`: the comb referee pins this element's KEY set, not the
+    # value, and a reader must be able to tell a blank the BIR reserved from
+    # one the sheet printed over.
     blocked = fields.blocked.get(cell["id"]) if fields is not None else None
     if blocked:
         attrs.append('data-preprinted="shading"' if blocked == "shading"
-                     else 'data-preprinted="true"')
+                     else ('data-preprinted="bureau"' if blocked == "bureau"
+                           else 'data-preprinted="true"'))
     live = id_attribute == "id"
     if box is not None:
         attrs.append(f'data-field-kind="{esc_attr(box.kind)}"')
@@ -5251,8 +5483,8 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
             "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
         })
         ink = PrePrintedInk(page["text_runs"])
-        _check(not field_verdict(victim, ink, None)[0]
-               and field_verdict(dict(victim, comb={"cells": 3}), ink, None)[0],
+        _check(not field_verdict(victim, ink, None, None)[0]
+               and field_verdict(dict(victim, comb={"cells": 3}), ink, None, None)[0],
                "pre-printed text blocks a plain field but never a comb",
                f"coverage {ink.coverage(victim):.2f}", failures)
         html, _ = build_document(staged_ir, staged_layout, plan,
@@ -5291,9 +5523,9 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
         band = _fill(0.8509, "decorative", top + 1)
         _check(DecorativeShading([band]).blocks(shade_victim)
                and field_verdict(shade_victim, None,
-                                 DecorativeShading([band]))[1] == "shading"
+                                 DecorativeShading([band]), None)[1] == "shading"
                and field_verdict(dict(shade_victim, comb={"cells": 3}), None,
-                                 DecorativeShading([band]))[0],
+                                 DecorativeShading([band]), None)[0],
                "decorative shading blocks a plain field but never a comb",
                f"grey 0.8509 over {shade_victim['id']}", failures)
         # The five real fields the threshold exists to spare: 1604CF's three
@@ -5344,9 +5576,19 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                "none found", failures)
     else:
         slot_x = [float(v) for v in slot_victim["comb"]["slot_x"]]
-        band_y0 = float(slot_victim["comb"].get("y0", slot_victim["y0"]))
-        band_y1 = band_y0 + float(slot_victim["comb"].get(
-            "height_pt", float(slot_victim["y1"]) - float(slot_victim["y0"])))
+        # The probes below must land inside the rectangle the verdicts are
+        # asked of, which is the compartment's WRITING rectangle when the
+        # layout publishes one and the divider band otherwise -- the same
+        # preference `comb_slot_verdicts` itself takes, for the reason
+        # documented there.
+        if ("writing_y0" in slot_victim["comb"]
+                and "writing_y1" in slot_victim["comb"]):
+            band_y0 = float(slot_victim["comb"]["writing_y0"])
+            band_y1 = float(slot_victim["comb"]["writing_y1"])
+        else:
+            band_y0 = float(slot_victim["comb"].get("y0", slot_victim["y0"]))
+            band_y1 = band_y0 + float(slot_victim["comb"].get(
+                "height_pt", float(slot_victim["y1"]) - float(slot_victim["y0"])))
         glyph_y0 = band_y0 + 0.25 * (band_y1 - band_y0)
         glyph_y1 = band_y1 - 0.25 * (band_y1 - band_y0)
 
@@ -5376,7 +5618,7 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
         def _verdicts(runs: Sequence[dict[str, Any]],
                       fills: Sequence[dict[str, Any]] = ()) -> dict[int, str]:
             return comb_slot_verdicts(slot_victim, PrePrintedInk(runs),
-                                      DecorativeShading(fills))
+                                      DecorativeShading(fills), None)
 
         # 1. A constant: the century BIR prints into the first two boxes of a
         #    year comb (1600-PT/VT p1c5, 1604C/1604E p1c4). Per slot, so the
@@ -5463,6 +5705,123 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                and 'getAttribute("data-slot-index"),10)+delta' not in FIELD_JS,
                "comb navigation steps through the typeable slots, not slot numbers",
                "positionOf, not the attribute", failures)
+
+    # -- C6 part 5: a box the sheet reserves for the Bureau ---------------------
+    # F147: 0605's "BCS No./Item No. (To be filled up by the BIR)" blank was a
+    # 253x17.5pt free-text taxpayer input. The geometry below is that sheet's,
+    # transcribed: the caption sits on the grey band, its compartment's left
+    # wall at 287.9 and right wall at the outer frame, the white knockout
+    # 4.4pt below the caption, and the taxpayer's own Return Period box on the
+    # same row but outside the caption's walls. The knockout's top border
+    # (321.2..576.5) does not span the compartment (287.9..579.8), which is
+    # exactly why caption and blank are one compartment on the real sheet.
+    bcs_caption = {"text": " BCS No./Item No. (To be filled up by the  BIR)",
+                   "x0": 290.0, "y0": 172.5, "x1": 456.6, "y1": 181.5}
+    bcs_walls = [
+        {"axis": "v", "x0": 287.6, "y0": 172.8, "x1": 288.1, "y1": 208.7},
+        {"axis": "v", "x0": 579.6, "y0": 168.0, "x1": 580.1, "y1": 208.7},
+        {"axis": "h", "x0": 321.2, "y0": 185.7, "x1": 576.5, "y1": 186.1},
+        {"axis": "h", "x0": 321.2, "y0": 204.6, "x1": 576.5, "y1": 205.0},
+    ]
+    bcs_res = BureauReservation([bcs_caption], bcs_walls, [])
+    bcs_cell = {"kind": "field", "x0": 321.6, "y0": 185.9, "x1": 576.1, "y1": 204.8}
+    peer_cell = {"kind": "field", "x0": 40.6, "y0": 185.9, "x1": 165.7, "y1": 205.6}
+    _check(field_verdict(bcs_cell, None, None, bcs_res) == (False, "bureau")
+           and field_verdict(peer_cell, None, None, bcs_res)[0],
+           "a Bureau-captioned blank is refused; the taxpayer box beside it is not",
+           "0605's BCS box against its Return Period neighbour", failures)
+    separated = BureauReservation(
+        [bcs_caption],
+        bcs_walls + [{"axis": "h", "x0": 286.0, "y0": 183.3, "x1": 581.0, "y1": 183.7}],
+        [])
+    _check(field_verdict(bcs_cell, None, None, separated)[0],
+           "a ruled separator under the caption breaks the binding",
+           "a section header governs its section, not the row beneath", failures)
+    _check(field_verdict(dict(bcs_cell, y0=191.0), None, None, bcs_res)[0],
+           "adjacency is bounded by the caption's own height",
+           "9.5pt of separation against a 9.0pt line is not adjacency", failures)
+    _check(_bureau_caption("(To be filled up the BIR)")
+           and not _bureau_caption(
+               "The machine validation shall reflect the date of payment")
+           and not _bureau_caption("with an “X”. Three (3) copies must be "
+                                   "filed: two (2) copies for BIR and one copy "
+                                   "for the taxpayer."),
+           "the sheet's own typo is a caption; prose about the boxes is not",
+           "prefix match for prose-prone phrases, substring for parentheticals",
+           failures)
+    # The bottom-of-sheet shape, transcribed from 2200-A: one band the lattice
+    # reads as a 2-slot comb, the left compartment captioned "Machine
+    # Validation/...", the right "Stamp of Receiving Office/AAB...". Per slot,
+    # because the compartments are separate Bureau boxes; and the cell itself
+    # stays a field, because a comb cell always is one at cell resolution.
+    validation_caption = {"text": "Machine  Validation/Revenue Official Receipt "
+                                  "Details (if not filed with an Authorized "
+                                  "Agent Bank) ",
+                          "x0": 21.7, "y0": 847.4, "x1": 306.0, "y1": 856.3}
+    stamp_caption = {"text": "Stamp of Receiving Office/AAB and Date of Receipt ",
+                     "x0": 402.1, "y0": 847.4, "x1": 587.9, "y1": 856.3}
+    band_cell = {"kind": "mixed", "x0": 16.3, "y0": 847.1, "x1": 595.3, "y1": 897.7,
+                 "comb": {"cells": 2, "slot_x": [16.3, 392.7, 595.3],
+                          "y0": 847.6, "height_pt": 49.7}}
+    both = BureauReservation([validation_caption, stamp_caption], [], [])
+    _check(comb_slot_verdicts(band_cell, None, None, both)
+           == {0: "bureau", 1: "bureau"}
+           and field_verdict(band_cell, None, None, both)[0],
+           "each Bureau box of the bottom band refuses its own compartment",
+           "per slot, and the comb cell itself stays a field", failures)
+    _check(comb_slot_verdicts(band_cell, None, None,
+                              BureauReservation([validation_caption], [], []))
+           == {0: "bureau"},
+           "a compartment without a Bureau caption keeps its input",
+           "slot 1 stays when only the left box is captioned", failures)
+
+    # End to end: a Bureau caption printed inside a blank leaves the cell in
+    # the document, marked, with no input -- and the exclusion is published.
+    bureau_ir = json.loads(json.dumps(ir))
+    bureau_layout = json.loads(json.dumps(layout))
+    bureau_victim = next((c for p in bureau_layout["pages"] for c in p["cells"]
+                          if c["kind"] == "field" and not c.get("comb")
+                          and c["x1"] - c["x0"] > 40.0
+                          and c["y1"] - c["y0"] > 8.0), None)
+    if bureau_victim is None:
+        _check(False, "C6 part 5 has a plain field cell to reserve",
+               "none found", failures)
+    else:
+        page_index = int(bureau_victim["id"][1:].split("c")[0])
+        page = next(p for p in bureau_ir["pages"] if int(p["index"]) == page_index)
+        text = "For BIR Use Only"
+        # 30% of the cell's width: enough ink to be the caption, well under
+        # the 50% at which the pre-printed rule would answer first.
+        width = 0.3 * (bureau_victim["x1"] - bureau_victim["x0"])
+        left = bureau_victim["x0"] + 0.35 * (bureau_victim["x1"] - bureau_victim["x0"])
+        mid_y = (bureau_victim["y0"] + bureau_victim["y1"]) / 2.0
+        each = width / len(text)
+        page["text_runs"].append({
+            "text": text, "font": "Arial", "family": "Arial", "size_pt": 6.5,
+            "bold": False, "italic": False, "serif": False, "monospace": False,
+            "superscript": False, "flags": 0, "color": 0,
+            "x0": left, "y0": mid_y - 3.5, "x1": left + width, "y1": mid_y + 3.5,
+            "baseline_y": mid_y + 3.5, "origin_x": left,
+            "ascender": 0.9, "descender": -0.2, "line_height_pt": 7.0,
+            "measured_advance_pt": width,
+            "char_origin_offsets_pt": [each * i for i in range(len(text))],
+            "char_advances_pt": [each] * len(text),
+            "char_widths_pt": [each] * len(text),
+            "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+        })
+        page["text_runs"].sort(key=lambda r: (r["y0"], r["x0"]))
+        html, bureau_warnings = build_document(
+            bureau_ir, bureau_layout, plan,
+            Options("svg", "fonts", "assets", None, None, None))
+        cell = re.search(rf'<div id="{bureau_victim["id"]}"[^>]*>(<input[^>]*>)?', html)
+        _check(cell is not None and cell.group(1) is None
+               and 'data-preprinted="bureau"' in cell.group(0),
+               "a cell the Bureau reserves is emitted without an input",
+               cell.group(0)[:80] if cell else "cell absent", failures)
+        _check(any("reserved for the Bureau" in w for w in bureau_warnings),
+               "the Bureau exclusion is published, per cell",
+               next((w for w in bureau_warnings if "reserved for the Bureau" in w),
+                    "no such warning")[:90], failures)
 
     # -- Ink: a padded single-word run is emitted as its ink, at its own origin -
     padded = {"text": " No ", "origin_x": 231.17,
@@ -5605,9 +5964,12 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
 
     ink = {int(p["index"]): PrePrintedInk(p["text_runs"]) for p in ir["pages"]}
     shading = {int(p["index"]): DecorativeShading(p["area_fills"]) for p in ir["pages"]}
+    reservation = {int(p["index"]): BureauReservation(
+        p["text_runs"], p["rules"], p["area_fills"]) for p in ir["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
                 if field_verdict(c, ink.get(int(p["index"])),
-                                 shading.get(int(p["index"])))[0]]
+                                 shading.get(int(p["index"])),
+                                 reservation.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
