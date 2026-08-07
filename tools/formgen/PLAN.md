@@ -46,31 +46,32 @@ sheet does not print, which is the new finding F184.
 | Gate-demanded assertions | **10** | unchanged at r20 |
 | Findings in `review-findings.json` | **185** | **42 blocker+major open of 128** at r20 (was 55 of 126): 15 closed on measurement (F049, F054, F058, F062, F106, F135, F150, F152, F153, F173–F177, F180), **F184 filed open** (2550M money combs claim a compartment the paper does not print) and **F185 filed open** (11 comb-spanning inputs the cap model made visible). The 138 immutable baseline entries are untouched; the digest at `gate.py:8752` still matches, re-verified at r20 |
 
-**Gate — full clean-tree run r19 (2026-08-07 15:41, `d3e7a72`). 9/12 PASS, the
-same three checks red as r18, no regression on any check.** STATUS.md holds the
-full table and the analysis.
+**Gate — full clean-tree run r20 (2026-08-07 18:27, `73c3ce4`). 9/12 PASS, the
+same three checks red as r19, and one assertion fewer inside the red one.**
+STATUS.md holds the full table and the two self-inflicted faults this run
+found.
 
     PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
     PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
-    PASS  determinism 7a152bc88161  (moved from 8ceeab9e506d, and had to: three
-                                     guide documents changed. Two generations
+    PASS  determinism b5e4f9e1b979  (moved from 7a152bc88161, and had to: 25
+                                     form documents changed. Two generations
                                      still compare byte-for-byte)
-    FAIL  assertions    inputs_over_printed_text 20/53        (r18: 20, unmoved)
-                        comb_slots_match_printed 22/53        (r18: 22, unmoved)
-                        inputs_span_no_printed_divider 11/53  (r18: 11, unmoved)
-                        printed_box_peers_all_fillable 14/53  (r18: 14, unmoved)
-    FAIL  findings      55/126 blocker+major open (r18: 59/125) — 4 closed on
-                        measurement, F182 filed and fixed, F183 filed
-    UNEV  comb-referee  52/53 forms, up from 40/53. The one that does not arrive
-                        is 2551Q, on a reviewed control the pin refuses to move
-                        for — see G18
+    FAIL  assertions    inputs_over_printed_text 20/53        (r19: 20, unmoved)
+                        comb_slots_match_printed 22/53        (r19: 22, unmoved)
+                        inputs_span_no_printed_divider 11/53  (r19: 11, unmoved)
+                        printed_box_peers_all_fillable        GONE (r19: 14/53)
+    FAIL  findings      42/128 blocker+major open (r19: 55/126)
+    UNEV  comb-referee  52/53 forms, 2551Q the only error, identical to r19
 
-**Not one of the four assertion populations moved by a single form.** That is
-the confirmation that a guide-side change did nothing form-side, and it is why
-"no regression" is a measurement here rather than a hope.
+*(r19's block, superseded: determinism `7a152bc88161`; assertions 20/22/11/14;
+findings 55/126; comb-referee 52/53.)*
 
-*(r18's block, superseded: determinism `8ceeab9e506d`; assertions 20/22/11/14;
-findings 59/125; comb-referee 40/53.)*
+**Three of the four assertion populations did not move by a single form, and
+the fourth emptied.** The two pre-existing rows are unmoved form-for-form,
+which is what makes "the checkbox class is fixed and nothing else regressed" a
+measurement rather than a hope. The one number that did move the wrong way,
+`comb_slots_match_printed`'s offender count, is reported in full above and in
+STATUS.md, and is now finding F184 / row G19.
 
 **The two new red rows are the point, not a regression.** Every one of their 93
 offenders was already in the shipped corpus at r14; what changed is that a check

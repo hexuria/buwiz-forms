@@ -774,8 +774,19 @@ HTML_ALLOWED_TAGS = frozenset({
 #   white. Rasters in the session scratchpad under preprinted/.
 #
 # 25 of the 53 refreshed 2026-08-07 (r20) -- the other 28 documents are
-# byte-identical and their pins were not touched. Reviewed the same way, and the
-# review is again the point rather than the regeneration:
+# byte-identical and their pins were not touched.
+#
+# This pin hashes `build/html/<slug>.html`, the EMITTED document, not
+# `forms/<slug>/index.html`, the bundled one. r20's refresh was first computed
+# off the bundle and it cost a full 60-minute gate: 25 forms reported "emitted
+# HTML bytes changed from the reviewed pin" and the referee fell to 27 of 53.
+# Exactly the same 25 slugs differ at both levels -- verified by diffing today's
+# `build/html` digests against the r19 pins in git -- so the review below, taken
+# on the bundled documents, covers the same population; only the artifact being
+# hashed was wrong.
+#
+# Reviewed as follows, and the review is again the point rather than the
+# regeneration:
 #
 #   Tag inventory across the 25 changed documents moves in ONE direction:
 #   +60 <input>, +29 <div>, +3 <rect>, and nothing of any kind deleted (2551M's
@@ -804,59 +815,59 @@ HTML_ALLOWED_TAGS = frozenset({
 # legitimate producer change; the design tension recorded in GOAL.md §Blocked is
 # unresolved and this refresh does not resolve it.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "fa321c89b7d52e9a2c115f8e823dcbb6e6b557ac46421e9c033ce7014ad81ae9",
-    "0619e-2018": "eab986a03a97c81c4de511d5e6d6d226c88bef7aa831da79173541031a192099",
+    "0605-1999": "86664165c9650ee6bbf56300f43b53cab68095993359b2401e404109585dd384",
+    "0619e-2018": "55931f50a9ca2cd6e7652724630b71247a2b9afb557dc4e3345cf5bae46628aa",
     "0619f-2018": "1d73c117c370ba2635a790fffb24fcc5ca5ed731921eda37525750fd6880c8c1",
-    "0620-2019": "5c1fa7181a3cdbd88efe302363bff2ac9620be54dc4526402dd7a4c53e07618a",
+    "0620-2019": "a607e1675cd7e1019672dbee6df415914b10a008b3a23039ea44614125cb209b",
     "1600-pt-2018": "f8f3e28b8120aba3c7456f6ea665d67d7b6f5ea7fa8d230c58aba07ea39d69bd",
     "1600-vt-2018": "dae7516503767ae9b4d8bc87135e054274cced91e7ddcad3fd28ec5163b7c1ae",
-    "1600wp-2010": "87fa90cbcc38ac9429d5e8699756fbc8281e423b2289cd4469ad34b2c553d96a",
+    "1600wp-2010": "6231082b82f82d61ed77d4b2bd3b340dbc1db93b52adfd56faac00cf2692e101",
     "1601-fq-2020": "54f581b0874e6da686806221bf1c29a46055e823164c656d3dc952508838b6b4",
-    "1601c-2018": "31d8ee09c59f343027e615e84f22d2701a56f7b635540be1f1b6541c7f36e598",
+    "1601c-2018": "c4290064774382f570a7e470ef61210bfd7ef187d336898ddff5932f5f79409a",
     "1601eq-2019": "74886837c796ec19ac56514ffa3b5ace429a4fffb31c8c68ef1d0f49416eeefe",
     "1602q-2019": "25fe05a1a7189f6a7c6f2e5cbe30fe516b1b888995edcf31669973640ed7e694",
     "1603q-2018": "95d6b18dd21b2463d7637724452ae56669371ee655cfa0e5ddc3d9526092c79b",
-    "1604c-2018": "be5e08c12477a2210f14272643952f5d6fd7489965d7bb68314d02dc5611ea5a",
-    "1604cf-2008": "f4a2434eefeb406201bad1a9e02fd7cfe9ec3582829f2af301efe61dd50fcff7",
+    "1604c-2018": "d1b66032d79e5f927b11fa24d354c574c7e3d234e9da8397727c825be7dd9ae1",
+    "1604cf-2008": "a155557d19361591f571ccbc3e24e1d834728a9d6cd9be370e03013855d05833",
     "1604e-2018": "8960362c0cba23e6edce5751a78f8a1ce2e416b8e453d3ac88faabf33cce61f2",
     "1604f-2018": "aa6a8869cc7893886cc1548f07a8d9db5cffbd6e066bc2013acd39b1fbd04e98",
     "1606-2018": "14ea5824bcfccd2ecf39ca0c66ded941f16bc5745ac8294c1219fa0083d507d3",
     "1621-2019": "a5efb8ad61225676537865d22458a55cbed83ce87716fb6cbc04a77bc6bdb9a4",
     "1700-2018": "7ab3f172dbad486ade7525a796ce3cf03fa62125cb13e1f7be488d7c090945aa",
-    "1701-2018": "1b5d68dc8e389014da44f4b69bf90d405eaa91501d35871de1aa193365814333",
+    "1701-2018": "10b5f732116eaa45295bcf2c809d55d059a29ba6196931cb67bb5654dcf6a816",
     "1701-2018-attachment": "51c3cc5471d9996bb32571300d7e8e9aa9d1a78630f686485fc44668d545f1e7",
     "1701-2018-conso": "ee6460b88319fca960bc6a6d696f43115b3eeace6c858ef3b139f3b648928d3b",
     "1701a-2018": "1787b1eb21c5269ca6c547419cec8f0f04656f0d1c0fa812034eedef939029ad",
-    "1701ms-2024": "1d5d859a539a9f80d928f5a8c9230d915245cb917c7e26c0b71b959d499082d1",
+    "1701ms-2024": "2cfcdfc4a7e4481e46637321b4bce7fd23949bd3b34fd2034f0882e27877c734",
     "1701q-2018": "2ab2da4b39f4cea77ad1a6baa96ee8a1b73115ad174541f98456d21af3414f21",
-    "1702ex-2018": "f0eb90b8b7137a4868535fa5daaf9ce3152c3e24149e9b10bc5125fcd2ef8d66",
-    "1702mx-2018c": "7c2c26d79b37de266bef68ea93aacf199f9387ceaf24e46d3a7db5559acfe1be",
+    "1702ex-2018": "f5fe397e217faf0dd067b27a8892b7b1946040a19e369e32f57c2f0be7c27dfb",
+    "1702mx-2018c": "46b7fad0d87e341e8a2a7b09b5efd4dbafab78bf0e618bca9eb184d00be818a4",
     "1702mx-2018c-attachment": "fa94174dfe4c8bee14085e0cda823461b95ff50bbf280da00379dc5818424f96",
-    "1702q-2018": "304f8a7e509e5854f82544b5062cda49af6cadddc9bada138e324d1216943b3e",
-    "1702rt-2018c": "6b492e6bae472a92cbc1d5ad9539d56592caec0a2f1dd422db967c2fcb96baf9",
-    "1706-2018": "01e9e65ff0379f41db670fbda5cede30eba7a8af90f7b716ffa3fd0a41417ab4",
-    "1707-2021": "9ccb14f47b79d950139364e0be1e22621a8e7078da73f683cbc7c2a8b42a857b",
+    "1702q-2018": "517eb499e11394d16dc83bee880e72f828bf4edda72e27592b4e1bf2c0e4f063",
+    "1702rt-2018c": "d2f2599c8aa34172921815729cd5b2b9c4a0d2783b2cf491b5674db61117058c",
+    "1706-2018": "c91d610c95c03afd34d2557df51c943a97eb9542de07b91828400d17c5dabe7f",
+    "1707-2021": "6d8ecd027d880b875fe8b8e7a37279914b815edff2b4ec6efcc1bbac9bd9e656",
     "1707a-2021": "8268bde7581c4261fcb040b03ff7b2e4eecd979f80471159b0788d48ea91e134",
     "1709-2020": "206b9b87a260e18ae7cc1ebdf062d6626a4facbdc52bf01097034f411e635ae3",
     "1800-2018": "733f9a14da504cc7120b227d6a2e8d78b7e94293377fcaf71f3a0ce5cd9b0ef2",
-    "1801-2018": "c81a43320037236a34d50430285ff37f48a6c76802c08723669e493de4a44b7e",
+    "1801-2018": "f9c29eb63fbdb516f07caedd237c39bb375ca9b6644a2e6bb8d93bc33de88534",
     "2000-dst-2018": "0833c3f222a8da9e8c6bfad5de47d049659a0d6a53ef2d96d6da4984a1e8a021",
     "2000-ot-2018": "7da7f3a3ed0a29c6df2b3c9bccfe9c5b58113bc472f7070a24428da245922b5c",
     "2200a-2020": "f6d6354240e94b9bb5a6befb8fcb4ab3f733929cfcc7700df2dc87f983e775ef",
-    "2200an-2018": "bf3adae5dfb209a2c2e68d9990290eea2e9ada99ef3f3f19d529c963b6ed6eb0",
+    "2200an-2018": "7512a870934e52ee4790836a3fffd7859d6be05e52b010db7360fd0148cfe967",
     "2200c-2018": "210312c0168cdac356e31f1eeddb00b693732ab059c6270256dbfaa8f8dc58f7",
-    "2200m-2018": "dbd52ec2dd675bec3fbddf30f2261cc5825f0d778581a298720c699fc36365e3",
+    "2200m-2018": "894bebac15201977bc6397078389629fdecdf2ca974b4e6fdc0d3f127df14d5c",
     "2200p-2020": "6acc10faca9eee26e31942d30f041ccd5976984895425e80281326cecae44590",
-    "2200s-2018": "5cdabc979edbb52dd9a47813c5f59b33a9c4e7fe0b6c615b8cfaf8142a5bf22d",
-    "2200t-2022": "e7f24c309245959389fba2d50351c100f4a722998f664b0343c3e6a66e22662c",
-    "2316-2021": "1c0931866c78c78a261ccdc4f84ff25814eac1b71e783c68e24ce3f06c3610df",
+    "2200s-2018": "09196e37cf9198afe8cd19c742f0c459d2449fe99570fb08046e0547f8590174",
+    "2200t-2022": "6fcaa0aef49b1661d90a26c55cefca27fa69e1fed1283107c40f4cbceeccb465",
+    "2316-2021": "665a3847ba3f105ceb4bacff438fc7cce487c68a3e96f582a3dcf330ccb0819d",
     "2550-ds-2025": "6429458bdb76c2afc1dc1b79d3fb9fb41e121d3fc308123579e540d69c847579",
-    "2550m-2007": "3030be20b51373b3924a389d14c3ed0f30ebc83daf5e8131ab78a98f3d4f4460",
-    "2550q-2024": "f31a4e06fa6c600b20e5e32b085ea733a661bd1d6802b318cc6f60ef187abc7f",
-    "2551m-2002": "0d6429f9ff0aa924c3bcc247e9f5e70181ee8daf82d66d3571ff955a771f7178",
+    "2550m-2007": "472b81f2efa7773a9d2950bb10b2cc6bed6403def0241c581b92e863a2d8a578",
+    "2550q-2024": "4fdebe613aa3b357b2af1e2f46c4bda0bc3e515f257cb32b80dff55ad2222cc6",
+    "2551m-2002": "b11d1fc19f7e80ebeb979d81302f3c93ef1588ed38316dd982313c57730a48a6",
     "2551q-2018": "cafd4edab3ae185d8ec0b2e21958ba82afe816725cdaacb0816365df025b82f4",
     "2552-2018": "6b4cac3a60f59f88176a76d31aaf18a4ba836c040f221837bf2e6e28033be2d9",
-    "2553-1999": "1e06b3fd0af85bb484f36f45b4e868235865a7dfc3dbb6094ff1b6f7ce892492",
+    "2553-1999": "0840295364bca6107b54587cf6ce2a88088c1fc7c4bcd7002b4749498487b3ef",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")

@@ -2410,7 +2410,8 @@
       "where": "forms/2550m-2007/, page 1: p1c89, p1c90, p1c94, p1c95, p1c102. Each has comb.cells 3 against `printed` 2. Invisible dividers on the page: v199, v200, v201, v217, v218, v219 (6 of 43).",
       "evidence": "`comb_slots_match_printed` offenders of kind (layout-printed-mismatch, emission-printed-mismatch): 2 -> 7 at r20, the five new ones all on this form. The layout ALREADY records the right answer beside the wrong one -- p1c89's comb.resolution is {status: unresolved, method: legacy-continuity, reason_codes: [final-visible-count-regression, legacy-continuity-only], final_visible_candidate_cells: 2} -- so the subject is active_unresolved and already blocks the gate. Paint order read from the pinned PDF (sha256 9fb4101a...) with get_drawings(); the 30x raster of x 252-276, y 834-845 shows ONE tick: scratchpad/blockers/2550m-p1c89-ticks.png. NOT FIXED at r20 and deliberately not patched here: dropping the legacy topology is the reviewed `retired_proven_false` transition, which needs independent evidence and a human, not an integration-time edit.",
       "audit_blind": false,
-      "cause": "lattice-comb-legacy-continuity-outranks-final-visibility"
+      "cause": "C5",
+      "resolution": ""
     },
     {
       "id": "F185",
@@ -2422,7 +2423,8 @@
       "where": "2550M p1c3 [524.40,90.24,574.32,102.96] spans 549.36; p1c21 [526.56,171.36,574.32,184.80] spans 536.64/549.36/561.12; p1c116 [66.72,119.52,99.12,133.68] spans 77.04/87.36; p1c118 [273.36,119.04,324.00,133.68] spans 289.68/306.96. 1604CF p2c82/91/100/109/118, each [175.44,*,269.04,*], each spanning 243.12 (the same Schedule rows F179 names by their old ids). 2551M p2c17 and p2c21, each [24.48,*,249.12,*], each spanning 93.36.",
       "evidence": "`inputs_span_no_printed_divider` offender-set diff r19 -> r20, computed per form on the published offender records. The assertion's total falls 79 -> 67 and its form count is unmoved at 11 of 53; 24 offenders cleared (F180's 8, F179's page-1 5, F181's p1c25, and 2551M's page-1 group) and these 11 appeared. audit.py is byte-identical, so the assertion did not move.",
       "audit_blind": false,
-      "cause": "extract-line-cap-underreported-divider"
+      "cause": "C5",
+      "resolution": ""
     }
   ]
 }

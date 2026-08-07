@@ -215,6 +215,46 @@ runs left the document, with the row still well formed.
   independent of any corpus form: *a run crossing into an occupied column does
   not swallow its cell*.
 
+## Gate — full clean-tree run r20 (2026-08-07 18:27, `73c3ce4`)
+
+    PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
+    PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
+    PASS  determinism  byte-identical (b5e4f9e1b979, moved from 7a152bc88161 —
+                       25 form documents changed and had to. Two generations
+                       still compare byte-for-byte)
+    FAIL  assertions   inputs_over_printed_text 20/53        (r19: 20, unmoved)
+                       comb_slots_match_printed 22/53        (r19: 22, unmoved)
+                       inputs_span_no_printed_divider 11/53  (r19: 11, unmoved)
+                       printed_box_peers_all_fillable — GONE from this list
+                                                        (r19: 14/53)
+    FAIL  findings     42/128 blocker+major open  (r19: 55/126)
+    UNEV  comb-referee 52/53 forms, 2551Q the only error — identical to r19
+
+**9 of 12, the same three checks red as r19, and one assertion fewer inside
+the red one.** `printed_box_peers_all_fillable` no longer appears in the
+`assertions` detail at all: that is the full clean-tree gate confirming the
+14 → 0 measurement.
+
+**Two faults in this run were mine, both self-inflicted, both fixed, and both
+worth recording because each cost a 60-minute run:**
+
+1. **`findings` came back UNEVALUABLE, not FAIL** — "finding 184 schema is
+   unsupported". `FINDING_KEYS` is an exact set and my two new entries omitted
+   `resolution`; their `cause` also has to be one of the declared
+   `cause_codes`, which cannot be extended because `cause_codes` is inside the
+   immutable-baseline digest. Both now carry `resolution: ""` and `cause: C5`,
+   and `gate.py --only findings` reports the honest **FAIL 42/128**.
+2. **`comb-referee` fell to 27/53** — "emitted HTML bytes changed from the
+   reviewed pin" on 25 forms. `EXPECTED_HTML_STRUCTURE_SHA256` hashes
+   **`build/html/<slug>.html`, the emitted document**, and I refreshed it from
+   `forms/<slug>/index.html`, the bundled one. Corrected against the right
+   artifact and verified by re-running the referee: **52 of 53 forms, one
+   error, and it is 2551Q's reviewed control (`p2c5 != 14`) — byte-for-byte
+   r19's position.** 2551Q's own documents are unchanged at r20, and the
+   reviewed pin was NOT moved. Exactly the same 25 slugs differ at the emitted
+   and the bundled level, so the tag/attribute review below covers the right
+   population; only the artifact being hashed was wrong.
+
 ## The four user-visible checks, looked at rather than counted (r20)
 
 Screenshots in the session scratchpad under `blockers/`, taken with Playwright
