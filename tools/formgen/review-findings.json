@@ -1435,8 +1435,8 @@
       "evidence": "I overlaid every input/textarea with a red outline in Playwright at DPR2 and looked at the page: the item 2 Yes/No and item 12 Yes/No boxes are outlined, the three Part II boxes are not. Confirmed against the DOM: 884 inputs exist on the form, none intersects those three rects. build/layout/2200t-2022.layout.json marks p1c58, p1c59, p1c62 as kind=\"label\", is_empty=false, so emit.py never emitted a field. Cause is the same as on 2200-S: the neighbouring run's trailing-space advance is wide enough to overlap the box rect, so lattice.py sees the cell as occupied.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "All three cited boxes carry inputs in the shipped DOM at the finding's own coordinates: p1c58 [37.0, 362.5, 50.4, 374.0] (item 13), p1c59 [224.4, 362.5, 237.8, 374.0] (item 14), p1c62 [37.0, 377.3, 50.4, 388.8] (item 15). Screenshot with an X typed into each: scratchpad blockers2/F109-2200t-manner-of-payment-r21.png. The closure is LATE, not new: byte-comparison against HEAD~1 shows all three inputs already present in the r20 shipped tree -- the r20 checkbox-class fixes (GroupGeometry.span counting a cluster's own rule as coverage; glyph_ink_spans placing runs by ink, not advance) fixed this population and the finding was not re-verified then."
     },
     {
       "id": "F110",
@@ -1474,8 +1474,8 @@
       "evidence": "Enumerated input bounding boxes in the summary money column: inputs exist at y = 512.6, 532.1, 551.5, 571.0, then a gap, then 628.9, 648.7, 668.2, 688.1, 707.6 — all w=101.0, h=14.5, pitch ~19.5 pt. Two pitch slots (~590.5 and ~610) have no input. In the fill-every-input screenshot, rows 19-22 and 25A-28 all show '888888' inside a red-outlined box while rows 23 and 24 are blank white boxes with no outline. Both boxes are drawn identically in the official PDF.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "Both cited money boxes carry inputs in the shipped DOM at the finding's own coordinates: p1c101 [207.9, 589.6, 309.3, 605.0] (item 23) and p1c103 [207.9, 609.0, 309.3, 624.4] (item 24), the Part IVA money column x 207.9-308.9 at y ~590 and ~610. Screenshot with amounts typed into both: scratchpad blockers2/F112-2316-items23-24-r21.png. As with F109 the closure is late: HEAD~1 already carries both inputs, so the fix landed with the r20 producer changes and the finding was not re-verified then."
     },
     {
       "id": "F113",
