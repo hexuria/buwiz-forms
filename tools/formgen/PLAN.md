@@ -233,6 +233,19 @@ the emission contract was not told the contract changed.
 
 ## Stage 2 — correct
 
+> **Reconciled 2026-08-08 (user decision): batch-versioned immutability.**
+> Stage-1 batches are immutable once a sighted gate scores them (tag
+> `corpus/rN` per verdict); a generator fix produces the NEXT batch, never a
+> mutation of the last. Stage 2 builds `forms-corrected/` from a NAMED batch:
+> byte-copy per form, then apply that form's correction records — no record
+> means byte-identical copy. The applier's manifest names source batch, every
+> record, and input/output sha256. The gate runs on BOTH trees; on the
+> corrected tree fidelity must fail ONLY at declared divergences, each named.
+> Stage 3 binds to `forms-corrected/` only. Full rationale and the
+> counter-check that amended the never-regenerate clause:
+> ARCHITECTURE.md § Batch-versioned immutability.
+
+
 Not built. Four binding rules, not open for relitigation (ARCHITECTURE.md
 §"Rules the user set"; rule 4 is the design constraint they imply):
 
@@ -423,6 +436,7 @@ Condensed to what changes behaviour.
 
 ## Log
 
+- **2026-08-08** Batch-versioned immutability reconciled with the user and recorded (ARCHITECTURE.md): stage-1 batches freeze per scored gate, stage 2 applies records to a named batch, uncorrected forms byte-copy, gate runs on both trees. One true stage-2 record known: 2550M TIN 3->5.
 Newest first. One line each.
 
 - **2026-08-07 (r23)** — **The three regressed assertion families, paid; two

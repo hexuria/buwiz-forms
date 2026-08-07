@@ -6,9 +6,9 @@ to be expressed as a change to the generator, so a fact true of one form is
 paid for by regenerating all 53, re-pinning four census files, and a 60-minute
 gate. Stage 2 breaks that coupling.
 
-    STAGE 1  GENERATE   pinned PDF -> IR -> lattice -> emit -> HTML
-    STAGE 2  CORRECT    declared per-form corrections, applied after generation
-    STAGE 3  MAP        fields -> eBIRForms XML payload keys
+    STAGE 1  GENERATE   pinned PDF -> IR -> lattice -> emit -> HTML   (forms/, batch-versioned)
+    STAGE 2  CORRECT    forms-corrected/ = copy(batch vN) + declared correction records
+    STAGE 3  MAP        fields -> eBIRForms XML payload keys, bound to forms-corrected/
 
 ## What belongs in which stage
 
@@ -45,6 +45,55 @@ while the underlying bug still ships to every new form.
    EXPECTED EFFECT. A verifier re-derives the effect from the corrected output
    and fails if it does not match what was declared. A correction that cannot
    state its effect in advance cannot land.
+
+## Batch-versioned immutability (reconciled with the user, 2026-08-08)
+
+The user's instinct: stage-1 artifacts that pass are not to be churned; fixes
+produce ANOTHER batch; a form needing no correction is copied as-is into the
+corrected tree. The counter-check that amended one clause of it, agreed after
+review:
+
+- **"Passing" was hollow until the field-layer assertions existed.** 137 of 138
+  visual-review defects sat on pages the numeric audit scored 100%. Freezing
+  the first "passing" batch would have frozen unusable 2.6pt comb fonts,
+  typeable statutory ATC codes, and an amended-return checkbox that could not
+  be ticked. A batch is only worth freezing after a SIGHTED gate has scored it.
+- **A source-misreading fix belongs in the generator, never in a correction
+  record** (the stage-1/stage-2 dividing line above). Routing tone/clip/cap
+  misreadings through stage 2 would have produced 53 hand-patched forms and a
+  generator that repeats the mistake on form 54.
+- **Frozen artifacts are never re-measured.** The r22 regressions were not
+  caused by regeneration -- they were CAUGHT by it, on the run that introduced
+  them. Never-regenerate would have prevented their detection, not their
+  existence.
+
+What survives of the instinct, as binding rules:
+
+1. **A batch is immutable once published.** Every gate-verdict commit is a
+   batch version (the git history is the ledger; tag `corpus/rN` at each
+   scored gate run). A generator fix never mutates a published batch in place;
+   it produces the NEXT batch, and the reviewable artifact is the v(N) ->
+   v(N+1) diff -- which is exactly what the determinism check and the
+   tracked-file guard already enforce commit-by-commit.
+2. **One generator version per batch.** A corpus mixing producer versions has
+   no provenance; determinism and the audit's application-scope binding both
+   assume (and verify) this. This is why "do not regenerate passing forms"
+   cannot hold form-by-form, only batch-by-batch.
+3. **Stage 2 consumes a named batch.** `forms-corrected/` is built by a small
+   applier: for each form, byte-copy from the named stage-1 batch, then apply
+   that form's correction records, if any. No record -> byte-identical copy
+   (the user's rule). The applier's manifest names the source batch, every
+   record applied, and the sha256 of input and output -- so "what changed and
+   under whose authority" is one file, not an investigation.
+4. **The gate runs on BOTH trees.** Stage-1 checks are unchanged. On
+   forms-corrected/, fidelity must fail ONLY at the declared divergences, each
+   named per rule 1 above; an undeclared diff between the trees is a build
+   failure, not a shrug. Stage 3 binds to forms-corrected/ and to nothing
+   else, so the mapping moves only when a correction record moves.
+
+Current stage-2 ledger: exactly ONE true correction is known -- the TIN branch
+code 3 -> 5 on 2550M (see the table above). The applier gets built when stage 1
+closes, against this section.
 
 ## Why rule 3 matters here specifically
 
