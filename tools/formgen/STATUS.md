@@ -5,9 +5,165 @@ same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
 Measured 2026-08-07 over the 53-form corpus, on branch `gol/form-correction`,
-regenerated at the r20 producer bytes. Assertion counts are from a corpus-wide
+regenerated at the r23 producer bytes. Assertion counts are from a corpus-wide
 `audit.py` run over that regeneration; the findings tally is recomputed from
 `review-findings.json`.
+
+## r23 — the three regressed assertion families, and what it cost to fix two of them
+
+**r23 starts nothing. It is r21/r22's three regressions, paid.** Two of the
+three are gone; the third is gone as a *form count* and its residue is filed.
+One family got worse and that is reported first, not last.
+
+| Assertion | r20 | r22 | **r23** | |
+| --- | --- | --- | --- | --- |
+| `comb_slots_match_printed` | 22 / 188 | 36 / 254 | **22 / 193** | form count back to r20 |
+| `money_boxes_have_inputs` | 0 / 0 | 4 / 4 | **0 / 0** | **PASSES again** |
+| `printed_box_peers_all_fillable` | 0 / 0 | 1 / 1 | **0 / 0** | **PASSES again** |
+| `inputs_span_no_printed_divider` | 11 / 67 | 5 / 33 | **5 / 33** | unmoved, offender-for-offender |
+| `inputs_over_printed_text` | 20 / 149 | 19 / 131 | **20 / 147** | **WORSE by 1 form / 16 offenders** |
+
+### Reported loudly: `inputs_over_printed_text` got worse, and the fix did it
+
+**+21 new offenders, −5 cleared, 19 forms → 20.** Every one of the 21 is the
+population STATUS.md has carried since the writing-surface increment: a comb
+cell whose lattice rectangle spans **caption and comb**, so a writing box that
+fills the cell reaches the caption printed in its upper half. The offenders
+name themselves — `"   Zip Code"` (1600WP `p1c24`), `"Telephone No."` and
+`"Zip Code"` (1604CF `p1c16`/`p1c21`), 2551M `p1c74`/`79`/`86`, 2553
+`p1c79`/`84`/`91`, 2316 `p1c37`–`40`, 2550M `p1c89`–`91` — the same cells, cell
+for cell, that the earlier increment listed under this exact heading.
+
+**r22 had not fixed them. r22 had hidden them**, by shrinking every comb's
+typing surface to the 3.12pt divider band, which is too short to reach any
+caption and too short to type in. A number that improved because the field
+stopped being usable is not an improvement, and restoring the field restores
+the debt. The fix belongs in `lattice.py`'s cell segmentation (row **G05**),
+not in this assertion and not in the emitter.
+
+### What fixed the other two: emit.py lays out on the WRITING box (F186)
+
+`emit.comb_writing_rect` is now the **one** reader of a comb's vertical extent
+for everything the emitter draws — the slot div, the input inside it, the
+band-template JSON a cloned row is re-laid out from, and the face `field_box`
+fits — and it returns `writing_y0`/`writing_height_pt`. The **divider band**
+(`y0`/`y1`/`height_pt`) survives emission unmodified, because that is the
+contract `comb_referee.classify_band` seeds source topology from and the one
+the reviewed 2551Q control was signed against. `emit.py`'s new
+`comb_writing_rectangle_assertions` drives both halves at once, and a mutation
+that restates the writing box into `y0`/`y1` fails it.
+
+In the shipped bytes: 2550M `p1c9` (item-4 TIN, a 15.60pt row) reads
+`top:0.72pt;height:14.16pt` on all three slots where r22 shipped **3.12pt**;
+2316 slot 0 reads `top:0.45pt;height:13.92pt` against r22's
+`top:8.71pt;height:6.05pt`.
+
+**Why that moved an assertion nobody edited.** `audit.py`'s
+`comb_slots_match_printed` asks the SOURCE whether it printed a constant in
+each **emitted** slot rectangle — that is how G16 was closed, and it is right.
+With the rectangle collapsed onto a 3pt band, the query landed where the
+constant is not, so 64 correctly-refused compartments across 25 forms read as
+`editable comb slot has no live input element and the source prints no
+constant or shading in that compartment`. Restoring the rectangle takes that
+population **64 → 3**. The assertion was not touched.
+
+### The one exclusion added, and its blast radius is ONE box
+
+0605's `p1c17` — `BCS No./Item No. (To be filled up by the BIR)` — is blocker
+**F147**, fixed at r22: the box is emitted with no input and
+`data-preprinted="bureau"`. Two assertions then reported it, and both were
+right on their old model of the paper and wrong about this box:
+`money_boxes_have_inputs` called it an `enclosed empty box, no input`, and
+`printed_box_peers_all_fillable` reported it against four fillable row peers.
+
+`audit.source_bureau_reservations` now reads the reservation **from the pinned
+PDF's own text operators** (`drawn_glyph_boxes`) and from nothing else — not
+from `emit.BureauReservation`, not from the IR, not from the layout. The two
+answer the same question about the paper through different producers, which is
+what still lets this one catch an emitter that reserves a box the sheet does
+not.
+
+It is not a relaxation and the numbers say so:
+
+- **Corpus-wide it claims exactly ONE box**, 0605 `p1c17`, and every caller
+  publishes the count as `boxes_bureau_reserved`, declared in
+  `gate.BASIC_ASSERTION_COUNT_FIELDS` so an undeclared count would fail the
+  gate rather than pass quietly.
+- The rectangle reported is the **matching phrase's own glyphs, never its
+  line**: 0605 sets `Return Period (MM/DD/YYYY)` and `BCS No./Item No. (To be
+  filled up by the BIR)` on ONE baseline, and a line-wide rectangle would hand
+  the taxpayer's Return Period boxes the Bureau's excuse. A mutation to the
+  line-wide rectangle fails two new `audit.py` self-test assertions.
+- The phrases are matched **without spaces**, because `drawn_glyph_boxes` drops
+  whitespace glyphs; the list quotes the paper including 0605's own missing
+  "by", and `(To be filled up by the taxpayer)` does not match.
+- Prose is refused: `The machine validation shall reflect the date of payment`
+  reserves nothing, while `Machine Validation/Revenue Official Receipt Details`
+  does — line-start, not substring.
+
+2200-A/C/P's Bureau band needed **no exclusion at all**: with the writing
+rectangle restored its compartments are no longer ink-free, and
+`money_boxes_have_inputs` cleared them on the source's own answer.
+
+### The residue, filed rather than absorbed
+
+Three offenders remain inside `comb_slots_match_printed` — 2200A `p1c115`,
+2200C `p1c105`, 2200P `p1c114`, the Bureau band's left compartment — because
+that assertion asks the source for **ink** and a reservation is a caption. It
+is **F187** (minor). None of the three changes its form's verdict: those forms
+fail on 27, 25 and 26 offenders of their own. It is deliberately not fixed
+here, because that assertion's published shape is contract-bound by
+`comb_referee._normalise_outer_comb_assertion`, and moving the referee's
+subject and the referee in one increment is what GOAL.md's user decision 1
+forbids.
+
+### The four user-visible checks, looked at rather than counted (r23)
+
+Screenshots at 3× device scale over the **shipped `forms/` tree** through a
+local static server, in the session scratchpad under `r23/`.
+
+| Check | Verdict | Evidence |
+| --- | --- | --- |
+| 2550M's comb slot height is the writing box, not 3.12pt | **YES** | `F186-2550m-item4-tin-writing-box.png`. Browser-measured slot 18.88 CSS px = **14.16pt** in a 15.60pt row; the typed digits sit centred in the printed box, not on its floor |
+| 2316 item 3 TIN still shows 14 boxes | **YES — 14, unchanged** | `F111-2316-item3-tin-row.png`. `p1c17`+`p1c12`+`p1c14`+`p1c16` = 3+3+3+5 = **14 compartments, 14 inputs**, a `9` typed into every one. F111's fix at r22 is intact and r23 did not disturb it |
+| 0605 BCS No./Item No. is NOT fillable | **YES — still refused** | `F147-0605-bcs-bir-only.png`. `p1c17` carries `data-preprinted="bureau"` and **0 inputs**; the caption "(To be filled up by the BIR)" is printed above an empty box with nothing to type into |
+| A real money box on each money_boxes-failing form IS fillable | **YES, all four** | `money-2200a.png`, `money-2200c.png`, `money-2200p.png` — the `Tax Payment/Deposit` comb, **14 compartments each, every one typed into**, decimal separator intact. `money-0605.png` — 0605 item 21 `Total Amount Payable` holds `1,234,567.89`. 0605's money boxes are plain fields, not combs, so the currency shot there is a text field by construction |
+
+### Corpus census — r23
+
+Nothing but geometry moved. **No comb census pin moved and none should have:**
+`lattice.py` is byte-identical to r22, so the ledger is the same ledger.
+
+| Quantity | r23 | r22 | Note |
+| --- | --- | --- | --- |
+| Bundles / unique codes | 53 / 50 | 53 / 50 | unchanged |
+| Pages | 116 | 116 | |
+| Comb ledger subjects (`EXPECTED_COMBS`) | **4,583** | 4,583 | unchanged — no lattice change |
+| Active comb cells / retained | **4,561 / 22** | 4,561 / 22 | re-derived from the fresh `build/layout` |
+| Emitted inputs | **45,765** | 45,765 | unchanged |
+| Comb slot divs | **40,213** | 40,213 | unchanged |
+| Comb slots with no input | **287** | 287 | the compartments the source already filled in, plus the Bureau's |
+| Form documents changed | **53 of 53** | — | plus `forms/index.html`; every one an attribute-value change |
+| Findings | **187** | 186 | **32 blocker+major open of 129** (r22: 33) — F186 closed on the shipped bytes, F187 filed open (minor) |
+
+**Pins moved, each with its cause recorded at the constant:** all 53
+`EXPECTED_HTML_STRUCTURE_SHA256` (the emitted documents' geometry) and
+`AUDIT_PRODUCER_SHA256` `8d22a957` → `cf7ed2bd` (the Bureau reservation).
+`HTML_RUNTIME_SCRIPT_SHA256` was re-derived and did **not** move — all three
+pinned runtime scripts are byte-identical, which is the standing evidence that
+a layout change did not reach the page runtime.
+`LATTICE_/EXTRACT_/VERIFY_PRODUCER_SHA256` are unchanged and still match.
+
+**The 53 re-pinned documents were reviewed, not rubber-stamped**, and the
+review is unusually strong: the tag inventory delta is **ZERO for every tag
+name** — 239,562 elements before and 239,562 after, nothing added and nothing
+deleted — and **visible text is token-for-token identical in every one of the
+53**. The whole change is `style` attribute values on `<div class="s">`.
+
+All 11 self-tests pass (10 modules plus `validate_tree`), including a new
+`audit.py` mutation-proven pair for the reservation rectangle and a new
+`emit.py` block that drives the writing-box/divider-band split in both
+directions.
 
 ## r20 — a printed box a taxpayer must tick now has somewhere to tick
 

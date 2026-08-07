@@ -4745,6 +4745,121 @@ def drawn_glyph_boxes(page) -> tuple[SourceGlyph, ...]:
     return tuple(glyphs)
 
 
+# The sheet's own words for "this blank is not yours". Quoted from the paper,
+# including 0605's missing "by" -- a match list that silently corrected the
+# Bureau's typo would not match the Bureau's form.
+#
+# Written WITHOUT spaces because they are matched against a text operator
+# stream, not against prose: `drawn_glyph_boxes` drops whitespace glyphs
+# (a space occupies a compartment the way an empty compartment does), so the
+# only faithful comparison is between the visible characters on both sides.
+#
+# ANYWHERE for the parenthetical, which 0605 sets at the end of a longer
+# caption line; LINE_START for the two bottom-of-sheet band headings, because
+# guide prose discusses those boxes mid-sentence ("The machine validation
+# shall reflect the date of payment") and an anywhere rule would read a
+# paragraph as a reservation. A caption STARTS with its subject; prose does
+# not.
+BUREAU_RESERVING_ANYWHERE = (
+    "tobefilledupbythebir",
+    "tobefilledupthebir",
+    "forbiruseonly",
+)
+BUREAU_RESERVING_LINE_START = (
+    "machinevalidation",
+    "stampofreceiving",
+    "stampofauthorized",
+)
+# A caption is set against the blank it governs. 0605's clears its BCS box by
+# 5.3pt against its own 8.1pt line, so the bound is the caption's OWN height:
+# one line of separation at most, measured rather than chosen.
+BUREAU_CAPTION_LINE_TOLERANCE_PT = 1.0
+
+
+def source_bureau_reservations(
+        glyphs: Sequence[SourceGlyph]) -> tuple[Rect, ...]:
+    """Every caption the SOURCE PAGE prints reserving a blank for the Bureau.
+
+    Assembled from the pinned PDF's own text operators (`drawn_glyph_boxes`)
+    and from nothing else. `emit.py` answers the same question from
+    `extract.py`'s IR runs and binds it through the page's walls; this reads
+    the file directly and binds it geometrically, so the two share the words
+    the Bureau printed and share no producer, no code path and no
+    intermediate. That is the point: an emitter that reserved a box the sheet
+    does not reserve still has to answer to this, because this never asks the
+    emitter anything.
+
+    Glyphs are grouped into printed lines by their own box band and ordered by
+    x, which is the only structure a texttrace gives. **The rectangle reported
+    is the matching phrase's own glyphs, never the line's** -- 0605 sets
+    "Return Period (MM/DD/YYYY)" and "BCS No./Item No. (To be filled up by the
+    BIR)" on ONE baseline, and a line-wide rectangle would hand the taxpayer's
+    Return Period boxes the Bureau's excuse.
+    """
+    lines: dict[tuple[float, float], list[SourceGlyph]] = (
+        collections.defaultdict(list))
+    for glyph in glyphs:
+        lines[(round(glyph.y0, 1), round(glyph.y1, 1))].append(glyph)
+    captions: list[Rect] = []
+    for key in sorted(lines):
+        ordered = sorted(lines[key], key=lambda glyph: glyph.x0)
+        text = "".join(glyph.text for glyph in ordered).lower()
+        spans: list[tuple[int, int]] = []
+        for phrase in BUREAU_RESERVING_ANYWHERE:
+            start = text.find(phrase)
+            while start >= 0:
+                spans.append((start, start + len(phrase)))
+                start = text.find(phrase, start + 1)
+        for phrase in BUREAU_RESERVING_LINE_START:
+            if text.startswith(phrase):
+                spans.append((0, len(phrase)))
+        for start, stop in spans:
+            matched = ordered[start:stop]
+            if not matched:
+                continue
+            captions.append((
+                min(glyph.x0 for glyph in matched),
+                min(glyph.y0 for glyph in matched),
+                max(glyph.x1 for glyph in matched),
+                max(glyph.y1 for glyph in matched),
+            ))
+    return tuple(captions)
+
+
+def bureau_reserved_box(box: Rect, captions: Sequence[Rect]) -> bool:
+    """Whether a printed blank carries a Bureau reservation on the paper.
+
+    Two placements, both of which the corpus prints:
+
+      * the caption is set INSIDE the blank -- 2200-A/C/P's bottom band draws
+        one wide rectangle split into "Machine Validation" and "Stamp of
+        Receiving Office", each carrying its heading at its own top edge; and
+      * the caption is set DIRECTLY ABOVE the blank, within the caption's own
+        height, horizontally overlapping it -- 0605's
+        "BCS No./Item No. (To be filled up by the BIR)".
+
+    This can only ever REMOVE an offender, so the count it removes is
+    published by every caller. It is deliberately silent about a caption that
+    is merely near: a reservation the paper does not place on the box is a
+    guess, and a guess here would hide exactly the class of defect these
+    assertions exist to find.
+    """
+    for caption in captions:
+        if (caption[0] >= box[0] - OVERLAP_EPS_PT
+                and caption[2] <= box[2] + OVERLAP_EPS_PT
+                and caption[1] >= box[1] - OVERLAP_EPS_PT
+                and caption[3] <= box[3] + OVERLAP_EPS_PT):
+            return True
+        overlap = min(caption[2], box[2]) - max(caption[0], box[0])
+        if overlap <= 0:
+            continue
+        gap = box[1] - caption[3]
+        height = caption[3] - caption[1]
+        if -OVERLAP_EPS_PT <= gap <= height + BUREAU_CAPTION_LINE_TOLERANCE_PT:
+            return True
+    return False
+
+
 class PointToneIndex:
     """Composited final tone at an arbitrary point of one source page.
 
@@ -6966,6 +7081,16 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
             emitted_cell_binding_issues=len(binding_issues),
         )
     offenders, checked, fully_inked, preprinted = [], 0, 0, 0
+    bureau_reserved = 0
+    # Read from the pinned PDF's own text operators, never from the layout
+    # this assertion's population comes from, so a lattice or emitter mistake
+    # cannot manufacture its own excuse. A page whose captions cannot be read
+    # yields none, and a box with no reservation is reported exactly as
+    # before: the failure direction is to report, never to excuse.
+    bureau_captions: dict[int, tuple[Rect, ...]] = {
+        page_index: source_bureau_reservations(glyphs)
+        for page_index, glyphs in (b.source_glyphs or {}).items()
+    }
     by_id = {cell.id: cell for cell in b.cells}
     for cell_id, layout_cell in b.layout_cells.items():
         if cell_id in b.relocated_cells:
@@ -6974,6 +7099,7 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
         if cell is None:
             continue
         index = b.ink.get(cell.page)
+        captions = bureau_captions.get(cell.page, ())
         comb = layout_cell.get("comb")
         if comb:
             slots = slot_boxes(cell)
@@ -6989,7 +7115,16 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                 fully_inked += 1
                 continue
             checked += 1
-            missing = [i for i, _, has in free if not has]
+            # A compartment the sheet's own caption reserves for the Bureau is
+            # not a money box. 2200-A/C/P's bottom band is one wide rectangle
+            # the lattice reads as a two-slot comb, and each half carries its
+            # own heading -- "Machine Validation", "Stamp of Receiving
+            # Office/AAB" -- printed inside the compartment it governs.
+            missing = [i for i, box, has in free
+                       if not has and not bureau_reserved_box(box, captions)]
+            reserved = [i for i, box, has in free
+                        if not has and bureau_reserved_box(box, captions)]
+            bureau_reserved += len(reserved)
             if missing:
                 offenders.append({"cell": cell_id, "page": cell.page,
                                   "why": "comb slots with no input",
@@ -7014,16 +7149,26 @@ def check_money_boxes_have_inputs(b: Bundle) -> dict[str, Any]:
                 continue
             checked += 1
             if not input_boxes(cell):
+                box = (float(layout_cell["x0"]), float(layout_cell["y0"]),
+                       float(layout_cell["x1"]), float(layout_cell["y1"]))
+                # Still counted in `checked`: the box was examined and the
+                # sheet answered for it. Only the demand for an input is
+                # dropped, and `boxes_bureau_reserved` publishes how often.
+                if bureau_reserved_box(box, captions):
+                    bureau_reserved += 1
+                    continue
                 offenders.append({"cell": cell_id, "page": cell.page,
                                   "why": "enclosed empty box, no input"})
     if offenders:
         return broken(f"{len(offenders)} of {checked} printed boxes are not fillable",
                       offenders, boxes_checked=checked, combs_fully_inked=fully_inked,
-                      boxes_preprinted=preprinted)
+                      boxes_preprinted=preprinted,
+                      boxes_bureau_reserved=bureau_reserved)
     return held(
         boxes_checked=checked,
         combs_fully_inked=fully_inked,
         boxes_preprinted=preprinted,
+        boxes_bureau_reserved=bureau_reserved,
         emitted_cell_binding_issues=0,
     )
 
@@ -7507,6 +7652,7 @@ def check_printed_box_peers_all_fillable(b: Bundle) -> dict[str, Any]:
     checked = 0
     peer_rows = 0
     unevaluable = 0
+    bureau_reserved = 0
     for page_index in sorted(b.pages):
         page = b.vector_pages.get(page_index)
         if page is None:
@@ -7520,6 +7666,7 @@ def check_printed_box_peers_all_fillable(b: Bundle) -> dict[str, Any]:
                 peer_rows_checked=peer_rows,
                 boxes_unevaluable=unevaluable,
             )
+        captions = source_bureau_reservations(glyphs)
         boxes, page_unevaluable = source_printed_boxes(
             page, glyphs, PointToneIndex(page.paints))
         unevaluable += page_unevaluable
@@ -7557,6 +7704,18 @@ def check_printed_box_peers_all_fillable(b: Bundle) -> dict[str, Any]:
             for box in group:
                 if filled_by[box] is not None:
                     continue
+                # This assertion's premise is that the SHEET has already said
+                # these boxes are the same kind of thing. Where the sheet
+                # itself says one of them is the Bureau's, the premise is
+                # false for that box: 0605's BCS blank shares its row with
+                # four taxpayer boxes and is captioned "(To be filled up by
+                # the BIR)" in the source's own text operators. Removing it is
+                # not a relaxation -- an input there is finding F147, a
+                # blocker. The removals are counted and published, so the
+                # exclusion can never be silent.
+                if bureau_reserved_box(box, captions):
+                    bureau_reserved += 1
+                    continue
                 offenders.append({
                     "page": page_index,
                     "box": [round(value, 2) for value in box],
@@ -7572,12 +7731,14 @@ def check_printed_box_peers_all_fillable(b: Bundle) -> dict[str, Any]:
             printed_boxes_checked=checked,
             peer_rows_checked=peer_rows,
             boxes_unevaluable=unevaluable,
+            boxes_bureau_reserved=bureau_reserved,
             emitted_cell_binding_issues=0,
         )
     return held(
         printed_boxes_checked=checked,
         peer_rows_checked=peer_rows,
         boxes_unevaluable=unevaluable,
+        boxes_bureau_reserved=bureau_reserved,
         emitted_cell_binding_issues=0,
     )
 
@@ -9581,6 +9742,82 @@ def self_test() -> int:
             == "enclosed empty box, no input"
             and not input_boxes(inert_plain_bundle.cells[0]),
         )
+
+    # ------------------------------------------------------------------
+    # A blank the SHEET reserves for the Bureau, read from the source's own
+    # glyph stream. Driven at the predicate rather than through a bundle,
+    # because what has to hold is a property of the paper: the phrase, its
+    # rectangle, and which blank that rectangle governs.
+    # ------------------------------------------------------------------
+    def _glyph_line(text: str, x0: float, y0: float,
+                    advance: float = 4.0, height: float = 8.07):
+        """One printed line, one glyph per visible character.
+
+        Spaces are omitted exactly as `drawn_glyph_boxes` omits them, which is
+        why the match phrases carry no spaces either.
+        """
+        out, pen = [], x0
+        for character in text:
+            if character == " ":
+                pen += advance
+                continue
+            out.append(SourceGlyph(character, pen, y0,
+                                   pen + advance, y0 + height))
+            pen += advance
+        return out
+
+    # 0605's real shape: two captions on ONE baseline, the Bureau's second.
+    bcs_line = _glyph_line(
+        "Return Period (MM/DD/YYYY)     BCS No./Item No. "
+        "(To be filled up by the BIR)", 200.0, 173.23)
+    bcs_captions = source_bureau_reservations(bcs_line)
+    check(
+        "the reservation's rectangle is the phrase's, not its whole line",
+        len(bcs_captions) == 1
+        and bcs_captions[0][0] > bcs_line[0].x0
+        and bcs_captions[0][2] <= bcs_line[-1].x1 + OVERLAP_EPS_PT,
+    )
+    reserved_box = (bcs_captions[0][0] - 4.0, 186.6,
+                    bcs_captions[0][2] + 40.0, 205.56)
+    taxpayer_box = (bcs_line[0].x0, 186.6, bcs_line[0].x0 + 60.0, 205.56)
+    check(
+        "the blank under the reservation is reserved and its row peer is not",
+        bureau_reserved_box(reserved_box, bcs_captions)
+        and not bureau_reserved_box(taxpayer_box, bcs_captions),
+    )
+    check(
+        "a blank a full line further down is not claimed by that caption",
+        not bureau_reserved_box(
+            (reserved_box[0], 200.0, reserved_box[2], 218.0), bcs_captions),
+    )
+    # The bottom-of-sheet band: the heading is printed INSIDE the compartment
+    # it governs, and the compartment beside it is a different box.
+    band_captions = source_bureau_reservations(
+        _glyph_line("Machine Validation", 20.0, 848.0))
+    check(
+        "a heading printed inside its own compartment reserves it",
+        bureau_reserved_box((16.32, 847.08, 392.71, 897.72), band_captions)
+        and not bureau_reserved_box(
+            (392.71, 847.08, 595.32, 897.72), band_captions),
+    )
+    # Prose about those boxes is not a reservation. The guide sentence is the
+    # exact text this rule exists to refuse.
+    check(
+        "guide prose that merely mentions the band reserves nothing",
+        source_bureau_reservations(_glyph_line(
+            "The machine validation shall reflect the date of payment",
+            40.0, 400.0)) == ()
+        and source_bureau_reservations(_glyph_line(
+            "Machine Validation/Revenue Official Receipt Details",
+            20.0, 400.0)) != (),
+    )
+    check(
+        "the sheet's own missing 'by' is matched as the sheet prints it",
+        source_bureau_reservations(
+            _glyph_line("(To be filled up the BIR)", 10.0, 10.0)) != ()
+        and source_bureau_reservations(
+            _glyph_line("(To be filled up by the taxpayer)", 10.0, 10.0)) == (),
+    )
 
     moved_plain_ir = copy.deepcopy(ir)
     moved_page = copy.deepcopy(ir["pages"][0])

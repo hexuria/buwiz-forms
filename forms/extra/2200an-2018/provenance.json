@@ -78,7 +78,7 @@
       "2200-AN Jan 2018 ENCS guidelines final.pdf"
     ]
   },
-  "html_bytes": 585734,
+  "html_bytes": 586708,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

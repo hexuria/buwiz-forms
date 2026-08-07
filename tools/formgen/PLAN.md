@@ -15,10 +15,36 @@ regression against it.
 
 ## Where we are
 
-Measured 2026-08-07 at r20, worktree `.claude/worktrees/form-correction`,
-branch `gol/form-correction`. STATUS.md holds the r20 census, the four
+Measured 2026-08-07 at r23, worktree `.claude/worktrees/form-correction`,
+branch `gol/form-correction`. STATUS.md holds the r23 census, the four
 user-visible screenshot checks and the gate table; the rows below carry only
 the per-defect numbers.
+
+**r23 started nothing. It paid r21/r22's three regressed assertion families,
+and one of them got worse in the paying.**
+
+| Assertion | r20 | r22 | r23 | |
+| --- | --- | --- | --- | --- |
+| `comb_slots_match_printed` | 22 / 188 | 36 / 254 | **22 / 193** | forms back to r20 |
+| `money_boxes_have_inputs` | 0 / 0 | 4 / 4 | **0 / 0** | PASSES |
+| `printed_box_peers_all_fillable` | 0 / 0 | 1 / 1 | **0 / 0** | PASSES |
+| `inputs_span_no_printed_divider` | 11 / 67 | 5 / 33 | **5 / 33** | unmoved |
+| `inputs_over_printed_text` | 20 / 149 | 19 / 131 | **20 / 147** | **WORSE by 1 form / 16** |
+
+The one that got worse is reported first in STATUS.md and is **G05**, not a new
+class: r22 had not fixed those 21 offenders, it had *hidden* them by shrinking
+every comb's typing surface to a 3.12pt divider band that is too short to reach
+a caption and too short to type in. Restoring the writing box (F186) restores
+the debt with it.
+
+The two that went green went green because the **corpus** changed, not because
+a check did: `emit.comb_writing_rect` lays every rectangle the emitter draws
+out on the writing box, and `audit.py`'s source-occupancy query — unchanged —
+stopped being asked about a 3pt strip where the printed constant is not. That
+alone took the `invalid-emission` population 64 offenders / 25 forms → 3 / 3.
+The one exclusion added, `audit.source_bureau_reservations`, is derived from
+the pinned PDF's own text operators, claims **exactly one box corpus-wide**
+(0605 `p1c17`, blocker F147's), and publishes its own count.
 
 **One of the four red assertion rows is green, honestly.**
 `printed_box_peers_all_fillable` goes 14 offenders on 14 of 53 forms to 0 on 0
@@ -375,6 +401,44 @@ Condensed to what changes behaviour.
 ## Log
 
 Newest first. One line each.
+
+- **2026-08-07 (r23)** — **The three regressed assertion families, paid; two
+  are green and the third is back to r20's form count.** `emit.py` now lays
+  every rectangle it DRAWS for a comb — the slot div, the input inside it, the
+  band-template JSON a cloned row is re-laid out from, and the face
+  `field_box` fits — out on the WRITING box through one function,
+  `comb_writing_rect`, while the divider band survives emission unmodified for
+  `comb_referee.classify_band` and the reviewed 2551Q control. 2550M's item-4
+  TIN compartments are **14.16pt inside a 15.60pt row again, not 3.12pt**
+  (F186 closed on the shipped bytes and on a 3× screenshot). That corpus
+  change alone took `comb_slots_match_printed`'s `invalid-emission` population
+  **64 offenders on 25 forms → 3 on 3** with `audit.py`'s source-occupancy
+  query untouched: it had been asking the source about a 3pt band where the
+  printed constant is not. `money_boxes_have_inputs` 4 → **0** and
+  `printed_box_peers_all_fillable` 1 → **0**; the only exclusion added,
+  `audit.source_bureau_reservations`, reads the sheet's own
+  "(To be filled up by the BIR)" from the pinned PDF's text operators — not
+  from `emit.BureauReservation`, not from the IR — reports the matching
+  phrase's rectangle and never its line (0605 sets two captions on one
+  baseline, and a line-wide rectangle would excuse the taxpayer's Return
+  Period boxes; a mutation to it fails two new self-test assertions), claims
+  **exactly ONE box corpus-wide**, and publishes `boxes_bureau_reserved`
+  declared in `gate.BASIC_ASSERTION_COUNT_FIELDS`. **Reported loudly:
+  `inputs_over_printed_text` got WORSE — 19 forms/131 → 20/147, +21 new and −5
+  cleared** — and every one of the 21 is G05's existing caption-plus-comb
+  population, cell for cell, that r22 had hidden rather than fixed. **F187**
+  files the residue: 2200-A/C/P's Bureau band still reports one compartment to
+  `comb_slots_match_printed`, which asks for ink and cannot see a caption; not
+  fixed here because that assertion's shape is contract-bound by the referee.
+  Census: **no comb pin moved and none should have** — `lattice.py` is
+  byte-identical, 4,583 subjects / 4,561 active / 22 retained, 45,765 inputs
+  and 40,213 slot divs all unchanged. All 53 `EXPECTED_HTML_STRUCTURE_SHA256`
+  and `AUDIT_PRODUCER_SHA256` moved; `HTML_RUNTIME_SCRIPT_SHA256` was
+  re-derived and did not. The 53-document review is the strongest yet: **tag
+  inventory delta ZERO for every tag name, 239,562 elements before and after,
+  visible text token-for-token identical**, the whole change being slot-div
+  style attributes. 33 → **32 blocker+major open of 129**. No check, tolerance
+  or assertion was weakened.
 
 - **2026-08-07 (r20)** — **`printed_box_peers_all_fillable` PASSES, 14 of 53
   forms → 0, with `audit.py` byte-identical (`8d22a957…`) throughout.** Two

@@ -6682,9 +6682,16 @@ AUDIT_INPUT_MANIFEST_KEYS = {
 BASIC_ASSERTION_COUNT_FIELDS = {
     "inputs_over_printed_text": (
         ("cells_checked",), ("emitted_cell_binding_issues",)),
+    # `boxes_bureau_reserved` counts the blanks the SHEET's own caption
+    # reserves for the Bureau and which the producer therefore did not demand
+    # an input in. It is optional for the same reason `boxes_preprinted` is:
+    # the early unresolved-source returns publish neither. Declaring it here
+    # is what stops the exclusion being silent -- an undeclared count field
+    # reads as `detail has unsupported fields` and fails the gate.
     "money_boxes_have_inputs": (
         ("boxes_checked", "combs_fully_inked"),
-        ("boxes_preprinted", "emitted_cell_binding_issues")),
+        ("boxes_preprinted", "boxes_bureau_reserved",
+         "emitted_cell_binding_issues")),
     "rules_below_guide_cut": (("cuts",), ("area_fills_below_cut",)),
     "run_colour_matches_ir": (("runs_checked",), ()),
     "reflow_rate_without_description": (("rate_tables",), ("rows_checked",)),
@@ -6700,7 +6707,8 @@ BASIC_ASSERTION_COUNT_FIELDS = {
         ("emitted_cell_binding_issues",)),
     "printed_box_peers_all_fillable": (
         ("printed_boxes_checked", "peer_rows_checked"),
-        ("boxes_unevaluable", "emitted_cell_binding_issues")),
+        ("boxes_unevaluable", "boxes_bureau_reserved",
+         "emitted_cell_binding_issues")),
 }
 BASIC_ASSERTION_PUBLICATION_KEYS = {
     "offender_count", "offenders_published", "offenders_omitted",

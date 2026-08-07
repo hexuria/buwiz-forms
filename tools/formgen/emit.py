@@ -1195,9 +1195,11 @@ class FieldBox:
     kinds it is now the same measurement: the cell inset by the thickness of the
     rule bounding each side. A comb's used to be the extent of its own dividers
     (7.44pt inside an 18.90pt cell on 2551Q), which mistook a guide tick for a
-    wall; `lattice.comb_writing_surface` carries the artwork that settles it and
-    applies the identical inset there, so a comb arrives with `y0`/`height_pt`
-    already inset and only the plain-field branch below computes one.
+    wall; `lattice.comb_on_writing_surface` carries the artwork that settles it
+    and applies the identical inset there, publishing it as `writing_y0` /
+    `writing_height_pt` beside the divider band, so a comb arrives already
+    inset -- see `comb_writing_rect`, which is the one reader of it -- and only
+    the plain-field branch below computes one.
     A cell rect runs along its rules' *centres*
     (rule v173 spans x 136.10-136.58 and the cell edge is 136.34), so half a
     thickness already clears the ink; using the whole one clears it and leaves
@@ -1224,13 +1226,54 @@ class FieldBox:
         return (self.size_pt, self.line_height_pt, self.letter_spacing_pt)
 
 
+def comb_writing_rect(cell: dict[str, Any],
+                      comb: dict[str, Any]) -> tuple[float, float]:
+    """One comb's WRITING rectangle: absolute top, and height. Never the band.
+
+    `lattice.comb_on_writing_surface` publishes two vertical extents for one
+    comb because they answer two different questions, and every defect this
+    function exists to prevent came from one caller reading the other one:
+
+      * `y0` / `y1` / `height_pt` are the **source divider band** -- the extent
+        of the tick marks themselves. They are the contract the comb referee's
+        `classify_band` seeds its source topology from and the reviewed 2551Q
+        control was signed against, so nothing emitted may restate them. This
+        function never returns them when a writing rectangle exists.
+      * `writing_y0` / `writing_y1` / `writing_height_pt` are the **writing
+        box** -- the owning cell's printed walls inset by that cell's own
+        border thicknesses, the identical inset `field_box` gives a plain text
+        field.
+
+    A tick is a guide mark *under* the box, not the box. On 2550M's item-4 TIN
+    row the cell walls span the full 15.60pt of the row while the digit
+    separators are 3.12pt stubs along its bottom edge; laying the slot div and
+    its input on the band hands the taxpayer a 3.12pt typing surface fitted at
+    a 2.81pt face, which is F186. Everything the emitter LAYS OUT for a comb --
+    the slot rectangle, the input inside it, the band-template JSON the runtime
+    re-lays cloned rows from, and the face `field_box` fits -- therefore comes
+    from here, so those four can never disagree with each other again.
+
+    The fallback is the band, and it is for a layout that predates
+    `comb_on_writing_surface` (and for the emitter's own synthetic fixtures),
+    not a preference: measured over `build/layout`, all 4,561 combs in this
+    corpus publish all three writing keys, `writing_y1 - writing_y0` equals
+    `writing_height_pt` on every one of them, and every writing rectangle lies
+    inside its own cell.
+    """
+    if ("writing_y0" in comb and "writing_y1" in comb
+            and "writing_height_pt" in comb):
+        return float(comb["writing_y0"]), float(comb["writing_height_pt"])
+    return (float(comb.get("y0", cell["y0"])),
+            float(comb.get("height_pt", float(cell["y1"]) - float(cell["y0"]))))
+
+
 def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
     """Fit the body face into one field's writing box. None if it cannot fit."""
     comb = cell.get("comb")
     if comb:
         kind, capacity = "comb", int(comb["cells"])
         inset: tuple[float, float, float, float] | None = None
-        height = float(comb.get("height_pt", cell["y1"] - cell["y0"]))
+        height = comb_writing_rect(cell, comb)[1]
     else:
         kind, capacity = "text", None
         top = _border_thickness(cell, "top")
@@ -1844,22 +1887,17 @@ def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
     slot_x = [float(value) for value in comb["slot_x"]]
     # The verdicts are questions about the COMPARTMENT -- did the source print
     # a constant into this box, shade this box, caption this box for the
-    # Bureau -- so they are asked of the compartment's writing rectangle
-    # (`writing_y0`/`writing_y1`, published by `lattice.comb_on_writing_surface`
-    # beside the band), never of the divider tick band that `y0`/`y1` measure.
-    # Asking them of the band regressed G11 on the r21 integration: 1702EX's
-    # branch-code `00000` sits mid-compartment, stopped being "wholly inside"
-    # the 3.84pt band, and 145 refused constants corpus-wide came back as live
-    # inputs over statutory ink. The EMITTED slot geometry is a different
-    # question and stays on `y0`/`y1`, which is what `comb_slot_markup` lays
-    # out and the comb referee's `emitted_geometry_contract` binds.
-    if "writing_y0" in comb and "writing_y1" in comb:
-        y0 = float(comb["writing_y0"])
-        y1 = float(comb["writing_y1"])
-    else:
-        y0 = float(comb.get("y0", cell["y0"]))
-        y1 = y0 + float(comb.get("height_pt",
-                                 float(cell["y1"]) - float(cell["y0"])))
+    # Bureau -- so they are asked of the compartment's writing rectangle,
+    # never of the divider tick band. Asking them of the band regressed G11 on
+    # the r21 integration: 1702EX's branch-code `00000` sits mid-compartment,
+    # stopped being "wholly inside" the 3.84pt band, and 145 refused constants
+    # corpus-wide came back as live inputs over statutory ink. The rectangle is
+    # `comb_writing_rect`'s, which is the SAME rectangle `comb_slots_markup`
+    # lays the slot div and its input on: a verdict about a compartment a
+    # taxpayer cannot reach, or an input over ink no verdict was asked about,
+    # is what two rectangles for one comb bought last round.
+    top, height = comb_writing_rect(cell, comb)
+    y0, y1 = top, top + height
     verdicts: dict[int, str] = {}
     for index in range(len(slot_x) - 1):
         x0, x1 = slot_x[index], slot_x[index + 1]
@@ -2040,8 +2078,13 @@ class FieldPlan:
         if not comb:
             return
         self.comb_count += 1
-        top = float(comb.get("y0", cell["y0"])) - float(cell["y0"])
-        height = float(comb.get("height_pt", cell_height))
+        # The box this classifies is the one the emitter actually lays out, so
+        # it is measured on `comb_writing_rect`'s rectangle. Measured on the
+        # divider band instead, 4,474 of 4,522 combs report `collapsed` and 225
+        # report `uncontained` -- a report about a rectangle nothing is drawn
+        # on, which is how the 3.12pt slot survived a whole round.
+        write_top, height = comb_writing_rect(cell, comb)
+        top = write_top - float(cell["y0"])
         if (top < -FIELD_CONTAINMENT_EPSILON_PT
                 or top + height > cell_height + FIELD_CONTAINMENT_EPSILON_PT):
             self.uncontained.append(cell["id"])
@@ -2318,8 +2361,12 @@ def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any],
     through `FieldPlan`'s warnings, per cell and per slot index, instead.
     """
     slot_x = comb["slot_x"]
-    top = float(comb.get("y0", cell["y0"])) - cell["y0"]
-    height = float(comb.get("height_pt", cell["y1"] - cell["y0"]))
+    # The slot rectangle is the compartment a taxpayer types into, so it is the
+    # comb's WRITING rectangle and never its divider band -- `comb_writing_rect`
+    # documents which is which and why. On the band, 2550M's item-4 TIN slots
+    # were 3.12pt tall inside a 15.60pt row.
+    write_top, height = comb_writing_rect(cell, comb)
+    top = write_top - cell["y0"]
     parts = []
     for index in range(len(slot_x) - 1):
         left = float(slot_x[index]) - cell["x0"]
@@ -2355,12 +2402,18 @@ def cell_json(cell: dict[str, Any], fields: "FieldPlan | None" = None) -> dict[s
     }
     comb = cell.get("comb")
     if comb:
+        # `y`/`h` are what the runtime re-lays a CLONED band row's slots from,
+        # so they have to be the same rectangle `comb_slots_markup` gave the
+        # pre-rendered rows -- the writing rectangle. A clone laid out on the
+        # divider band would be a row whose boxes are 3pt tall beside identical
+        # printed rows whose boxes are not.
+        write_top, height = comb_writing_rect(cell, comb)
         payload["comb"] = {
             "cells": comb["cells"],
             "pitch_pt": comb["pitch_pt"],
             "slot_x": [round(float(v) - cell["x0"], 4) for v in comb["slot_x"]],
-            "y": round(float(comb.get("y0", cell["y0"])) - cell["y0"], 4),
-            "h": round(float(comb.get("height_pt", cell["y1"] - cell["y0"])), 4),
+            "y": round(write_top - cell["y0"], 4),
+            "h": round(height, 4),
         }
     box = fields.of(cell["id"]) if fields is not None else None
     if box is not None:
@@ -2632,7 +2685,13 @@ def band_template_markup(plan: BandPlan, blob_index: int,
         comb = cell.get("comb")
         if comb:
             relative["comb"] = dict(comb)
-            relative["comb"]["y0"] = float(comb["y0"]) - row_top
+            # Every absolute y this comb publishes, moved together. The writing
+            # rectangle is the one `comb_writing_rect` lays the slots out from,
+            # so leaving it absolute here while `y0` moves would put a template
+            # row's compartments a page-height away from the row.
+            for key in ("y0", "y1", "writing_y0", "writing_y1"):
+                if key in comb:
+                    relative["comb"][key] = float(comb[key]) - row_top
         parts.append(cell_markup(relative, fields, id_attribute="data-cell-id"))
     return (f'<template id="band-template-{esc_attr(plan.band["id"])}" '
             f'data-band="{esc_attr(plan.band["id"])}" '
@@ -6023,13 +6082,27 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
            "@media print resets border/outline/background", failures)
 
     field_surface_assertions(layout, plan, failures)
+    comb_writing_rectangle_assertions(plan, failures)
     field_debug_assertions(html, failures)
 
 
 def _synthetic_comb(cells: int, x0: float, pitch: float,
-                    y0: float, height: float) -> dict[str, Any]:
-    return {"cells": cells, "pitch_pt": pitch, "y0": y0, "height_pt": height,
+                    y0: float, height: float,
+                    writing: tuple[float, float] | None = None) -> dict[str, Any]:
+    """A comb subject. `writing` is (top, height) for the writing rectangle.
+
+    Omitted, the subject carries the divider band alone -- a layout written
+    before `lattice.comb_on_writing_surface` published a writing rectangle, and
+    the fallback branch of `comb_writing_rect`.
+    """
+    comb = {"cells": cells, "pitch_pt": pitch, "y0": y0, "height_pt": height,
+            "y1": y0 + height,
             "slot_x": [x0 + index * pitch for index in range(cells + 1)]}
+    if writing is not None:
+        comb["writing_y0"] = writing[0]
+        comb["writing_y1"] = writing[0] + writing[1]
+        comb["writing_height_pt"] = writing[1]
+    return comb
 
 
 def _synthetic_cell(cell_id: str, y0: float, y1: float,
@@ -6039,6 +6112,143 @@ def _synthetic_cell(cell_id: str, y0: float, y1: float,
     if comb is not None:
         cell["comb"] = comb
     return cell
+
+
+_SELF_TEST_STYLE_RE = re.compile(
+    r"top:(-?[\d.]+)pt;width:(-?[\d.]+)pt;height:(-?[\d.]+)pt")
+
+
+def comb_writing_rectangle_assertions(plan: dict[str, Any],
+                                      failures: list[str]) -> None:
+    """F186: every rectangle the emitter LAYS OUT for a comb is the writing box.
+
+    One comb carries two vertical extents and they mean different things --
+    `comb_writing_rect`'s docstring says which is which. This proves the split
+    holds in both directions at once, because getting either half wrong has
+    already shipped:
+
+      * Read the divider band for layout and 2550M's item-4 TIN compartments
+        are 3.12pt tall inside a 15.60pt row, fitted at a 2.81pt face. That is
+        r22's state and this finding.
+      * Restate the writing box INTO `y0`/`y1` and the comb referee's
+        `classify_band` seeds its source topology from a rectangle the source
+        never drew: 4,417 of 4,522 combs went source-unevaluable and the
+        reviewed 2551Q control failed (G18).
+
+    So the pin is not "the numbers are 14.64" -- it is that the four emitted
+    rectangles all equal the WRITING rectangle, that none of them equals the
+    band, and that the subject the emitter was handed still carries the band
+    unmodified for the referee to read after emission.
+
+    The geometry is 2550M's item-4 TIN row, transcribed: a 15.60pt row whose
+    digit separators are 3.12pt stubs along its bottom edge.
+    """
+    face = resolve_field_face(plan, [])
+    if face is None:
+        _check(False, "the font plan resolves a body face to fit comb slots to",
+               "no metric-compatible face", failures)
+        return
+    row_y0, row_y1 = 100.0, 115.6
+    band_y0, band_h = 112.48, 3.12
+    write_y0, write_h = 100.48, 14.64
+    comb = _synthetic_comb(4, 0.0, 30.0, band_y0, band_h, (write_y0, write_h))
+    cell = _synthetic_cell("p0c0", row_y0, row_y1, comb)
+    layout = {"pages": [{"index": 0, "cells": [cell]}]}
+    fields = FieldPlan(layout, face, [])
+    box = fields.of("p0c0")
+
+    _check(comb_writing_rect(cell, comb) == (write_y0, write_h),
+           "a comb's layout rectangle is its writing box, not its divider band",
+           f"writing ({fmt(write_y0)}, {fmt(write_h)}) chosen over band "
+           f"({fmt(band_y0)}, {fmt(band_h)})", failures)
+
+    # The slot div, and therefore its input: `.s` is absolutely positioned and
+    # `.fi` is `inset:0` inside it, so the rectangle asserted here is the
+    # rectangle a taxpayer's character is typed into.
+    markup = comb_slots_markup(cell, comb, box, fields, True)
+    rects = _SELF_TEST_STYLE_RE.findall(markup)
+    tops = {value[0] for value in rects}
+    heights = {value[2] for value in rects}
+    _check(len(rects) == 4 and tops == {fmt(write_y0 - row_y0)}
+           and heights == {fmt(write_h)}
+           and markup.count("<input") == 4,
+           "every comb slot div, and the input inside it, is the writing box",
+           f"4 slots at top {sorted(tops)} height {sorted(heights)}; the band "
+           f"would give top {fmt(band_y0 - row_y0)} height {fmt(band_h)}",
+           failures)
+
+    # The band template's clones are re-laid out from this JSON, so a clone
+    # whose compartments disagree with the pre-rendered rows beside it is the
+    # same defect one indirection away.
+    payload = cell_json(cell, fields)["comb"]
+    _check(payload["y"] == round(write_y0 - row_y0, 4)
+           and payload["h"] == round(write_h, 4),
+           "the band-data JSON a cloned row is re-laid out from says the same",
+           f"y={payload['y']} h={payload['h']}", failures)
+
+    # The fitted face. `min` still caps it at the sheet's own body size, so the
+    # assertion is that the BOX grew, which is what the cap is applied to.
+    band_only = field_box(_synthetic_cell(
+        "p0c1", row_y0, row_y1,
+        _synthetic_comb(4, 0.0, 30.0, band_y0, band_h)), face)
+    _check(box is not None and band_only is not None
+           and box.line_height_pt == round(write_h, 4)
+           and band_only.line_height_pt == round(band_h, 4)
+           and box.size_pt > band_only.size_pt,
+           "the face is fitted to the writing box, so a 3.12pt band is not a field",
+           f"{fmt(box.size_pt) if box else 'none'}pt in {fmt(write_h)}pt against "
+           f"{fmt(band_only.size_pt) if band_only else 'none'}pt in {fmt(band_h)}pt",
+           failures)
+
+    # The other direction. The subject the emitter was handed is the referee's
+    # input too, and emission must leave its contract untouched.
+    _check(comb["y0"] == band_y0 and comb["height_pt"] == band_h
+           and comb["y1"] == band_y0 + band_h
+           and fmt(band_y0 - row_y0) not in tops
+           and fmt(band_h) not in heights,
+           "the divider band survives emission unmodified and is laid out on by nothing",
+           "y0/y1/height_pt are the referee's contract and stay the source's",
+           failures)
+
+    # A layout that predates the writing rectangle still emits, on the band.
+    legacy_comb = _synthetic_comb(4, 0.0, 30.0, band_y0, band_h)
+    legacy_cell = _synthetic_cell("p0c0", row_y0, row_y1, legacy_comb)
+    legacy_fields = FieldPlan({"pages": [{"index": 0, "cells": [legacy_cell]}]},
+                              face, [])
+    legacy = _SELF_TEST_STYLE_RE.findall(comb_slots_markup(
+        legacy_cell, legacy_comb, legacy_fields.of("p0c0"), legacy_fields, True))
+    _check(comb_writing_rect(legacy_cell, legacy_comb) == (band_y0, band_h)
+           and {value[0] for value in legacy} == {fmt(band_y0 - row_y0)}
+           and {value[2] for value in legacy} == {fmt(band_h)},
+           "a subject with no writing rectangle falls back to its band, and says so",
+           "the fallback is for a layout that predates it, not a preference",
+           failures)
+
+    # The seam. G11's 287 corpus refusals and the 145 statutory constants that
+    # nearly shipped as live inputs depend on the verdicts being asked of the same
+    # rectangle the input occupies: a constant printed in the writing box but
+    # clear of the 3.12pt band is invisible to a band-scoped question.
+    glyph_y0 = write_y0 + 2.0
+    glyph_y1 = glyph_y0 + 8.0
+    constant = {
+        "text": "0", "font": "Arial", "family": "Arial", "size_pt": 8.0,
+        "bold": False, "italic": False, "serif": False, "monospace": False,
+        "superscript": False, "flags": 0, "color": 0,
+        "x0": 8.0, "y0": glyph_y0, "x1": 22.0, "y1": glyph_y1,
+        "baseline_y": glyph_y1, "origin_x": 8.0, "ascender": 0.905,
+        "descender": -0.21, "line_height_pt": glyph_y1 - glyph_y0,
+        "measured_advance_pt": 14.0, "char_origin_offsets_pt": [0.0],
+        "char_advances_pt": [14.0], "char_widths_pt": [14.0],
+        "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+    }
+    _check(comb_slot_verdicts(cell, PrePrintedInk([constant]), None, None)
+           == {0: "pre-printed"}
+           and comb_slot_verdicts(legacy_cell, PrePrintedInk([constant]),
+                                  None, None) == {},
+           "the pre-printed verdict is asked of the rectangle the input occupies",
+           f"a constant at y {fmt(glyph_y0)}..{fmt(glyph_y1)} is inside the writing "
+           f"box and clear of the band; only the writing-box question sees it",
+           failures)
 
 
 def field_surface_assertions(layout: dict[str, Any], plan: dict[str, Any],
