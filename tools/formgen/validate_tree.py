@@ -82,6 +82,13 @@ ATTR_RE = re.compile(r"""\b([a-zA-Z][a-zA-Z0-9-]*)\s*=\s*"([^"]*)\"""")
 # "I could not write this image" placeholder.
 ARTWORK_TAG_RE = re.compile(
     r"""<(?:img|image)\b[^>]*>|<[a-z]+\b[^>]*\bdata-(?:sha256|missing-src)="[^>]*>""")
+# A script body is not markup: its text can contain anything, including the
+# literal spelling of a tag inside a comment.
+SCRIPT_BODY_RE = re.compile(r"<script\b[^>]*>.*?</script\s*>", re.S | re.I)
+# ...but a script that BUILDS an asset path would hide a real reference from the
+# scan above, so that is looked for explicitly and fails loudly.
+ASSET_URL_IN_SCRIPT_RE = re.compile(
+    r"<script\b[^>]*>(?:(?!</script).)*?assets/[0-9a-f]{8}", re.S | re.I)
 LENGTH_RE = {axis: re.compile(rf"\b{axis}:\s*([0-9.]+)pt") for axis in ("width", "height")}
 NON_LOCAL_PREFIXES = ("http:", "https:", "data:", "mailto:", "tel:", "javascript:", "//")
 
@@ -841,7 +848,22 @@ def _check_artwork_seals(tree: Tree, result: Result) -> int:
     for bundle, document in tree.documents():
         if bundle is None or document.suffix != ".html":
             continue
-        for tag in ARTWORK_TAG_RE.findall(read_text(document)):
+        # Script bodies are not markup. The overlay's own source contains the
+        # literal "<image>" inside a comment explaining that an image's bounding
+        # box is not a wall, and a raw scan read that as an artwork tag with no
+        # href and no seal -- 53 failures, one per bundle, for a defect that did
+        # not exist. Strip <script>...</script> before scanning.
+        # Note the limit this accepts: a reference CONSTRUCTED in script is now
+        # invisible to this check. That is the correct trade here because the
+        # emitted documents never build asset URLs at runtime -- asserted
+        # directly below -- but if that ever changes, this check goes blind and
+        # the assertion is what will say so.
+        markup = SCRIPT_BODY_RE.sub("", read_text(document))
+        if ASSET_URL_IN_SCRIPT_RE.search(read_text(document)):
+            result.failures.append(
+                f"{tree.rel(document)}: a script builds an asset URL, which the "
+                f"markup scan cannot see -- teach this check to follow it")
+        for tag in ARTWORK_TAG_RE.findall(markup):
             attrs = dict(ATTR_RE.findall(tag))
             seal = attrs.get("data-sha256")
             missing = attrs.get("data-missing-src")

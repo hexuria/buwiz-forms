@@ -280,26 +280,18 @@ python3 tools/formgen/<mapper>.py --check          # 0 unjoined, 0 unexplained
 
 ## Blocked — needs the user
 
-**CI does not run on this repository any more (2026-08-07).** PR #14 has ZERO
-checks. This is not a configuration fault: `gh api .../actions/permissions`
-reports `enabled: true, allowed: all`, all four workflows report `state:
-active`, and the formgen workflow's `pull_request: branches: [main]` trigger
-matches #14. Closing and reopening the PR fired no run either.
+Nothing.
 
-The last run repo-wide was 2026-08-06 14:29 — the #13 merge to main. Nothing
-since, on any branch or event. Workflows active + permissions open + no runs is
-what an exhausted Actions minutes quota looks like, and the private origin is
-already recorded as out of minutes; `public` (hexuria) appears to have reached
-the same state.
-
-**Consequence, stated rather than dropped:** the third clause of the Stage 1
-done-condition — `gh pr checks` every check green — cannot be evaluated. Per
-this plan's own rule, a check that cannot be evaluated is a FAILURE, not a pass.
-Stage 1 cannot be declared complete while this holds, even if the gate reaches
-12/12.
-
-Everything else is local and unblocked: the gate, the defect classes, the
-findings ledger, the visual review.
+**Retracted 2026-08-07:** this section previously claimed CI was dead across the
+repository, probably from exhausted Actions minutes. That was WRONG on both
+counts and is corrected here rather than deleted, because the reasoning failed
+in an instructive way. The repository is PUBLIC, so GitHub-hosted minutes are
+unlimited and quota could never have been the cause. And CI had in fact run on
+this branch at 23:05 -- `CI` passed, `formgen` failed. I ran
+`gh run list --branch` once, got an empty result, and concluded "no runs
+repo-wide" from a single negative observation without checking whether the
+repository even had a quota to exhaust. The real failure was ours:
+validate_tree's markup scan reading a `<image>` inside a JavaScript comment.
 
 ## Risk register
 
