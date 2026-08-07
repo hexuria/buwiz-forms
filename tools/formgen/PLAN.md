@@ -46,6 +46,29 @@ The one exclusion added, `audit.source_bureau_reservations`, is derived from
 the pinned PDF's own text operators, claims **exactly one box corpus-wide**
 (0605 `p1c17`, blocker F147's), and publishes its own count.
 
+**Gate — full clean-tree run r23 (2026-08-08 00:49, `912c6ed`). 9/12 PASS, the
+same three checks red as r22, and TWO assertions fewer inside the red one.**
+
+    PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
+    PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
+    PASS  determinism ba1bd2d8c47e  (moved, and had to: all 53 form documents
+                                     changed. Two generations still compare
+                                     byte-for-byte)
+    FAIL  assertions    inputs_over_printed_text        20/53  (r22: 19)
+                        comb_slots_match_printed        22/53  (r22: 36)
+                        inputs_span_no_printed_divider   5/53  (r22: 5)
+                        money_boxes_have_inputs          GONE  (r22: 4)
+                        printed_box_peers_all_fillable   GONE  (r22: 1)
+    FAIL  findings      32/129 blocker+major open (r22: 33/129)
+    UNEV  comb-referee  2550M p1c89/p1c90 — character-for-character r22's
+
+**The referee is UNEVALUABLE for exactly r22's reason and r23 did not touch
+it.** `p1c89`/`p1c90` are F184's cells; `lattice.py` is byte-identical this
+round and the referee's derivation was not edited. It is the one thing between
+9/12 and 10/12, it is r22's debt, and closing it is the reviewed
+`retired_proven_false` transition F184 already names — which needs independent
+evidence and a human, not an integration-time edit to the adjudicator.
+
 **One of the four red assertion rows is green, honestly.**
 `printed_box_peers_all_fillable` goes 14 offenders on 14 of 53 forms to 0 on 0
 with `audit.py` byte-identical throughout. `inputs_span_no_printed_divider`
@@ -438,7 +461,12 @@ Newest first. One line each.
   inventory delta ZERO for every tag name, 239,562 elements before and after,
   visible text token-for-token identical**, the whole change being slot-div
   style attributes. 33 → **32 blocker+major open of 129**. No check, tolerance
-  or assertion was weakened.
+  or assertion was weakened. **Gate r23: 9/12, the same three red as r22, and
+  `money_boxes_have_inputs` and `printed_box_peers_all_fillable` are GONE from
+  the `assertions` detail — the full clean-tree gate confirming 4 → 0 and
+  1 → 0. Determinism `ba1bd2d8c47e`, moved and had to. The comb referee is
+  UNEVALUABLE for character-for-character r22's reason (2550M `p1c89`/`p1c90`,
+  F184's cells) and r23 neither cleared nor worsened it.**
 
 - **2026-08-07 (r20)** — **`printed_box_peers_all_fillable` PASSES, 14 of 53
   forms → 0, with `audit.py` byte-identical (`8d22a957…`) throughout.** Two

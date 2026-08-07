@@ -165,6 +165,48 @@ All 11 self-tests pass (10 modules plus `validate_tree`), including a new
 `emit.py` block that drives the writing-box/divider-band split in both
 directions.
 
+## Gate — full clean-tree run r23 (2026-08-08 00:49, `912c6ed`) — 9 of 12 PASS
+
+    PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
+    PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
+    PASS  determinism  byte-identical (ba1bd2d8c47e). The digest MOVED and had
+                       to: all 53 form documents changed. Two generations still
+                       compare byte-for-byte
+    FAIL  assertions   inputs_over_printed_text        20/53  (r22: 19)
+                       comb_slots_match_printed        22/53  (r22: 36)
+                       inputs_span_no_printed_divider   5/53  (r22: 5)
+                       money_boxes_have_inputs          GONE  (r22: 4/53)
+                       printed_box_peers_all_fillable   GONE  (r22: 1/53)
+    FAIL  findings     32/129 blocker+major open  (r22: 33/129)
+    UNEV  comb-referee 2550M p1c89/p1c90 — IDENTICAL to r22, see below
+
+**Same 9 of 12 and the same three red checks as r22, with TWO assertions fewer
+inside the red one.** `money_boxes_have_inputs` and
+`printed_box_peers_all_fillable` no longer appear in the `assertions` detail at
+all: that is the full clean-tree gate confirming the 4 → 0 and 1 → 0
+measurements. `comb_slots_match_printed` is back to r22's-predecessor 22 forms.
+
+### The comb referee is UNEVALUABLE for exactly r22's reason, and r23 did not touch it
+
+Reported loudly rather than netted off. The gate's verdict is character-for-
+character what r22 produced:
+
+    measured source certificate schema is unsupported: 2550m-2007/p1c89
+    measured source certificate schema is unsupported: 2550m-2007/p1c90
+    form total disagrees with evidence: 2550m-2007/referee_layout_mismatches
+    form total disagrees with evidence: 2550m-2007/referee_layout_position_mismatches
+    report total disagrees with forms: referee_layout_mismatches
+    report total disagrees with forms: referee_layout_position_mismatches
+
+`p1c89` and `p1c90` are **F184's cells** — the 2550M Schedule money boxes where
+the source strokes two ticks and then paints a white fill over one of them, so
+the layout carries a compartment the paper does not print. r23 changed nothing
+on that path: `lattice.py` is byte-identical and the referee's own derivation
+was not edited. **This is the one thing standing between 9/12 and 10/12, and it
+is r22's debt, not r23's.** Closing it means the reviewed `retired_proven_false`
+transition F184 already names, which needs independent evidence and a human —
+not an integration-time edit to the adjudicator.
+
 ## r20 — a printed box a taxpayer must tick now has somewhere to tick
 
 **`printed_box_peers_all_fillable` goes 14 offenders on 14 of 53 forms to ZERO
