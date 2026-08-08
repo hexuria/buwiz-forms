@@ -4,10 +4,149 @@
 same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
-Measured 2026-08-07 over the 53-form corpus, on branch `gol/form-correction`,
-regenerated at the r23 producer bytes. Assertion counts are from a corpus-wide
-`audit.py` run over that regeneration; the findings tally is recomputed from
-`review-findings.json`.
+Measured 2026-08-08 over the 53-form corpus, on branch `gol/form-correction`,
+regenerated at the r27 producer bytes. Assertion counts are from the gate's own
+corpus-wide `audit.py` run over that regeneration; the findings tally is
+recomputed from `review-findings.json`.
+
+## r27 — a caption block is not a comb, and an occupied compartment is not a box
+
+**`inputs_over_printed_text` goes 20 forms / 147 offenders to 12 / 33, and it is
+NOT the r22 trap.** r22 lowered this same number by cutting every comb's typing
+surface to a 3.12pt stub, which hid the defect and made the fields unusable.
+This time nothing shrank, and that is measured rather than asserted: **all 7,405
+slot rectangles that survive in the ten changed documents were compared
+attribute-string to attribute-string against their r26 selves and ZERO moved.**
+The only rectangles that disappear are the 22 belonging to the eleven refuted
+caption blocks. Per-document minimum slot height is unchanged in all ten
+(16.32 / 14.88 / 14.52 / 12.96 / 12.96 / 14.52 / 12.96 / 12.96 / 12.84 /
+15.09pt); only the MAXIMUM falls, from 103.83pt — 1606's whole rate table as one
+"compartment" — to a normal box.
+
+### Reported loudly: `comb_slots_match_printed` got worse, and this fix did it
+
+22 forms / 193 offenders → **23 / 203**. The mechanism is exact and is finding
+**F192**, not a mystery: refusing an occupied compartment in the INTERIOR of a
+comb makes `comb_slots_match_printed` publish `invalid-emission` — "one or more
+comb inputs do not identify their owning slot" — because it pairs the k-th
+input with the k-th compartment while `data-slot-index` already carries the
+compartment's true number. **94 cells gained that failure kind, which is
+exactly the number of compartments the emitter now refuses; the correspondence
+is one-to-one.** 76 of the 94 were already offenders under
+`source-topology-unevaluable` and move no count. The 18 that were not are
+2200S's 16 money combs, 1800 `p1c68` and 2550-DS `p1c79`, and 2550-DS crossing
+`holds: true → false` on that one cell is the entire +1 form.
+
+This is **G16**, already on the board as G11's unpaid half — "the assertion that
+owns the emission contract was not told the contract changed". The assertion is
+not weakened here and must not be. Against it: 89 of the 147 offenders it cost
+to leave in place were taxpayer typing surfaces laid on printed ink.
+
+Two other movements inside that assertion, both downward and neither r27's:
+
+- 2200A 27→26, 2200C 25→24, 2200P 26→25 — the Bureau band ceasing to claim to
+  be a comb, which is **F187 closed on evidence**.
+- 2550M 8→3 — **r24's G19/F184 fix, first measured here.** The newest audit
+  artifact in the tree was r23's (`build/audit-r23b.json`), and 2550M's emitted
+  document is byte-identical across r27's regeneration while that audit
+  describes a 3-slot `p1c89` the tree no longer contains. The −5 predates this
+  round and is attributed to r24, not claimed for r27.
+
+### The referee: 46/53 → 50/53 after a census pin moved, and 3 forms I did not fix
+
+Two separate things, and only one of them was mine to touch.
+
+**The census half, moved with its cause.** `EXPECTED_RETAINED_SUBJECTS_BY_SLUG`
+goes **22 → 33** on exactly seven slugs (1606 +1, 2200A +2, 2200AN +1, 2200C +1,
+2200P +2, 2200S +1, 2200T +2), and every one of the eleven new subjects carries
+the single reason code `emission-suppressed-caption-block-not-character-cells`.
+That pin's own comment demands this: "retention appearing on a new form is a
+census move that must be declared here". `EXPECTED_COMBS` stays **4,583** and
+**no per-slug comb count moves**, because active + retained is what that
+denominator counts — a refuted comb does not leave the ledger.
+
+**The contract half, deliberately left failing — F191.** The referee requires a
+retained subject's `legacy_comb` to be `unresolved`, encoding "retained because
+we could not resolve it". A refuted caption block is a third shape: resolved
+geometry, refuted semantics. 5 of the 11 refuted subjects happen to carry
+`unresolved` and are accepted; **6 on 2200A / 2200C / 2200P carry `resolved` and
+the referee refuses the whole form.** Widening the adjudicator in the same
+increment as the producer it adjudicates is the failure already paid for at
+`EXPECTED_COMBS` and `HTML_RUNTIME_SCRIPT_SHA256`, and a producer rewriting its
+own published `resolution_status` to satisfy its referee would be the same fault
+in mirror image. The referee's refusal is fail-closed and correct on its own
+terms.
+
+### The cross-file contract the lattice declared and nobody implemented
+
+`lattice.REFUTED_CAPTION_BLOCK_REASON_CODE` is published on the retained
+subject, and `audit.validate_comb_owner_registry` admits a retained subject only
+on a reason-code tuple it knows. Measured before the fix: 1606, 2200A and 2200S
+all returned `retained_unresolved suppression reason evidence is malformed`,
+which invalidates the **whole form's** owner registry, not the one record.
+audit.py now names the tuple and routes it through exactly the identity branch
+the no-band tuple goes through — suppressed, blocking, comb-less, and an
+identity mapping onto its own still-present cell, both directions asserted in
+the self-test. Nothing is weakened; a shape that exists is named.
+
+### The four user-visible checks, looked at rather than counted (r27)
+
+Screenshots at 3× device scale over the shipped `forms/` tree through a local
+static server, in the session scratchpad under `r27/`.
+
+| Check | Verdict | Evidence |
+| --- | --- | --- |
+| 1606 p2's statutory rate table is NOT typeable | **YES** | `1606-p2-rate-table-not-typeable.png`. `p2c135` is `class="c"` `data-cell-kind="label"`, **0 slots, 0 inputs**; clicking its centre leaves `document.activeElement` at `BODY` and typing `999` produces no value anywhere. Schedule 4's Exempt / 1.5% / 3.0% / 5.0% / 6.0% render as printed text |
+| 2000-DST's money grid IS still typeable, digits included | **YES** | `2000-dst-money-grid-typeable.png`. `p1c102`: 14 compartments, **13 live**, slot 11 the printed bullet and inert; digits typed into all 11 peso boxes and both centavos boxes. 30 money combs on the page, none left without a typing surface |
+| 2550M item 4's TIN slots are still ~14.16pt | **YES — 14.16pt, unchanged** | `2550m-item4-tin-writing-box.png`. `p1c9`/`p1c11`/`p1c13`, browser-measured slot height **14.16pt in a 15.60pt row**, 3 inputs each. The document is byte-identical to r26 |
+| 2316 item 3's TIN still shows 14 boxes | **YES — 14, unchanged** | `2316-item3-tin-14-boxes.png`. `p1c17`+`p1c12`+`p1c14`+`p1c16` = 3+3+3+5 = **14 compartments, 14 inputs**, a `9` typed into every one. The document is byte-identical to r26 |
+
+One extra, because it is the refutation's other face:
+`2200s-masthead-not-typeable.png` — the sheet's own "BIR Form No. 2200-S /
+EXCISE TAX RETURN for Sweetened Beverages" title, 0 inputs where it used to
+carry two.
+
+### Corpus census — r27
+
+| Quantity | r27 | prior | Note |
+| --- | --- | --- | --- |
+| Bundles / unique codes / pages | 53 / 50 / 116 | same | unchanged |
+| Comb ledger subjects (`EXPECTED_COMBS`) | **4,583** | 4,583 | **did not move, and must not have**: a refuted comb stays in the ledger |
+| Retained subjects (`EXPECTED_RETAINED_SUBJECTS`) | **33** | 22 | +11, all `caption-block-not-character-cells`, on 7 slugs |
+| Cells still carrying a comb | **4,550** | 4,561 | the 11 refutations |
+| Emitted documents changed | **10 of 53** | — | 43 byte-identical, including 2550M and 2316 |
+| Tag inventory across the ten | **−110 `<input>`, −22 `<div>`** | — | nothing added; visible text token-for-token identical in all ten; every embedded `<script>` byte-identical, so `HTML_RUNTIME_SCRIPT_SHA256` does not move |
+| `EXPECTED_HTML_STRUCTURE_SHA256` | **10 of 53 re-pinned** | — | the other 43 untouched |
+| Findings | **192**, **33 blocker+major open of 132** | 32 of 129 | F187 closed; F188/F189 filed already fixed; F190 filed open (a live input over "27 Tax Debit Memo" on 3 forms); F191/F192 filed open as minor |
+
+The 110 inputs are three named populations: **92** money decimal bullets, each
+ONE compartment of a 14-, 29- or 33-compartment comb with the two centavos boxes
+to its right; **16** on the 8 refuted caption blocks that had inputs; and **2**
+completing the printed rate `0 %` on 1800 `p1c68` and 2550-DS `p1c79`.
+
+## Gate — full clean-tree run r27 (2026-08-08, `522cb44`) — 9 of 12 PASS
+
+    PASS  self-tests 10 · conversion 53/53 · rules 53/53 · paper 53/53
+    PASS  artwork 53/53 · text 53/53 · tracked-files · audit-refresh 53
+    PASS  determinism 91712db2b4b4  (moved, and had to: ten form documents
+                                     changed. Two generations still compare
+                                     byte-for-byte)
+    FAIL  assertions    inputs_over_printed_text        12/53  (r25: 20)
+                        comb_slots_match_printed        23/53  (r25: 22)
+                        inputs_span_no_printed_divider   5/53  (r25: 5, and
+                                                                offender-for-
+                                                                offender the
+                                                                same 33)
+    FAIL  findings      33/132 blocker+major open (r25: 32/129)
+    UNEV  comb-referee  46/53 forms at 522cb44
+
+Same three checks red as r25. **The referee line is 46/53 as the gate scored it
+and 50/53 after the census pin moved**, measured by a standalone referee run at
+payload `a3a97860` rather than by a second full gate; the corpus is
+byte-identical across that pin move, so the determinism digest and the other
+eleven checks are unaffected by it. What is left is F191's three forms and the
+runtime attestation, which is deliberately non-enforceable and is not this
+round's work.
 
 ## r23 — the three regressed assertion families, and what it cost to fix two of them
 

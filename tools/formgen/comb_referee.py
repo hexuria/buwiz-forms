@@ -464,16 +464,36 @@ if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
 # one of them, like the four already retained there, cannot be given a single
 # rectangular owner; it is retained rather than dropped, exactly as the r20
 # note above describes for the line-cap model.
+# Re-measured 2026-08-08 (r27): 22 -> 33, on exactly seven slugs, and every
+# one of the eleven new subjects carries the single reason code
+# `emission-suppressed-caption-block-not-character-cells` -- 1606 +1, 2200A +2,
+# 2200AN +1, 2200C +1, 2200P +2, 2200S +1, 2200T +2. This is the caption-block
+# refutation described at LATTICE_PRODUCER_SHA256: a cell whose every comb
+# compartment carries running prose is not a character cell, so the comb comes
+# off the cell and the subject moves to the retained half rather than leaving
+# the ledger. EXPECTED_COMBS does not move and no per-slug comb count moves,
+# because active + retained is what that denominator counts -- which is the
+# whole point of splitting the two quantities here.
+#
+# 2200C's entry goes 1 -> 3 and keeps its original subject: one
+# `emission-suppressed-no-rectangular-owner` / `painted-edge-partition` from
+# r20, plus the two new ones.
 EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "0605-1999": 1,
     "1600wp-2010": 2,
     "1604cf-2008": 1,
     "1604f-2018": 1,
+    "1606-2018": 1,
     "1707-2021": 1,
     "1707a-2021": 2,
     "1800-2018": 1,
     "2000-ot-2018": 2,
-    "2200c-2018": 1,
+    "2200a-2020": 2,
+    "2200an-2018": 1,
+    "2200c-2018": 3,
+    "2200p-2020": 2,
+    "2200s-2018": 1,
+    "2200t-2022": 2,
     "2550m-2007": 4,
     "2551m-2002": 4,
     "2553-1999": 2,

@@ -2449,8 +2449,73 @@
       "evidence": "r23 corpus audit (build/audit-r23b.json). The same three cells cleared money_boxes_have_inputs at r23 without any exclusion -- with the writing rectangle restored their compartments are no longer ink-free -- so this is the residue of ONE question, not two. audit.source_bureau_reservations already derives the reservation independently from the pinned PDF's own text operators for the other two assertions; teaching comb_slots_match_printed the same fact is deliberately NOT done here because that assertion's published shape is contract-bound by comb_referee._normalise_outer_comb_assertion, and changing the referee's subject and the referee in one increment is what GOAL.md's user decision 1 forbids.",
       "cause": "C5",
       "audit_blind": false,
+      "status": "fixed",
+      "resolution": "Fixed at r27 by lattice.printed_caption_refutes_comb, and by removing the comb rather than by teaching the assertion anything. The three cells -- 2200a-2020 p1c115, 2200c-2018 p1c105, 2200p-2020 p1c114 -- are the bottom-of-sheet Bureau band, whose two 'compartments' each carry a whole printed caption ('Machine Validation', 'Stamp of Receiving Office/AAB'), 84 and 77 glyphs. A comb compartment is one character wide, so the band is not a comb at all; the lattice now refuses it and the subject moves to the retained half. Measured on the r27 corpus audit (build/audit.json, gate run 2026-08-08 at 522cb44): all three cells are GONE from comb_slots_match_printed's offender list, and each form's count falls by exactly one (2200A 27->26, 2200C 25->24, 2200P 26->25). The assertion was NOT changed, its published shape was NOT changed, and no exclusion was added -- the offender stopped existing because the subject stopped claiming to be a comb."
+    },
+    {
+      "id": "F188",
+      "form": "1606-2018",
+      "page": 2,
+      "severity": "major",
+      "status": "fixed",
+      "what": "A printed caption block carrying a single stray vertical is read as a two-compartment comb, so the entire caption becomes a taxpayer typing surface. On 1606 page 2 that is the whole of 'Schedule 4 - Tax Rates' -- a 566.4 x 105.75 pt block stating the statutory rates Exempt / 1.5% / 3.0% / 5.0% / 6.0% -- covered by two live <input> elements. The same shape puts two inputs over the masthead of five excise forms, i.e. over the sheet's own 'BIR Form No. 2200-S / EXCISE TAX RETURN' title.",
+      "where": "1606-2018 p2c135 (566.40 x 105.75pt, 2 slots, 2 inputs); 2200s-2018 p1c0; 2200an-2018 p2c0; 2200t-2022 p2c0 and p3c0; 2200a-2020 p1c94; 2200c-2018 p1c84; 2200p-2020 p1c93. Eight cells with inputs across six forms, 16 inputs; three further cells of the same shape (2200a p1c115, 2200c p1c105, 2200p p1c114) carried no input and are F187.",
+      "evidence": "classify_cell reached its 'mixed' verdict from has_comb alone. Measured over all 4,561 comb cells of the corpus: the minimum per-compartment glyph count of the cell's OWN assigned text is 0 on 4,524 cells, exactly 1 on 26 (the printed rate '0 %', 'I I 0 1 1', 'X C 0 1 0' -- the decoration the 'mixed' verdict is for) and 29 or more on the 11 cells listed here. Nothing lies between 1 and 29, so the test carries no tuned constant. Verified by eye at r27: clicking the centre of 1606 p2c135 in Chromium leaves document.activeElement at BODY and typing produces no value; screenshots 1606-p2-rate-table-not-typeable.png and 2200s-masthead-not-typeable.png in the session scratchpad r27/.",
+      "cause": "C6",
+      "audit_blind": true,
+      "resolution": "Fixed at r27 in lattice.printed_caption_refutes_comb: decoration in a character cell is at most one glyph per cell, so a comb whose EVERY compartment carries running prose is refused and the comb is removed from the cell. Stated over every compartment and never some, which is what keeps 2200A p1c111's 29-box money comb (one swallowed caption in the first compartment, 28 empty ones after it) with its money boxes -- that cell is the separate defect F190. The refuted subject does not leave the ledger: it goes retained_unresolved / suppressed / blocks_gate with retired_proven_false among its permitted transitions, so EXPECTED_COMBS stays 4,583 and no per-slug comb pin moves. 11 cells refuted, 16 inputs and 22 slot divs removed, no other element added or deleted, visible text token-for-token identical in all ten changed documents."
+    },
+    {
+      "id": "F189",
+      "form": "2000-dst-2018",
+      "page": 1,
+      "severity": "major",
+      "status": "fixed",
+      "what": "The pre-printed decimal bullet of a money comb sits in its OWN compartment, and that compartment carries a live <input>: a one-character typing surface laid directly on printed ink, which no taxpayer can use and which no vertical inset can clear because the bullet sits inside the divider band. 92 compartments across five forms. Two further compartments of the same kind carry the statutory rate '0 %' printed across a whole 2-compartment comb.",
+      "where": "2000-dst-2018 16 cells, 2200a-2020 20, 2200c-2018 20, 2200p-2020 20, 2200s-2018 16 -- each the third compartment from the right of a 14-, 29- or 33-compartment money comb, with the two centavos compartments to its right. Plus 1800-2018 p1c68 slot 1 and 2550-ds-2025 p1c79 slot 1, the '%' of a printed rate.",
+      "evidence": "These 92 were the largest single population inside inputs_over_printed_text: 89 of its 147 offenders at r23/r25. emit.PrePrintedInk.slot_constant required the printed glyph to be ALPHANUMERIC, on the reasoning that '.', '-', '%' and the bullet are drawn inside a field to shape what is typed into it. Re-measured at compartment resolution over 39,444 compartments, that reasoning does not hold: the compartment is one character wide and the source has already put a character in it. The C4 evidence it was resting on says something different -- C4 is a comb with ZERO inputs, and this verdict is per compartment. Measured on the r27 corpus: 2000-DST's page-1 money grid keeps 13 of its 14 compartments on every money row, 2200A/2200P Part III likewise, and 1801 item 24, 2316 items 23-24 and 1702EX item 18 carry no bullet compartment and do not move. Not one digit compartment anywhere in the corpus loses its input. Verified by eye: screenshot 2000-dst-money-grid-typeable.png, digits typed into all 11 peso boxes and both centavos boxes of p1c102 with the bullet's own compartment printed and inert.",
+      "cause": "C6",
+      "audit_blind": true,
+      "resolution": "Fixed at r27 in emit.PrePrintedInk.slot_constant, by dropping the alphanumeric condition so the verdict asks OCCUPANCY rather than authorship. The two surviving conditions are unchanged: exactly one glyph, and that glyph wholly inside the compartment's own walls. inputs_over_printed_text falls from 20 forms / 147 offenders to 12 forms / 33 (build/audit.json, gate run 2026-08-08). It is not the r22 trap: all 7,405 slot rectangles that survive in the ten changed documents were compared attribute-string to attribute-string against their r26 selves and ZERO moved, and per-document minimum slot height is unchanged in every one. The measurement cost is F192."
+    },
+    {
+      "id": "F190",
+      "form": "2200a-2020",
+      "page": 1,
+      "severity": "major",
       "status": "open",
-      "resolution": ""
+      "what": "The first compartment of a 29-box money comb has swallowed the caption printed to its left, so item 27's money comb opens with a 173.66pt-wide 'compartment' carrying a live single-character <input> laid over the printed words '27 Tax Debit Memo'. The other 28 compartments are 14.55pt money boxes and are correct.",
+      "where": "2200a-2020 p1c111, 2200c-2018 p1c101, 2200p-2020 p1c110. Each is a 29-slot comb whose slot 0 is 173.66pt wide against a 14.55pt pitch for slots 1-28, and whose slot 0 carries an <input maxlength=1>. The cell's assigned text runs are ['27', ' Tax Debit Memo ', '\\u25cf'] -- the caption plus the money bullet.",
+      "evidence": "Measured on the r27 layouts and the r27 emitted documents (build/layout, build/html, 2026-08-08). comb_compartment_glyph_counts for the cell is [17, 0, 0, ... 0]: SOME compartment is multi-glyph and EVERY compartment is not, which is exactly why lattice.printed_caption_refutes_comb (F188) is stated over every compartment and leaves this comb its money boxes. Refusing it there would have cost 28 real money boxes on three forms. The defect is upstream of that rule: the caption belongs to the label cell to the left, and the segmentation put it inside the comb.",
+      "cause": "C5",
+      "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F191",
+      "form": "2200a-2020",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "comb_referee refuses a retained comb subject whose legacy_comb resolved, so three forms produce no referee report at all. The referee's retained-subject contract encodes 'a subject is retained because its topology could not be resolved' and raises 'retained legacy_comb is not unresolved' otherwise. The caption-block refutation (F188) introduces a third retained shape -- resolved geometry, refuted semantics -- that the contract does not know.",
+      "where": "2200a-2020 page 1 subject 39 (p1c94), 2200c-2018 subject 37 (p1c84), 2200p-2020 subject 39 (p1c93), and their siblings p1c115 / p1c105 / p1c114 which the same rule would reject next. 6 of the 11 refuted subjects carry legacy_comb.resolution.status 'resolved'; the other 5 (1606 p2c135, 2200AN p2c0, 2200S p1c0, 2200T p2c0 and p3c0) carry 'unresolved' and are accepted.",
+      "evidence": "Standalone referee runs at r27 over the r27 corpus: 46/53 forms before EXPECTED_RETAINED_SUBJECTS_BY_SLUG was moved, 50/53 after, with these three the only remaining errors (/tmp payload a3a97860...). The census half was a pin this integration owns and has been moved with its cause (22 -> 33 retained, all eleven new subjects carrying emission-suppressed-caption-block-not-character-cells). The contract half was deliberately NOT touched: changing the adjudicator in the same increment as the producer it adjudicates is the failure this project has already paid for at EXPECTED_COMBS and HTML_RUNTIME_SCRIPT_SHA256, and a producer rewriting its own published resolution_status to satisfy its referee would be the same fault in mirror image. The referee's refusal is fail-closed and correct on its own terms.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F192",
+      "form": "2200s-2018",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "comb_slots_match_printed reports invalid-emission -- 'one or more comb inputs do not identify their owning slot' -- on every comb where a compartment in the INTERIOR of the run is refused. Refusing the 94 occupied compartments of F189 therefore adds that failure kind to 94 cells, and takes the assertion from 22 forms / 193 offenders to 23 / 203.",
+      "where": "94 cells gained the kind: 2000-dst-2018 16, 2200a-2020 20, 2200c-2018 20, 2200p-2020 20, 2200s-2018 16, 1800-2018 1, 2550-ds-2025 1. Of those, 76 were already offenders under source-topology-unevaluable and do not move a count; the 18 that were not are 2200S's 16 money combs, 1800 p1c68 and 2550-DS p1c79. 2550-DS crosses from holds:true to holds:false on that single cell, which is the whole of the +1 form.",
+      "evidence": "Measured by diffing build/audit.json (r27, gate run 2026-08-08) against build/audit-r23b.json cell by cell and failure-kind by failure-kind. The count of cells gaining the kind is 94, exactly the number of compartments emit now refuses -- a one-to-one correspondence, not a coincidence. This is G16, named in PLAN.md as G11's unpaid half: 'the assertion that owns the emission contract was not told the contract changed'. The assertion must not be weakened; the fix is to let the input-to-slot binding read data-slot-index, which the emitter already publishes as the compartment's true number, instead of pairing the k-th input with the k-th compartment. That is a change to an assertion whose published shape is contract-bound by comb_referee._normalise_outer_comb_assertion, so it is a declared increment of its own.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": null
     }
   ]
 }
