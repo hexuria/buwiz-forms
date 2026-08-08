@@ -2158,13 +2158,13 @@
       "form": "2551m-2002",
       "page": 2,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "In Schedule 1 the taxable-period column and the name column are merged into a single input per row, so the two printed columns cannot be captured separately.",
       "where": "Every Schedule 1 body row on page 2; the input outline spans both printed columns.",
       "evidence": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2551m-2002/EVIDENCE-sched1-period-and-name-merged.png (official left, ours right with field outlines).",
       "cause": "C5",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r33 by lattice.printed_partitions + emit.writing_regions: 2551M page 2's Schedule 1 rows are ruled across by column border v11 between 'Period Covered' and 'Name of Withholding Agent', and the cell is now two writing regions. Verified by me in the shipped bytes, not by report: forms/2551m-2002/index.html page 2 carries twelve region inputs p2c1-i0/-i1, p2c5, p2c9, p2c17, p2c21, p2c25 -- six rows, two columns each -- and ZERO remaining 224.6pt-wide boxes at left:24.48pt. The two printed columns are now captured separately."
     },
     {
       "id": "F166",
@@ -2345,8 +2345,8 @@
       "evidence": "Caught by `inputs_span_no_printed_divider` (audit.py assertion 9), r18, on the r18 corpus. The assertion walks the emitted <input> rectangles and asks the pinned PDF whether it drew a compartment divider strictly inside one -- dark, thin, taller than wide, and still visible after the page composites. It has no inventory, so unlike `comb_slots_match_printed` it does not need the lattice to have recognised a comb; that is why this population was invisible until now. 22 offenders of 846 inputs checked, 12 published (the default preview limit), against 498 printed dividers detected. This bundle has no other open finding, so without this assertion the defect had no record at all. The page-2 population is the more serious half: one input across a column divider means two officially separate values share a single box.",
       "cause": "C5",
       "audit_blind": false,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r33. The defect statement is exactly the assertion inputs_span_no_printed_divider, which now HOLDS on all 53 forms with 0 offenders against 69,201 printed dividers detected corpus-wide (it reported 5 forms / 33 offenders at 5c4ae78, including every 1604CF cell named here). emit.writing_regions cuts a cell's writing box at any structural stroke the source draws wholly inside it that reaches deeper than its own width. CAVEAT recorded rather than hidden: the judge's DIVIDER_MIN_HEIGHT_PT is 2.0pt, so a divider shorter than that is outside what this evidence covers -- see F197, where 1600WP's 1.80pt ticks were fixed without any assertion ever reporting them."
     },
     {
       "id": "F180",
@@ -2405,26 +2405,26 @@
       "form": "2550m-2007",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Five money-comb cells claim one more compartment than the sheet prints, because a slot boundary is taken from a divider the page's OWN `comb_divider_final_visible_ids` excludes. p1c89 is the MM box of a Schedule row: the source strokes two ticks in it, at x 260.40 and x 263.52, but paints a white fill over the whole box (seqno 477) AFTER the 263.52 tick (seqno 419) and before the 260.40 one, so only one tick survives to the paper. The layout emits slot_x [246.96, 260.40, 263.52, 273.84] -- a 3.12pt compartment no character fits in.",
       "where": "forms/2550m-2007/, page 1: p1c89, p1c90, p1c94, p1c95, p1c102. Each has comb.cells 3 against `printed` 2. Invisible dividers on the page: v199, v200, v201, v217, v218, v219 (6 of 43).",
       "evidence": "`comb_slots_match_printed` offenders of kind (layout-printed-mismatch, emission-printed-mismatch): 2 -> 7 at r20, the five new ones all on this form. The layout ALREADY records the right answer beside the wrong one -- p1c89's comb.resolution is {status: unresolved, method: legacy-continuity, reason_codes: [final-visible-count-regression, legacy-continuity-only], final_visible_candidate_cells: 2} -- so the subject is active_unresolved and already blocks the gate. Paint order read from the pinned PDF (sha256 9fb4101a...) with get_drawings(); the 30x raster of x 252-276, y 834-845 shows ONE tick: scratchpad/blockers/2550m-p1c89-ticks.png. NOT FIXED at r20 and deliberately not patched here: dropping the legacy topology is the reviewed `retired_proven_false` transition, which needs independent evidence and a human, not an integration-time edit.",
       "audit_blind": false,
       "cause": "C5",
-      "resolution": ""
+      "resolution": "FIXED. build/layout/2550m-2007.layout.json now publishes comb.cells=2 for p1c89, p1c90, p1c94, p1c95 and p1c102, against the 2 compartments the sheet prints -- the erased-witness rail residue rule stops a divider the page paints over from cutting a slot. Corroborated by the judge: 2550M's only remaining comb_slots_match_printed offenders are p1c13 (unevaluable source paint) and p1c203 (the F196 outer-edge residual). No extra-compartment offender remains on the form."
     },
     {
       "id": "F185",
       "form": "2550m-2007",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Eleven further inputs lie across printed compartment dividers that extract.py under-reported until r20 modelled line caps. These are newly VISIBLE, not newly broken: the divider was always on the paper, and the wide input has always covered it. Same class as F178-F181.",
       "where": "2550M p1c3 [524.40,90.24,574.32,102.96] spans 549.36; p1c21 [526.56,171.36,574.32,184.80] spans 536.64/549.36/561.12; p1c116 [66.72,119.52,99.12,133.68] spans 77.04/87.36; p1c118 [273.36,119.04,324.00,133.68] spans 289.68/306.96. 1604CF p2c82/91/100/109/118, each [175.44,*,269.04,*], each spanning 243.12 (the same Schedule rows F179 names by their old ids). 2551M p2c17 and p2c21, each [24.48,*,249.12,*], each spanning 93.36.",
       "evidence": "`inputs_span_no_printed_divider` offender-set diff r19 -> r20, computed per form on the published offender records. The assertion's total falls 79 -> 67 and its form count is unmoved at 11 of 53; 24 offenders cleared (F180's 8, F179's page-1 5, F181's p1c25, and 2551M's page-1 group) and these 11 appeared. audit.py is byte-identical, so the assertion did not move.",
       "audit_blind": false,
       "cause": "C5",
-      "resolution": ""
+      "resolution": "FIXED in r33, same mechanism and same evidence as F179: inputs_span_no_printed_divider now holds on all 53 forms with 0 offenders, having reported these exact 2550M and 1604CF cells at 5c4ae78. The dividers extract.py began reporting at r20 (line caps) are now cut at, not spanned. Same DIVIDER_MIN_HEIGHT_PT 2.0 caveat as F179."
     },
     {
       "id": "F186",
@@ -2483,13 +2483,13 @@
       "form": "2200a-2020",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "The first compartment of a 29-box money comb has swallowed the caption printed to its left, so item 27's money comb opens with a 173.66pt-wide 'compartment' carrying a live single-character <input> laid over the printed words '27 Tax Debit Memo'. The other 28 compartments are 14.55pt money boxes and are correct.",
       "where": "2200a-2020 p1c111, 2200c-2018 p1c101, 2200p-2020 p1c110. Each is a 29-slot comb whose slot 0 is 173.66pt wide against a 14.55pt pitch for slots 1-28, and whose slot 0 carries an <input maxlength=1>. The cell's assigned text runs are ['27', ' Tax Debit Memo ', '\\u25cf'] -- the caption plus the money bullet.",
       "evidence": "Measured on the r27 layouts and the r27 emitted documents (build/layout, build/html, 2026-08-08). comb_compartment_glyph_counts for the cell is [17, 0, 0, ... 0]: SOME compartment is multi-glyph and EVERY compartment is not, which is exactly why lattice.printed_caption_refutes_comb (F188) is stated over every compartment and leaves this comb its money boxes. Refusing it there would have cost 28 real money boxes on three forms. The defect is upstream of that rule: the caption belongs to the label cell to the left, and the segmentation put it inside the comb.",
       "cause": "C5",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r33 by PrePrintedInk.slot_caption: a compartment containing a WHOLE printed run is one the source filled in, so it is refused an input. Exactly 5 compartments corpus-wide qualify and 2 were already refused for tone. Verified by me by GEOMETRY rather than by cell id (ids are positional and renumber): each of forms/extra/2200a-2020, forms/2200c-2018 and forms/extra/2200p-2020 contains exactly one data-slot=0 div of width 173.66pt and it contains ZERO <input> elements; the comb still publishes all 29 slot divs. The segmentation defect is NOT hidden by this -- comb_slots_match_printed still names 2200A p1c111, 2200C p1c101 and 2200P p1c110 by cell in the same audit run, which is why the reviewed emit self-test claim that refusing the input would hide it was overturned."
     },
     {
       "id": "F191",
