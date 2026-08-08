@@ -1372,7 +1372,18 @@ def emitted_comb_evidence(cells: Sequence[Cell],
     # position bound, and on `source-topology-unevaluable` where the source
     # partition could not be derived at all. The excuse only ever decides
     # whether `invalid-emission` joins those, never whether the comb passes.
+    #
+    # Beside it, the same compartment over its printed ROW: the walls stay the
+    # source's dividers and the top and bottom become the cell's, which the
+    # sheet drew, instead of the writing rectangle's, which emit chose. That is
+    # the rectangle the glyph question is asked of; `SourceSlotOracle` states
+    # why, and measures what it costs (nothing) and what it buys (85 identical
+    # money bullets that answered differently from their 7 twins).
     slot_rects = {index: box for index, box, _live in slot_boxes(cell)}
+    slot_rows = {
+        index: (box[0], cell.rect[1], box[2], cell.rect[3])
+        for index, box in slot_rects.items()
+    }
     source_filled: dict[int, dict[str, Any]] = {}
     for slot_index, within_slot in zip(indexes, input_indexes):
         for input_index in within_slot:
@@ -1389,7 +1400,8 @@ def emitted_comb_evidence(cells: Sequence[Cell],
             })
         if "f" in cell.classes.split() and not within_slot:
             occupancy = (
-                source.occupancy(slot_rects.get(slot_index))
+                source.occupancy(
+                    slot_rects.get(slot_index), slot_rows.get(slot_index))
                 if source is not None else None
             )
             if occupancy is not None:
@@ -1397,7 +1409,7 @@ def emitted_comb_evidence(cells: Sequence[Cell],
                 continue
             if source is not None and source.available:
                 why_not = (
-                    "the source prints no constant or shading in that "
+                    "the source prints no glyph or shading in that "
                     "compartment")
             else:
                 unavailable = (
@@ -5257,25 +5269,61 @@ class SourceSlotOracle:
     Two ways the source occupies a compartment, answered in this order because
     that is the order they are painted in:
 
-      * **A printed constant.** Exactly one glyph overlaps the compartment, it
-        is alphanumeric, and it lies wholly inside the compartment's walls.
-        One glyph, because a constant is typeset AT the comb's pitch, one
-        character per box, to look like a filled-in form; a caption the lattice
-        swallowed into the same cell lands 9 to 87 glyphs in a single
-        compartment (measured: 1801 p1c110 carries 87). Alphanumeric, because
-        `.` `,` `-` `%` and the money bullet are drawn INSIDE a field to shape
-        what is typed there rather than to state a value -- excusing those
-        would put back exactly the C4 regression that left the money grids with
-        no way to enter an amount. Wholly inside, because a neighbouring
-        caption can clip one glyph across a compartment wall.
+      * **A printed glyph.** Exactly one glyph overlaps the compartment's own
+        printed ROW, and it lies wholly inside that rectangle. One glyph,
+        because a value is typeset AT the comb's pitch, one character per box,
+        to look like a filled-in form; a caption the lattice swallowed into the
+        same cell lands 9 to 87 glyphs in a single compartment (measured: 1801
+        p1c110 carries 87). Wholly inside, because a neighbouring caption can
+        clip one glyph across a compartment wall.
       * **Decorative shading.** The topmost source fill covering the
         compartment is grey at the copied `SOURCE_SHADING_*` bounds. This is
         the same statement made with tone instead of glyphs -- BIR shades a
-        box to say NO ENTRY APPLIES -- and it is what accounts for the printed
-        `-` and `.` separators between TIN digit groups and for the swallowed
-        captions. Topmost, because the sheet paints a grey band across a row
-        and then knocks white boxes back out of it for the blanks; reading the
-        band alone would excuse every real field on that row.
+        box to say NO ENTRY APPLIES -- and it is what accounts for the
+        swallowed captions. Topmost, because the sheet paints a grey band
+        across a row and then knocks white boxes back out of it for the blanks;
+        reading the band alone would excuse every real field on that row.
+
+    **The compartment is asked about over its printed row, not over the
+    emitted writing rectangle.** The compartment's left and right walls are the
+    source's own dividers -- an emitted partition that is not the source's is
+    an offender anyway, on `emission-printed-mismatch`,
+    `emission-source-position-mismatch` or `source-topology-unevaluable`, so an
+    excuse can never carry a comb whose boxes are not where the sheet prints
+    them. Its top and bottom are nothing the source drew: they are the writing
+    rectangle emit chose. Containing the glyph's font box in THAT made the
+    answer a function of the emitter's typography, and the corpus shows the
+    cost exactly: of 92 identical money bullets, 7 were called occupied and 85
+    blank paper, the only difference being that the bullet's descent line falls
+    0.03-0.41pt below the writing rectangle's floor. The row -- the compartment
+    stretched to the top and bottom of the cell whose walls the sheet drew --
+    is a rectangle the source is responsible for, and it keeps every rejection
+    the old test made: over the whole corpus's 375 inputless compartments, the
+    row rectangle admits every compartment the writing rectangle admitted and
+    loses none.
+
+    **Character class is not the question, and the C4 reasoning that said it
+    was does not survive its own measurement.** The old rule demanded an
+    ALPHANUMERIC glyph, on the reasoning that `.` `,` `-` `%` and the money
+    bullet are drawn INSIDE a field to shape what is typed there rather than to
+    state a value, and that excusing them would put back C4 -- a money comb
+    with no way to enter an amount at all. A compartment is one character wide
+    and the source has already put a character in it; whatever that character
+    means, the compartment is SPENT, and an input there is a typing surface
+    laid on printed ink that no taxpayer can use. What actually protects C4 is
+    that only an OCCUPIED compartment is ever excused, which is a per-
+    compartment fact the source answers: measured over this corpus, the
+    non-alphanumeric population is 92 money bullets, each ONE compartment of a
+    14-, 29- or 33-compartment comb, every one of them the third from the right
+    with the two centavos compartments to its right and centred in its own
+    compartment to within 0.2pt (2000-DST 16, 2200A 20, 2200C 20, 2200P 20,
+    2200S 16); the 2 that complete the printed rate `0 %` on 1800 p1c68 and
+    2550-DS p1c79, 2-compartment combs the source fills entirely and which are
+    not money boxes; and 7 grey TIN group separators printing `-` or `.` that
+    the shading branch below already excused. No digit compartment anywhere in
+    the corpus loses its input. The kind is still published per compartment --
+    `printed-constant` for an alphanumeric glyph, `printed-mark` for one that
+    is not -- so a report can still tell a statutory value from a separator.
 
     `available` is False when either evidence is missing (no glyph operators
     for the page, no modelled source paint, a rotated page whose text operators
@@ -5293,8 +5341,18 @@ class SourceSlotOracle:
         return (self.glyphs is not None and self.paints is not None
                 and self.unavailable_reason is None)
 
-    def occupancy(self, box: Rect | None) -> dict[str, Any] | None:
-        """What the source put in this compartment, or None for nothing."""
+    def occupancy(self, box: Rect | None,
+                  row: Rect | None = None) -> dict[str, Any] | None:
+        """What the source put in this compartment, or None for nothing.
+
+        `box` is the compartment a taxpayer would type into, and it is what the
+        shading question is asked of -- tone is a fact about the paper directly
+        under the box. `row` is that same compartment stretched to its printed
+        row, and it is what the glyph question is asked of, for the reason the
+        class docstring gives. A caller that cannot supply the row supplies no
+        glyph evidence and gets none: the oracle fails closed rather than
+        falling back to a rectangle whose vertical edges the emitter chose.
+        """
         if not self.available or box is None:
             return None
         x0, y0, x1, y1 = (float(value) for value in box)
@@ -5302,16 +5360,26 @@ class SourceSlotOracle:
             return None
         if x1 <= x0 or y1 <= y0:
             return None
-        constant = self._printed_constant(x0, y0, x1, y1)
-        if constant is not None:
-            return {"kind": "printed-constant", "text": constant}
+        glyph = self._printed_glyph(row)
+        if glyph is not None:
+            return {
+                "kind": ("printed-constant" if glyph.isalnum()
+                         else "printed-mark"),
+                "text": glyph,
+            }
         tone = self._covering_shading(x0, y0, x1, y1)
         if tone is not None:
             return {"kind": "decorative-shading", "tone": tone}
         return None
 
-    def _printed_constant(self, x0: float, y0: float,
-                          x1: float, y1: float) -> str | None:
+    def _printed_glyph(self, row: Rect | None) -> str | None:
+        if row is None:
+            return None
+        x0, y0, x1, y1 = (float(value) for value in row)
+        if not all(math.isfinite(value) for value in (x0, y0, x1, y1)):
+            return None
+        if x1 <= x0 or y1 <= y0:
+            return None
         found: SourceGlyph | None = None
         for glyph in self.glyphs or ():
             if min(x1, glyph.x1) <= max(x0, glyph.x0):
@@ -5321,7 +5389,7 @@ class SourceSlotOracle:
             if found is not None:
                 return None
             found = glyph
-        if found is None or not found.text.isalnum():
+        if found is None:
             return None
         if found.x0 < x0 or found.x1 > x1 or found.y0 < y0 or found.y1 > y1:
             return None
@@ -6432,10 +6500,10 @@ def check_comb_slots_match_printed(b: Bundle) -> dict[str, Any]:
     even when the source and lattice counts agree.
 
     A compartment the source itself filled in -- a printed statutory constant,
-    or shading that says no entry applies -- is emitted without an input on
-    purpose, and this assertion reads that fact from the same place it reads
-    the printed topology: the source PDF's own operators, through
-    `SourceSlotOracle`. It is deliberately NOT read from emit.py's verdict, nor
+    the money bullet or a printed `%` in a compartment of its own, or shading
+    that says no entry applies -- is emitted without an input on purpose, and
+    this assertion reads that fact from the same place it reads the printed
+    topology: the source PDF's own operators, through `SourceSlotOracle`. It is deliberately NOT read from emit.py's verdict, nor
     from any marker emit could publish, nor inferred from the missing input
     itself; a check that takes the emitter's word for why the emitter did
     something is a mirror, not a check. Everything else about a compartment
@@ -10836,10 +10904,17 @@ def self_test() -> int:
             extra_paints: Sequence[VectorPaint] = (),
             publish_glyphs: bool = True,
             paints: Sequence[VectorPaint] | None = None,
+            slot_top: float = 0.0,
+            slot_height: float = 10.0,
             ) -> CombEmissionFixture:
+        # `slot_top`/`slot_height` are the WRITING rectangle, which emit sizes
+        # from the comb's typography and which is shorter than the cell on
+        # every real comb in the corpus. The default keeps them equal so the
+        # fixtures that are not about that distinction stay unchanged.
         markup = "".join(
             f'<div class="s" data-slot="{index}" '
-            f'style="left:{index * 10}pt;top:0pt;width:10pt;height:10pt">'
+            f'style="left:{index * 10}pt;top:{slot_top}pt;'
+            f'width:10pt;height:{slot_height}pt">'
             + ("" if index in omit
                else '<input type="text" class="fi fc" '
                     f'data-slot-index="{index}">')
@@ -10898,33 +10973,29 @@ def self_test() -> int:
     blank_result = check_comb_slots_match_printed(blank_compartment)
     blank_offender = first_offender(blank_result)
     check(
-        "a compartment with neither an input nor a source constant still "
-        "fails",
+        "a compartment with neither an input nor source occupancy still fails",
         blank_result["holds"] is False
         and blank_result["emission_invalid"] == 1
         and blank_offender["emission_state"] == "slot-input-index-mismatch"
         and "invalid-emission" in blank_offender["failure_kinds"]
         and "no live input element" in blank_offender["why"]
-        and "prints no constant or shading" in blank_offender["why"]
+        and "prints no glyph or shading" in blank_offender["why"]
         and emitted_comb_evidence(
             blank_compartment.cells,
             source_oracle_for(blank_compartment),
         )["source_filled_slots"] == {},
     )
 
-    # Four ways a compartment can hold source ink and still not be a constant.
-    # The first is C4: the money bullet and the decimal point are drawn INSIDE
-    # a field to shape what is typed there, and excusing them is what left the
-    # money grids with no way to enter an amount.
+    # Three ways a compartment can hold source ink and still not be occupied by
+    # it. Each is a population the corpus separates on; none of them is a
+    # character class.
     for ink_label, ink_glyphs in (
-            ("a decimal point is decoration, not a constant",
-             (SourceGlyph(".", 13.0, 2.0, 17.0, 8.0),)),
-            ("a swallowed caption is a segmentation fault, not a constant",
+            ("a swallowed caption is a segmentation fault, not occupancy",
              (SourceGlyph("Z", 11.0, 2.0, 13.0, 8.0),
               SourceGlyph("I", 13.5, 2.0, 15.0, 8.0))),
-            ("a glyph clipped across the compartment wall is not a constant",
+            ("a glyph clipped across the compartment wall is not occupancy",
              (SourceGlyph("0", 9.0, 2.0, 13.0, 8.0),)),
-            ("a glyph printed outside the compartment band is not a constant",
+            ("a glyph printed outside the compartment's row is not occupancy",
              (SourceGlyph("0", 13.0, 12.0, 17.0, 18.0),))):
         ink_result = check_comb_slots_match_printed(
             source_filled_fixture(omit=(1,), glyphs=ink_glyphs))
@@ -10934,6 +11005,101 @@ def self_test() -> int:
             and first_offender(ink_result)["emission_state"]
             == "slot-input-index-mismatch",
         )
+
+    # The character class is NOT one of them, and this is the control that used
+    # to say the opposite ("a decimal point is decoration, not a constant").
+    # It was refuted by measuring the population it was reasoning about: the
+    # money bullet is not drawn inside a digit box, it holds a compartment of
+    # its own -- 92 of them corpus-wide, every one the third from the right of
+    # a 14-, 29- or 33-compartment money comb with the two centavos
+    # compartments to its right. A compartment is one character wide and the
+    # source has already spent it.
+    for mark_label, mark_text in (
+            ("the money bullet occupies its own compartment", "●"),
+            ("a printed per-cent sign occupies its own compartment", "%"),
+            ("a printed group separator occupies its own compartment", "-")):
+        mark_fixture = source_filled_fixture(
+            omit=(1,), glyphs=(SourceGlyph(mark_text, 13.0, 2.0, 17.0, 8.0),))
+        mark_result = check_comb_slots_match_printed(mark_fixture)
+        check(
+            mark_label + " and is not a live typing surface",
+            mark_result["holds"] is True
+            and mark_result["emission_invalid"] == 0
+            and emitted_comb_evidence(
+                mark_fixture.cells, source_oracle_for(mark_fixture),
+            )["source_filled_slots"]
+            == {1: {"kind": "printed-mark", "text": mark_text}},
+        )
+
+    # What actually protects C4 -- a money comb with no way to enter an amount
+    # at all -- is that only an OCCUPIED compartment is ever excused. One
+    # printed mark cannot carry the compartments either side of it, so an
+    # emitter that empties a whole comb still fails on both of them.
+    emptied_comb = source_filled_fixture(
+        omit=(0, 1, 2), glyphs=(SourceGlyph("●", 13.0, 2.0, 17.0, 8.0),))
+    emptied_offender = first_offender(
+        check_comb_slots_match_printed(emptied_comb))
+    emptied_evidence = emitted_comb_evidence(
+        emptied_comb.cells, source_oracle_for(emptied_comb))
+    check(
+        "one printed mark does not excuse the compartments beside it",
+        emptied_offender.get("emission_state") == "slot-input-index-mismatch"
+        and "invalid-emission" in emptied_offender.get("failure_kinds", ())
+        and "'slot': 0" in emptied_offender.get("why", "")
+        and "'slot': 2" in emptied_offender.get("why", "")
+        and "'slot': 1" not in emptied_offender.get("why", "")
+        and emitted_comb_evidence(
+            emptied_comb.cells, source_oracle_for(emptied_comb),
+        )["source_filled_slots"]
+        == {1: {"kind": "printed-mark", "text": "●"}}
+        and emptied_evidence["source_filled_slots"].keys() == {1},
+    )
+
+    # The rectangle the glyph question is asked of is the compartment's printed
+    # ROW, never the writing rectangle emit sized. Here the writing rectangle
+    # is 8pt inside a 10pt cell -- the corpus shape -- and the bullet's descent
+    # falls 0.18pt below its floor, which is exactly what separated 85 corpus
+    # money bullets from their 7 identical twins. Asking over the writing
+    # rectangle instead reports this compartment as blank paper.
+    descended = source_filled_fixture(
+        omit=(1,), slot_top=0.72, slot_height=8.0,
+        glyphs=(SourceGlyph("●", 13.0, 3.0, 17.0, 8.9),))
+    descended_result = check_comb_slots_match_printed(descended)
+    check(
+        "a glyph descending past the writing rectangle is still printed in "
+        "its row",
+        descended_result["holds"] is True
+        and descended_result["emission_invalid"] == 0
+        and emitted_comb_evidence(
+            descended.cells, source_oracle_for(descended),
+        )["source_filled_slots"]
+        == {1: {"kind": "printed-mark", "text": "●"}},
+    )
+
+    # And the row is a rectangle the SOURCE is responsible for, so it does not
+    # reach past the cell: the same glyph moved below the cell's own floor is
+    # a neighbour's, and excuses nothing.
+    for row_label, row_glyph in (
+            ("above", SourceGlyph("●", 13.0, -6.0, 17.0, -0.1)),
+            ("below", SourceGlyph("●", 13.0, 10.1, 17.0, 16.0))):
+        outside_row = check_comb_slots_match_printed(source_filled_fixture(
+            omit=(1,), slot_top=0.72, slot_height=8.0, glyphs=(row_glyph,)))
+        check(
+            f"a glyph printed {row_label} the cell is not this row's ink",
+            outside_row["holds"] is False
+            and first_offender(outside_row)["emission_state"]
+            == "slot-input-index-mismatch",
+        )
+
+    # A caller that cannot say which row a compartment belongs to gets no glyph
+    # evidence at all, rather than a fallback onto the emitted rectangle.
+    check(
+        "the oracle refuses to answer the glyph question without a row",
+        SourceSlotOracle(
+            glyphs=(SourceGlyph("0", 13.0, 2.0, 17.0, 8.0),),
+            paints=(),
+        ).occupancy((10.0, 0.0, 20.0, 10.0)) is None,
+    )
 
     # Tone says the same thing glyphs do -- BIR shades a box to state that no
     # entry applies -- and it is read the same way: topmost covering fill.
@@ -11167,6 +11333,43 @@ def self_test() -> int:
         wrong_owner["holds"] is False
         and wrong_owner["offenders"][0]["emission_state"]
         == "slot-input-index-mismatch",
+    )
+
+    out_of_range_owner = check_comb_slots_match_printed(
+        CombEmissionFixture(
+            [emitted_comb_cell(
+                slot_indexes=(0, 1), input_indexes=(0, 7), declared=2)],
+            count=2,
+        ))
+    check(
+        "an input index outside the comb's own compartments fails",
+        out_of_range_owner["holds"] is False
+        and out_of_range_owner["offenders"][0]["emission_state"]
+        == "slot-input-index-mismatch"
+        and "'input_slot_index': 7"
+        in out_of_range_owner["offenders"][0]["why"],
+    )
+
+    # The assertion's first question, and the one an excused compartment must
+    # never be able to answer for the comb: a comb that emits fewer boxes than
+    # the sheet prints fails on the count, whatever is or is not inside them.
+    short_comb = check_comb_slots_match_printed(
+        CombEmissionFixture(
+            [emitted_comb_cell(
+                slot_indexes=(0, 1), declared=2,
+                geometry=((0.0, 0.0, 15.0, 10.0),
+                          (15.0, 0.0, 15.0, 10.0)))],
+            count=3,
+        ))
+    short_offender = first_offender(short_comb)
+    check(
+        "a comb short of the printed compartment count still fails on the "
+        "count",
+        short_comb["holds"] is False
+        and short_offender["printed"] == 3
+        and short_offender["slots"] == 2
+        and "emission-printed-mismatch" in short_offender["failure_kinds"]
+        and "emission-layout-mismatch" in short_offender["failure_kinds"],
     )
 
     zero_width_slot = check_comb_slots_match_printed(

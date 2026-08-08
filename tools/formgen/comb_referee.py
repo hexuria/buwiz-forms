@@ -269,8 +269,41 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # identity mapping onto its own still-present cell, and both directions are
 # asserted in the self-test. `ASSERTION_KEYS` is unchanged at 10 and no comb
 # constant moved.
+#
+# Re-pinned 2026-08-08 (r28), and unlike every re-pin above this one DOES land
+# inside `comb_slots_match_printed`, the single derivation this referee
+# adjudicates. Stated plainly rather than buried: `SourceSlotOracle` decides
+# whether a compartment the emitter left without an input was already spent by
+# the sheet, and both halves of that question moved.
+#
+#   * The rectangle the GLYPH question is asked of is now the compartment's
+#     printed ROW -- the source's own dividers for walls, the cell's own top
+#     and bottom for the other two edges -- instead of the writing rectangle
+#     `emit.comb_writing_rect` chose. The old rectangle made the answer a
+#     function of OUR typography: 85 of 92 identical money bullets read as
+#     blank paper because the bullet's descent falls 0.03-0.41pt below the
+#     writing floor. The row cannot reach outside the cell, and the self-test
+#     drives a glyph above and below the cell as a neighbour's ink.
+#   * The character-class test is gone. A compartment is one character wide,
+#     the source has already put a character in it, and an input laid there is
+#     a typing surface no taxpayer can use whatever the character means. What
+#     protects C4 -- a money comb with no way to enter an amount -- is that
+#     only an OCCUPIED compartment is ever excused, one compartment at a time;
+#     audit.py's self-test drives an emitter that empties a whole comb still
+#     failing on the compartments either side of the printed mark. The kind is
+#     still published per compartment (`printed-constant` vs `printed-mark`),
+#     so a report can still tell a statutory value from a separator.
+#
+# This referee does NOT re-derive that excuse. It re-derives the printed and
+# layout topologies and then checks that audit.py's published relations agree
+# with its own published `emission_state`. So this re-pin carries NO verdict on
+# the oracle: the oracle is bound by audit.py's own mutation-proven self-test
+# cases and by the corpus measurement recorded in STATUS.md r28.
+# `ASSERTION_KEYS` is unchanged at 10, no comb constant moved, no tolerance
+# moved, and the assertion's published SHAPE -- which
+# `_normalise_outer_comb_assertion` is contract-bound to -- is unchanged.
 AUDIT_PRODUCER_SHA256 = (
-    "bb2d56b565b65bd0482a9d2106f19c7b0dd2d823b5ddf9e97fdaed5b5c7d12f7"
+    "ef78cf64e8e93c56451d570e298d42a094ce4ebd0006eb2023a4478166fead15"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
