@@ -218,8 +218,41 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # not move; a refuted band that no subject published raises rather than
 # shipping; and a refuted subject that is not an identity mapping onto its own
 # rectangle raises too. No tolerance constant moved and no threshold moved.
+# Re-pinned 2026-08-08 (r29) for the comb RAIL derivation, which is a change
+# to a derivation this referee does adjudicate, so it is stated in full.
+# `comb_bands` no longer takes a comb's outer `slot_x` from the lattice cell
+# box. It measures them: each side is the ink of the owner's own edge WHERE IT
+# CROSSES THIS BAND (a lattice line sits at the mean centre of every collinear
+# bar on the page, and the bar ruling one comb can be a third of a point from
+# that mean -- 1800 fuses 584.26/584.50/584.74 into 584.56 over a comb the
+# 584.26 bar rules), moved inward to the innermost boundary that crosses the
+# owner's whole paper when the comb's tick run does not reach it (1801 rules a
+# TIN dash box, a "Contact Number" caption and 366pt of item-24 caption inside
+# the same rectangles as its digit boxes, and slot 0 was a typeable box over
+# printed text). Two source facts decide it and no constant does: whether a
+# boundary's ink crosses the paper the owner encloses, joined where the paper
+# between fragments is thinner than the ink either side of it and never across
+# a corridor a later layer painted out; and where that ink's own centre is.
+#
+# A rail moves the comb's edge INWARD off the fused mean and only inward: the
+# rectangle is the paper the comb is emitted on, and `emitted_comb_evidence`
+# in audit.py requires every emitted slot to stay inside it. Where the drawn
+# bar's own centre falls outside the rectangle, the rectangle wins and the
+# comb keeps the old edge -- which leaves SIX combs (1701MS p1c166/p1c173/
+# p1c179/p1c187, 2550M p1c203, 2550Q p1c6) whose printed rail is 0.26-0.31pt
+# beyond their owner's fused edge still reported by the audit. That residual
+# is in the lattice POSITION, not in the comb, and it is not touched here.
+#
+# The census does NOT move: 4583 subjects, 33 retained, 4550 active comb cells,
+# form for form. What moves is 773 combs' outer coordinates and 9 combs' slot
+# counts, and the audit -- which reads the compartment count and the rail
+# positions from the pinned PDF's own paint stream, never from the layout --
+# agrees on all 4,531 compartment counts and on 4,422 of the 4,428 rail pairs
+# it can evaluate, where before it named 33 of these combs as defects.
+# `EXPECTED_HTML_STRUCTURE_SHA256` moves with the emitted slot rectangles,
+# per form, below.
 LATTICE_PRODUCER_SHA256 = (
-    "703a3d9d5f03fe7491dd236c018ccbc311b32e31fc068e1104821288e3825ba4"
+    "ca5427ee3186b58d7be8a769d173f805edbe3ada76140b4837bd602ff3b642c6"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -1156,60 +1189,87 @@ HTML_ALLOWED_TAGS = frozenset({
 #   / 15.09pt); only the MAXIMUM falls, from 103.83pt (1606's rate table) and
 #   47-55pt (the mastheads) to a normal compartment. 2550M and 2316, the two
 #   forms the writing-box check is watched on, are byte-identical documents.
+#
+# Re-pinned 2026-08-08 (r29) for the comb RAIL derivation described at
+# LATTICE_PRODUCER_SHA256. 43 of the 53 documents move and 10 are
+# byte-identical. What moves in them is comb slot RECTANGLES and nothing else:
+#
+#   * 764 combs' slot runs shift horizontally, by 0.02 to 0.47pt, onto the bar
+#     the source rules the band with instead of the mean of every collinear
+#     bar on that lattice line. No slot count and no slot height changes in any
+#     of them.
+#   * 9 combs on 5 documents lose their leading or trailing slot -- 1604F
+#     p1c36, 1800 p1c15 and p1c26, 1801 p1c31/p1c32/p1c33/p1c112, 2200S p1c29,
+#     2552 p1c28 -- because the region they covered is a printed caption or a
+#     TIN dash box that the same rectangle also rules, and the comb's own rail
+#     starts after it. The widest was 365.95pt over "24 TOTAL AMOUNT PAYABLE
+#     (For full payment Sum of Items 20 and 23D)". None of the nine carried an
+#     <input>: emit.py's pre-printed-ink rule had already refused them one,
+#     which is why `inputs_over_printed_text` neither improves nor regresses
+#     here. What goes is the compartment the sheet does not print, and with it
+#     the cell's `data-comb-capacity`; the caption still prints.
+#
+#   NOT A SHRUNK WRITING SURFACE, the regression the pin above exists to catch:
+#   every surviving slot's `top` and `height` is unchanged, and no minimum slot
+#   height moves on any document. The independent evidence is audit.py's, which
+#   reads compartment counts and rail positions from the pinned PDF's own paint
+#   stream: of the 33 combs it named as defects before, 27 are gone and the six
+#   named at LATTICE_PRODUCER_SHA256 remain, and it agrees on all 4,531
+#   compartment counts it can evaluate.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "87d7be818a0541e6a4645e6df1697421e608d228bb2bc7916305d7b6788ef9f3",
-    "0619e-2018": "55931f50a9ca2cd6e7652724630b71247a2b9afb557dc4e3345cf5bae46628aa",
-    "0619f-2018": "1d73c117c370ba2635a790fffb24fcc5ca5ed731921eda37525750fd6880c8c1",
-    "0620-2019": "a607e1675cd7e1019672dbee6df415914b10a008b3a23039ea44614125cb209b",
-    "1600-pt-2018": "f8f3e28b8120aba3c7456f6ea665d67d7b6f5ea7fa8d230c58aba07ea39d69bd",
-    "1600-vt-2018": "dae7516503767ae9b4d8bc87135e054274cced91e7ddcad3fd28ec5163b7c1ae",
-    "1600wp-2010": "dc14610135dc26f812fee58a7eed37e2cae25357342e007bb1ba2da16588ff4c",
-    "1601-fq-2020": "54f581b0874e6da686806221bf1c29a46055e823164c656d3dc952508838b6b4",
-    "1601c-2018": "c4290064774382f570a7e470ef61210bfd7ef187d336898ddff5932f5f79409a",
-    "1601eq-2019": "74886837c796ec19ac56514ffa3b5ace429a4fffb31c8c68ef1d0f49416eeefe",
-    "1602q-2019": "25fe05a1a7189f6a7c6f2e5cbe30fe516b1b888995edcf31669973640ed7e694",
-    "1603q-2018": "95d6b18dd21b2463d7637724452ae56669371ee655cfa0e5ddc3d9526092c79b",
-    "1604c-2018": "d1b66032d79e5f927b11fa24d354c574c7e3d234e9da8397727c825be7dd9ae1",
-    "1604cf-2008": "a155557d19361591f571ccbc3e24e1d834728a9d6cd9be370e03013855d05833",
-    "1604e-2018": "8960362c0cba23e6edce5751a78f8a1ce2e416b8e453d3ac88faabf33cce61f2",
-    "1604f-2018": "aa6a8869cc7893886cc1548f07a8d9db5cffbd6e066bc2013acd39b1fbd04e98",
-    "1606-2018": "c4b996c0cdb74f9cbf2fe447588ba241259093b6e4ac88a28275982128d4362a",
-    "1621-2019": "a5efb8ad61225676537865d22458a55cbed83ce87716fb6cbc04a77bc6bdb9a4",
-    "1700-2018": "7ab3f172dbad486ade7525a796ce3cf03fa62125cb13e1f7be488d7c090945aa",
-    "1701-2018": "10b5f732116eaa45295bcf2c809d55d059a29ba6196931cb67bb5654dcf6a816",
-    "1701-2018-attachment": "51c3cc5471d9996bb32571300d7e8e9aa9d1a78630f686485fc44668d545f1e7",
-    "1701-2018-conso": "ee6460b88319fca960bc6a6d696f43115b3eeace6c858ef3b139f3b648928d3b",
-    "1701a-2018": "a23ac03ac9d470c6077d8a647d6372183bd8230037fcf2ca9f78667ea68cba64",
-    "1701ms-2024": "083de338603884be80fd8400c8599324a83daffd34185051a4a3fba016d637e0",
-    "1701q-2018": "2ab2da4b39f4cea77ad1a6baa96ee8a1b73115ad174541f98456d21af3414f21",
-    "1702ex-2018": "f5fe397e217faf0dd067b27a8892b7b1946040a19e369e32f57c2f0be7c27dfb",
-    "1702mx-2018c": "46b7fad0d87e341e8a2a7b09b5efd4dbafab78bf0e618bca9eb184d00be818a4",
+    "0605-1999": "de35f9386cf28e4078a15c23a479bec2d11e350b5ba37e7867c983e1be11dd4d",
+    "0619e-2018": "74a9c1189c8682674ecb35177ec81b2187417f5ce4021d559e3aad55473aa8cd",
+    "0619f-2018": "2bc72cf30d0cd8ed72b74b3e1cc2adbbe03a8420aa58e294712d312c5f13b4e8",
+    "0620-2019": "16197dd4a83b6c3c399905d4229e7e2f68902d8c219ec3397a44560ceeca05b7",
+    "1600-pt-2018": "6120c5148ab7f95c222d538a7eb77bb563df1016c74112d05a01a48ad142c12d",
+    "1600-vt-2018": "4bc4e38fdd028378505300ee4da5dbf1a990867ace6058215b445719f21ad18c",
+    "1600wp-2010": "2db4ff43d6d4c0762c8a20c2f2d84b8f6d7315215bfb113e73d69b6b2007ccd9",
+    "1601-fq-2020": "02ce73d36302c3192f1a5dbf5cfa147daef3daf56d2463cb74cc42cbd48fa0d1",
+    "1601c-2018": "7d85c2066f207651d55e4529a5b306d540c5d809c987c143c2f617332c79926d",
+    "1601eq-2019": "239ed795e68426066cbc18b345e54a4995b669c4cf62cfcb7700a4720a2c837e",
+    "1602q-2019": "d9b9265f657087bbbc42d782a005cc5b7c5e935c842c300e60d074cb1abf2c19",
+    "1603q-2018": "472127ef62fb1daf6d030183bc7a961e673b07f7e0d429193ac42f0902b908af",
+    "1604c-2018": "854772119dc3684fb28c03b0e0b8fcc1479c82e835bf5097de485bb99b91f101",
+    "1604cf-2008": "048136f0f1a2ed6f051f82476e648d6d2d3a784466d794e78aede4bcce2055e5",
+    "1604e-2018": "e82922d143bae8c8af6f2a65f3d488e25596581fc93ae80b5c4963d34ba6f21a",
+    "1604f-2018": "8ae6e85fd6b767d5bae86c2b2c445dd6ca1d961b41019e9481093cf63ab3707a",
+    "1606-2018": "fcea32039e512a804274b7cd32153418eb9e636e7a594871be00ea72a21f37b2",
+    "1621-2019": "488d7d55cd398fc05b11bf9b12d4a3c267694d95b806b21538b57456a0f990ec",
+    "1700-2018": "0087887dcc2c7a0e9031de32dff3c5ff3bb3a787229bd5e554fec8788812314b",
+    "1701-2018": "ddbecb6f317e9cd1eac0a84e04d74772d18a86fec907f8e40826272fde3ac105",
+    "1701-2018-attachment": "0606245183889693f40fd11b8304746688b3ab2c292603ab9ba2207a4b552ada",
+    "1701-2018-conso": "83df258bb3d7822270a7821be0b5290efc3a73819ae8dc9f96c6f649499ca6b3",
+    "1701a-2018": "cb81bf7a16dac309e2d0a0a393ff94bc5f2150f5a54586c4be7d2bb1793311e9",
+    "1701ms-2024": "3f46aefe5e7e986aa3eec66d3eda9519025db1ba9c4c7e765af1d6a9abcf7581",
+    "1701q-2018": "04a1b2f7908a68ece674aae8cdbc4872c09e11781260b9ed1bf4809ff7c0b4f8",
+    "1702ex-2018": "5e7546a9431a6d93493153db256e4c720b06a06526ff9a24883a8010b7b04049",
+    "1702mx-2018c": "e2e43a024d93d137be5fce936e79c52170823b0ce34ccfdd4e9724146de73503",
     "1702mx-2018c-attachment": "fa94174dfe4c8bee14085e0cda823461b95ff50bbf280da00379dc5818424f96",
-    "1702q-2018": "517eb499e11394d16dc83bee880e72f828bf4edda72e27592b4e1bf2c0e4f063",
-    "1702rt-2018c": "d2f2599c8aa34172921815729cd5b2b9c4a0d2783b2cf491b5674db61117058c",
-    "1706-2018": "c91d610c95c03afd34d2557df51c943a97eb9542de07b91828400d17c5dabe7f",
+    "1702q-2018": "badff4ef415d9647bf91e5d2753083ddd81dd508e3831d459ce836a1257b3eea",
+    "1702rt-2018c": "f99eb1fab7ee149abf1cfbd9407df0f786fde21ef57382f4add1738fe2cc5b96",
+    "1706-2018": "489f0c98ab91cc3501c0b45a7cc7d19e8f23f1f4513b4cb65d4d95e3cfa19f65",
     "1707-2021": "6d8ecd027d880b875fe8b8e7a37279914b815edff2b4ec6efcc1bbac9bd9e656",
-    "1707a-2021": "8268bde7581c4261fcb040b03ff7b2e4eecd979f80471159b0788d48ea91e134",
+    "1707a-2021": "938a7ae8b74a8b0d6ae021c64111ab33a7e73d7dd5f519fd5ce182104a4b6167",
     "1709-2020": "206b9b87a260e18ae7cc1ebdf062d6626a4facbdc52bf01097034f411e635ae3",
-    "1800-2018": "89f4cd729c073e357cf81b5b4cb688b0e31b945938abc6e5755f50a3c80e54a1",
-    "1801-2018": "f9c29eb63fbdb516f07caedd237c39bb375ca9b6644a2e6bb8d93bc33de88534",
-    "2000-dst-2018": "f15d4e5439ef285c53e085f3ed356c8518a59187338d024c4986247c5275f2f6",
+    "1800-2018": "1331088d3324e48ca4ab26dd2e9befb765650c67fe8127437bbdbeab550fb8f4",
+    "1801-2018": "d5d3b715e771e5908d3b72e00901a82bf94abc0b6ec81cad8d688b5348cdf927",
+    "2000-dst-2018": "492788eb0a4abe1388094fe14cf8b04dda90f126f5b8da2e99a2ee3555565dfa",
     "2000-ot-2018": "7da7f3a3ed0a29c6df2b3c9bccfe9c5b58113bc472f7070a24428da245922b5c",
     "2200a-2020": "10cfb1f0fbb6e7c0aa0877f3344754d10cdec1007ed56dbf7790792163a1cfe8",
     "2200an-2018": "f337c5fb13b37cdc337a10eb4fe4dc39e2f14c944a3d0b579290c7698ffca40e",
     "2200c-2018": "08bd5c9dc0525cbf72df1af51804ac302a29d840e8363c8029284d27f20df143",
     "2200m-2018": "894bebac15201977bc6397078389629fdecdf2ca974b4e6fdc0d3f127df14d5c",
     "2200p-2020": "f25b46dfc01f40afe7aefccb7dd41090061c6b6c1778ba77bec8c79ca2555886",
-    "2200s-2018": "1a6bf5bf3005765e1c81e30c9ac32b6e292c8e44687e469aa81db5eea9cda5e6",
+    "2200s-2018": "8254cba6f29db56a0f5a117081def0518faecea53c39b7397d24cfd42cd56207",
     "2200t-2022": "c0da01d8e1c0ecbe82749ecfef145732f12e34dcaf0dcd362fa3f9b9035c99f2",
-    "2316-2021": "a46e91b08880d49086c7f0ca2caf23ea0f3966540f0c3e3e5aa3908dd5eff21a",
-    "2550-ds-2025": "87491a372f3ac0cdc4d434c37d466cb5f5bb961e3b63c00505ca64870403681b",
-    "2550m-2007": "546f0ba03f3587479daedf9cbdad18de401064bb1cfc18e5893f34c0f70a2f76",
-    "2550q-2024": "23313a0c58587d524bc0af0ebf9e01bbe36a0cad8519fc1282d55823ed7fe661",
-    "2551m-2002": "91c0263acfd04c4ac615e4a79ec50a4810eb935235c2d9bc95f010924d40887e",
-    "2551q-2018": "cafd4edab3ae185d8ec0b2e21958ba82afe816725cdaacb0816365df025b82f4",
-    "2552-2018": "6b4cac3a60f59f88176a76d31aaf18a4ba836c040f221837bf2e6e28033be2d9",
-    "2553-1999": "d9203e82e78efcf0b0d35f6189c91f69943e33146d0119c2bbfe24da4f394047",
+    "2316-2021": "34d97b81d050218b83f7a6d862719addce3d1e898aba5a9d2cade928de8f6653",
+    "2550-ds-2025": "6c396d682cf3db767154e935794a9fb21f5a855dbce51ad379e98657be5797a4",
+    "2550m-2007": "113cb1713252467498d213f1be179d431278b43aa911f1577b5ff8a1d3a1c638",
+    "2550q-2024": "a1aafc5da9935075eab1d3f8f523ef8380ada1282cd86d190a2039efc6d6f595",
+    "2551m-2002": "1bd6acca84c2b53ad2660fb821f8e8c02d467d944ec09c5269264a4202c0acc9",
+    "2551q-2018": "1c27fb36658049f018107cbaa4a18d450420d2bd49a7ba928bcdb4c79bf4d7c1",
+    "2552-2018": "5d720a2bca47f1f8da19d1cb3230c40b803d280fb594a3e64d100ef70db24727",
+    "2553-1999": "871a05e13da1918b29f70278ae942279e1bd6a7a72c5c96cf2970ca62be94543",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
@@ -3519,15 +3579,17 @@ def slot_records(
             )
         )
         if geometry_valid and geometry:
+            # A comb runs between its own printed RAILS, and those need not be
+            # the container's edges: the container is the lattice cell, whose x
+            # is the mean centre of every collinear bar on that line, and the
+            # cell may also rule a caption or a dash box beside the comb, which
+            # the comb does not own. So the run is no longer required to START
+            # at 0 and END at the container's width. It is still required to
+            # lie inside the container (above, unchanged) and to be contiguous
+            # (below, unchanged), which is what keeps the compartments one
+            # partition of one field rather than a scattering of boxes.
             geometry_valid = (
-                abs(float(geometry[0]["left"]))
-                <= HTML_GEOMETRY_EPSILON_PT
-                and abs(
-                    float(geometry[-1]["left"])
-                    + float(geometry[-1]["width"])
-                    - float(container[0])
-                ) <= HTML_GEOMETRY_EPSILON_PT
-                and all(
+                all(
                     abs(
                         float(right["left"])
                         - (float(left["left"]) + float(left["width"]))
@@ -4018,9 +4080,22 @@ def validate_comb_topology(
     bbox_numbers = [
         finite_number(value, f"{label} bbox") for value in bbox_value
     ]
-    if (len(bbox_numbers) != 4
-            or not same_numbers((slots[0], slots[-1]),
-                                (bbox_numbers[0], bbox_numbers[2]))):
+    # A comb's outer slot boundaries are its PRINTED RAILS, and those are not
+    # the subject's rectangle. The rectangle's x is a fused lattice position --
+    # the mean centre of every collinear bar on that line -- while the rail is
+    # the bar that crosses THIS band; and a rectangle may rule more than the
+    # comb, a caption or a dash box beside it, in which case the comb starts
+    # where its own rail is drawn.
+    #
+    # What must still hold is that every COMPARTMENT belongs to this subject,
+    # and that is exactly the statement that its centre lies inside the
+    # rectangle. A compartment centred outside it is the subject next door's,
+    # however the rails bounding it were derived, and a rail sitting a fraction
+    # of a point beyond a fused edge takes nothing from anybody. Over this
+    # corpus all 39,573 compartments satisfy it.
+    if len(bbox_numbers) != 4 or not all(
+            bbox_numbers[0] < (left + right) / 2.0 < bbox_numbers[2]
+            for left, right in zip(slots, slots[1:])):
         raise RefereeError(f"{label} slot_x disagrees with subject bbox")
     y0 = finite_number(comb.get("y0"), f"{label} y0")
     y1 = finite_number(comb.get("y1"), f"{label} y1")
@@ -11416,6 +11491,38 @@ def self_test() -> int:
             caption_comb_contract, caption_bbox, "caption self-test"),
         "source_suppression_criterion": SOURCE_CAPTION_BLOCK_CRITERION,
     }
+
+    # A comb's outer slot boundaries are its printed rails, so they are no
+    # longer required to equal the subject's rectangle -- but the comb must
+    # still be that subject's. It may sit inside the rectangle (the rectangle
+    # rules a caption or a dash box beside the comb), and it may overhang it by
+    # less than one of its own compartments (the rectangle's x is a fused mean
+    # of every collinear bar on the line, and the rail is one of them). It may
+    # not overhang by a whole compartment, and it may not miss the rectangle.
+    for railed in (
+            {"slot_x": [8.0, 20.0, 40.0], "divider_x": [20.0]},
+            {"slot_x": [0.0, 20.0, 32.0], "divider_x": [20.0]},
+            {"slot_x": [-0.4, 20.0, 40.4], "divider_x": [20.0]},
+            {"slot_x": [8.0, 20.0, 32.0], "divider_x": [20.0]},
+    ):
+        validate_comb_topology(
+            {**caption_comb_contract, **railed},
+            caption_bbox, "railed self-test")
+    for stolen in (
+            {"slot_x": [-20.0, 0.0, 20.0], "divider_x": [0.0]},
+            {"slot_x": [20.0, 40.0, 60.0], "divider_x": [40.0]},
+            {"slot_x": [40.0, 60.0, 80.0], "divider_x": [60.0]},
+            {"slot_x": [-40.0, -20.0, 0.0], "divider_x": [-20.0]},
+    ):
+        try:
+            validate_comb_topology(
+                {**caption_comb_contract, **stolen},
+                caption_bbox, "stolen self-test")
+        except RefereeError:
+            continue
+        raise AssertionError(
+            f"a comb with a compartment centred outside its subject passed: "
+            f"{stolen}")
 
     def caption_page(glyph_regions: Sequence[UnsupportedRegion]) -> SvgPage:
         return SvgPage(100, 100, [paint(20), *source_frame()],

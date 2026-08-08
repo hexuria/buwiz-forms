@@ -2288,10 +2288,289 @@ def band_ink(extra: Sequence[dict[str, Any]], x0: float, x1: float,
     return found
 
 
+class CombOwnerPaper:
+    """The paper one comb owner encloses, as its rails are measured against.
+
+    ``y0``/``y1`` are the owner's own paper -- its top border's inner edge to
+    its bottom border's inner edge, i.e. ``yl.ink_hi[j0]``/``yl.ink_lo[j1]``,
+    the same numbers ``comb_band_owners`` binds ownership to. A boundary that
+    crosses all of it is a WALL: it closes a box. A boundary that stops inside
+    it is a guide TICK, which is what `comb_writing_surface` already says the
+    source draws at the foot of a taller box.
+
+    ``left``/``right`` are the ink of the owner's own vertical edges, which is
+    not the same thing as the lattice line's position: fusion moves a line to
+    the MEAN centre of every collinear fragment it gathered, and the fragment
+    that actually crosses the comb band can be a third of a point away from
+    that mean (1800 fuses 584.26/584.50/584.74x2 into 584.56 while the bar
+    over the comb is the one at 584.26).
+    """
+
+    __slots__ = ("y0", "y1", "left", "right")
+
+    def __init__(self, y0: float, y1: float,
+                 left: Sequence[dict[str, Any]],
+                 right: Sequence[dict[str, Any]]) -> None:
+        self.y0 = float(y0)
+        self.y1 = float(y1)
+        self.left = list(left)
+        self.right = list(right)
+
+
+def owner_paper_from_lattice(xl: Lattice, yl: Lattice,
+                             i0: int, i1: int, j0: int, j1: int,
+                             all_ink: Sequence[dict[str, Any]],
+                             ) -> CombOwnerPaper:
+    """The paper and edge ink of the cell spanning lattice box (i0,j0)-(i1,j1).
+
+    An edge's ink is the boundary's own defining bars PLUS anything else drawn
+    inside that boundary's measured ink. Both halves are needed and neither is
+    redundant: the defining list is the only place a bar the compositor
+    proved erased survives (`build_page` retains it as a companion so the
+    line's centre does not move), and the ink list is the only place a bar
+    `split_verticals` filed as a comb divider appears -- 1801's item-24 money
+    comb is closed on the right by a 0.48pt stroke that hangs from nothing.
+    """
+    def edge(index: int) -> list[dict[str, Any]]:
+        lo = xl.ink_lo[index] - JOIN_EPSILON_PT
+        hi = xl.ink_hi[index] + JOIN_EPSILON_PT
+        seen: set[tuple[float, float, float, float, float]] = set()
+        out: list[dict[str, Any]] = []
+        for ink in [*xl.members[index], *all_ink]:
+            if float(ink["x1"]) <= lo or float(ink["x0"]) >= hi:
+                continue
+            key = (float(ink["x0"]), float(ink["y0"]),
+                   float(ink["x1"]), float(ink["y1"]),
+                   float(ink["thickness_pt"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(ink)
+        return out
+
+    return CombOwnerPaper(yl.ink_hi[j0], yl.ink_lo[j1], edge(i0), edge(i1))
+
+
+def ink_runs(candidates: Sequence[dict[str, Any]],
+             final_paint: FinalPaint | None,
+             ) -> list[tuple[float, float, float]]:
+    """The y runs one column of collinear ink covers, with their own weight.
+
+    Fragments join where the paper between them is thinner than the ink either
+    side of it -- `distinct_boundary`'s test, turned through a right angle,
+    which is also how `is_one_boundary` decides that two bars draw one line.
+    A wall regularly arrives in pieces: 1800 breaks the column closing its
+    middle date box where that box's own top rule crosses it, leaving 0.24pt
+    of paper between two strokes 0.48 and 0.24pt wide. A break that cannot be
+    as wide as the stroke is thick does not print as a break.
+
+    They do NOT join across an erased corridor, however narrow. A knockout
+    painted over the junction is the source saying the stroke stops there --
+    the same reading `source_owned_comb_frame.separated_top_rail_stub` already
+    takes of the same evidence -- and it is exactly what separates two forms
+    that draw the same shape: 2200-A erases the junction between its YYYY
+    column and the row above, 1800 leaves 0.24pt of paper beside its knockout
+    and the column carries through.
+
+    `final_paint` is optional because the legacy continuity detector is
+    deliberately raw: it measures the ink the source drew, without asking
+    whether a later knockout removed it. Passing it here would give the
+    continuity denominator a final-paint opinion it is defined not to have.
+    """
+    spans: list[tuple[float, float, float, dict[str, Any]]] = []
+    for ink in candidates:
+        weight = float(ink["thickness_pt"])
+        if final_paint is None:
+            spans.append((float(ink["y0"]), float(ink["y1"]), weight, ink))
+        else:
+            spans.extend(
+                (lo, hi, weight, ink)
+                for lo, hi in final_paint.visible_intervals(ink))
+
+    def junction_erased(previous: dict[str, Any], ink: dict[str, Any],
+                        gap_y0: float, gap_y1: float) -> bool:
+        if final_paint is None or gap_y1 <= gap_y0:
+            return False
+        x0 = max(float(previous["x0"]), float(ink["x0"]))
+        x1 = min(float(previous["x1"]), float(ink["x1"]))
+        if x1 <= x0:
+            x0 = min(float(previous["x0"]), float(ink["x0"]))
+            x1 = max(float(previous["x1"]), float(ink["x1"]))
+        # Later than the stroke it interrupts, not later than both: the sheet
+        # draws the column, paints the slice out, and draws the rest below it.
+        last = min(paint_ordinal_range(previous)[1],
+                   paint_ordinal_range(ink)[1])
+        return final_paint.definitely_erased({
+            "x0": x0, "y0": gap_y0, "x1": x1, "y1": gap_y1,
+            "paint_seq": last, "paint_seq_max": last,
+        })
+
+    runs: list[tuple[float, float, float, dict[str, Any]]] = []
+    for lo, hi, weight, ink in sorted(spans, key=lambda item: item[:3]):
+        if (runs
+                and lo - runs[-1][1] <= runs[-1][2] + weight + JOIN_EPSILON_PT
+                and not junction_erased(runs[-1][3], ink, runs[-1][1], lo)):
+            runs[-1] = (runs[-1][0], max(runs[-1][1], hi),
+                        max(runs[-1][2], weight), ink)
+        else:
+            runs.append((lo, hi, weight, ink))
+    return [(lo, hi, weight) for lo, hi, weight, _ink in runs]
+
+
+def edge_rail(edge_ink: Sequence[dict[str, Any]], edge: InkSpan,
+              band_y0: float, band_y1: float) -> float | None:
+    """Where the owner's own edge actually rules the comb band, or None.
+
+    Two restrictions, and they are the whole difference from the lattice line
+    the edge belongs to:
+
+      * only the bars that CROSS THIS BAND count. A lattice line is fused from
+        every collinear fragment on the page and sits at their mean centre, so
+        it answers "where is this column", not "where is this comb's edge".
+        1800's right column fuses bars at 584.26, 584.50 and 584.74 into a line
+        at 584.56 while the bar ruling the comb band is the one at 584.26.
+      * only ink the band-boundary test would already have refused as a slot
+        divider counts -- `distinct_boundary` against the edge's own span, the
+        same question `band_ink` asks -- so nothing that could have been a
+        compartment boundary is quietly promoted to a rail.
+
+    The position is then the mean centre of those bars, which is how a
+    boundary drawn as a stack of bars has always been positioned here
+    (`GroupGeometry.position`), applied to this band rather than to the page.
+
+    Membership is deliberately the drawn stack, knocked-out companions
+    included: `build_page` already retains every bar of a fused composite
+    boundary once one of them survives, precisely so that a later knockout
+    cannot move a published centre, and a rail measured on a different
+    membership rule from the line it stands on would be a second answer to
+    the same question. 2550M draws its date-box columns as two 0.72pt bars and
+    covers the second one's shaft; the boundary is still the pair.
+    """
+    hits = [
+        ink for ink in edge_ink
+        if float(ink["y0"]) <= band_y0 + JOIN_EPSILON_PT
+        and float(ink["y1"]) >= band_y1 - JOIN_EPSILON_PT
+        and not distinct_boundary(
+            (float(ink["x0"]), float(ink["x1"]),
+             float(ink["thickness_pt"])), edge)
+    ]
+    if not hits:
+        return None
+    return q(sum(centre(ink) for ink in hits) / len(hits))
+
+
+def divides_owner_paper(x: float, candidates: Sequence[dict[str, Any]],
+                        paper_y0: float, paper_y1: float,
+                        final_paint: FinalPaint | None) -> bool:
+    """Whether the ink at one boundary crosses the whole of the owner's paper.
+
+    The chain is assembled from every collinear fragment at that x by
+    `ink_runs`, and meets the paper's own top and bottom rails on the same
+    terms it joins its own fragments: a stroke that stops within its own width
+    of the rule closing the box has met that rule (1800's column stops 0.12pt
+    short of the 1.44pt rule above it). Where final paint is available only
+    visible span counts: a wall a later knockout erased no longer closes
+    anything.
+    """
+    return any(
+        lo - paper_y0 <= weight + JOIN_EPSILON_PT
+        and paper_y1 - hi <= weight + JOIN_EPSILON_PT
+        for lo, hi, weight in ink_runs(
+            [ink for ink in candidates
+             if abs(centre(ink) - x) <= CLUSTER_TOL_PT],
+            final_paint))
+
+
+def comb_rails(boundaries: Sequence[dict[str, Any]],
+               extra: Sequence[dict[str, Any]],
+               x0: float, x1: float,
+               band_y0: float, band_y1: float,
+               edge_thickness: tuple[float, float],
+               paper: CombOwnerPaper | None,
+               final_paint: FinalPaint | None,
+               ) -> tuple[float, float, list[dict[str, Any]]]:
+    """One comb's own outer rails, and the boundaries they still enclose.
+
+    A comb's outer edges are printed rails, not the lattice cell box, and the
+    two differ in two ways that both put a typeable box where the sheet prints
+    none:
+
+      * the cell box is a FUSED lattice position -- the mean centre of every
+        collinear fragment on that line -- while the rail is the one bar that
+        crosses this band, up to 0.47pt away from that mean;
+      * a cell may legitimately hold more than the comb. 1801 rules its TIN
+        dash box and its "Contact Number" caption inside the same rectangle as
+        the digit boxes, and 1801 item 24 rules 366pt of caption before its
+        money comb starts. Bounding the comb by the cell then publishes a
+        compartment the sheet does not print, lays a slot rectangle over the
+        caption, and hands the field one more character of capacity than the
+        artwork has boxes for.
+
+    The rails are therefore measured: each side is the owner's own edge ink
+    where it crosses the band, moved inward to the innermost WALL outside the
+    tick run when the owner encloses one. A wall closes a box (it crosses the
+    owner's whole paper); a tick is a guide mark hanging inside one. Boundaries
+    outside the resulting rails are the neighbouring compartment's, not this
+    comb's, and are dropped from it.
+
+    Nothing is trimmed without a wall to trim at, and a comb drawn entirely
+    from walls -- a row of full-height boxes -- keeps every one of them: there
+    is no tick run to sit outside of, so the cell's own edges stay the rails.
+    """
+    left, right = edge_thickness
+    left_edge = (x0 - left / 2.0, x0 + left / 2.0, left)
+    right_edge = (x1 - right / 2.0, x1 + right / 2.0, right)
+    left_rail = x0
+    right_rail = x1
+    if paper is not None:
+        # The rail has to rule the band's PAPER, not the rule the band ends
+        # inside. 2550M's raw date-box ticks run 0.72pt down into the row's
+        # bottom rule, and requiring the rail to follow them there would reject
+        # the bar that plainly rules the box (the two readings of one band then
+        # measure two different outer edges, and the erased-divider certificate
+        # correctly refuses to bridge them).
+        rail_y0 = max(band_y0, paper.y0)
+        rail_y1 = min(band_y1, paper.y1)
+        measured_left = edge_rail(paper.left, left_edge, rail_y0, rail_y1)
+        measured_right = edge_rail(paper.right, right_edge, rail_y0, rail_y1)
+        # A measured rail moves the comb's edge INWARD off the fused mean, and
+        # only inward. The rectangle is the paper this comb is emitted on and
+        # nothing may be typed off it, so where the drawn bar's own centre
+        # falls outside the rectangle the rectangle wins: half the bar is
+        # already the neighbour's and the neighbour's comb measures the same
+        # rail from its own side, where it lies inside.
+        if measured_left is not None and measured_left > x0:
+            left_rail = measured_left
+        if measured_right is not None and measured_right < x1:
+            right_rail = measured_right
+        kinds = [
+            divides_owner_paper(
+                q(centre(ink)), extra, paper.y0, paper.y1, final_paint)
+            for ink in boundaries
+        ]
+        ticks = [q(centre(ink))
+                 for ink, wall in zip(boundaries, kinds) if not wall]
+        if ticks:
+            walls_left = [q(centre(ink))
+                          for ink, wall in zip(boundaries, kinds)
+                          if wall and q(centre(ink)) < ticks[0]]
+            walls_right = [q(centre(ink))
+                           for ink, wall in zip(boundaries, kinds)
+                           if wall and q(centre(ink)) > ticks[-1]]
+            if walls_left:
+                left_rail = max(walls_left)
+            if walls_right:
+                right_rail = min(walls_right)
+    enclosed = [ink for ink in boundaries
+                if left_rail < q(centre(ink)) < right_rail]
+    return q(left_rail), q(right_rail), enclosed
+
+
 def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]],
                x0: float, x1: float,
                edge_thickness: tuple[float, float],
-               final_paint: FinalPaint) -> list[dict[str, Any]]:
+               final_paint: FinalPaint,
+               paper: CombOwnerPaper | None = None) -> list[dict[str, Any]]:
     """Group a cell's comb dividers into bands, one band per field.
 
     Dividers of one comb share a y extent exactly (they are drawn by the same
@@ -2336,8 +2615,16 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             continue
         (band, band_y0, band_y1, topology_evidence,
          horizontal_rail_only) = selected
+        band = sorted(band, key=lambda ink: q(centre(ink)))
+        left_rail, right_rail, band = comb_rails(
+            band, extra, x0, x1, band_y0, band_y1, edge_thickness,
+            paper, final_paint)
+        if not band:
+            # Every measured boundary belongs to a neighbouring compartment of
+            # the same rectangle. There is no comb here to publish.
+            continue
         xs = sorted(q(centre(d)) for d in band)
-        boundaries = [q(x0), *xs, q(x1)]
+        boundaries = [left_rail, *xs, right_rail]
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
         # A single divider cannot prove two character compartments when one
         # side can hold at least two copies of the other. Likewise, a large
@@ -2475,7 +2762,8 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
 def legacy_comb_bands(members: Sequence[dict[str, Any]],
                       extra: Sequence[dict[str, Any]],
                       x0: float, x1: float,
-                      edge_thickness: tuple[float, float]
+                      edge_thickness: tuple[float, float],
+                      paper: CombOwnerPaper | None = None,
                       ) -> list[dict[str, Any]]:
     """Reconstruct the pre-partition subject ledger without promoting it.
 
@@ -2487,6 +2775,14 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
     unless exact source-order evidence proves that every omitted legacy
     divider was fully erased; a nonrectangular owner remains retained and
     unresolved.
+
+    It measures its comb's outer rails the same way `comb_bands` does, and for
+    the same reason: where a comb's edge is printed is a fact about the sheet,
+    not about which detector is reading it. Continuity is preserved by this,
+    not weakened -- a denominator that kept counting a caption as a compartment
+    would report every corrected comb as a REDUCTION and preserve the wrong
+    contract in the name of continuity. What it still refuses to do is consult
+    final paint, which is why it passes none: this is the raw reading.
     """
     inside = [d for d in members
               if x0 + CLUSTER_TOL_PT < centre(d) < x1 - CLUSTER_TOL_PT]
@@ -2513,8 +2809,13 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
         ordered = sorted(ink, key=lambda divider: (
             q(centre(divider)), -paint_ordinal(divider),
             -float(divider["thickness_pt"])))
+        left_rail, right_rail, ordered = comb_rails(
+            ordered, extra, x0, x1, band_y0, band_y1, edge_thickness,
+            paper, None)
+        if not ordered:
+            continue
         xs = [q(centre(divider)) for divider in ordered]
-        boundaries = [q(x0), *xs, q(x1)]
+        boundaries = [left_rail, *xs, right_rail]
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
         thicknesses = collections.Counter(d["thickness_pt"] for d in ordered)
         grays = sorted({d["gray"] for d in ordered if d["gray"] is not None})
@@ -3313,12 +3614,19 @@ def retained_replacement_covers_inference(
     band_y0, band_y1 = (float(value) for value in band_y)
     dividers = [float(value) for value in divider_x]
     slots = [float(value) for value in slot_x]
+    # The outer slots are the comb's own measured rails (`comb_rails`), so they
+    # are not required to be the rectangle's edges: a rectangle may rule a
+    # caption beside the comb, and its x is a fused mean the rail need not sit
+    # on. What must hold is that every COMPARTMENT is this rectangle's, which
+    # is exactly that its centre is inside the rectangle -- a compartment
+    # centred outside belongs to the subject next door, however the rails that
+    # bound it were derived.
     return (
         x0 < x1
         and y0 < y1
         and y0 <= band_y0 < band_y1 <= y1
-        and slots[0] == x0
-        and slots[-1] == x1
+        and all(x0 < (left + right) / 2.0 < x1
+                for left, right in zip(slots, slots[1:]))
         and slots[1:-1] == dividers
         and all(left < right for left, right in zip(slots, slots[1:]))
     )
@@ -3706,6 +4014,29 @@ def comb_has_cell_owner(cell: dict[str, Any],
     return comb_owner_failure_reason(cell, comb) is None
 
 
+def comb_rail_span(comb: dict[str, Any]) -> Interval:
+    """The outer rails one comb contract claims."""
+    slot_x = comb.get("slot_x") or ()
+    return (float(slot_x[0]), float(slot_x[-1]))
+
+
+def dividers_within(comb: dict[str, Any], rails: Interval) -> int:
+    """How many of one comb's boundaries fall strictly inside a rail pair.
+
+    Two readings of the same field can now bound it differently -- one detector
+    finds the printed rail, the other still ends on the cell -- so comparing
+    their raw slot COUNTS compares different questions. A boundary outside a
+    comb's rails was never one of that comb's compartment boundaries, and
+    counting it as one is how a rail correction reads as a lost divider (and
+    is then "preserved" by restoring the reading that was wrong).
+    """
+    lo, hi = rails
+    return sum(
+        1 for value in comb.get("divider_x") or ()
+        if lo < float(value) < hi
+    )
+
+
 def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
     """The vertical paper a comb's compartments are written on.
 
@@ -3842,7 +4173,8 @@ def source_owned_comb_frame(
             default=q(xl.ink_hi[i1] - xl.ink_lo[i1])),
     )
     bands = comb_bands(
-        members, extra_ink, x0, x1, edge_thickness, final_paint)
+        members, extra_ink, x0, x1, edge_thickness, final_paint,
+        owner_paper_from_lattice(xl, yl, i0, i1, j0, j1, extra_ink))
     bands = [
         band for band in bands
         if float(band["y0"]) >= y0 - CLUSTER_TOL_PT
@@ -3864,11 +4196,18 @@ def source_owned_comb_frame(
             if not any(boundary_topology_subset(topology, other)
                        for other in topologies)
         ]
+        # The published evidence is untrimmed -- `endpoint_band` measures every
+        # competing topology across the whole rectangle -- while the band has
+        # since been bounded by its own rails. Compare the part of the winning
+        # topology that lies inside those rails, or a comb whose rails cut off
+        # a boundary would look like a different topology from the one that won.
+        rail_lo, rail_hi = comb_rail_span(band)
         frame_resolves_competition = (
             len(maximal) == 1
             and same_boundary_topology(
                 tuple(float(value) for value in band["divider_x"]),
-                maximal[0])
+                tuple(value for value in maximal[0]
+                      if rail_lo < value < rail_hi))
         )
     if not has_internal_edges and not frame_resolves_competition:
         return None
@@ -4060,7 +4399,12 @@ def source_owned_comb_frame(
 
     return {
         "method": "final-visible-framed-comb",
-        "outer_rail_x": [q(x0), q(x1)],
+        # The band's own measured rails, not the component box: `comb_rails`
+        # has already established which printed bars bound this comb, and a
+        # certificate that restated the box would be claiming a frame the
+        # source does not draw.
+        "outer_rail_x": [
+            q(float(band["slot_x"][0])), q(float(band["slot_x"][-1]))],
         "baseline_y": q(yl.positions[baseline_index]),
         "band_y": [q(band["y0"]), q(band["y1"])],
         "divider_x": list(band["divider_x"]),
@@ -4326,8 +4670,14 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             0.0 if cell["border"][side] is None
             else cell["border"][side]["thickness_pt"]
             for side in ("left", "right"))
+        legacy_paper = owner_paper_from_lattice(
+            continuity_xl, continuity_yl,
+            int(cell["col"]), int(cell["col"] + cell["col_span"]),
+            int(cell["row"]), int(cell["row"] + cell["row_span"]),
+            continuity_extra)
         bands = legacy_comb_bands(
-            members, continuity_extra, cell["x0"], cell["x1"], edges)
+            members, continuity_extra, cell["x0"], cell["x1"], edges,
+            legacy_paper)
         if not bands:
             continue
         selected = max(
@@ -4352,7 +4702,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         )
         final_candidates = comb_bands(
             supported_members,
-            continuity_extra, cell["x0"], cell["x1"], edges, final_paint)
+            continuity_extra, cell["x0"], cell["x1"], edges, final_paint,
+            legacy_paper)
         final_candidate = (
             max(final_candidates,
                 key=lambda band: (band["divider_count"], -band["y0"]))
@@ -4380,7 +4731,12 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                       else cell["border"][side]["thickness_pt"]
                       for side in ("left", "right"))
         bands = comb_bands(
-            members, extra_ink, cell["x0"], cell["x1"], edges, final_paint)
+            members, extra_ink, cell["x0"], cell["x1"], edges, final_paint,
+            owner_paper_from_lattice(
+                xl, yl,
+                int(cell["col"]), int(cell["col"] + cell["col_span"]),
+                int(cell["row"]), int(cell["row"] + cell["row_span"]),
+                extra_ink))
         retained_bands: list[dict[str, Any]] = []
         rejected_owner_bands: list[dict[str, Any]] = []
         for band in bands:
@@ -4818,8 +5174,12 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 erased_legacy_divider_reduction_certificate(
                     legacy_comb, final_candidate,
                     subject["legacy_divider_witnesses"], final_paint))
+        # Counts are compared inside the candidate's own rails, never as raw
+        # slot totals: `dividers_within` says why.
         if (resolved is not None and final_candidate is not None
-                and int(final_candidate["cells"]) > int(resolved["cells"])):
+                and int(final_candidate["divider_count"])
+                > dividers_within(
+                    resolved, comb_rail_span(final_candidate))):
             if final_candidate_has_unique_owner:
                 cell["comb"] = final_candidate
                 if final_candidate_path_conflicts:
@@ -4837,7 +5197,9 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 cell["comb"] = mark_comb_unresolved(
                     legacy_comb, "no-final-visible-band",
                     method="legacy-continuity")
-            elif int(final_candidate["cells"]) < int(legacy_comb["cells"]):
+            elif (int(final_candidate["divider_count"])
+                  < dividers_within(
+                      legacy_comb, comb_rail_span(final_candidate))):
                 if erased_reduction_certificate is not None:
                     cell["comb"] = certify_erased_legacy_reduction(
                         final_candidate, erased_reduction_certificate)
@@ -4861,7 +5223,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 else:
                     cell["comb"] = mark_comb_unresolved(
                         final_candidate, "no-final-visible-owned-band")
-        elif int(resolved["cells"]) < int(legacy_comb["cells"]):
+        elif (int(resolved["divider_count"])
+              < dividers_within(legacy_comb, comb_rail_span(resolved))):
             reduction_matches_current = (
                 erased_reduction_certificate is not None
                 and final_candidate is not None
@@ -7382,11 +7745,103 @@ def self_test(ir_path: pathlib.Path) -> int:
         [topology_left, topology_right, topology_middle],
         ordinary_frame_paint,
     )
+    # The two outer boundaries here run the frame's full height while the
+    # middle one hangs inside it, so they are this comb's printed RAILS and it
+    # owns one compartment boundary, not three. The certificate must publish
+    # the rails it measured rather than restating the component box, and it
+    # must still resolve the competition -- against the winning topology's own
+    # enclosed part, since the published evidence is untrimmed.
     check(
         ordinary_certificate is not None
         and ordinary_certificate.get("resolved_competing_topologies") is True
-        and ordinary_certificate.get("divider_x") == [10.0, 15.0, 20.0],
+        and ordinary_certificate.get("divider_x") == [15.0]
+        and ordinary_certificate.get("outer_rail_x") == [10.0, 20.0],
         "an ordinary framed comb did not certify its unique maximal topology",
+    )
+    # Same frame, same evidence, with the outer boundaries stopping inside the
+    # paper: nothing is a rail, so every boundary stays a compartment divider
+    # and the comb is the whole box. This is the pair that makes the rule above
+    # a measurement rather than a preference.
+    hung_left = synthetic_vertical(10, 3, 10, 0.2, 25)
+    hung_right = synthetic_vertical(20, 3, 10, 0.2, 26)
+    hung_certificate = source_owned_comb_frame(
+        ordinary_frame_box, ordinary_frame_x, ordinary_frame_y,
+        ordinary_frame_v_at, ordinary_frame_h_at,
+        [hung_left, hung_right],
+        [hung_left, hung_right, topology_middle],
+        FinalPaint([
+            frame_left, frame_right, frame_top, frame_bottom,
+            hung_left, hung_right, topology_middle,
+        ]),
+    )
+    check(
+        hung_certificate is not None
+        and hung_certificate.get("divider_x") == [10.0, 15.0, 20.0]
+        and hung_certificate.get("outer_rail_x") == [0.0, 30.0],
+        "a comb of hanging ticks was bounded by one of its own dividers",
+    )
+
+    # ---- the rail derivation itself, on the two questions it asks ----
+    #
+    # (1) WHERE the owner's edge rules this band. The lattice line here is a
+    # composite: two bars, 0.2 apart, only the left one crossing the band. The
+    # line's own position is their mean, and taking it would put the comb's
+    # edge on paper the source rules nothing at.
+    rail_band = (4.0, 10.0)
+    rail_edge_near = synthetic_vertical(30.0, 0, 10, 0.2, 60)
+    rail_edge_far = synthetic_vertical(30.2, -5, 3, 0.2, 61)
+    rail_edge_paint = FinalPaint([rail_edge_near, rail_edge_far])
+    check(
+        edge_rail([rail_edge_near, rail_edge_far],
+                  (30.0, 30.2, 0.2), *rail_band) == 30.0,
+        "a comb rail was measured on a bar that does not cross its band",
+    )
+    check(
+        edge_rail([rail_edge_far], (30.0, 30.2, 0.2), *rail_band) is None,
+        "an edge that rules nothing across the band still produced a rail",
+    )
+    # A bar far enough from the edge to be its own boundary is a compartment
+    # divider, and a rail measured on it would be a comb eating its neighbour.
+    rail_separate = synthetic_vertical(28.0, 0, 10, 0.2, 62)
+    check(
+        edge_rail([rail_separate], (30.0, 30.2, 0.2), *rail_band) is None,
+        "a distinct boundary beside the edge was promoted to a rail",
+    )
+    #
+    # (2) WHETHER a boundary closes a box. The wall below is drawn in two
+    # pieces meeting where the band's own top rule crosses it; the same two
+    # pieces with the junction painted out are the source saying the stroke
+    # stops there, and then it divides nothing.
+    wall_upper = synthetic_vertical(15, 0.1, 4.0, 0.4, 63)
+    wall_lower = synthetic_vertical(15, 4.2, 9.9, 0.2, 64)
+    wall_paint = FinalPaint([wall_upper, wall_lower])
+    check(
+        divides_owner_paper(
+            15.0, [wall_upper, wall_lower], 0.1, 9.9, wall_paint),
+        "a wall broken by its own crossing rule stopped dividing the paper",
+    )
+    knockout_junction = {
+        **synthetic_horizontal(4.1, 0.0, 30.0, 0.2, 65, role="knockout"),
+        "paint_seq": 65, "paint_seq_max": 65,
+    }
+    check(
+        not divides_owner_paper(
+            15.0, [wall_upper, wall_lower], 0.1, 9.9,
+            FinalPaint([wall_upper, knockout_junction, wall_lower])),
+        "a stroke the source painted out at the junction still closed a box",
+    )
+    # The break itself has to be narrower than the ink either side of it.
+    wide_break_lower = synthetic_vertical(15, 5.0, 9.9, 0.2, 66)
+    check(
+        not divides_owner_paper(
+            15.0, [wall_upper, wide_break_lower], 0.1, 9.9,
+            FinalPaint([wall_upper, wide_break_lower])),
+        "two strokes with paper between them were joined into one wall",
+    )
+    check(
+        not divides_owner_paper(
+            15.0, [wall_lower], 0.1, 9.9, FinalPaint([wall_lower])),
+        "a tick hanging inside the paper was read as a wall",
     )
 
     off_baseline_middle = synthetic_vertical(15, 5, 9, 0.2, 24)
@@ -7873,13 +8328,33 @@ def self_test(ir_path: pathlib.Path) -> int:
             represented_cell, represented_comb),
         "an off-grid retained band suppressed an inference",
     )
+    # An outer slot INSIDE the rectangle is the comb's own measured rail: the
+    # rectangle rules a caption beside the comb, and the comb starts where its
+    # rail is drawn. That is evidence, not malformation, and it is covered.
+    railed_outer_comb = {
+        **represented_comb,
+        "divider_x": [10.0, 20.0],
+        "slot_x": [1.0, 10.0, 20.0, 30.4],
+    }
+    check(
+        retained_replacement_covers_inference(
+            [represented_subject_with(
+                new_slot_x=railed_outer_comb["slot_x"])],
+            represented_cell, railed_outer_comb),
+        "a rail-bounded inference was refused by its own retained blocker",
+    )
+    # A whole compartment outside the rectangle is not a rail on any reading:
+    # it is a comb claiming paper the subject next door owns.
     malformed_outer_comb = {
         **represented_comb,
-        "slot_x": [1.0, 10.0, 20.0, 30.0],
+        "divider_x": [10.0, 20.0],
+        "slot_x": [-11.0, 10.0, 20.0, 30.0],
     }
+    assert (-11.0 + 10.0) / 2.0 < 0.0
     check(
         not retained_replacement_covers_inference(
             [represented_subject_with(
+                divider_x=malformed_outer_comb["divider_x"],
                 new_slot_x=malformed_outer_comb["slot_x"])],
             represented_cell, malformed_outer_comb),
         "mutually malformed outer-slot evidence suppressed an inference",
@@ -7929,9 +8404,14 @@ def self_test(ir_path: pathlib.Path) -> int:
         owned_band_cells[0].get("comb")
         if len(owned_band_cells) == 1 else None
     )
+    # Two slots, not four: the boundaries at 10 and 20 run past the cell's own
+    # rails and are this band's outer edges, so the band owns the one tick
+    # between them. What the case is about is the ownership verdict, and that
+    # must still be clean.
     check(
         owned_band_comb is not None
-        and owned_band_comb.get("cells") == 4
+        and owned_band_comb.get("cells") == 2
+        and owned_band_comb.get("slot_x") == [10.0, 15.0, 20.0]
         and comb_has_cell_owner(owned_band_cells[0], owned_band_comb)
         and "no-final-visible-owned-band" not in (
             owned_band_comb.get("resolution") or {}).get("reason_codes", [])
@@ -7947,7 +8427,8 @@ def self_test(ir_path: pathlib.Path) -> int:
     )
     check(
         richer_current_comb is not None
-        and richer_current_comb.get("cells") == 4
+        and richer_current_comb.get("cells") == 2
+        and richer_current_comb.get("slot_x") == [10.0, 15.0, 20.0]
         and "anchor-ownership-disagreement" not in (
             richer_current_comb.get("resolution") or {}).get(
                 "reason_codes", [])

@@ -6307,6 +6307,36 @@ def comb_writing_rectangle_assertions(plan: dict[str, Any],
            "the fallback is for a layout that predates it, not a preference",
            failures)
 
+    # A comb's horizontal extent is its own `slot_x`, and that is no longer the
+    # cell's: `lattice.comb_rails` measures the printed rails, and a rectangle
+    # that also rules a caption or a TIN dash box hands the comb only the part
+    # it owns. The emitter lays out on those rails and never widens them back
+    # to the cell, because widening them is exactly how a typeable box lands
+    # over the caption the sheet printed.
+    railed_comb = {**_synthetic_comb(3, 0.0, 30.0, band_y0, band_h,
+                                     (write_y0, write_h)),
+                   "slot_x": [29.9, 59.9, 89.9, 119.9]}
+    railed_cell = _synthetic_cell("p0c0", row_y0, row_y1, railed_comb)
+    railed_fields = FieldPlan(
+        {"pages": [{"index": 0, "cells": [railed_cell]}]}, face, [])
+    railed_markup = comb_slots_markup(
+        railed_cell, railed_comb, railed_fields.of("p0c0"),
+        railed_fields, True)
+    railed_lefts = re.findall(r"left:(-?[\d.]+)pt", railed_markup)
+    railed_widths = [value[1] for value in
+                     _SELF_TEST_STYLE_RE.findall(railed_markup)]
+    _check(railed_lefts == [fmt(29.9), fmt(59.9), fmt(89.9)]
+           and railed_widths == [fmt(30.0), fmt(30.0), fmt(30.0)]
+           and railed_markup.count("<input") == 3,
+           "a comb is laid out on its measured rails, not on its cell's edges",
+           f"lefts {railed_lefts} widths {railed_widths} in a cell 0..120",
+           failures)
+    _check(cell_json(railed_cell, railed_fields)["comb"]["slot_x"]
+           == [29.9, 59.9, 89.9, 119.9],
+           "the band template re-lays cloned rows from the same rails",
+           "the runtime must not rebuild a clone on the cell's edges",
+           failures)
+
     # The seam. G11's 287 corpus refusals and the 145 statutory constants that
     # nearly shipped as live inputs depend on the verdicts being asked of the same
     # rectangle the input occupies: a constant printed in the writing box but

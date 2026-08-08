@@ -2555,6 +2555,19 @@
       "cause": null,
       "audit_blind": true,
       "resolution": null
+    },
+    {
+      "id": "F196",
+      "form": "1701ms-2024, 2550m-2007, 2550q-2024",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "Six combs whose outer slot edge misses the source's printed U-frame rail by 0.26-0.31pt and cannot be fixed from the comb side. build_lattice sets a lattice line to the mean of the centres of every collinear bar on the PAGE; for these six the printed rail's own centre falls OUTSIDE the owning cell's fused edge. audit.emitted_comb_evidence simultaneously requires the outer slot_x to be within POSITION_TOL_PT (0.25) of the rail and every emitted slot to lie inside the cell rectangle, and those two cannot both be satisfied by moving the comb.",
+      "where": "1701ms-2024 p1c166, p1c173, p1c179, p1c187; 2550m-2007 p1c203; 2550q-2024 p1c6. Each of these rails is measured correctly from the other side -- 1701ms p1c167 and 2550m p1c95 now sit exactly on the same rails and hold.",
+      "evidence": "Measured on the tree written for r31: comb_slots_match_printed 16 forms/52 (33 decided) -> 12 forms/25 (6 decided) after bounding combs by their measured rails. These 6 are the whole decided residual. The other two assertion families are byte-identical at 12 forms/33 and 5 forms/28, and the 19 unevaluable subjects and their reasons did not move.",
+      "cause": null,
+      "audit_blind": false,
+      "resolution": null
     }
   ]
 }

@@ -66,7 +66,7 @@
       "2200-S Jan 2018 Guide revised.pdf"
     ]
   },
-  "html_bytes": 571118,
+  "html_bytes": 571035,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

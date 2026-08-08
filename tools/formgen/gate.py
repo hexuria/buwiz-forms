@@ -5482,10 +5482,18 @@ def _project_layout_topology(
         raise CombRefereeScopeError(f"{label} has invalid comb counts/edges")
     dividers = [float(value) for value in raw_dividers]
     slots = [float(value) for value in raw_slots]
+    # The outer values of slot_x are the comb's own printed RAILS, and they are
+    # not the subject rectangle. That rectangle's x is a fused lattice position
+    # -- the mean centre of every collinear bar on the line -- while the rail is
+    # the bar crossing this band; and one rectangle may rule a caption or a
+    # dash box beside the comb, which the comb does not own. What must hold is
+    # that every COMPARTMENT is this subject's, i.e. that its centre lies
+    # inside the rectangle; a compartment centred outside it belongs to the
+    # subject next door.
     if (any(right <= left for left, right in zip(slots, slots[1:]))
             or not _same_finite_numbers(slots[1:-1], dividers)
-            or not _same_finite_numbers(
-                [slots[0], slots[-1]], [bbox[0], bbox[2]])):
+            or not all(bbox[0] < (left + right) / 2.0 < bbox[2]
+                       for left, right in zip(slots, slots[1:]))):
         raise CombRefereeScopeError(f"{label} comb edges are inconsistent")
     y0 = comb.get("y0")
     y1 = comb.get("y1")
@@ -9689,6 +9697,27 @@ def _synthetic_comb_fixture(
     }
     fixture_topology = _project_layout_topology(
         fixture_comb, [0.0, 0.0, 10.0, 10.0], "fixture topology")
+    # A comb is bounded by its own printed rails, so slot_x's outer values need
+    # not be the subject rectangle: it may start inside it, and it may sit a
+    # fraction of a point beyond it, because that rectangle's x is the mean
+    # centre of every collinear bar on the line. What it may not do is own a
+    # compartment centred outside the rectangle.
+    for railed in ([2.0, 5.0, 10.0], [0.0, 5.0, 8.0],
+                   [-0.4, 5.0, 10.4], [2.0, 5.0, 8.0]):
+        _project_layout_topology(
+            {**fixture_comb, "slot_x": railed, "divider_x": [railed[1]]},
+            [0.0, 0.0, 10.0, 10.0], "railed fixture topology")
+    for stolen in ([-5.0, 0.0, 5.0], [5.0, 10.0, 15.0],
+                   [10.0, 15.0, 20.0], [-10.0, -5.0, 0.0]):
+        try:
+            _project_layout_topology(
+                {**fixture_comb, "slot_x": stolen, "divider_x": [stolen[1]]},
+                [0.0, 0.0, 10.0, 10.0], "stolen fixture topology")
+        except CombRefereeScopeError:
+            continue
+        raise AssertionError(
+            "a comb with a compartment centred outside its subject passed: "
+            f"{stolen}")
     fixture_emission_geometry = {
         "page_index": 1,
         "left": 0.0,
