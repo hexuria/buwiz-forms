@@ -21,7 +21,7 @@
     "Arial Narrow",
     "Calibri"
   ],
-  "rules": 1353,
+  "rules": 1352,
   "text_runs": 365,
   "images": 3,
   "cells": 398,
@@ -86,7 +86,7 @@
       "1701Q Guide Jan 2018.pdf"
     ]
   },
-  "html_bytes": 758127,
+  "html_bytes": 765160,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

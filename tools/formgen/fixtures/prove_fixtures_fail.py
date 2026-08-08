@@ -16,6 +16,18 @@ be the expected one -- a mutation that trips two means a check is standing in
 for another, and a mutation that trips none means the fixture never carried the
 property.
 
+Two cases reach past make_fixtures.py, and say so. The clip check's subject is
+not a form but a page extract.py writes itself: ten painting ops, three of them
+drawn outside their own scissor. The stroke-caps check is the same shape -- its
+subject is the page extract.py writes to state every case of the `J` operator
+at once, because no fixture in either corpus draws a round or projecting cap.
+Nothing in the corpus feeds either check, so no fixture can break them -- and a
+fixture that carried a clip or a cap would be ink no check reads, which is the
+decoration this file exists to catch. Those cases patch the probe pages' own
+source instead. Each is still a mutation of the PDF a check measures rather
+than of the evidence that PDF produced, which is the property the rest of this
+file rests on.
+
 Five of extract.py's checks are deliberately NOT reachable this way; see
 CONTRACT_ONLY. They are statements about the extractor's own output contract
 rather than about corpus content, and no PDF can violate them. Naming them here
@@ -116,7 +128,69 @@ def mutate_bar_like() -> None:
     fixtures.LEAN_OFFSET_PT = 0.0
 
 
-# (the check that must trip, what was done to the corpus, how)
+def mutate_clips() -> None:
+    """Build the probe page with no scissor: every `W n` becomes a plain `n`.
+
+    The path is still constructed and still discarded, so the page paints the
+    same ten ops in the same order; only the clipping is gone. The three ops it
+    draws outside their scissors are then ink like any other, which is exactly
+    what the extractor did before it read the clip stack at all -- 1701 page 1's
+    fill at x 602.16, beyond a clip ending at 598.32, printed as a black bar
+    where the official sheet is blank.
+
+    Counted rather than replaced blind: a pattern that stopped matching would
+    mutate nothing, and a case that mutates nothing proves nothing.
+    """
+    stream = extract.CLIP_PROBE_STREAM
+    found = stream.count(b" re W n")
+    if found != PROBE_SCISSORS:
+        raise SystemExit(f"the clip probe states {found} scissors, "
+                         f"expected {PROBE_SCISSORS}")
+    extract.CLIP_PROBE_STREAM = stream.replace(b" re W n", b" re n")
+
+
+# The probe page's two nested scissors. Named so the mutation above fails loudly
+# if the page is rewritten, rather than quietly patching a stream it no longer
+# understands.
+PROBE_SCISSORS = 2
+
+
+def mutate_stroke_caps() -> None:
+    """Build the cap probe butt-capped: every `1 J` and `2 J` becomes `0 J`.
+
+    The same seven strokes are painted in the same order at the same declared
+    endpoints; only the cap style is gone. The extractor then reads every bar
+    as stopping exactly at its endpoints and measures every extension as 0.0,
+    which is precisely the pre-cap-model reading -- the one that filed 2550M's
+    round-capped comb ticks short of their rail, so lattice.split_verticals
+    took them for box borders and four year boxes reached the taxpayer as one
+    wide input. The check must refuse it on both fronts: the published
+    geometry no longer matches the table, and the measured extensions are 0.0
+    where the page's `J` operators say 0.6.
+
+    Counted rather than replaced blind, for the same reason as mutate_clips: a
+    pattern that stopped matching would mutate nothing, and a case that
+    mutates nothing proves nothing.
+    """
+    stream = extract.CAP_PROBE_STREAM
+    found = (stream.count(b"\n1 J\n"), stream.count(b"\n2 J\n"))
+    if found != (PROBE_ROUND_CAPS, PROBE_PROJECTING_CAPS):
+        raise SystemExit(
+            f"the cap probe states {found[0]} round and {found[1]} projecting "
+            f"caps, expected {PROBE_ROUND_CAPS} and {PROBE_PROJECTING_CAPS}")
+    extract.CAP_PROBE_STREAM = (stream
+                                .replace(b"\n1 J\n", b"\n0 J\n")
+                                .replace(b"\n2 J\n", b"\n0 J\n"))
+
+
+# The cap probe's non-butt cap operators: five round (`1 J`), one projecting
+# (`2 J`). Named for the same reason as PROBE_SCISSORS -- a rewritten probe
+# page must fail this case loudly, not be half-patched in silence.
+PROBE_ROUND_CAPS = 5
+PROBE_PROJECTING_CAPS = 1
+
+
+# (the check that must trip, what was done to the source, how)
 CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
     ("paper", "every sheet is built Letter-height", mutate_paper),
     ("paths", "one filled triangle is never drawn", mutate_paths),
@@ -125,14 +199,21 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
     ("codepoints", "the unmappable glyph is not emitted", mutate_codepoints),
     ("tone", "both decorative greys are painted black", mutate_tone),
     ("is-bar-like", "the separators are drawn exactly vertical", mutate_bar_like),
+    ("clips", "the probe page's scissors are never established", mutate_clips),
+    ("stroke-caps", "the cap probe's every stroke is butt-capped",
+     mutate_stroke_caps),
 )
 
-# Everything a mutation is allowed to reach into, captured before the first one
-# runs and restored before each. Patching a module global and forgetting to put
-# it back would leak into the next case and misattribute its result.
-PATCHABLE = ("PAGE_HEIGHT_PT", "LEAN_OFFSET_PT", "GREY_LIGHT", "GREY_MID",
-             "right_triangle", "checkerboard", "flip_placement",
-             "insert_unmappable_glyph")
+# Everything a mutation is allowed to reach into, as (module, attribute),
+# captured before the first one runs and restored before each. Patching a module
+# global and forgetting to put it back would leak into the next case and
+# misattribute its result. The probe streams are on this list for that reason
+# and no other: they are the two subjects that do not live in the corpus.
+PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
+             (fixtures, "GREY_LIGHT"), (fixtures, "GREY_MID"),
+             (fixtures, "right_triangle"), (fixtures, "checkerboard"),
+             (fixtures, "flip_placement"), (fixtures, "insert_unmappable_glyph"),
+             (extract, "CLIP_PROBE_STREAM"), (extract, "CAP_PROBE_STREAM"))
 
 
 def profile_over(root: pathlib.Path) -> extract.SelfTestProfile:
@@ -178,7 +259,8 @@ def prove(stream: Any) -> int:
             f"cannot have one; unaccounted={sorted(declared - accounted)} "
             f"invented={sorted(accounted - declared)}")
 
-    pristine = {name: getattr(fixtures, name) for name in PATCHABLE}
+    pristine = [(module, name, getattr(module, name))
+                for module, name in PATCHABLE]
     with tempfile.TemporaryDirectory() as scratch:
         root = pathlib.Path(scratch)
         fixtures.build_all(root / "clean")
@@ -189,8 +271,8 @@ def prove(stream: Any) -> int:
               f"nothing trips", file=stream)
 
         for expected, description, mutate in CASES:
-            for name, value in pristine.items():
-                setattr(fixtures, name, value)
+            for module, name, value in pristine:
+                setattr(module, name, value)
             mutate()
             out = root / expected
             fixtures.build_all(out)
@@ -202,8 +284,8 @@ def prove(stream: Any) -> int:
                     f"tripped {tripped}")
             print(f"  {expected:<12} {'OK' if good else 'WEAK':<5} "
                   f"{description}", file=stream)
-        for name, value in pristine.items():
-            setattr(fixtures, name, value)
+        for module, name, value in pristine:
+            setattr(module, name, value)
 
     for name in sorted(CONTRACT_ONLY):
         print(f"  {name:<12} n/a   not reachable from corpus content: "

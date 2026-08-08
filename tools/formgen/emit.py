@@ -83,7 +83,11 @@ import re
 import sys
 import tempfile
 import urllib.parse
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Iterator, Sequence
+
+_HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE))
+import guides  # noqa: E402 - a sibling stage; used for its text-table column grid
 
 SCHEMA_VERSION = 1
 
@@ -1191,9 +1195,11 @@ class FieldBox:
     kinds it is now the same measurement: the cell inset by the thickness of the
     rule bounding each side. A comb's used to be the extent of its own dividers
     (7.44pt inside an 18.90pt cell on 2551Q), which mistook a guide tick for a
-    wall; `lattice.comb_writing_surface` carries the artwork that settles it and
-    applies the identical inset there, so a comb arrives with `y0`/`height_pt`
-    already inset and only the plain-field branch below computes one.
+    wall; `lattice.comb_on_writing_surface` carries the artwork that settles it
+    and applies the identical inset there, publishing it as `writing_y0` /
+    `writing_height_pt` beside the divider band, so a comb arrives already
+    inset -- see `comb_writing_rect`, which is the one reader of it -- and only
+    the plain-field branch below computes one.
     A cell rect runs along its rules' *centres*
     (rule v173 spans x 136.10-136.58 and the cell edge is 136.34), so half a
     thickness already clears the ink; using the whole one clears it and leaves
@@ -1220,13 +1226,54 @@ class FieldBox:
         return (self.size_pt, self.line_height_pt, self.letter_spacing_pt)
 
 
+def comb_writing_rect(cell: dict[str, Any],
+                      comb: dict[str, Any]) -> tuple[float, float]:
+    """One comb's WRITING rectangle: absolute top, and height. Never the band.
+
+    `lattice.comb_on_writing_surface` publishes two vertical extents for one
+    comb because they answer two different questions, and every defect this
+    function exists to prevent came from one caller reading the other one:
+
+      * `y0` / `y1` / `height_pt` are the **source divider band** -- the extent
+        of the tick marks themselves. They are the contract the comb referee's
+        `classify_band` seeds its source topology from and the reviewed 2551Q
+        control was signed against, so nothing emitted may restate them. This
+        function never returns them when a writing rectangle exists.
+      * `writing_y0` / `writing_y1` / `writing_height_pt` are the **writing
+        box** -- the owning cell's printed walls inset by that cell's own
+        border thicknesses, the identical inset `field_box` gives a plain text
+        field.
+
+    A tick is a guide mark *under* the box, not the box. On 2550M's item-4 TIN
+    row the cell walls span the full 15.60pt of the row while the digit
+    separators are 3.12pt stubs along its bottom edge; laying the slot div and
+    its input on the band hands the taxpayer a 3.12pt typing surface fitted at
+    a 2.81pt face, which is F186. Everything the emitter LAYS OUT for a comb --
+    the slot rectangle, the input inside it, the band-template JSON the runtime
+    re-lays cloned rows from, and the face `field_box` fits -- therefore comes
+    from here, so those four can never disagree with each other again.
+
+    The fallback is the band, and it is for a layout that predates
+    `comb_on_writing_surface` (and for the emitter's own synthetic fixtures),
+    not a preference: measured over `build/layout`, all 4,561 combs in this
+    corpus publish all three writing keys, `writing_y1 - writing_y0` equals
+    `writing_height_pt` on every one of them, and every writing rectangle lies
+    inside its own cell.
+    """
+    if ("writing_y0" in comb and "writing_y1" in comb
+            and "writing_height_pt" in comb):
+        return float(comb["writing_y0"]), float(comb["writing_height_pt"])
+    return (float(comb.get("y0", cell["y0"])),
+            float(comb.get("height_pt", float(cell["y1"]) - float(cell["y0"]))))
+
+
 def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
     """Fit the body face into one field's writing box. None if it cannot fit."""
     comb = cell.get("comb")
     if comb:
         kind, capacity = "comb", int(comb["cells"])
         inset: tuple[float, float, float, float] | None = None
-        height = float(comb.get("height_pt", cell["y1"] - cell["y0"]))
+        height = comb_writing_rect(cell, comb)[1]
     else:
         kind, capacity = "text", None
         top = _border_thickness(cell, "top")
@@ -1309,7 +1356,8 @@ class PrePrintedInk:
     BUCKET_PT = 16.0
 
     def __init__(self, runs: Sequence[dict[str, Any]]) -> None:
-        self._buckets: dict[int, list[tuple[float, float, list[tuple[float, float]]]]] = {}
+        self._buckets: dict[
+            int, list[tuple[float, float, list[tuple[str, float, float]]]]] = {}
         for run in runs:
             spans = _glyph_spans(run)
             if not spans:
@@ -1319,14 +1367,15 @@ class PrePrintedInk:
             for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
                 self._buckets.setdefault(bucket, []).append(entry)
 
-    def coverage(self, cell: dict[str, Any]) -> float:
-        """Fraction of the cell's width covered by pre-printed glyph ink."""
-        width = float(cell["x1"]) - float(cell["x0"])
-        if width <= 0:
-            return 0.0
-        x0, x1 = float(cell["x0"]), float(cell["x1"])
-        y0, y1 = float(cell["y0"]), float(cell["y1"])
-        inside: list[tuple[float, float]] = []
+    def _spans_over(self, y0: float, y1: float
+                    ) -> Iterator[list[tuple[str, float, float]]]:
+        """The glyphs of every run that is printed IN the band `y0..y1`.
+
+        The half-its-own-height test is the whole of "printed in" -- see the
+        class docstring -- and lives here so that the two questions asked of
+        this index, occupancy of a cell and what a comb slot carries, cannot
+        drift apart on which runs they consider.
+        """
         seen: set[int] = set()
         for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
             for entry in self._buckets.get(bucket, ()):
@@ -1337,10 +1386,20 @@ class PrePrintedInk:
                 overlap = min(y1, run_y1) - max(y0, run_y0)
                 if run_y1 <= run_y0 or overlap < 0.5 * (run_y1 - run_y0):
                     continue
-                for span_x0, span_x1 in spans:
-                    low, high = max(x0, span_x0), min(x1, span_x1)
-                    if high > low:
-                        inside.append((low, high))
+                yield spans
+
+    def coverage(self, cell: dict[str, Any]) -> float:
+        """Fraction of the cell's width covered by pre-printed glyph ink."""
+        width = float(cell["x1"]) - float(cell["x0"])
+        if width <= 0:
+            return 0.0
+        x0, x1 = float(cell["x0"]), float(cell["x1"])
+        inside: list[tuple[float, float]] = []
+        for spans in self._spans_over(float(cell["y0"]), float(cell["y1"])):
+            for _char, span_x0, span_x1 in spans:
+                low, high = max(x0, span_x0), min(x1, span_x1)
+                if high > low:
+                    inside.append((low, high))
         if not inside:
             return 0.0
         inside.sort()
@@ -1355,27 +1414,406 @@ class PrePrintedInk:
         covered += high - low
         return covered / width
 
+    def slot_constant(self, x0: float, y0: float, x1: float, y1: float) -> str | None:
+        """The pre-printed glyph this comb slot is ALREADY OCCUPIED BY, or None.
 
-def _glyph_spans(run: dict[str, Any]) -> list[tuple[float, float]]:
-    """Each non-space glyph's x extent, from the IR's own per-glyph metrics."""
+        `coverage` cannot answer this. A comb slot is one character wide, so a
+        single printed glyph covers most of it whatever that glyph is; how much
+        ink is in the slot cannot tell a compartment the source filled in from
+        a blank compartment beside one it filled in.
+
+        The name is kept because three resolved findings quote it verbatim, but
+        the question it asks is occupancy, not authorship -- see the third
+        paragraph. Two conditions, each a population the corpus separates on
+        (build/layout + build/ir, 53 bundles, 4,561 comb cells, 39,444
+        compartments, 2026-08-08 -- 407 compartments carry ink at all, 373 of
+        those carry exactly one glyph, and 366 of THOSE are contained and
+        admitted here):
+
+          * **Exactly one glyph.** A value is typeset AT the comb's pitch, one
+            character per compartment, because it is printed to look like a
+            filled-in box: `I I 0 1 1`, `X C 0 1 0`, `2 0`, `0 0 0 0 0`, and
+            the money bullet in its own compartment. A caption the lattice
+            swallowed into the same cell is typeset at label scale and lands 9
+            to 654 glyphs in ONE slot -- `7A ZIP Code`, `12 Contact Number`,
+            2200A's whole signature line. All 34 such slots are that, every one
+            of them 9 glyphs or more; all 373 single-glyph slots are not.
+            Nothing in the corpus is in between, and the two populations answer
+            to different defects: a swallowed caption is a segmentation fault
+            (G05/G12) and deleting its slot's input would hide it, not fix it.
+          * **Wholly inside the slot.** A neighbour's caption can clip one
+            glyph into the first compartment: 2551M's and 2553's `28C`/`29B`
+            item numbers overhang by 4.53pt, and 0605 p1c3's date hint clips
+            its closing bracket in by 1.98pt. The margin (glyph to slot wall)
+            is negative for exactly those 7 and >= +0.24pt for all 366 admitted
+            compartments; the corpus separates by 2.22pt with nothing in
+            between, so the test is containment itself and carries no
+            tolerance.
+
+        There was a third condition -- the glyph must be ALPHANUMERIC -- on the
+        reasoning that `.` `-` `%` and the money bullet `●` are drawn INSIDE a
+        field to shape what is typed into it rather than to state a value, and
+        that refusing their compartments would re-create C4 (a money comb with
+        no way to type an amount at all). Measured at compartment resolution
+        over the whole corpus, that reasoning is wrong on both halves:
+
+          * **Character class is not the question.** The compartment is one
+            character wide and the source has already put a character in it.
+            Whatever that character means, the compartment is SPENT: an input
+            there is a typing surface no taxpayer can use, laid directly over
+            printed ink. Those 92 money bullets are `inputs_over_printed_text`'s
+            largest offender population -- 89 of its 147 -- and no vertical
+            inset can clear them, because the bullet sits inside the divider
+            band. The digits of an amount go into the compartments either side
+            of the point, which is precisely why refusing the point's own
+            compartment leaves the comb usable.
+          * **The C4 evidence does not say what it was read as saying.** C4 is
+            a comb with ZERO inputs; this verdict is per compartment, and what
+            protects C4 is that only an OCCUPIED compartment is refused.
+            Dropping the condition refuses 94 compartments that were live: 92
+            money bullets, each ONE compartment of a 14-, 29- or
+            33-compartment comb, every one of them the third from the right
+            with the two centavos compartments to its right (2000-DST 16,
+            2200A 20, 2200C 20, 2200P 20, 2200S 16); and the 2 that complete
+            the printed rate `0 %` on 1800 p1c68 and 2550-DS p1c79, 2-
+            compartment combs the source fills entirely and which are not money
+            boxes. Re-measured against the C4 list itself: 2000-DST's page-1
+            money grid keeps 13 of 14 compartments on every money row, 2200A
+            and 2200P Part III likewise, and 1801 item 24, 2316 items 23-24 and
+            1702EX item 18 carry no bullet compartment at all and do not move.
+            Not one digit compartment anywhere in the corpus loses its input,
+            and no comb that had a typeable compartment is left without one
+            except the two printed rates.
+          * The other 7 non-alphanumeric compartments were **already refused**
+            before this change, by `comb_slot_verdicts`' shading branch: the
+            grey group separators printing `-` (1800 p1c15, 1801 p1c14, p1c15,
+            p1c31 twice, p1c32) or `.` (1801 p1c57). All that moves for them is
+            which evidence the report names -- their emitted bytes are
+            identical, because a slot div deliberately carries no
+            `data-preprinted` attribute. What is left to the shading branch is
+            then exactly the 9 swallowed-caption compartments, which is the
+            population that branch was reasoned about.
+
+        Where it stops, stated rather than papered over. A caption printed
+        beside the comb whose LAST glyph lands wholly inside the first
+        compartment, alone, would be read as that compartment's own ink and
+        cost the taxpayer a box. Neither condition above rejects that shape and
+        the alphanumeric one never did either: it caught only the half of it
+        that ends in punctuation, and a caption ending in a letter passed it
+        unchanged. The corpus has neither half -- all 366 admitted compartments
+        take their glyph from a run lying wholly within its own comb's
+        compartment span -- and the two overhang shapes that DO occur are what
+        the two conditions above are for. A format hint typeset at comb pitch
+        and centred in the writing band -- a literal `M M / Y Y` inside the
+        boxes -- would likewise read as occupancy; the corpus has no such hint,
+        its only date hints (`( MM / YYYY )` on 0605 p1c3, `( MM / DD / YYYY )`)
+        being printed OUTSIDE the comb and merely clipping a bracket 1.98pt
+        into the first slot, which containment rejects and which is now the
+        tightest rejection in the corpus. Adding a size, colour or run-extent
+        test against a population that does not exist would be machinery
+        earning nothing.
+        """
+        found: tuple[str, float, float] | None = None
+        for spans in self._spans_over(y0, y1):
+            for char, span_x0, span_x1 in spans:
+                if min(x1, span_x1) <= max(x0, span_x0):
+                    continue
+                if found is not None:
+                    return None
+                found = (char, span_x0, span_x1)
+        if found is None:
+            return None
+        char, span_x0, span_x1 = found
+        if span_x0 < x0 or span_x1 > x1:
+            return None
+        return char
+
+
+def _glyph_spans(run: dict[str, Any]) -> list[tuple[str, float, float]]:
+    """Each non-space glyph and its x extent, from the IR's per-glyph metrics."""
     origin = run.get("origin_x")
     if origin is None:
         return []
     offsets = run.get("char_origin_offsets_pt") or []
     widths = run.get("char_widths_pt") or []
-    spans: list[tuple[float, float]] = []
+    spans: list[tuple[str, float, float]] = []
     for index, char in enumerate(run["text"]):
         if char.isspace() or index >= len(offsets) or index >= len(widths):
             continue
         start = float(origin) + float(offsets[index])
-        spans.append((start, start + float(widths[index])))
+        spans.append((char, start, start + float(widths[index])))
     return spans
 
 
-def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None) -> tuple[bool, str]:
+# A cell the source shaded is a cell the source said not to write in. BIR's
+# "no rate applies here" grey is a literal operand in the content stream --
+# extract.classify_tone stamps every fill structural/decorative/knockout from
+# it -- so this is read, never inferred from a raster.
+#
+# The threshold separates the corpus rather than being tuned to it. Measured
+# over every non-comb `field` cell whose topmost covering fill is decorative
+# (build/layout + build/ir, 53 bundles, 2026-08-06), the grey values are:
+#
+#     0.5020   3     2551M's shaded Part II rows
+#     0.5882   1     1604CF page 3
+#     0.6510  27     1601-FQ / 1602Q schedule shading
+#     0.7489 149     the largest population, 2200-series schedules
+#     0.7529  41     0605 and the TIN-group gaps
+#     0.8509 126     the band grey CLAUDE.md names
+#     ----------  the gap the threshold sits in  ----------
+#     0.8902   3     1604CF p1c8/c10/c12 -- REAL fields, beside item "7" and
+#                    "(Last Name, First Name, Middle Name)"
+#     0.9489   2     2200AN p2c247/c255 -- REAL, one labelled "(To Schedule 1C)"
+#
+# Nothing lands between 0.8509 and 0.8902. `role == "decorative"` alone spans
+# the gap and would delete those 5 real fields; 0.87 catches 347 and spares
+# them. A knockout (>= 0.98) covering the cell is white paper painted back over
+# a band and leaves the cell fillable -- 2381 cells sit that way -- and a
+# chromatic fill (no grey at all: 2553 p1c16/c18/c20) is not this evidence and
+# is left alone.
+DECORATIVE_GRAY_MAX = 0.87
+# Area, not width. A band that runs the length of a row covers a narrow cell
+# entirely, and a cell straddling the edge of a band is not one the source
+# shaded -- it is one the lattice cut across a boundary, which is a different
+# defect and must not be silently answered here.
+DECORATIVE_COVERAGE = 0.7
+
+
+class DecorativeShading:
+    """What tone the paper under a cell is, asked per cell.
+
+    Topmost, because paint order decides what the taxpayer sees: BIR draws a
+    grey band across a whole row and then knocks white boxes back out of it for
+    the blanks, so the fill with the highest `paint_seq` is the one whose colour
+    the paper actually is. Reading the band alone would report every knocked-out
+    blank on the row as shaded and delete the row's real fields.
+    """
+
+    __slots__ = ("_buckets",)
+
+    BUCKET_PT = 32.0
+
+    def __init__(self, fills: Sequence[dict[str, Any]]) -> None:
+        self._buckets: dict[int, list[tuple[int, dict[str, Any]]]] = {}
+        for index, fill in enumerate(fills):
+            entry = (index, fill)
+            y0, y1 = float(fill["y0"]), float(fill["y1"])
+            for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
+                self._buckets.setdefault(bucket, []).append(entry)
+
+    def covering(self, cell: dict[str, Any]) -> dict[str, Any] | None:
+        """The topmost fill covering most of this cell, or None."""
+        x0, y0 = float(cell["x0"]), float(cell["y0"])
+        x1, y1 = float(cell["x1"]), float(cell["y1"])
+        area = (x1 - x0) * (y1 - y0)
+        if area <= 0.0:
+            return None
+        best: dict[str, Any] | None = None
+        # The IR's own index breaks a paint_seq tie, so the answer is a pure
+        # function of the file and cannot depend on bucket iteration order.
+        best_key: tuple[int, int] = (-1, -1)
+        seen: set[int] = set()
+        for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
+            for index, fill in self._buckets.get(bucket, ()):
+                if index in seen:
+                    continue
+                seen.add(index)
+                width = min(x1, float(fill["x1"])) - max(x0, float(fill["x0"]))
+                height = min(y1, float(fill["y1"])) - max(y0, float(fill["y0"]))
+                if width <= 0.0 or height <= 0.0:
+                    continue
+                if width * height < DECORATIVE_COVERAGE * area:
+                    continue
+                key = (int(fill["paint_seq"]), index)
+                if key > best_key:
+                    best, best_key = fill, key
+        return best
+
+    def blocks(self, cell: dict[str, Any]) -> bool:
+        """Whether the source shaded this cell to say it is not a blank."""
+        fill = self.covering(cell)
+        if fill is None or fill.get("role") != "decorative":
+            return False
+        gray = fill.get("gray")
+        return gray is not None and float(gray) <= DECORATIVE_GRAY_MAX
+
+
+# The captions with which BIR reserves a box for its own officers, normalised
+# to single-space lowercase. These are the sheet's own words, not ours: the
+# corpus states a reservation in exactly four voices, and the DLN/PSIC/PSOC
+# line at the top of every legacy sheet is already inert for a different
+# reason -- it has no ruled box at all, so the lattice never makes a cell
+# there. What that protection cannot cover is a reserved blank that IS boxed,
+# which is F147's defect: 0605's "BCS No./Item No. (To be filled up by the
+# BIR)" satisfies the box detector exactly as a taxpayer blank does, because
+# nothing at the box-model stage reads the caption the source set against it.
+#
+# Substrings, because 0605 embeds the phrase at the end of a longer caption
+# run; and "to be filled up the bir" is not a typo of ours -- it is the
+# official sheet's own missing "by", printed at the top of 0605 page 1, and a
+# match list that silently corrected it would not match the paper.
+BUREAU_RESERVED_SUBSTRINGS = (
+    "to be filled up by the bir",
+    "to be filled up the bir",
+    "for bir use only",
+)
+# Prefixes, not substrings: guide prose discusses these boxes mid-sentence
+# ("The machine validation shall reflect the date of payment...") and a
+# substring match would make a paragraph a reservation. A caption STARTS with
+# its subject; prose does not.
+BUREAU_RESERVED_PREFIXES = (
+    "machine validation",
+    "stamp of receiving",
+    "stamp of authorized",
+)
+
+
+def _bureau_caption(text: str) -> bool:
+    """Whether this run is a caption reserving a box for the Bureau."""
+    normalised = " ".join(text.split()).lower()
+    return (any(phrase in normalised for phrase in BUREAU_RESERVED_SUBSTRINGS)
+            or any(normalised.startswith(prefix)
+                   for prefix in BUREAU_RESERVED_PREFIXES))
+
+
+class BureauReservation:
+    """Which blanks the sheet's own captions reserve for the Bureau, per page.
+
+    The evidence is the SOURCE's, twice over: the caption text comes from the
+    IR's runs, and the box it governs is bound structurally rather than by
+    proximity -- a caption governs the ruled compartment it is printed in, and
+    nothing outside it. Both halves are needed. A keyword rule alone has
+    already burned this corpus once ("Add: Penalties"), and pure geometry
+    cannot tell 0605's Bureau-reserved BCS blank from the taxpayer's Return
+    Period boxes beside it: both are white knockouts on the same grey band,
+    under captions on the same caption row, drawn by the same operators. The
+    caption is the only thing on the paper that distinguishes them, so the
+    caption is the evidence -- anchored to the walls the source drew.
+
+    Two bindings, each measured against the corpus (build/ir + build/layout +
+    the shipped documents, 53 bundles, 2026-08-07; 96 caption runs match, and
+    the two bindings together claim 7 inputs, every one verified against the
+    official raster by a human in F147's fix):
+
+      * **The caption is printed inside the blank** -- at least half of the
+        caption's own height lies in the rect's y-band and its x-centre is
+        inside the rect. This is the bottom-of-sheet shape: 2200-A/C/P draw
+        one wide band split by a dashed rule into "Machine Validation/..."
+        and "Stamp of Receiving Office/AAB...", each box carrying its caption
+        at its top edge. (The lattice reads that band as a 2-slot comb, which
+        is why the slot resolution exists.)
+      * **The caption is printed directly above the blank, in the same ruled
+        compartment.** Adjacency is bounded by the caption's own height -- a
+        caption is set against the blank it governs, one line of separation
+        at most, and 0605's measures 4.4pt against a 9.0pt line. The
+        compartment is the nearest pair of v-walls flanking the CAPTION that
+        span from the caption down through the rect, and the rect must lie
+        between them; a h-wall spanning the compartment between caption and
+        rect breaks the binding, because a ruled separator means the caption
+        governs a section header's row, not this blank. Both constraints are
+        load-bearing: without the walls, the "For BIR Use Only" corner stack
+        on 2200S would claim the whole header band below it, and without the
+        separator test, 1701MS page 2's "PART VI ... (For BIR Use Only)"
+        header would claim the ruled money row beneath -- a real reservation
+        on the paper, but one a header-scope rule must claim over different
+        evidence, reviewed on its own.
+
+    Walls are the page's rules plus its thin structural fills, merged along
+    their line: BIR draws its outer frames as filled rectangles and breaks
+    inner rules wherever text sits on them, so an unmerged segment list would
+    find no wall where the paper plainly draws one.
+    """
+
+    __slots__ = ("_captions", "_h_walls", "_v_walls")
+
+    WALL_FILL_MAX_PT = 3.0
+    WALL_LINE_EPSILON_PT = 0.6
+    WALL_SPAN_GAP_PT = 1.0
+
+    def __init__(self, runs: Sequence[dict[str, Any]],
+                 rules: Sequence[dict[str, Any]],
+                 fills: Sequence[dict[str, Any]]) -> None:
+        self._captions = [
+            (float(run["x0"]), float(run["y0"]),
+             float(run["x1"]), float(run["y1"]))
+            for run in runs if _bureau_caption(run["text"])]
+        self._h_walls: list[tuple[float, float, float]] = []
+        self._v_walls: list[tuple[float, float, float]] = []
+        if not self._captions:
+            return
+        segments: dict[str, list[tuple[float, float, float]]] = {"h": [], "v": []}
+        for rule in rules:
+            if rule["axis"] == "h":
+                segments["h"].append(((float(rule["y0"]) + float(rule["y1"])) / 2.0,
+                                      float(rule["x0"]), float(rule["x1"])))
+            else:
+                segments["v"].append(((float(rule["x0"]) + float(rule["x1"])) / 2.0,
+                                      float(rule["y0"]), float(rule["y1"])))
+        for fill in fills:
+            if fill.get("role") != "structural":
+                continue
+            width = float(fill["x1"]) - float(fill["x0"])
+            height = float(fill["y1"]) - float(fill["y0"])
+            if height <= self.WALL_FILL_MAX_PT < width:
+                segments["h"].append(((float(fill["y0"]) + float(fill["y1"])) / 2.0,
+                                      float(fill["x0"]), float(fill["x1"])))
+            elif width <= self.WALL_FILL_MAX_PT < height:
+                segments["v"].append(((float(fill["x0"]) + float(fill["x1"])) / 2.0,
+                                      float(fill["y0"]), float(fill["y1"])))
+        for axis, walls in (("h", self._h_walls), ("v", self._v_walls)):
+            lines: list[tuple[float, list[list[float]]]] = []
+            for mid, lo, hi in sorted(segments[axis]):
+                if lines and abs(lines[-1][0] - mid) <= self.WALL_LINE_EPSILON_PT:
+                    lines[-1][1].append([lo, hi])
+                else:
+                    lines.append((mid, [[lo, hi]]))
+            for mid, spans in lines:
+                spans.sort()
+                merged = [spans[0]]
+                for lo, hi in spans[1:]:
+                    if lo <= merged[-1][1] + self.WALL_SPAN_GAP_PT:
+                        merged[-1][1] = max(merged[-1][1], hi)
+                    else:
+                        merged.append([lo, hi])
+                walls.extend((mid, lo, hi) for lo, hi in merged)
+
+    def blocks(self, x0: float, y0: float, x1: float, y1: float) -> bool:
+        """Whether a Bureau caption reserves this rect, by either binding."""
+        for rx0, ry0, rx1, ry1 in self._captions:
+            height = ry1 - ry0
+            if height <= 0.0:
+                continue
+            centre = (rx0 + rx1) / 2.0
+            if (min(y1, ry1) - max(y0, ry0) >= 0.5 * height
+                    and x0 <= centre <= x1):
+                return True
+            if not (-0.5 <= y0 - ry1 <= height):
+                continue
+            lo, hi = ry0 + 1.0, y1 - 1.0
+            left = max((w for w in self._v_walls
+                        if w[0] <= rx0 + 0.5 and w[1] <= lo and w[2] >= hi),
+                       key=lambda w: w[0], default=None)
+            right = min((w for w in self._v_walls
+                         if w[0] >= rx1 - 0.5 and w[1] <= lo and w[2] >= hi),
+                        key=lambda w: w[0], default=None)
+            if left is None or right is None:
+                continue
+            if x0 < left[0] - 1.0 or x1 > right[0] + 1.0:
+                continue
+            if any(ry1 - 0.5 < w[0] < y0 + 0.5
+                   and w[1] <= left[0] + 1.5 and w[2] >= right[0] - 1.5
+                   for w in self._h_walls):
+                continue
+            return True
+        return False
+
+
+def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None,
+                  shading: DecorativeShading | None,
+                  reservation: "BureauReservation | None") -> tuple[bool, str]:
     """Whether a taxpayer can type in this cell, and why.
 
-    Two rules, in this order, and the order is the point:
+    Four rules, in this order, and the order is the point:
 
       * **A comb-bearing cell is a field whatever text it also holds.** A comb
         *is* the field -- N boxes drawn with tick marks -- and the pre-printed
@@ -1385,20 +1823,155 @@ def field_verdict(cell: dict[str, Any], ink: PrePrintedInk | None) -> tuple[bool
         Part III, 1801 item 24, 2316 items 23-24 and 1702EX item 18 had no way
         to type an amount at all, headline payable included. 195 cells across
         37 forms.
+
+        This is a verdict about the CELL and it stops there. Which of that
+        cell's compartments a taxpayer may type in is a separate question with
+        a separate answer per compartment -- see `comb_slot_verdicts`. Reading
+        this rule as "and therefore every slot is editable" is what put a live
+        text box on the statutory ATC codes `II 011` and `XC 010`, on the
+        century `2 0`, and on the TIN branch code `0 0 0 0 0` across 24 forms.
       * **A blank the source printed over is not a blank.** Independently of
         whether guides.py relocated the table it belongs to, a cell whose
         geometry is filled with pre-printed text gets no input: on 1700 page 2 a
         taxpayer could type over the statutory bracket "Not over P 250,000".
         This is the belt to that fix's braces and it protects the forms whose
         reference tables are never relocated.
+      * **A blank the source shaded is not a blank either.** The rule above
+        protects statutory TEXT and was applied to the wrong evidence for a
+        whole class of cells: an empty three-bordered region on a grey band
+        satisfies the box detector exactly as a white one does, because
+        `lattice.classify_cell` is never told what colour the paper is. On
+        2200T page 2 that let a taxpayer focus a cell the official form shades
+        precisely to say NO RATE APPLIES and type 999,999.00 into it. The tone
+        is in the IR -- `extract.classify_tone` computed it from the content
+        stream operand -- and was simply discarded at the box-model stage.
+      * **A blank the sheet's own caption reserves for the Bureau is not the
+        taxpayer's.** F147: 0605's "BCS No./Item No. (To be filled up by the
+        BIR)" blank is a white knockout under a caption, structurally
+        identical to the taxpayer's Return Period boxes on the same row --
+        the caption is the only distinguishing ink on the paper, so it is the
+        evidence, bound to the ruled compartment it is printed in. See
+        `BureauReservation` for the two bindings and their measured corpus.
+
+    This function is the independent belt to `lattice.classify_cell`'s brace,
+    so it asks the IR itself rather than trusting the cell kind the lattice
+    assigned. Both must be wrong for a shaded cell to become typeable.
+
+    `shading` is separate from `ink` deliberately: they answer different
+    questions ("is there statutory text here" vs "is this paper a writing
+    surface") off different parts of the IR, and a cell can fail either alone.
+    Passing None for either means that evidence was not measured -- the caller
+    says so in its report rather than the check silently passing.
     """
     if cell.get("comb"):
+        # Left as it stands, on measurement rather than on principle. Exactly
+        # one comb-bearing cell in the corpus is >= 70% covered by decorative
+        # shading at <= 0.87 (1801 p1c13, 226pt wide on the 0.8509 Part I
+        # band), and its comb holds real TIN digit boxes: the band is the row,
+        # the comb is the field. The 25 narrow slivers in the census -- the
+        # grey gaps BETWEEN TIN digit groups, e.g. 2550M p1c10/c12/c14, 4.8pt
+        # strips each carrying its own 0.7529 patch -- are plain `field` cells
+        # and are caught below. Blanket-blocking a shaded comb would remove
+        # real digit boxes and buy nothing. The evidence that DOES survive at
+        # comb resolution is applied per slot instead, in `comb_slot_verdicts`.
         return True, "comb"
     if cell["kind"] != "field":
         return False, cell["kind"]
     if ink is not None and ink.coverage(cell) > PREPRINTED_COVERAGE:
         return False, "pre-printed"
+    if shading is not None and shading.blocks(cell):
+        return False, "shading"
+    if reservation is not None and reservation.blocks(
+            float(cell["x0"]), float(cell["y0"]),
+            float(cell["x1"]), float(cell["y1"])):
+        return False, "bureau"
     return True, "field"
+
+
+def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
+                       shading: DecorativeShading | None,
+                       reservation: "BureauReservation | None") -> dict[int, str]:
+    """Which of a comb's compartments the source already filled in, and why.
+
+    `field_verdict` settles the cell; a comb cell is N compartments and they do
+    not share an answer. On 1600-PT the year comb prints the century `2 0` in
+    its first two boxes and leaves the last two blank for the taxpayer -- one
+    cell, two verdicts. Answering per cell can only be wrong in one of the two
+    directions: editable everywhere (what shipped: 2,187 inputs over 180 cells
+    the lattice had already marked `mixed`) or editable nowhere (which would
+    delete the year).
+
+    Three kinds of evidence, the same three `field_verdict` uses, re-asked of
+    the slot's own rectangle rather than the cell's (the third, a Bureau
+    caption printed in the slot, is documented at its branch below):
+
+      * **Glyph ink the source put in the compartment** -- `slot_constant`,
+        which is where the occupied-versus-free discrimination lives. 366
+        compartments corpus-wide.
+      * **Decorative shading under the slot** -- the identical
+        `DecorativeShading.blocks` test at slot resolution. It resolves the 9
+        compartments the ink rule declines because they hold a whole swallowed
+        label rather than one glyph: the caption compartment of a cell whose
+        lattice segmentation ate a label (1801 p1c13/c31/c33/c112, 1800 p1c26,
+        2200S p1c29, 2552 p1c28, 1604F p1c25/c36). Not one is a digit box --
+        they are 56 to 366pt wide. The 7 grey group-separator compartments of a
+        TIN comb, which print `-` (1800 p1c15, 1801 p1c14/c15/c31 twice/c32) or
+        `.` (1801 p1c57) and are exactly the "narrow grey slivers between TIN
+        digit groups" the cell-level rule catches when the lattice happens to
+        cut them as their own cells, used to be resolved here too; the ink rule
+        now answers for them first, since the source has printed a glyph into
+        each. The verdict for those 7 changes from `shading` to `pre-printed`
+        and their emitted bytes do not change at all.
+
+    Per slot and never per group, which is a decision the corpus forces. "Any
+    constant in this comb blocks the comb" would delete 1600-PT's year entry
+    (constant leading, blanks trailing); "everything left of the constant goes
+    too" would delete the first nine digits of every 12-slot TIN comb
+    (constant trailing, blanks leading: 1702EX p1c75, 1702Q p2c47). The two
+    shapes are mirror images and no rule over the group distinguishes them, so
+    the group is not the unit -- the compartment is. The one case this leaves
+    open is recorded rather than guessed at: 1800 p2c63 prints `2 5 0 0 0 0`
+    into the last six of ten compartments and leaves four leading ones blank,
+    the way a right-aligned number does; those four stay editable, and typing
+    in them produces a figure the form's own printed digits contradict. That is
+    a segmentation question (the printed amount is one value, not a field),
+    not a can-a-taxpayer-overtype-a-constant one.
+    """
+    comb = cell.get("comb")
+    if not comb:
+        return {}
+    slot_x = [float(value) for value in comb["slot_x"]]
+    # The verdicts are questions about the COMPARTMENT -- did the source print
+    # a constant into this box, shade this box, caption this box for the
+    # Bureau -- so they are asked of the compartment's writing rectangle,
+    # never of the divider tick band. Asking them of the band regressed G11 on
+    # the r21 integration: 1702EX's branch-code `00000` sits mid-compartment,
+    # stopped being "wholly inside" the 3.84pt band, and 145 refused constants
+    # corpus-wide came back as live inputs over statutory ink. The rectangle is
+    # `comb_writing_rect`'s, which is the SAME rectangle `comb_slots_markup`
+    # lays the slot div and its input on: a verdict about a compartment a
+    # taxpayer cannot reach, or an input over ink no verdict was asked about,
+    # is what two rectangles for one comb bought last round.
+    top, height = comb_writing_rect(cell, comb)
+    y0, y1 = top, top + height
+    verdicts: dict[int, str] = {}
+    for index in range(len(slot_x) - 1):
+        x0, x1 = slot_x[index], slot_x[index + 1]
+        if x1 <= x0:
+            continue
+        if ink is not None and ink.slot_constant(x0, y0, x1, y1) is not None:
+            verdicts[index] = "pre-printed"
+        elif shading is not None and shading.blocks(
+                {"x0": x0, "y0": y0, "x1": x1, "y1": y1}):
+            verdicts[index] = "shading"
+        elif reservation is not None and reservation.blocks(x0, y0, x1, y1):
+            # The bottom-of-sheet shape: 2200-A/C/P's "Machine Validation" /
+            # "Stamp of Receiving Office" band reads to the lattice as one
+            # 2-slot comb, so the Bureau's two boxes surface here, each
+            # carrying its own caption. Slot resolution for the same reason
+            # ink and shading get it -- the compartments do not share answers.
+            verdicts[index] = "bureau"
+    return verdicts
 
 
 class FieldPlan:
@@ -1413,7 +1986,7 @@ class FieldPlan:
 
     __slots__ = ("face", "boxes", "classes", "small", "blocked",
                  "undersized_source", "undersized_derived", "uncontained",
-                 "collapsed", "comb_count")
+                 "collapsed", "comb_count", "blocked_slots", "slot_count")
 
     def __init__(self, layout: dict[str, Any], face: FieldFace | None,
                  warnings: list[str], ir: dict[str, Any] | None = None) -> None:
@@ -1430,20 +2003,35 @@ class FieldPlan:
         self.uncontained: list[str] = []
         self.collapsed: list[str] = []
         self.comb_count = 0
+        self.slot_count = 0
         # cell id -> why it has no typing surface, for the markup and the report.
         self.blocked: dict[str, str] = {}
+        # cell id -> {slot index: why that ONE compartment has none}. Separate
+        # from `blocked` because it is a different claim: `blocked` says the
+        # cell is not a blank at all, this says the source already wrote in
+        # some of the boxes it drew. A cell appears in at most one of them --
+        # a comb cell is always fillable at cell resolution.
+        self.blocked_slots: dict[str, dict[int, str]] = {}
         if face is None:
             return
         # Keyed by page index rather than zipped, so a layout page and an IR page
         # cannot be paired by position if either list is ever ordered otherwise.
         ink_by_page = {int(page["index"]): PrePrintedInk(page["text_runs"])
                        for page in (ir or {}).get("pages", ())}
+        shading_by_page = {int(page["index"]): DecorativeShading(page["area_fills"])
+                           for page in (ir or {}).get("pages", ())}
+        reservation_by_page = {
+            int(page["index"]): BureauReservation(
+                page["text_runs"], page["rules"], page["area_fills"])
+            for page in (ir or {}).get("pages", ())}
         for page in layout["pages"]:
             ink = ink_by_page.get(int(page["index"]))
+            shading = shading_by_page.get(int(page["index"]))
+            reservation = reservation_by_page.get(int(page["index"]))
             for cell in page["cells"]:
-                fillable, reason = field_verdict(cell, ink)
+                fillable, reason = field_verdict(cell, ink, shading, reservation)
                 if not fillable:
-                    if reason == "pre-printed":
+                    if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
                     continue
                 box = field_box(cell, face)
@@ -1453,6 +2041,12 @@ class FieldPlan:
                     continue
                 self.boxes[cell["id"]] = box
                 self._audit_surface(cell, box, face)
+                comb = cell.get("comb")
+                if comb:
+                    self.slot_count += max(len(comb["slot_x"]) - 1, 0)
+                    filled = comb_slot_verdicts(cell, ink, shading, reservation)
+                    if filled:
+                        self.blocked_slots[cell["id"]] = filled
         # Sorted through an explicit key: the tracking is None for a field whose
         # scaled tracking rounds to nothing, and a bare tuple sort would compare
         # None against a float the day two boxes share a size and differ there.
@@ -1461,17 +2055,67 @@ class FieldPlan:
         for index, key in enumerate(distinct):
             self.classes[key] = f"fh{index}"
         self._report(warnings)
-        if self.blocked:
-            names = sorted(self.blocked)
+        # Reported as two populations, each naming what it excluded: they are
+        # blocked on different evidence, and a count alone would leave a reader
+        # unable to tell a statutory bracket from a shaded spacer or to check
+        # either. An exclusion has to publish what it excluded.
+        printed = sorted(i for i, why in self.blocked.items() if why == "pre-printed")
+        shaded = sorted(i for i, why in self.blocked.items() if why == "shading")
+        reserved = sorted(i for i, why in self.blocked.items() if why == "bureau")
+        if reserved:
             warnings.append(
-                f"{len(names)} cell(s) the box detector called blank are filled with "
-                f"pre-printed text and get no typing surface ({', '.join(names[:6])}"
-                f"{'...' if len(names) > 6 else ''}); a taxpayer must not be able to "
-                f"type over a statutory rate")
+                f"{len(reserved)} cell(s) the box detector called blank are reserved "
+                f"for the Bureau by the sheet's own caption and get no typing surface "
+                f"({self._sample(reserved)}); a taxpayer must not be able to fill a "
+                f"box the form says the BIR fills")
+        if printed:
+            warnings.append(
+                f"{len(printed)} cell(s) the box detector called blank are filled with "
+                f"pre-printed text and get no typing surface ({self._sample(printed)}); "
+                f"a taxpayer must not be able to type over a statutory rate")
+        if shaded:
+            warnings.append(
+                f"{len(shaded)} cell(s) the box detector called blank sit on decorative "
+                f"shading at grey <= {fmt(DECORATIVE_GRAY_MAX)} and get no typing surface "
+                f"({self._sample(shaded)}); the source shaded them to say no entry "
+                f"applies there")
+        # The same obligation at slot resolution, and named the same two ways:
+        # a compartment refused for glyph ink is a value the form STATES and a
+        # reader must be able to check that claim against the sheet, while one
+        # refused for tone is a separator or a swallowed caption. Reporting a
+        # single total would put an ATC code and a TIN hyphen in one bucket.
+        printed_slots = sorted(
+            f"{cell_id}[{index}]" for cell_id, slots in self.blocked_slots.items()
+            for index, why in slots.items() if why == "pre-printed")
+        shaded_slots = sorted(
+            f"{cell_id}[{index}]" for cell_id, slots in self.blocked_slots.items()
+            for index, why in slots.items() if why == "shading")
+        reserved_slots = sorted(
+            f"{cell_id}[{index}]" for cell_id, slots in self.blocked_slots.items()
+            for index, why in slots.items() if why == "bureau")
+        if reserved_slots:
+            warnings.append(
+                f"{len(reserved_slots)} of {self.slot_count} comb slot(s) are boxes "
+                f"the sheet's own caption reserves for the Bureau and get no input "
+                f"({self._sample(reserved_slots)}); they are the Machine Validation "
+                f"and Stamp of Receiving Office boxes the lattice reads as a comb")
+        if printed_slots:
+            warnings.append(
+                f"{len(printed_slots)} of {self.slot_count} comb slot(s) already carry "
+                f"a constant the form prints and get no input "
+                f"({self._sample(printed_slots)}); a taxpayer must not be able to "
+                f"overtype a statutory code, a century or a fixed branch code")
+        if shaded_slots:
+            warnings.append(
+                f"{len(shaded_slots)} of {self.slot_count} comb slot(s) sit on "
+                f"decorative shading at grey <= {fmt(DECORATIVE_GRAY_MAX)} and get no "
+                f"input ({self._sample(shaded_slots)}); they are the grey gaps between "
+                f"digit groups and the caption end of a cell the lattice cut too wide")
         if ir is None:
             warnings.append(
-                "no IR was given to the field plan, so pre-printed occupancy is "
-                "unmeasured and a cell filled with statutory text may be editable")
+                "no IR was given to the field plan, so pre-printed occupancy and paper "
+                "tone are both unmeasured; a cell filled with statutory text or shaded "
+                "out by the source may be editable")
 
     def _audit_surface(self, cell: dict[str, Any], box: FieldBox,
                        face: FieldFace) -> None:
@@ -1490,8 +2134,13 @@ class FieldPlan:
         if not comb:
             return
         self.comb_count += 1
-        top = float(comb.get("y0", cell["y0"])) - float(cell["y0"])
-        height = float(comb.get("height_pt", cell_height))
+        # The box this classifies is the one the emitter actually lays out, so
+        # it is measured on `comb_writing_rect`'s rectangle. Measured on the
+        # divider band instead, 4,474 of 4,522 combs report `collapsed` and 225
+        # report `uncontained` -- a report about a rectangle nothing is drawn
+        # on, which is how the 3.12pt slot survived a whole round.
+        write_top, height = comb_writing_rect(cell, comb)
+        top = write_top - float(cell["y0"])
         if (top < -FIELD_CONTAINMENT_EPSILON_PT
                 or top + height > cell_height + FIELD_CONTAINMENT_EPSILON_PT):
             self.uncontained.append(cell["id"])
@@ -1557,6 +2206,10 @@ class FieldPlan:
 
     def of(self, cell_id: str) -> FieldBox | None:
         return self.boxes.get(cell_id)
+
+    def slot_blocked(self, cell_id: str, index: int) -> str | None:
+        """Why this one comb compartment carries no input, or None."""
+        return self.blocked_slots.get(cell_id, {}).get(index)
 
     def class_of(self, box: FieldBox) -> str:
         return self.classes[box.metrics_key]
@@ -1706,8 +2359,19 @@ def cell_markup(cell: dict[str, Any], fields: FieldPlan | None = None,
              f'data-row="{cell["row"]}"', f'data-col="{cell["col"]}"']
     if not cell.get("rectangular", True):
         attrs.append('data-rectangular="false"')
-    if fields is not None and fields.blocked.get(cell["id"]):
-        attrs.append('data-preprinted="true"')
+    # One attribute, because it answers one question -- "the source printed
+    # over this blank, so it is not one" -- and its value names WHICH evidence
+    # said so. `"true"` is kept for glyph ink rather than renamed: three
+    # resolved findings quote it verbatim, and a shaded cell is as literally
+    # pre-printed as a bracket of statutory text is. A Bureau-reserved cell
+    # says `"bureau"`: the comb referee pins this element's KEY set, not the
+    # value, and a reader must be able to tell a blank the BIR reserved from
+    # one the sheet printed over.
+    blocked = fields.blocked.get(cell["id"]) if fields is not None else None
+    if blocked:
+        attrs.append('data-preprinted="shading"' if blocked == "shading"
+                     else ('data-preprinted="bureau"' if blocked == "bureau"
+                           else 'data-preprinted="true"'))
     live = id_attribute == "id"
     if box is not None:
         attrs.append(f'data-field-kind="{esc_attr(box.kind)}"')
@@ -1736,10 +2400,29 @@ def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any],
     slots": the input *is* the slot box, so a centred character is centred on a
     measured slot centre by layout rather than by an advance calculation over a
     pitch that is not uniform (2551Q's pitch deviates by up to 0.12pt).
+
+    Each slot the SOURCE already filled holds none. The slot div is emitted
+    either way, because the printed compartment exists either way and every
+    consumer that counts compartments -- `comb_slots_match_printed`, the comb
+    referee's structural pass -- is counting the artwork, not the affordance.
+    What changes is only whether there is something to type into, which is the
+    same signal `money_boxes_have_inputs` already reads ("<input" in the slot).
+
+    No attribute says so, deliberately. The obvious move is a `data-preprinted`
+    on the slot to match the one `cell_markup` puts on a blocked cell, and it
+    would break two downstream readers that pin this element's exact attribute
+    set: `audit.SLOT_RE` matches `class`, `data-slot`, `style` in that order and
+    nothing else, and `comb_referee._emitter_attributes_valid` asserts the key
+    set is exactly `{"class", "data-slot", "style"}`. The exclusion is published
+    through `FieldPlan`'s warnings, per cell and per slot index, instead.
     """
     slot_x = comb["slot_x"]
-    top = float(comb.get("y0", cell["y0"])) - cell["y0"]
-    height = float(comb.get("height_pt", cell["y1"] - cell["y0"]))
+    # The slot rectangle is the compartment a taxpayer types into, so it is the
+    # comb's WRITING rectangle and never its divider band -- `comb_writing_rect`
+    # documents which is which and why. On the band, 2550M's item-4 TIN slots
+    # were 3.12pt tall inside a 15.60pt row.
+    write_top, height = comb_writing_rect(cell, comb)
+    top = write_top - cell["y0"]
     parts = []
     for index in range(len(slot_x) - 1):
         left = float(slot_x[index]) - cell["x0"]
@@ -1748,7 +2431,17 @@ def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any],
             ("left", f"{fmt(left)}pt"), ("top", f"{fmt(top)}pt"),
             ("width", f"{fmt(width)}pt"), ("height", f"{fmt(height)}pt"),
         ))
+        # `live` is the guard, not an optimisation. A band template is cut from
+        # row 0 and carries row 0's cell id, so consulting the verdict there
+        # would take a constant printed in the first row of a schedule and
+        # stamp it onto every row the renderer clones -- rows whose paper is
+        # blank. What the source printed is a fact about the row it printed it
+        # in; the pre-rendered rows are real cells and get their own verdicts a
+        # few lines up in `emit_page`. No cell in the corpus is affected either
+        # way (measured: 0 of the 82 cells with a filled compartment lie inside
+        # a growable band), so this is a guard rather than a behaviour.
         inner = ("" if box is None or fields is None
+                 or (live and fields.slot_blocked(cell["id"], index) is not None)
                  else field_input_markup(cell["id"], box, fields, index, live))
         parts.append(f'<div class="s" data-slot="{index}" '
                      f'style="{esc_attr(style)}">{inner}</div>')
@@ -1765,12 +2458,18 @@ def cell_json(cell: dict[str, Any], fields: "FieldPlan | None" = None) -> dict[s
     }
     comb = cell.get("comb")
     if comb:
+        # `y`/`h` are what the runtime re-lays a CLONED band row's slots from,
+        # so they have to be the same rectangle `comb_slots_markup` gave the
+        # pre-rendered rows -- the writing rectangle. A clone laid out on the
+        # divider band would be a row whose boxes are 3pt tall beside identical
+        # printed rows whose boxes are not.
+        write_top, height = comb_writing_rect(cell, comb)
         payload["comb"] = {
             "cells": comb["cells"],
             "pitch_pt": comb["pitch_pt"],
             "slot_x": [round(float(v) - cell["x0"], 4) for v in comb["slot_x"]],
-            "y": round(float(comb.get("y0", cell["y0"])) - cell["y0"], 4),
-            "h": round(float(comb.get("height_pt", cell["y1"] - cell["y0"])), 4),
+            "y": round(write_top - cell["y0"], 4),
+            "h": round(height, 4),
         }
     box = fields.of(cell["id"]) if fields is not None else None
     if box is not None:
@@ -2042,7 +2741,13 @@ def band_template_markup(plan: BandPlan, blob_index: int,
         comb = cell.get("comb")
         if comb:
             relative["comb"] = dict(comb)
-            relative["comb"]["y0"] = float(comb["y0"]) - row_top
+            # Every absolute y this comb publishes, moved together. The writing
+            # rectangle is the one `comb_writing_rect` lays the slots out from,
+            # so leaving it absolute here while `y0` moves would put a template
+            # row's compartments a page-height away from the row.
+            for key in ("y0", "y1", "writing_y0", "writing_y1"):
+                if key in comb:
+                    relative["comb"][key] = float(comb[key]) - row_top
         parts.append(cell_markup(relative, fields, id_attribute="data-cell-id"))
     return (f'<template id="band-template-{esc_attr(plan.band["id"])}" '
             f'data-band="{esc_attr(plan.band["id"])}" '
@@ -2714,6 +3419,19 @@ def _table_markup(runs: Sequence[dict[str, Any]],
                 index += 1
                 continue
             span, group = cells[index]
+            # A colspan may not reach a column that owns a cell of its own.
+            # `span` is how many columns the widest run in this cell overlaps,
+            # and a run can overlap a column that a *later* run on the same
+            # line starts in -- a long description whose last word crosses into
+            # the rate column, say. Unclamped, the walk below then steps from
+            # this cell straight past that start index and never emits it, so
+            # its runs leave the document altogether. That is a text loss, and
+            # emit.py's own "carries every run of its own extraction" check is
+            # the thing that says so. Narrowing the span is the only correct
+            # repair: the printed columns are the printed columns, and two
+            # cells cannot occupy one of them.
+            span = min(span, min((start for start in cells if start > index),
+                                 default=len(grid)) - index)
             attribute = f' colspan="{span}"' if span > 1 else ""
             markup = _render_pieces(
                 _line_pieces(sorted(group, key=lambda r: float(r["origin_x"]))))
@@ -2948,7 +3666,21 @@ def reflow_page(page_ir: dict[str, Any], split: PageSplit,
             flows.append("lattice")
             parts.append(markup)
             continue
-        grid, flow = _column_bands(section_runs)
+        # The column *grid* of an unruled reference table comes from where the
+        # source starts its cells, not from a coverage histogram. On 2551M p2
+        # the real gutter between the left description and the left rate sits
+        # at 4-5 runs against a peak of 18, so `_coverage_gutters` called it
+        # occupied, emitted 4 columns where the sheet prints 6, and merged two
+        # independent source rows that share a scanline -- binding PT 060 to
+        # the right half's 5% against an official 2%. `guides.table_columns`
+        # asks the unambiguous question instead ("where does a cell start"),
+        # and guides.py's self-test pins its answer on both real unruled pages.
+        #
+        # `flow` -- the dissolved reading columns -- is unchanged and still
+        # comes from `_column_bands`, so the prose path and `_is_prose`'s own
+        # classification move for no region. The ruled-lattice path above never
+        # reaches here at all.
+        grid, flow = guides.table_columns(section_runs), _column_bands(section_runs)[1]
         prose = _is_prose(section_runs, flow)
         flows.append("prose" if prose else "table")
         parts.append(_prose_markup(section_runs, flow) if prose
@@ -3362,10 +4094,24 @@ function slotsOf(el){
   var cell=el.closest("[data-cell-kind]");
   return cell?cell.querySelectorAll("input.fi[data-slot-index]"):null;
 }
+/* Position in the list of TYPEABLE slots, which is not `data-slot-index`. A
+   comb compartment the source already filled -- the century "2 0", a TIN's
+   printed branch code, the grey gap between two digit groups -- emits its slot
+   div with no input, so the two numberings diverge the moment any comb has one.
+   Reading the attribute and indexing the NodeList with it would then step off
+   the end (a 4-slot year comb whose first two are printed leaves 2 inputs, and
+   slot 2 would look for list[3]) and typing would stop advancing at the first
+   printed box. The list itself is the sequence a taxpayer moves through. */
+function positionOf(list,el){
+  for(var i=0;i<list.length;i++){if(list[i]===el){return i;}}
+  return -1;
+}
 function move(el,delta,select){
   var list=slotsOf(el);
   if(!list){return null;}
-  var index=parseInt(el.getAttribute("data-slot-index"),10)+delta;
+  var at=positionOf(list,el);
+  if(at<0){return null;}
+  var index=at+delta;
   if(index<0||index>=list.length){return null;}
   list[index].focus();
   if(select&&list[index].select){list[index].select();}
@@ -3404,7 +4150,8 @@ document.addEventListener("paste",function(ev){
   var text=(clipboard.getData("text")||"").replace(/\s+/g,"");
   if(!text){return;}
   ev.preventDefault();
-  var index=parseInt(el.getAttribute("data-slot-index"),10),written=0,last=el;
+  var index=positionOf(list,el),written=0,last=el;
+  if(index<0){return;}
   while(index<list.length&&written<text.length){
     list[index].value=text.charAt(written);
     last=list[index];
@@ -3430,15 +4177,122 @@ window.formgenFields={slotsOf:slotsOf};
 # The field debug overlay
 # ---------------------------------------------------------------------------
 #
+# WHY THIS EXISTS, AND WHY ITS FIRST VERSION WAS WORTHLESS
+#
 # The affordance a taxpayer needs is `:focus`, and it shows exactly one field at
 # a time. That is right for filling a form in and useless for reviewing one:
 # 2551Q carries 782 inputs, so seeing them all means 782 tab presses, and a
-# defect nobody looked at is a defect that ships. Every writing-box fault this
-# module knows how to describe -- the four populations `FieldPlan._report`
-# counts, plus the two only a laid-out page can reveal -- is put on the screen
-# at once instead, in colour, behind one query string.
+# defect nobody looked at is a defect that ships.
 #
-# Why it is safe to ship inside the document:
+# The first version of this overlay coloured each input by occlusion, ancestor
+# clipping and fitted font size. Every one of those is computed FROM THE INPUT'S
+# OWN RECT -- the rect the field layer emitted. It reported "233 as drawn, 0
+# problems" on a page the user could see was wrong, and it was not lying: each
+# input really was exactly where the field layer said it should be. The field
+# layer was what was wrong.
+#
+#   AN OVERLAY THAT DERIVES ITS EXPECTATION FROM THE THING IT IS CHECKING IS
+#   DECORATION, NOT A CHECK. A checker that shares its subject's source of
+#   truth cannot fail.
+#
+# This version compares the field layer against a DIFFERENT PRODUCER on the
+# same page. `emit_page()` builds two layers from two inputs that never meet:
+#
+#     <svg class="rl">    from page_ir["rules"] / ["area_fills"] -- the PDF's
+#                         own painting operators, via extract.py
+#     <div class="layer-cells">   from page_layout["cells"] + FieldPlan -- what
+#                         lattice.py decided those operators MEAN
+#
+# The rule layer is the printed sheet. The field layer is our reading of it. The
+# overlay asks the only question that can catch a misreading: does each writing
+# box fill the printed box it is supposed to fill, and does every printed box
+# have a writing box in it? A wrong cell classification, a comb that stops
+# short, an input laid across three printed columns, a box a taxpayer cannot
+# type in -- all of those are silent to the field layer and loud here.
+#
+# It is not a perfect independence. Both layers descend from one extraction, so
+# an error in extract.py could move both together. It is the strongest
+# independence available inside the document, and it is the one that separates
+# "we drew the box here" from "the box is here".
+#
+# WHAT A PRINTED BOX IS, DERIVED RATHER THAN GUESSED
+#
+# The rule layer is not a list of boxes; it is a list of painted rectangles,
+# most of them one stroke of one wall. A box has to be reconstructed, and every
+# earlier attempt in this project to reconstruct one by proximity ("the nearest
+# printed rect by centre distance") produced numbers that were wrong. So:
+#
+#   * A rect bounds a region by its INNER face. The white space to the right of
+#     a rule starts at the rule's x1, not at its centre and not at its x0. That
+#     removes the "is a rule thin or thick" question entirely -- no thickness
+#     threshold is needed anywhere in this file, and none is used.
+#   * A rect only bounds what it is painted OVER differently. A white knockout
+#     inside a grey band is a visible box; the same white rect on white paper is
+#     nothing. `visibleRects()` compares each rect's fill with the fill of the
+#     innermost EARLIER rect that wholly contains it (paper white if there is
+#     none). Containment, not a point probe: an earlier draft sampled the fill
+#     under each rect's centre, and a vertical rule crossing a horizontal rule
+#     has another black rect under its centre, so it declared 2550M page 2's
+#     column dividers invisible and reported a 253pt-wide box where the printed
+#     box is 87pt. That was an instrument error, found by rendering the page.
+#   * A wall must SPAN the box it walls. `faceCoverage()` measures how much of
+#     each side is actually inked; a side under 90% is a tick, not a wall, and
+#     the search bans it and widens. This is what makes a comb slot resolve to
+#     the comb CELL its guides subdivide, instead of to a slot with two open
+#     sides. Comb guides are deliberately short on BIR forms.
+#   * Inputs that land in the same printed box are judged TOGETHER, as their
+#     union. Forty comb slots tiling one printed cell fill it; each slot alone
+#     covers 2.5% of it. Asking the question per input would report thirty-nine
+#     false defects per comb, which is how instruments in this project have
+#     inflated counts 68-fold before.
+#
+# TOLERANCE, FROM THE DATA
+#
+# Two numbers, and neither is taste:
+#
+#   * `RULE_POSITION_TOLERANCE_PT` (0.25pt) is the pipeline's own position
+#     tolerance, the same one verify.py holds the round-trip to.
+#   * The stroke's own width. "The box" is ambiguous to within the ink that
+#     draws it -- inside face, centre, outside face are three defensible
+#     answers differing by the stroke width -- so a writing box may sit anywhere
+#     within the wall without being wrong. That is expressed geometrically, not
+#     as a constant: the box has an INNER rectangle (inner faces) and an OUTER
+#     rectangle (outer faces), and an input is at home anywhere between them,
+#     plus 0.25pt.
+#
+# Measured over 2550M and 2200T (487 printed boxes, 1169 inputs): the emitted
+# insets cluster at 0.22-0.35pt and 0.70-0.74pt, always about half the wall they
+# sit inside, and every one of the 487 is inside the tolerance with margin --
+# the tolerance is not absorbing a population, it is absorbing the ink. The
+# defects that survive it are not marginal either: overflow beyond the outer
+# face is either 0.0pt (469 boxes) or 0.46pt and up, with six inputs 170pt
+# outside their box. There is no smooth tail for a threshold to sit in the
+# middle of, which is the property a threshold needs.
+#
+# THE STATES
+#
+#   fits      green, hairline dash -- the union of the box's inputs covers the
+#                                     printed box, and stays inside its walls
+#   small     orange               -- part of the printed box more than a wall's
+#                                     width inside the ink is unreachable; the
+#                                     % of box area unreached is reported
+#   over      red                  -- an input crosses a printed wall
+#   unboxed   magenta              -- no closed printed rectangle around it at
+#                                     all: the field layer invented this box
+#   vacant    blue                 -- a closed printed rectangle, big enough to
+#                                     write in, carrying no input and no printed
+#                                     label. This is the user's "no yellow box
+#                                     here", and the previous overlay could not
+#                                     express it: it iterated over inputs, so a
+#                                     missing input was a thing it never visited
+#
+# Health is a hairline dash and every defect is solid and filled, so a healthy
+# sheet reads as a wireframe and a fault reads as a blot. Every flagged printed
+# box is also outlined in the overlay layer, which is what makes a zero-size
+# input visible: the input paints nothing, but the box we compared it against
+# is drawn.
+#
+# WHY IT IS SAFE TO SHIP INSIDE THE DOCUMENT (four barriers, any one enough)
 #
 #   * The rules are a JS string. The emitted stylesheet is untouched, so a
 #     printed or packaged page contains no debug selector to lose a guard over,
@@ -3448,56 +4302,79 @@ window.formgenFields={slotsOf:slotsOf};
 #     `debug=fields` token in `location.search`. Without it the function returns
 #     having read one string off `window.location` and created nothing: no
 #     element, no attribute, no listener. A page opened without the token is the
-#     page that would have rendered if this script were deleted.
+#     page that would have rendered if this script were deleted. That is the
+#     byte-identical-render proof, and `field_debug_assertions()` re-proves it
+#     from the source text on every build.
 #   * The rules it does inject are wrapped in `@media screen`, and a second
 #     `@media print` block neutralises every one of them with `!important`.
-#   * `beforeprint` removes the injected stylesheet outright and `afterprint`
-#     puts it back, so even a browser that ignored both media guards has nothing
-#     to apply at print time.
+#   * `beforeprint` removes the injected stylesheet AND every element the
+#     overlay created, and `afterprint` puts them back, so even a browser that
+#     ignored both media guards has nothing left to apply.
 #
-# Four independent barriers, any one of which is sufficient. The order matters:
-# the query string is first because it is the only one that survives a
-# stylesheet transform dropping the media guards, which has happened to this
-# repo's packaged bundles before.
+# The order matters: the query string is first because it is the only one that
+# survives a stylesheet transform dropping the media guards, which has happened
+# to this repo's packaged bundles before.
+#
+# Two further containment rules the overlay obeys, both asserted:
+#
+#   * It never creates a `div`. `.page:last-of-type{break-after:auto}` is the
+#     one structural selector in BASE_CSS, and appending a div to `<body>`
+#     would make the LAST PAGE stop matching it and add a page break after the
+#     sheet. Overlay chrome is `<aside>` and `<i>`, which cannot be a `.page`.
+#   * It reads no geometry from the field layer's own containers. The selectors
+#     `.layer-cells`, `.c` and `.s` do not appear in the script at all -- if
+#     they did, the expectation could drift back towards the subject, which is
+#     the exact failure this rewrite exists to end.
 
-# The colours are the state names, and they mean:
-#   ok        blue, dashed  -- the input is where its geometry says it is
-#   small     orange        -- the fitted face is under FIELD_MIN_SIZE_PT
-#   clipped   magenta       -- an ancestor's overflow cuts the box away
-#   occluded  red           -- something else paints over the box
-#   nobox     purple        -- the box has no usable width or height
-# Defects are solid and filled, health is a hairline dash, so a healthy sheet
-# reads as a wireframe and a fault reads as a blot.
+# The pipeline's position tolerance, from GOAL.md's constraint list ("exact
+# tolerances (position 0.25pt, ...)"). Stated here rather than inlined so the
+# overlay and the round-trip cannot be relaxed independently of each other.
+RULE_POSITION_TOLERANCE_PT = 0.25
+
+# A side of a candidate box must be inked over at least this much of its length
+# to count as a wall rather than a guide tick. Measured on 2550M and 2200T,
+# sides are either fully inked (>= 0.99) or a comb guide at <= 0.46; nothing
+# lands between, so the cut has no population sitting on it.
+RULE_WALL_COVERAGE = 0.9
+
 FIELD_DEBUG_SCREEN_CSS = (
     '[data-fg-field]{outline-offset:0!important}'
-    '[data-fg-field="ok"]{outline:1px dashed rgba(21,101,192,.9)!important}'
+    '[data-fg-field="fits"]{outline:1px dashed rgba(46,125,50,.85)!important}'
     '[data-fg-field="small"]{outline:1.5px solid #ef6c00!important;'
     'background:rgba(239,108,0,.20)!important}'
-    '[data-fg-field="clipped"]{outline:1.5px solid #c2185b!important;'
-    'background:rgba(194,24,91,.22)!important}'
-    '[data-fg-field="occluded"]{outline:1.5px solid #d32f2f!important;'
+    '[data-fg-field="over"]{outline:1.5px solid #d32f2f!important;'
     'background:rgba(211,47,47,.25)!important}'
-    '[data-fg-field="nobox"]{outline:1.5px solid #6a1b9a!important;'
-    'background:rgba(106,27,154,.30)!important}'
-    # A field with no box paints no outline of its own, so the slot or cell that
-    # swallowed it is marked instead: otherwise the one fault a reviewer most
-    # needs to find is the only one that is invisible.
-    '[data-fg-host]{outline:1.5px dotted #6a1b9a!important;outline-offset:1px!important}'
-    '[data-fg-legend]{position:fixed;right:8px;top:8px;z-index:2147483647;'
+    '[data-fg-field="unboxed"]{outline:1.5px solid #c2185b!important;'
+    'background:rgba(194,24,91,.25)!important}'
+    # The printed box every flagged group was measured against, drawn where the
+    # RULE layer says it is. A zero-size input paints no outline of its own, so
+    # without this the one fault a reviewer most needs to find is the only one
+    # that is invisible.
+    '[data-fg-layer]{position:absolute;left:0;top:0;right:0;bottom:0;'
+    'pointer-events:none;z-index:2147483646}'
+    '[data-fg-box]{position:absolute;display:block}'
+    '[data-fg-box="small"]{outline:1.5px solid #ef6c00;'
+    'background:repeating-linear-gradient(45deg,rgba(239,108,0,.28) 0 3px,'
+    'rgba(239,108,0,0) 3px 7px)}'
+    '[data-fg-box="over"]{outline:1.5px solid #d32f2f}'
+    '[data-fg-box="vacant"]{outline:1.5px solid #1565c0;'
+    'background:rgba(21,101,192,.30)}'
+    '[data-fg-legend] b{display:block;font-weight:400}'
+    '[data-fg-legend]{position:absolute;right:4pt;top:4pt;z-index:2147483647;'
     'background:#fff;color:#111;border:1px solid #111;padding:6px 8px;'
-    'font:11px/1.5 system-ui,-apple-system,sans-serif;'
+    'font:11px/1.5 system-ui,-apple-system,sans-serif;white-space:nowrap;'
     'box-shadow:0 1px 4px rgba(0,0,0,.35)}'
     '[data-fg-swatch]{display:inline-block;width:9px;height:9px;'
     'margin-right:6px;vertical-align:-1px;border:1px solid #111}'
-    '[data-fg-swatch="ok"]{background:#1565c0}'
+    '[data-fg-swatch="fits"]{background:#2e7d32}'
     '[data-fg-swatch="small"]{background:#ef6c00}'
-    '[data-fg-swatch="clipped"]{background:#c2185b}'
-    '[data-fg-swatch="occluded"]{background:#d32f2f}'
-    '[data-fg-swatch="nobox"]{background:#6a1b9a}'
+    '[data-fg-swatch="over"]{background:#d32f2f}'
+    '[data-fg-swatch="unboxed"]{background:#c2185b}'
+    '[data-fg-swatch="vacant"]{background:#1565c0}'
 )
 FIELD_DEBUG_PRINT_CSS = (
     '[data-fg-field]{outline:0!important;background:none!important}'
-    '[data-fg-host]{outline:0!important}'
+    '[data-fg-layer]{display:none!important}'
     '[data-fg-legend]{display:none!important}'
 )
 FIELD_DEBUG_CSS = ("@media screen{" + FIELD_DEBUG_SCREEN_CSS + "}"
@@ -3518,222 +4395,422 @@ function requested(){
   return false;
 }
 /* Nothing above this line has touched the document, and nothing below it runs
-   without the token. This is the byte-identical-layout proof: a page loaded
+   without the token. This is the byte-identical-render proof: a page loaded
    without ?debug=fields creates no element, sets no attribute and registers no
    listener, so its rendered layout is the layout it had before this script
    existed. */
 if(!requested()){return;}
 var CSS=__FIELD_DEBUG_CSS__;
-/* FIELD_MIN_SIZE_PT, interpolated from the module constant so the overlay and
-   the report cannot drift apart or be relaxed independently. */
-var MIN_SIZE_PT=__FIELD_MIN_SIZE_PT__;
-var PT_PER_PX=0.75;
-/* Sub-pixel layout noise. A box out by a third of a pixel is not clipped; a box
-   out by a point is. */
-var EDGE_TOLERANCE_PX=0.5;
-var ORDER=["ok","small","clipped","occluded","nobox"];
-var LABELS={ok:"as drawn",
-            small:"fitted under "+MIN_SIZE_PT+"pt",
-            clipped:"clipped by an ancestor",
-            occluded:"covered by another element",
-            nobox:"no usable box"};
+/* Interpolated from the module constants so the overlay and the pipeline
+   cannot drift apart or be relaxed independently. */
+var TOL=__RULE_POSITION_TOLERANCE_PT__;
+var WALL=__RULE_WALL_COVERAGE__;
+var MIN_BOX=__FIELD_MIN_SIZE_PT__;
+/* Sub-point arithmetic noise on coordinates that arrive as pt from a viewport
+   measured in px. Never a tolerance: tolerances are TOL and the wall width. */
+var EPS=0.02;
+/* How far outside a wall a vacant-box probe is planted. Half a point is under
+   every printed gap on the corpus and over every rounding artefact. */
+var PROBE=0.5;
+/* A box has four sides, so four bans settle it; the cap is a termination
+   guarantee, not a tuning knob. */
+var ROUNDS=8;
+var PAPER="rgb(255, 255, 255)";
+var ORDER=["fits","small","over","unboxed","vacant"];
+var LABELS={fits:"fill their printed box",
+            small:"smaller than their printed box",
+            over:"cross a printed wall",
+            unboxed:"no printed box at all",
+            vacant:"printed box with no input"};
 
-function fontPt(el){
-  var size=parseFloat(window.getComputedStyle(el).fontSize);
-  return isFinite(size)?size*PT_PER_PX:0;
+/* ---- the printed sheet, read from the rule layer only ------------------- */
+
+/* Every painted rectangle on one page, in page points, in PAINT ORDER.
+   Rects only: an <image> or a filled <path> is ink, but its bounding box is
+   not a wall, and treating it as one would invent walls where the artwork
+   merely has extent. Both rule backends are read the same way, through the
+   viewport, so neither the svg backend's user units nor the css backend's
+   snapped divs are trusted to be what their markup says. */
+function ruleRects(page,frame,ptPerPx){
+  var out=[],nodes=page.querySelectorAll(".rl rect, .rl .r"),i,el,r,style;
+  for(i=0;i<nodes.length;i++){
+    el=nodes[i];
+    r=el.getBoundingClientRect();
+    if(r.width<=0||r.height<=0){continue;}
+    style=window.getComputedStyle(el);
+    out.push({n:out.length,
+              x:(r.left-frame.left)*ptPerPx,y:(r.top-frame.top)*ptPerPx,
+              x1:(r.right-frame.left)*ptPerPx,y1:(r.bottom-frame.top)*ptPerPx,
+              fill:el.tagName.toLowerCase()==="rect"?style.fill:style.backgroundColor});
+  }
+  return out;
 }
-/* Every ancestor that establishes a clip, against the field's own rect. `.f`
-   and `.f .s` both set overflow:hidden, which is what makes a comb band that
-   starts above its cell disappear rather than overhang. */
-function clipped(el,rect){
-  var node=el.parentElement;
-  while(node&&node!==document.documentElement){
-    var style=window.getComputedStyle(node);
-    if(style.overflow!=="visible"||style.overflowX!=="visible"||
-       style.overflowY!=="visible"){
-      var box=node.getBoundingClientRect();
-      if(rect.left<box.left-EDGE_TOLERANCE_PX||
-         rect.top<box.top-EDGE_TOLERANCE_PX||
-         rect.right>box.right+EDGE_TOLERANCE_PX||
-         rect.bottom>box.bottom+EDGE_TOLERANCE_PX){
-        return true;
+/* A rect delimits a region only where it changes the colour under it. The
+   comparison is against the innermost EARLIER rect that WHOLLY CONTAINS this
+   one, paper white if there is none.
+
+   Containment and not a point probe, and this is the instrument bug that made
+   the first draft of this function report a 253pt box where the printed box is
+   87pt: a vertical divider's centre lands on the horizontal rule it crosses,
+   which is also black, so a centre probe called every crossing divider
+   invisible. Containment cannot be fooled that way -- a crossing rect does not
+   contain the rect it crosses.
+
+   The residual error is one-directional and stated: a rect only PARTLY over a
+   different colour is kept. That over-reports walls, which can only shrink a
+   box, so it can turn a `fits` into an `over` and never the reverse. It cannot
+   hide a defect. */
+function visibleRects(rects){
+  var out=[],i,j,r,q,under;
+  for(i=0;i<rects.length;i++){
+    r=rects[i];under=PAPER;
+    for(j=i-1;j>=0;j--){
+      q=rects[j];
+      if(q.x<=r.x+EPS&&q.y<=r.y+EPS&&q.x1>=r.x1-EPS&&q.y1>=r.y1-EPS){
+        under=q.fill;break;
       }
     }
-    node=node.parentElement;
+    if(r.fill!==under){out.push(r);}
   }
-  return false;
+  return out;
 }
-/* Centre plus four inset corners. A single centre probe misses a box half
-   covered by the cell beside it, which is the shape most of these take. A hit
-   on a DESCENDANT is still this field; a hit on an ancestor is not -- it means
-   the point landed on the box behind the input rather than on the input.
+/* What fraction of [lo,hi] the union of these intervals inks. */
+function coverage(spans,lo,hi){
+  if(hi<=lo){return 1;}
+  spans.sort(function(a,b){return a[0]-b[0];});
+  var total=0,cursor=lo,i,a,b;
+  for(i=0;i<spans.length;i++){
+    a=Math.max(spans[i][0],lo);b=Math.min(spans[i][1],hi);
+    if(b<=cursor){continue;}
+    total+=b-Math.max(a,cursor);cursor=Math.max(cursor,b);
+  }
+  return total/(hi-lo);
+}
+/* The four walls of a candidate box: which rects form each one, how much of
+   the side they ink, and where the wall's OUTER face is. The outer face is the
+   far side of the ink, and it is the whole tolerance story: "the box" is
+   ambiguous to within the stroke that draws it, so an input is at home
+   anywhere between the inner rectangle and this one. */
+function wallsOf(L,T,R,B,vis,banned){
+  var walls={L:null,T:null,R:null,B:null},side,i,r,spans,members,outer,lo,hi;
+  var sides=["L","T","R","B"];
+  for(var s=0;s<4;s++){
+    side=sides[s];spans=[];members=[];outer=null;
+    for(i=0;i<vis.length;i++){
+      r=vis[i];
+      if(banned[r.n]){continue;}
+      if(side==="L"&&Math.abs(r.x1-L)<=TOL&&r.y<B&&r.y1>T){
+        spans.push([r.y,r.y1]);members.push(r.n);
+        outer=outer===null?r.x:Math.min(outer,r.x);
+      }else if(side==="R"&&Math.abs(r.x-R)<=TOL&&r.y<B&&r.y1>T){
+        spans.push([r.y,r.y1]);members.push(r.n);
+        outer=outer===null?r.x1:Math.max(outer,r.x1);
+      }else if(side==="T"&&Math.abs(r.y1-T)<=TOL&&r.x<R&&r.x1>L){
+        spans.push([r.x,r.x1]);members.push(r.n);
+        outer=outer===null?r.y:Math.min(outer,r.y);
+      }else if(side==="B"&&Math.abs(r.y-B)<=TOL&&r.x<R&&r.x1>L){
+        spans.push([r.x,r.x1]);members.push(r.n);
+        outer=outer===null?r.y1:Math.max(outer,r.y1);
+      }
+    }
+    lo=(side==="L"||side==="R")?T:L;
+    hi=(side==="L"||side==="R")?B:R;
+    walls[side]={cover:coverage(spans,lo,hi),members:members,
+                 outer:outer===null?(side==="L"?L:side==="R"?R:side==="T"?T:B):outer};
+  }
+  return walls;
+}
+/* The smallest CLOSED printed rectangle around a point, or null.
 
-   The inset is at least a whole CSS pixel, and that is measured, not tidy:
-   Chromium quantises hit testing to the pixel grid, so a probe 0.5px inside a
-   comb slot's right edge is answered by the NEXT slot. At the corner insets a
-   quarter-height rule produced -- 0.96px on a 3.83px-tall slot -- 2550M
-   reported 36 occluded fields, every one of them a false positive against its
-   own neighbour. A box too small to carry the inset on an axis is probed at its
-   centre on that axis instead of being lied about. */
-/* Snapped to the centre of a whole CSS pixel, because that is the granularity
-   the hit test answers at. Without it the verdict depends on the scroll offset
-   the field happened to be probed from, and a fractional offset is exactly what
-   centring a field in the viewport produces: the same 2550M reported 0 occluded
-   fields at one window size and 5 at another. A point clamped back inside the
-   box when snapping would push it out, so the snap can move a probe but never
-   move it off the element. */
-function pixelCentre(value,low,high){
-  var snapped=Math.floor(value)+0.5;
-  if(snapped<low){snapped=low;}
-  if(snapped>high){snapped=high;}
-  return snapped;
-}
-function probePoints(rect){
-  var cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
-  var dx=Math.min(2,Math.max(1,rect.width/4));
-  var dy=Math.min(2,Math.max(1,rect.height/4));
-  var x0=rect.width>=2*dx?rect.left+dx:cx;
-  var x1=rect.width>=2*dx?rect.right-dx:cx;
-  var y0=rect.height>=2*dy?rect.top+dy:cy;
-  var y1=rect.height>=2*dy?rect.bottom-dy:cy;
-  var lx=rect.left+Math.min(dx,rect.width/2),hx=rect.right-Math.min(dx,rect.width/2);
-  var ly=rect.top+Math.min(dy,rect.height/2),hy=rect.bottom-Math.min(dy,rect.height/2);
-  return [[pixelCentre(cx,lx,hx),pixelCentre(cy,ly,hy)],
-          [pixelCentre(x0,lx,hx),pixelCentre(y0,ly,hy)],
-          [pixelCentre(x1,lx,hx),pixelCentre(y0,ly,hy)],
-          [pixelCentre(x0,lx,hx),pixelCentre(y1,ly,hy)],
-          [pixelCentre(x1,lx,hx),pixelCentre(y1,ly,hy)]];
-}
-function occluded(el,rect){
-  var points=probePoints(rect);
-  for(var i=0;i<points.length;i++){
-    /* Every point is inside the viewport by construction: inView() refuses to
-       hand back a rect that is not wholly in it. */
-    var hit=document.elementFromPoint(points[i][0],points[i][1]);
-    if(hit!==el&&!el.contains(hit)){return true;}
-  }
-  return false;
-}
-/* Bring a field into the viewport by scrolling the WINDOW, never by
-   scrollIntoView. `.page`, `.f` and `.f .s` are all overflow:hidden, which
-   makes every one of them a scroll container the browser is entitled to scroll
-   instead -- and scrolling a clip box moves the very content this pass is
-   measuring, leaving the sheet displaced afterwards. Fields the window cannot
-   reach (a band that starts above its own page) are reported as unprobed rather
-   than assumed healthy. */
-function inside(rect){
-  /* WHOLLY inside, not merely intersecting. A field straddling the viewport
-     edge has probe points the browser will not answer for, and dropping those
-     points quietly changes what the remaining ones are allowed to prove: the
-     same four fields on 1800-2018 came back healthy at 1400x1000 and occluded
-     at 1200x900, purely because the pass happened to reach them at a different
-     scroll offset. A verdict that depends on the window size is not a
-     measurement. */
-  return rect.left>=0&&rect.top>=0&&
-         rect.right<=window.innerWidth&&rect.bottom<=window.innerHeight;
-}
-function inView(el){
-  var rect=el.getBoundingClientRect();
-  if(inside(rect)){return rect;}
-  var root=document.documentElement;
-  /* Whole pixels: a fractional scroll offset shifts every rect on the page by a
-     fraction and moves the probe grid under the field being measured. */
-  window.scrollTo(
-    Math.round(Math.max(0,Math.min(rect.left+window.pageXOffset-window.innerWidth/2,
-                                   root.scrollWidth-window.innerWidth))),
-    Math.round(Math.max(0,Math.min(rect.top+window.pageYOffset-window.innerHeight/2,
-                                   root.scrollHeight-window.innerHeight))));
-  rect=el.getBoundingClientRect();
-  return inside(rect)?rect:null;
-}
-function legend(counts,total,unprobed){
-  var node=document.querySelector("[data-fg-legend]");
-  if(!node){
-    node=document.createElement("div");
-    node.setAttribute("data-fg-legend","");
-    /* It sits over the top-right corner of the sheet, which on most BIR forms
-       is the form number. Clicking it gets it out of the way;
-       formgenFieldDebug.refresh() brings it back. */
-    node.addEventListener("click",function(){node.style.display="none";});
-    document.body.appendChild(node);
-  }
-  node.style.display="";
-  while(node.firstChild){node.removeChild(node.firstChild);}
-  var head=document.createElement("div");
-  head.textContent="?debug=fields — "+total+" input(s)"+
-    (unprobed?", "+unprobed+" unreachable on screen":"");
-  node.appendChild(head);
-  for(var i=0;i<ORDER.length;i++){
-    var state=ORDER[i];
-    var line=document.createElement("div");
-    var swatch=document.createElement("span");
-    swatch.setAttribute("data-fg-swatch",state);
-    line.appendChild(swatch);
-    line.appendChild(document.createTextNode(counts[state]+"  "+LABELS[state]));
-    node.appendChild(line);
-  }
-}
-/* Two passes, and the split is what keeps the verdicts honest.
-
-   The first needs no scrolling: size and ancestor clipping are answered from
-   geometry alone, and reading every field's rect at one scroll position means
-   no verdict depends on where the page happened to be. Only the fields that
-   survive it need a hit test, and only those are scrolled to.
-
-   Precedence, worst first: a box with no size cannot be probed, a clipped box
-   probes as whatever replaced it, and a covered box's font size is beside the
-   point. Each field reports the most fundamental thing wrong with it. */
-function run(){
-  var scrollX=window.pageXOffset,scrollY=window.pageYOffset;
-  /* <template> content lives in a separate document fragment, so a blueprint
-     row is never selected here and never marked. */
-  var inputs=document.querySelectorAll("input.fi");
-  var counts={},states=[],pending=[],unprobed=0,i,el,host,rect;
-  for(i=0;i<ORDER.length;i++){counts[ORDER[i]]=0;}
-  for(i=0;i<inputs.length;i++){
-    el=inputs[i];
-    el.removeAttribute("data-fg-field");
-    host=el.parentElement;
-    if(host){host.removeAttribute("data-fg-host");}
-  }
-  for(i=0;i<inputs.length;i++){
-    el=inputs[i];
-    rect=el.getBoundingClientRect();
-    if(rect.width<1||rect.height<1){states.push("nobox");}
-    else if(clipped(el,rect)){states.push("clipped");}
-    else{states.push(null);pending.push(i);}
-  }
-  /* The legend is position:fixed over the top-right of the viewport, so on a
-     small window it sits on top of real fields and every one of them probes as
-     covered -- by us. It reported 14 phantom occlusions on 2551Q at 900x700 and
-     none at 1400x1000, which is how a measurement that depends on the window
-     size announces itself. The overlay's own chrome leaves the document for the
-     duration of the pass; legend() puts it back. */
-  var chrome=document.querySelector("[data-fg-legend]");
-  if(chrome){chrome.style.display="none";}
-  /* In document order, so the window walks down the sheet once instead of
-     jumping back and forth across it. */
-  for(i=0;i<pending.length;i++){
-    el=inputs[pending[i]];
-    rect=inView(el);
-    if(rect===null){unprobed++;}
-    else if(occluded(el,rect)){states[pending[i]]="occluded";continue;}
-    states[pending[i]]=fontPt(el)<MIN_SIZE_PT?"small":"ok";
-  }
-  window.scrollTo(scrollX,scrollY);
-  /* Marked only after the whole sheet is measured: a mark is a paint, and no
-     field's verdict may depend on whether the field before it was painted. */
-  for(i=0;i<inputs.length;i++){
-    el=inputs[i];
-    counts[states[i]]++;
-    el.setAttribute("data-fg-field",states[i]);
-    if(states[i]!=="ok"){
-      host=el.parentElement;
-      if(host){host.setAttribute("data-fg-host",states[i]);}
+   Closed is the whole of it. A side inked over less than WALL of its length is
+   a guide tick, not a wall; it is banned and the search widens, which is what
+   resolves a comb slot to the comb cell its guides subdivide rather than to a
+   slot with two open sides. Without that step 2550M reported nine "no printed
+   box" fields that are sitting in perfectly good printed boxes. */
+function boxAt(cx,cy,vis){
+  var banned={},round,i,r,L,T,R,B,walls,worst,worstSide,sides=["L","T","R","B"],s;
+  for(round=0;round<ROUNDS;round++){
+    L=null;T=null;R=null;B=null;
+    for(i=0;i<vis.length;i++){
+      r=vis[i];
+      if(banned[r.n]){continue;}
+      /* Inner faces only, so no stroke-thickness question is ever asked. */
+      if(r.y-EPS<=cy&&cy<=r.y1+EPS){
+        if(r.x1<=cx+EPS&&(L===null||r.x1>L)){L=r.x1;}
+        if(r.x>=cx-EPS&&(R===null||r.x<R)){R=r.x;}
+      }
+      if(r.x-EPS<=cx&&cx<=r.x1+EPS){
+        if(r.y1<=cy+EPS&&(T===null||r.y1>T)){T=r.y1;}
+        if(r.y>=cy-EPS&&(B===null||r.y<B)){B=r.y;}
+      }
+    }
+    if(L===null||T===null||R===null||B===null||R-L<=EPS||B-T<=EPS){return null;}
+    walls=wallsOf(L,T,R,B,vis,banned);
+    worst=2;worstSide=null;
+    for(s=0;s<4;s++){
+      if(walls[sides[s]].cover<worst){worst=walls[sides[s]].cover;worstSide=sides[s];}
+    }
+    if(worst>=WALL){return {L:L,T:T,R:R,B:B,walls:walls};}
+    for(i=0;i<walls[worstSide].members.length;i++){
+      banned[walls[worstSide].members[i]]=true;
     }
   }
-  legend(counts,inputs.length,unprobed);
-  return counts;
+  return null;
+}
+/* Exact area of a union of axis-aligned rectangles, by coordinate sweep. Forty
+   comb slots tiling one printed cell fill it; forty times the area of one slot
+   would double-count every shared edge and is not the same question. */
+function unionArea(list){
+  var xs=[],i,j,x0,x1,spans,cursor,covered,total=0;
+  for(i=0;i<list.length;i++){xs.push(list[i][0]);xs.push(list[i][2]);}
+  xs.sort(function(a,b){return a-b;});
+  for(i=0;i<xs.length-1;i++){
+    x0=xs[i];x1=xs[i+1];
+    if(x1-x0<=0){continue;}
+    spans=[];
+    for(j=0;j<list.length;j++){
+      if(list[j][0]<=x0&&list[j][2]>=x1){spans.push([list[j][1],list[j][3]]);}
+    }
+    spans.sort(function(a,b){return a[0]-b[0];});
+    cursor=-1e9;covered=0;
+    for(j=0;j<spans.length;j++){
+      if(spans[j][1]<=cursor){continue;}
+      covered+=spans[j][1]-Math.max(spans[j][0],cursor);
+      cursor=Math.max(cursor,spans[j][1]);
+    }
+    total+=covered*(x1-x0);
+  }
+  return total;
+}
+
+/* ---- one page ----------------------------------------------------------- */
+
+function boxKey(box){
+  return [box.L,box.T,box.R,box.B].map(function(v){return v.toFixed(2);}).join("|");
+}
+/* Every closed printed rectangle on the page, found by planting a probe just
+   outside each crossing of a horizontal and a vertical rect. A box's corner IS
+   such a crossing, so no closed box on the sheet is unreachable this way, and
+   the probe count is proportional to the number of boxes rather than to the
+   square of the number of rects. Probes are snapped to a half-point grid so
+   two rules that cross twice do not pay twice. */
+function allBoxes(vis){
+  var horizontal=[],vertical=[],i,j,h,v,seen={},boxes={},px,py,key,box,probes=[];
+  for(i=0;i<vis.length;i++){
+    (vis[i].x1-vis[i].x>=vis[i].y1-vis[i].y?horizontal:vertical).push(vis[i]);
+  }
+  for(i=0;i<horizontal.length;i++){
+    h=horizontal[i];
+    for(j=0;j<vertical.length;j++){
+      v=vertical[j];
+      if(v.x1<h.x-PROBE||v.x>h.x1+PROBE||v.y1<h.y-PROBE||v.y>h.y1+PROBE){continue;}
+      var xs=[v.x-PROBE,v.x1+PROBE],ys=[h.y-PROBE,h.y1+PROBE],a,b;
+      for(a=0;a<2;a++){for(b=0;b<2;b++){
+        px=Math.round(xs[a]*2)/2;py=Math.round(ys[b]*2)/2;
+        key=px+","+py;
+        if(seen[key]){continue;}
+        seen[key]=true;probes.push([px,py]);
+      }}
+    }
+  }
+  for(i=0;i<probes.length;i++){
+    box=boxAt(probes[i][0],probes[i][1],vis);
+    if(box===null){continue;}
+    key=boxKey(box);
+    if(!boxes[key]){boxes[key]=box;}
+  }
+  return boxes;
+}
+function ptRect(el,frame,ptPerPx){
+  var r=el.getBoundingClientRect();
+  return {el:el,x:(r.left-frame.left)*ptPerPx,y:(r.top-frame.top)*ptPerPx,
+          x1:(r.right-frame.left)*ptPerPx,y1:(r.bottom-frame.top)*ptPerPx};
+}
+function pageRun(page,report){
+  var frame=page.getBoundingClientRect();
+  var widthPt=parseFloat(page.style.width);
+  if(!(widthPt>0)||!(frame.width>0)){return null;}
+  var ptPerPx=widthPt/frame.width;
+  var vis=visibleRects(ruleRects(page,frame,ptPerPx));
+  var boxes=allBoxes(vis);
+  var inputs=[],nodes=page.querySelectorAll("input.fi"),i,key,box;
+  for(i=0;i<nodes.length;i++){inputs.push(ptRect(nodes[i],frame,ptPerPx));}
+  var texts=[],tnodes=page.querySelectorAll(".t");
+  for(i=0;i<tnodes.length;i++){texts.push(ptRect(tnodes[i],frame,ptPerPx));}
+
+  /* Each input is judged in the smallest closed printed box its CENTRE lies
+     in. The centre and not a corner: an input that overflows its box has
+     corners in the neighbouring boxes, and asking which box a corner is in
+     would answer with the box next door. */
+  var groups={},unboxed=[];
+  for(i=0;i<inputs.length;i++){
+    box=boxAt((inputs[i].x+inputs[i].x1)/2,(inputs[i].y+inputs[i].y1)/2,vis);
+    if(box===null){unboxed.push(inputs[i]);continue;}
+    key=boxKey(box);
+    if(!boxes[key]){boxes[key]=box;}
+    if(!groups[key]){groups[key]=[];}
+    groups[key].push(inputs[i]);
+  }
+
+  var counts={},marks=[],state;
+  for(i=0;i<ORDER.length;i++){counts[ORDER[i]]=0;}
+  counts.unboxed=unboxed.length;
+  for(i=0;i<unboxed.length;i++){
+    unboxed[i].state="unboxed";
+    report.push({page:page.id,input:unboxed[i].el.id,state:"unboxed",unreached:null});
+  }
+  for(key in groups){
+    if(!Object.prototype.hasOwnProperty.call(groups,key)){continue;}
+    box=boxes[key];
+    var members=groups[key],w=box.walls,rects=[],over=0,m;
+    for(m=0;m<members.length;m++){
+      rects.push([members[m].x,members[m].y,members[m].x1,members[m].y1]);
+      /* Beyond the OUTER face of the wall, plus the pipeline's own position
+         tolerance. Inside the ink is not outside the box. */
+      over=Math.max(over,w.L.outer-members[m].x-TOL,members[m].x1-w.R.outer-TOL,
+                    w.T.outer-members[m].y-TOL,members[m].y1-w.B.outer-TOL);
+    }
+    /* The mirror image on the inside: erode the printed box to the far side of
+       its own ink plus TOL, and ask whether the inputs reach all of what is
+       left. `2*L - outer` is the far side of the left wall measured from the
+       inner face the box is defined by; the direction is easy to invert, and
+       inverting it made every field on both test forms report as too small,
+       because the "eroded" box then included the walls themselves. A fixed AREA fraction would have been the wrong shape -- the inset
+       is a fixed distance, so it costs a short box a far larger share of its
+       area than a tall one, and a fraction would flag every small box on the
+       sheet. */
+    var eL=2*box.L-w.L.outer+TOL,eT=2*box.T-w.T.outer+TOL;
+    var eR=2*box.R-w.R.outer-TOL,eB=2*box.B-w.B.outer-TOL;
+    var shortfall=0,clipped=[],c;
+    if(eR>eL&&eB>eT){
+      for(m=0;m<rects.length;m++){
+        c=[Math.max(rects[m][0],eL),Math.max(rects[m][1],eT),
+           Math.min(rects[m][2],eR),Math.min(rects[m][3],eB)];
+        if(c[2]>c[0]&&c[3]>c[1]){clipped.push(c);}
+      }
+      shortfall=1-unionArea(clipped)/((eR-eL)*(eB-eT));
+    }
+    /* Reported against the printed box itself, not against the eroded one: a
+       reviewer asked "how much of this box can nobody type in" means the box
+       they can see. */
+    var unreached=1-unionArea(rects)/((box.R-box.L)*(box.B-box.T));
+    state=over>0?"over":(shortfall>EPS?"small":"fits");
+    counts[state]+=members.length;
+    for(m=0;m<members.length;m++){
+      members[m].state=state;
+      report.push({page:page.id,input:members[m].el.id,state:state,
+                   unreached:state==="small"?unreached:null});
+    }
+    if(state!=="fits"){marks.push({box:box,state:state,unreached:unreached});}
+  }
+
+  /* The state the previous overlay could not express, because it iterated over
+     inputs and a missing input is not something an input iteration visits. A
+     printed box counts as vacant only when it holds no input AND no printed
+     text -- a box with a label in it is a label, not a field somebody forgot --
+     and only when it is big enough to write a character in. Boxes that contain
+     another found box are containers, not cells, and are not reported: the
+     sheet's outer frame encloses everything and is nobody's missing field. */
+  var keys=Object.keys(boxes),k,other,vacant=0;
+  for(i=0;i<keys.length;i++){
+    box=boxes[keys[i]];
+    if(groups[keys[i]]){continue;}
+    if(box.R-box.L<MIN_BOX||box.B-box.T<MIN_BOX){continue;}
+    var occupied=false;
+    for(k=0;k<inputs.length;k++){
+      if(inputs[k].x1>box.L+EPS&&inputs[k].x<box.R-EPS&&
+         inputs[k].y1>box.T+EPS&&inputs[k].y<box.B-EPS){occupied=true;break;}
+    }
+    if(occupied){continue;}
+    for(k=0;k<texts.length;k++){
+      if(texts[k].x1>box.L+TOL&&texts[k].x<box.R-TOL&&
+         texts[k].y1>box.T+TOL&&texts[k].y<box.B-TOL){occupied=true;break;}
+    }
+    if(occupied){continue;}
+    for(k=0;k<keys.length;k++){
+      if(k===i){continue;}
+      other=boxes[keys[k]];
+      if(other.L>=box.L-EPS&&other.T>=box.T-EPS&&
+         other.R<=box.R+EPS&&other.B<=box.B+EPS){occupied=true;break;}
+    }
+    if(occupied){continue;}
+    vacant++;
+    marks.push({box:box,state:"vacant",unreached:1});
+    report.push({page:page.id,input:null,state:"vacant",unreached:1,
+                 at:[box.L.toFixed(1),box.T.toFixed(1),
+                     (box.R-box.L).toFixed(1),(box.B-box.T).toFixed(1)].join(" ")});
+  }
+  counts.vacant=vacant;
+  return {counts:counts,inputs:inputs,marks:marks,boxes:keys.length,unboxed:unboxed};
+}
+
+/* ---- painting ----------------------------------------------------------- */
+
+/* `aside` and `i`, never `div`: `.page:last-of-type{break-after:auto}` is the
+   one structural selector in the emitted stylesheet, and a div appended to the
+   sheet would take that match off the last page and add a page break after it.
+   An element that cannot be a `.page` cannot do that. */
+function layerOf(page){
+  var layer=page.querySelector("[data-fg-layer]");
+  if(!layer){
+    layer=document.createElement("aside");
+    layer.setAttribute("data-fg-layer","");
+    page.appendChild(layer);
+  }
+  while(layer.firstChild){layer.removeChild(layer.firstChild);}
+  return layer;
+}
+function paintPage(page,result){
+  var layer=layerOf(page),i,mark,node,box;
+  for(i=0;i<result.inputs.length;i++){
+    result.inputs[i].el.setAttribute("data-fg-field",result.inputs[i].state);
+  }
+  for(i=0;i<result.marks.length;i++){
+    mark=result.marks[i];box=mark.box;
+    node=document.createElement("i");
+    node.setAttribute("data-fg-box",mark.state);
+    node.setAttribute("data-fg-unreached",Math.round(mark.unreached*100)+"%");
+    node.title=mark.state+": "+Math.round(mark.unreached*100)+"% of this printed "
+      +"box is unreached";
+    node.style.left=box.L+"pt";node.style.top=box.T+"pt";
+    node.style.width=(box.R-box.L)+"pt";node.style.height=(box.B-box.T)+"pt";
+    layer.appendChild(node);
+  }
+  /* One legend per page, inside the page, so a reviewer photographing a single
+     page gets that page's numbers with it. A viewport-fixed legend showed the
+     document's totals over whichever page happened to be scrolled to. */
+  var legend=document.createElement("aside");
+  legend.setAttribute("data-fg-legend","");
+  legend.addEventListener("click",function(){legend.style.display="none";});
+  /* <b>, not <div>, for the same reason the containers are <aside>: no
+     element this overlay creates may be a div, so no div can ever end up as
+     the last one in the sheet and take `.page:last-of-type` off the last
+     page. */
+  var head=document.createElement("b");
+  head.textContent="?debug=fields — "+result.inputs.length+" input(s), "
+    +result.boxes+" printed box(es)";
+  legend.appendChild(head);
+  for(i=0;i<ORDER.length;i++){
+    var line=document.createElement("b"),swatch=document.createElement("span");
+    swatch.setAttribute("data-fg-swatch",ORDER[i]);
+    line.appendChild(swatch);
+    line.appendChild(document.createTextNode(result.counts[ORDER[i]]+"  "
+                                             +LABELS[ORDER[i]]));
+    legend.appendChild(line);
+  }
+  layer.appendChild(legend);
+}
+function run(){
+  var pages=document.querySelectorAll(".page"),totals={},report=[],i,result;
+  for(i=0;i<ORDER.length;i++){totals[ORDER[i]]=0;}
+  for(i=0;i<pages.length;i++){
+    result=pageRun(pages[i],report);
+    if(result===null){continue;}
+    paintPage(pages[i],result);
+    for(var s=0;s<ORDER.length;s++){totals[ORDER[s]]+=result.counts[ORDER[s]];}
+  }
+  window.formgenFieldDebug.report=report;
+  return totals;
 }
 function inject(){
   if(document.getElementById("formgen-field-debug")){return;}
@@ -3742,21 +4819,27 @@ function inject(){
   style.textContent=CSS;
   document.head.appendChild(style);
 }
+/* The fourth barrier, and it removes the marks as well as the rules: the
+   overlay now creates ELEMENTS, and a media query that a transformed
+   stylesheet dropped would leave those elements painting on paper. Nothing the
+   overlay made survives into the print. */
 function drop(){
-  var style=document.getElementById("formgen-field-debug");
+  var style=document.getElementById("formgen-field-debug"),i,nodes;
   if(style&&style.parentNode){style.parentNode.removeChild(style);}
+  nodes=document.querySelectorAll("[data-fg-layer]");
+  for(i=0;i<nodes.length;i++){nodes[i].parentNode.removeChild(nodes[i]);}
+  nodes=document.querySelectorAll("[data-fg-field]");
+  for(i=0;i<nodes.length;i++){nodes[i].removeAttribute("data-fg-field");}
 }
-/* The fourth barrier. @media screen and @media print already keep the overlay
-   off paper; this removes the stylesheet from the document entirely for the
-   duration of the print, so a browser that honoured neither has nothing left
-   to apply. */
 window.addEventListener("beforeprint",drop);
-window.addEventListener("afterprint",inject);
+window.addEventListener("afterprint",function(){inject();run();});
 function start(){inject();run();}
 if(document.readyState==="complete"){start();}
 else{window.addEventListener("load",start);}
-window.formgenFieldDebug={refresh:run,occluded:occluded,clipped:clipped};
+window.formgenFieldDebug={refresh:run,boxAt:boxAt,report:[]};
 })();""".replace("__FIELD_DEBUG_CSS__", json.dumps(FIELD_DEBUG_CSS)) \
+        .replace("__RULE_POSITION_TOLERANCE_PT__", fmt(RULE_POSITION_TOLERANCE_PT)) \
+        .replace("__RULE_WALL_COVERAGE__", fmt(RULE_WALL_COVERAGE)) \
         .replace("__FIELD_MIN_SIZE_PT__", fmt(FIELD_MIN_SIZE_PT))
 
 
@@ -4361,6 +5444,13 @@ DEFAULT_LAYOUT = _ROOT / "build/layout/2551q-2018.layout.json"
 DEFAULT_PLAN = _ROOT / "build/fonts/2551q-2018.fontplan.json"
 DEFAULT_GUIDE_PLAN = _ROOT / "build/guides/2551q-2018.guide.json"
 
+# The slot element as the self-test reads it back. Deliberately the same shape
+# as `audit.SLOT_RE` -- class, data-slot, style, in that order and nothing else
+# -- so that adding an attribute here fails the emitter's own test rather than
+# the audit's, 60 minutes later.
+SELF_TEST_SLOT_RE = re.compile(
+    r'<div class="s" data-slot="\d+" style="[^"]*">(.*?)</div>', re.S)
+
 
 def _check(ok: bool, label: str, detail: str, failures: list[str]) -> None:
     print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {detail}", file=sys.stderr)
@@ -4508,8 +5598,8 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
             "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
         })
         ink = PrePrintedInk(page["text_runs"])
-        _check(not field_verdict(victim, ink)[0]
-               and field_verdict(dict(victim, comb={"cells": 3}), ink)[0],
+        _check(not field_verdict(victim, ink, None, None)[0]
+               and field_verdict(dict(victim, comb={"cells": 3}), ink, None, None)[0],
                "pre-printed text blocks a plain field but never a comb",
                f"coverage {ink.coverage(victim):.2f}", failures)
         html, _ = build_document(staged_ir, staged_layout, plan,
@@ -4519,6 +5609,361 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                and 'data-preprinted="true"' in cell.group(0),
                "a cell filled with pre-printed text is emitted without an input",
                cell.group(0)[:80] if cell else "cell absent", failures)
+
+    # -- C6 part 3: decorative shading over a blank makes it uneditable --------
+    # The 2200T page-2 hazard, staged: a cell the official form shades to say NO
+    # RATE APPLIES accepted 999,999.00 because nothing in the box model ever
+    # asked what colour its paper was.
+    shade_ir = json.loads(json.dumps(ir))
+    shade_layout = json.loads(json.dumps(layout))
+    shade_victim = next((c for p in shade_layout["pages"] for c in p["cells"]
+                         if c["kind"] == "field" and not c.get("comb")
+                         and c["x1"] - c["x0"] > 20.0
+                         and c["y1"] - c["y0"] > 4.0), None)
+    if shade_victim is None:
+        _check(False, "C6 part 3 has a plain field cell to shade", "none found", failures)
+    else:
+        page_index = int(shade_victim["id"][1:].split("c")[0])
+        page = next(p for p in shade_ir["pages"] if int(p["index"]) == page_index)
+        top = max((int(f["paint_seq"]) for f in page["area_fills"]), default=0)
+        x0, y0 = float(shade_victim["x0"]), float(shade_victim["y0"])
+        x1, y1 = float(shade_victim["x1"]), float(shade_victim["y1"])
+
+        def _fill(gray: float, role: str, seq: int, *, shrink: float = 0.0
+                  ) -> dict[str, Any]:
+            return {"x0": x0, "y0": y0, "x1": x1 - shrink * (x1 - x0), "y1": y1,
+                    "gray": gray, "rgb": [gray, gray, gray], "role": role,
+                    "paint_seq": seq, "paint_seq_max": seq}
+
+        band = _fill(0.8509, "decorative", top + 1)
+        _check(DecorativeShading([band]).blocks(shade_victim)
+               and field_verdict(shade_victim, None,
+                                 DecorativeShading([band]), None)[1] == "shading"
+               and field_verdict(dict(shade_victim, comb={"cells": 3}), None,
+                                 DecorativeShading([band]), None)[0],
+               "decorative shading blocks a plain field but never a comb",
+               f"grey 0.8509 over {shade_victim['id']}", failures)
+        # The five real fields the threshold exists to spare: 1604CF's three
+        # 0.8902 cells and 2200AN's two 0.9489 ones. Asserted as tone, not as
+        # form code -- a rule that named the forms would not be a rule.
+        _check(not DecorativeShading([_fill(0.8902, "decorative", top + 1)])
+               .blocks(shade_victim)
+               and not DecorativeShading([_fill(0.9489, "decorative", top + 1)])
+               .blocks(shade_victim),
+               "near-white decoration above the threshold leaves a real field typeable",
+               f"{fmt(DECORATIVE_GRAY_MAX)} is the bound", failures)
+        _check(not DecorativeShading([band, _fill(1.0, "knockout", top + 2)])
+               .blocks(shade_victim)
+               and DecorativeShading([_fill(1.0, "knockout", top + 1), band])
+               .blocks(shade_victim),
+               "the topmost fill decides: a knockout over a band restores the blank",
+               "and a band over a knockout takes it away", failures)
+        _check(not DecorativeShading([_fill(0.8509, "decorative", top + 1,
+                                            shrink=0.45)]).blocks(shade_victim),
+               "a band covering under 70% of the cell is not this cell's paper",
+               f"{fmt(DECORATIVE_COVERAGE * 100)}% is the bound", failures)
+
+        page["area_fills"].append(band)
+        page["area_fills"].sort(key=lambda f: (f["y0"], f["x0"]))
+        html, _ = build_document(shade_ir, shade_layout, plan,
+                                 Options("svg", "fonts", "assets", None, None, None))
+        cell = re.search(rf'<div id="{shade_victim["id"]}"[^>]*>(<input[^>]*>)?', html)
+        _check(cell is not None and cell.group(1) is None
+               and 'data-preprinted="shading"' in cell.group(0),
+               "a cell on decorative shading is emitted without an input",
+               cell.group(0)[:80] if cell else "cell absent", failures)
+
+    # -- C6 part 4: a comb slot the SOURCE already filled in --------------------
+    # G11, the one place in the corpus where a producer bug puts a live text box
+    # on a statutory constant: 180 of 180 `mixed` cells were emitted with a full
+    # set of editable slots because `field_verdict`'s first rule returns before
+    # any ink is consulted. The assertions below are the four populations that
+    # decide the rule -- a constant, a whole printed group, a money comb's
+    # decimal bullet, and a rate the sheet prints across a whole comb -- plus
+    # the two false positives that would have cost real typing surface.
+    slot_victim = next(
+        (cell for page in layout["pages"] for cell in page["cells"]
+         if cell.get("comb") and len(cell["comb"]["slot_x"]) >= 6
+         and not any(cell["x0"] >= band["x0"] - 1.0 and cell["x1"] <= band["x1"] + 1.0
+                     and cell["y0"] >= band["y0"] - 1.0 and cell["y1"] <= band["y1"] + 1.0
+                     for band in (page.get("growable") or ()))), None)
+    if slot_victim is None:
+        _check(False, "C6 part 4 has a comb cell of 5+ slots to fill in",
+               "none found", failures)
+    else:
+        slot_x = [float(v) for v in slot_victim["comb"]["slot_x"]]
+        # The probes below must land inside the rectangle the verdicts are
+        # asked of, which is the compartment's WRITING rectangle when the
+        # layout publishes one and the divider band otherwise -- the same
+        # preference `comb_slot_verdicts` itself takes, for the reason
+        # documented there.
+        if ("writing_y0" in slot_victim["comb"]
+                and "writing_y1" in slot_victim["comb"]):
+            band_y0 = float(slot_victim["comb"]["writing_y0"])
+            band_y1 = float(slot_victim["comb"]["writing_y1"])
+        else:
+            band_y0 = float(slot_victim["comb"].get("y0", slot_victim["y0"]))
+            band_y1 = band_y0 + float(slot_victim["comb"].get(
+                "height_pt", float(slot_victim["y1"]) - float(slot_victim["y0"])))
+        glyph_y0 = band_y0 + 0.25 * (band_y1 - band_y0)
+        glyph_y1 = band_y1 - 0.25 * (band_y1 - band_y0)
+
+        def _printed(text: str, left: float, width: float, *,
+                     y0: float = glyph_y0, y1: float = glyph_y1) -> dict[str, Any]:
+            """A run of `text` laid from `left`, each glyph `width` wide."""
+            return {
+                "text": text, "font": "Arial,Bold", "family": "Arial",
+                "size_pt": 11.04, "bold": True, "italic": False, "serif": False,
+                "monospace": False, "superscript": False, "flags": 16, "color": 0,
+                "x0": left, "y0": y0, "x1": left + width * len(text), "y1": y1,
+                "baseline_y": y1, "origin_x": left, "ascender": 0.905,
+                "descender": -0.21, "line_height_pt": y1 - y0,
+                "measured_advance_pt": width * len(text),
+                "char_origin_offsets_pt": [width * i for i in range(len(text))],
+                "char_advances_pt": [width] * len(text),
+                "char_widths_pt": [width] * len(text),
+                "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+            }
+
+        def _centred(char: str, index: int, share: float = 0.45) -> dict[str, Any]:
+            """`char` printed in the middle of slot `index`, at comb pitch."""
+            width = (slot_x[index + 1] - slot_x[index]) * share
+            return _printed(char, slot_x[index] + (slot_x[index + 1]
+                                                   - slot_x[index] - width) / 2.0, width)
+
+        def _verdicts(runs: Sequence[dict[str, Any]],
+                      fills: Sequence[dict[str, Any]] = ()) -> dict[int, str]:
+            return comb_slot_verdicts(slot_victim, PrePrintedInk(runs),
+                                      DecorativeShading(fills), None)
+
+        # 1. A constant: the century BIR prints into the first two boxes of a
+        #    year comb (1600-PT/VT p1c5, 1604C/1604E p1c4). Per slot, so the
+        #    two the taxpayer must still fill stay fillable -- a whole-cell rule
+        #    here would delete the year.
+        _check(_verdicts([_centred("2", 0), _centred("0", 1)]) ==
+               {0: "pre-printed", 1: "pre-printed"},
+               "a constant printed at comb pitch takes only its own slots",
+               "the century leaves the year's boxes typeable", failures)
+        # 2. A whole printed group: the TIN branch code, 5 adjacent slots of
+        #    zeros on 1701 x5 pages, 1701A x2, 1702-EX/MX/RT/Q x11, 1800 x3.
+        #    Recognised without a group rule, because each zero answers for its
+        #    own compartment.
+        _check(_verdicts([_centred("0", i) for i in range(5)]) ==
+               {i: "pre-printed" for i in range(5)},
+               "every slot of a printed branch code is refused",
+               "5 of 5, from 5 independent per-slot verdicts", failures)
+        # 3. The money decimal bullet in its OWN compartment: 2000-DST,
+        #    2200A/C/P/S print it into the third compartment from the right of
+        #    a 14-, 29- or 33-compartment money comb, with the two centavos
+        #    boxes to its right. 92 compartments corpus-wide, and 89 of
+        #    `inputs_over_printed_text`'s 147 offenders. It takes its own
+        #    compartment and nothing else, which is what keeps C4 fixed: the
+        #    digits of the amount go either side of the point, so 2000-DST's
+        #    page-1 money grid, 2200A/2200P Part III, 1801 item 24, 2316 items
+        #    23-24 and 1702EX item 18 all stay typeable.
+        n_slots = len(slot_x) - 1
+        point = n_slots - 3
+        bullet = _verdicts([_centred("●", point)])
+        _check(bullet == {point: "pre-printed"}
+               and point - 1 not in bullet
+               and point + 1 not in bullet and point + 2 not in bullet,
+               "the money bullet is refused in its own compartment and no other",
+               f"1 of {n_slots} compartments refused; the two centavos boxes to "
+               f"its right and every digit box to its left stay typeable",
+               failures)
+        # 4. A statutory rate set across a whole comb: 1800 p1c68 and 2550-DS
+        #    p1c79 print "0 %" into a 2-compartment comb. Both compartments are
+        #    spent, so that comb ends with no input at all -- correct, and not
+        #    C4: C4 is a money box a taxpayer must fill, and a printed rate is
+        #    not one. These are the only two combs in the corpus the source
+        #    fills entirely.
+        _check(_verdicts([_centred("0", 0), _centred("%", 1)])
+               == {0: "pre-printed", 1: "pre-printed"},
+               "a rate the form prints spends both compartments it is set in",
+               "'0 %' is a value the sheet states, not a box to type in", failures)
+        # 5. A caption the lattice swallowed into the comb cell: 9+ glyphs in
+        #    ONE slot, at label scale rather than comb pitch. That is a
+        #    segmentation defect (G05/G12) and deleting the input would hide it.
+        _check(_verdicts([_printed(
+            "7A ZIP Code", slot_x[0] + 0.5,
+            (slot_x[1] - slot_x[0] - 1.0) / 11.0)]) == {},
+               "a label typeset across one slot is a segmentation fault, not a value",
+               "'7A ZIP Code' leaves every compartment typeable", failures)
+        # 6. A neighbour's item number clipping into the first box: 2551M's and
+        #    2553's "28C"/"29B" overhang by 4.53pt and 0605 p1c3's date hint
+        #    clips its bracket in by 1.98pt, while every occupied compartment
+        #    in the corpus clears its walls by at least 0.24pt.
+        overhang = (slot_x[1] - slot_x[0]) * 0.45
+        _check(_verdicts([_printed("8", slot_x[0] - overhang / 2.0, overhang)]) == {}
+               and _verdicts([_centred("8", 0)]) == {0: "pre-printed"},
+               "a glyph must clear the slot's own walls to be that slot's value",
+               "containment carries no tolerance; the corpus separates by 2.22pt",
+               failures)
+        # 7. Tone at slot resolution: the caption end of a cell the lattice cut
+        #    too wide (1801 p1c13/c31/c33/c112, 1800 p1c26, 2200S p1c29, 2552
+        #    p1c28, 1604F p1c25/c36). Same test as the cell-level rule, same
+        #    threshold. The grey TIN group separators this branch used to answer
+        #    for are now taken by the ink rule, which sees the `-` printed in
+        #    them; tone still has to work on its own, so it is asserted on a
+        #    compartment carrying no ink at all.
+        def _slot_fill(index: int, gray: float, role: str, seq: int) -> dict[str, Any]:
+            return {"x0": slot_x[index], "y0": band_y0,
+                    "x1": slot_x[index + 1], "y1": band_y1,
+                    "gray": gray, "rgb": [gray, gray, gray], "role": role,
+                    "paint_seq": seq, "paint_seq_max": seq}
+
+        grey = _slot_fill(3, 0.8509, "decorative", 1)
+        _check(_verdicts((), [grey]) == {3: "shading"}
+               and _verdicts((), [grey, _slot_fill(3, 1.0, "knockout", 2)]) == {},
+               "a shaded compartment is refused and a knockout over it is not",
+               "the topmost fill decides, exactly as it does for a cell", failures)
+
+        # 8. End to end: the slot div is still emitted, and it is the absent
+        #    <input> that says so -- no new attribute, because audit.SLOT_RE and
+        #    the comb referee both pin this element's exact attribute set.
+        slot_ir = json.loads(json.dumps(ir))
+        page_index = int(slot_victim["id"][1:].split("c")[0])
+        page = next(p for p in slot_ir["pages"] if int(p["index"]) == page_index)
+        page["text_runs"].append(_centred("0", 0))
+        page["text_runs"].sort(key=lambda r: (r["y0"], r["x0"]))
+        html, slot_warnings = build_document(
+            slot_ir, layout, plan, Options("svg", "fonts", "assets", None, None, None))
+        cell = re.search(rf'<div id="{slot_victim["id"]}"[^>]*>(.*?)</div></div>',
+                         html, re.S)
+        slots = SELF_TEST_SLOT_RE.findall(cell.group(1)) if cell else []
+        _check(len(slots) >= 2 and "<input" not in slots[0] and "<input" in slots[1],
+               "the filled compartment emits its slot div with no input in it",
+               f"slot 0 {'empty' if slots and '<input' not in slots[0] else 'editable'}",
+               failures)
+        _check(any("carry a constant the form prints" in w for w in slot_warnings),
+               "the exclusion is published, per cell and per slot index",
+               next((w for w in slot_warnings if "constant the form prints" in w),
+                    "no such warning")[:90], failures)
+        # 9. The navigation the gap breaks. `data-slot-index` is the compartment's
+        #    number and stays that; the NodeList is the sequence a taxpayer moves
+        #    through, and indexing one with the other stops advancing at the first
+        #    printed box.
+        _check("positionOf(list,el)" in FIELD_JS
+               and 'getAttribute("data-slot-index"),10)+delta' not in FIELD_JS,
+               "comb navigation steps through the typeable slots, not slot numbers",
+               "positionOf, not the attribute", failures)
+
+    # -- C6 part 5: a box the sheet reserves for the Bureau ---------------------
+    # F147: 0605's "BCS No./Item No. (To be filled up by the BIR)" blank was a
+    # 253x17.5pt free-text taxpayer input. The geometry below is that sheet's,
+    # transcribed: the caption sits on the grey band, its compartment's left
+    # wall at 287.9 and right wall at the outer frame, the white knockout
+    # 4.4pt below the caption, and the taxpayer's own Return Period box on the
+    # same row but outside the caption's walls. The knockout's top border
+    # (321.2..576.5) does not span the compartment (287.9..579.8), which is
+    # exactly why caption and blank are one compartment on the real sheet.
+    bcs_caption = {"text": " BCS No./Item No. (To be filled up by the  BIR)",
+                   "x0": 290.0, "y0": 172.5, "x1": 456.6, "y1": 181.5}
+    bcs_walls = [
+        {"axis": "v", "x0": 287.6, "y0": 172.8, "x1": 288.1, "y1": 208.7},
+        {"axis": "v", "x0": 579.6, "y0": 168.0, "x1": 580.1, "y1": 208.7},
+        {"axis": "h", "x0": 321.2, "y0": 185.7, "x1": 576.5, "y1": 186.1},
+        {"axis": "h", "x0": 321.2, "y0": 204.6, "x1": 576.5, "y1": 205.0},
+    ]
+    bcs_res = BureauReservation([bcs_caption], bcs_walls, [])
+    bcs_cell = {"kind": "field", "x0": 321.6, "y0": 185.9, "x1": 576.1, "y1": 204.8}
+    peer_cell = {"kind": "field", "x0": 40.6, "y0": 185.9, "x1": 165.7, "y1": 205.6}
+    _check(field_verdict(bcs_cell, None, None, bcs_res) == (False, "bureau")
+           and field_verdict(peer_cell, None, None, bcs_res)[0],
+           "a Bureau-captioned blank is refused; the taxpayer box beside it is not",
+           "0605's BCS box against its Return Period neighbour", failures)
+    separated = BureauReservation(
+        [bcs_caption],
+        bcs_walls + [{"axis": "h", "x0": 286.0, "y0": 183.3, "x1": 581.0, "y1": 183.7}],
+        [])
+    _check(field_verdict(bcs_cell, None, None, separated)[0],
+           "a ruled separator under the caption breaks the binding",
+           "a section header governs its section, not the row beneath", failures)
+    _check(field_verdict(dict(bcs_cell, y0=191.0), None, None, bcs_res)[0],
+           "adjacency is bounded by the caption's own height",
+           "9.5pt of separation against a 9.0pt line is not adjacency", failures)
+    _check(_bureau_caption("(To be filled up the BIR)")
+           and not _bureau_caption(
+               "The machine validation shall reflect the date of payment")
+           and not _bureau_caption("with an “X”. Three (3) copies must be "
+                                   "filed: two (2) copies for BIR and one copy "
+                                   "for the taxpayer."),
+           "the sheet's own typo is a caption; prose about the boxes is not",
+           "prefix match for prose-prone phrases, substring for parentheticals",
+           failures)
+    # The bottom-of-sheet shape, transcribed from 2200-A: one band the lattice
+    # reads as a 2-slot comb, the left compartment captioned "Machine
+    # Validation/...", the right "Stamp of Receiving Office/AAB...". Per slot,
+    # because the compartments are separate Bureau boxes; and the cell itself
+    # stays a field, because a comb cell always is one at cell resolution.
+    validation_caption = {"text": "Machine  Validation/Revenue Official Receipt "
+                                  "Details (if not filed with an Authorized "
+                                  "Agent Bank) ",
+                          "x0": 21.7, "y0": 847.4, "x1": 306.0, "y1": 856.3}
+    stamp_caption = {"text": "Stamp of Receiving Office/AAB and Date of Receipt ",
+                     "x0": 402.1, "y0": 847.4, "x1": 587.9, "y1": 856.3}
+    band_cell = {"kind": "mixed", "x0": 16.3, "y0": 847.1, "x1": 595.3, "y1": 897.7,
+                 "comb": {"cells": 2, "slot_x": [16.3, 392.7, 595.3],
+                          "y0": 847.6, "height_pt": 49.7}}
+    both = BureauReservation([validation_caption, stamp_caption], [], [])
+    _check(comb_slot_verdicts(band_cell, None, None, both)
+           == {0: "bureau", 1: "bureau"}
+           and field_verdict(band_cell, None, None, both)[0],
+           "each Bureau box of the bottom band refuses its own compartment",
+           "per slot, and the comb cell itself stays a field", failures)
+    _check(comb_slot_verdicts(band_cell, None, None,
+                              BureauReservation([validation_caption], [], []))
+           == {0: "bureau"},
+           "a compartment without a Bureau caption keeps its input",
+           "slot 1 stays when only the left box is captioned", failures)
+
+    # End to end: a Bureau caption printed inside a blank leaves the cell in
+    # the document, marked, with no input -- and the exclusion is published.
+    bureau_ir = json.loads(json.dumps(ir))
+    bureau_layout = json.loads(json.dumps(layout))
+    bureau_victim = next((c for p in bureau_layout["pages"] for c in p["cells"]
+                          if c["kind"] == "field" and not c.get("comb")
+                          and c["x1"] - c["x0"] > 40.0
+                          and c["y1"] - c["y0"] > 8.0), None)
+    if bureau_victim is None:
+        _check(False, "C6 part 5 has a plain field cell to reserve",
+               "none found", failures)
+    else:
+        page_index = int(bureau_victim["id"][1:].split("c")[0])
+        page = next(p for p in bureau_ir["pages"] if int(p["index"]) == page_index)
+        text = "For BIR Use Only"
+        # 30% of the cell's width: enough ink to be the caption, well under
+        # the 50% at which the pre-printed rule would answer first.
+        width = 0.3 * (bureau_victim["x1"] - bureau_victim["x0"])
+        left = bureau_victim["x0"] + 0.35 * (bureau_victim["x1"] - bureau_victim["x0"])
+        mid_y = (bureau_victim["y0"] + bureau_victim["y1"]) / 2.0
+        each = width / len(text)
+        page["text_runs"].append({
+            "text": text, "font": "Arial", "family": "Arial", "size_pt": 6.5,
+            "bold": False, "italic": False, "serif": False, "monospace": False,
+            "superscript": False, "flags": 0, "color": 0,
+            "x0": left, "y0": mid_y - 3.5, "x1": left + width, "y1": mid_y + 3.5,
+            "baseline_y": mid_y + 3.5, "origin_x": left,
+            "ascender": 0.9, "descender": -0.2, "line_height_pt": 7.0,
+            "measured_advance_pt": width,
+            "char_origin_offsets_pt": [each * i for i in range(len(text))],
+            "char_advances_pt": [each] * len(text),
+            "char_widths_pt": [each] * len(text),
+            "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+        })
+        page["text_runs"].sort(key=lambda r: (r["y0"], r["x0"]))
+        html, bureau_warnings = build_document(
+            bureau_ir, bureau_layout, plan,
+            Options("svg", "fonts", "assets", None, None, None))
+        cell = re.search(rf'<div id="{bureau_victim["id"]}"[^>]*>(<input[^>]*>)?', html)
+        _check(cell is not None and cell.group(1) is None
+               and 'data-preprinted="bureau"' in cell.group(0),
+               "a cell the Bureau reserves is emitted without an input",
+               cell.group(0)[:80] if cell else "cell absent", failures)
+        _check(any("reserved for the Bureau" in w for w in bureau_warnings),
+               "the Bureau exclusion is published, per cell",
+               next((w for w in bureau_warnings if "reserved for the Bureau" in w),
+                    "no such warning")[:90], failures)
 
     # -- Ink: a padded single-word run is emitted as its ink, at its own origin -
     padded = {"text": " No ", "origin_x": 231.17,
@@ -4648,7 +6093,8 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     disagree in both directions and each disagreement was a live defect: a
     comb-bearing `mixed` cell is a field the old test did not expect (2000-DST's
     entire money grid), and a `field` cell filled with statutory text is not one
-    (1700 page 2's tax brackets).
+    (1700 page 2's tax brackets), nor is one the source shaded out (2200T page
+    2's "no rate applies" rows).
     """
     fields = FieldPlan(layout, resolve_field_face(plan, []), [], ir)
     expected: dict[str, int] = {}
@@ -4659,8 +6105,13 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
                 expected[cell["id"]] = box.capacity or 1
 
     ink = {int(p["index"]): PrePrintedInk(p["text_runs"]) for p in ir["pages"]}
+    shading = {int(p["index"]): DecorativeShading(p["area_fills"]) for p in ir["pages"]}
+    reservation = {int(p["index"]): BureauReservation(
+        p["text_runs"], p["rules"], p["area_fills"]) for p in ir["pages"]}
     fillable = [c["id"] for p in layout["pages"] for c in p["cells"]
-                if field_verdict(c, ink.get(int(p["index"])))[0]]
+                if field_verdict(c, ink.get(int(p["index"])),
+                                 shading.get(int(p["index"])),
+                                 reservation.get(int(p["index"])))[0]]
     _check(len(expected) == len(fillable) and set(expected) == set(fillable),
            "every fillable cell has a typing surface",
            f"{len(expected)} of {len(fillable)} fillable cells", failures)
@@ -4714,13 +6165,27 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
            "@media print resets border/outline/background", failures)
 
     field_surface_assertions(layout, plan, failures)
+    comb_writing_rectangle_assertions(plan, failures)
     field_debug_assertions(html, failures)
 
 
 def _synthetic_comb(cells: int, x0: float, pitch: float,
-                    y0: float, height: float) -> dict[str, Any]:
-    return {"cells": cells, "pitch_pt": pitch, "y0": y0, "height_pt": height,
+                    y0: float, height: float,
+                    writing: tuple[float, float] | None = None) -> dict[str, Any]:
+    """A comb subject. `writing` is (top, height) for the writing rectangle.
+
+    Omitted, the subject carries the divider band alone -- a layout written
+    before `lattice.comb_on_writing_surface` published a writing rectangle, and
+    the fallback branch of `comb_writing_rect`.
+    """
+    comb = {"cells": cells, "pitch_pt": pitch, "y0": y0, "height_pt": height,
+            "y1": y0 + height,
             "slot_x": [x0 + index * pitch for index in range(cells + 1)]}
+    if writing is not None:
+        comb["writing_y0"] = writing[0]
+        comb["writing_y1"] = writing[0] + writing[1]
+        comb["writing_height_pt"] = writing[1]
+    return comb
 
 
 def _synthetic_cell(cell_id: str, y0: float, y1: float,
@@ -4730,6 +6195,173 @@ def _synthetic_cell(cell_id: str, y0: float, y1: float,
     if comb is not None:
         cell["comb"] = comb
     return cell
+
+
+_SELF_TEST_STYLE_RE = re.compile(
+    r"top:(-?[\d.]+)pt;width:(-?[\d.]+)pt;height:(-?[\d.]+)pt")
+
+
+def comb_writing_rectangle_assertions(plan: dict[str, Any],
+                                      failures: list[str]) -> None:
+    """F186: every rectangle the emitter LAYS OUT for a comb is the writing box.
+
+    One comb carries two vertical extents and they mean different things --
+    `comb_writing_rect`'s docstring says which is which. This proves the split
+    holds in both directions at once, because getting either half wrong has
+    already shipped:
+
+      * Read the divider band for layout and 2550M's item-4 TIN compartments
+        are 3.12pt tall inside a 15.60pt row, fitted at a 2.81pt face. That is
+        r22's state and this finding.
+      * Restate the writing box INTO `y0`/`y1` and the comb referee's
+        `classify_band` seeds its source topology from a rectangle the source
+        never drew: 4,417 of 4,522 combs went source-unevaluable and the
+        reviewed 2551Q control failed (G18).
+
+    So the pin is not "the numbers are 14.64" -- it is that the four emitted
+    rectangles all equal the WRITING rectangle, that none of them equals the
+    band, and that the subject the emitter was handed still carries the band
+    unmodified for the referee to read after emission.
+
+    The geometry is 2550M's item-4 TIN row, transcribed: a 15.60pt row whose
+    digit separators are 3.12pt stubs along its bottom edge.
+    """
+    face = resolve_field_face(plan, [])
+    if face is None:
+        _check(False, "the font plan resolves a body face to fit comb slots to",
+               "no metric-compatible face", failures)
+        return
+    row_y0, row_y1 = 100.0, 115.6
+    band_y0, band_h = 112.48, 3.12
+    write_y0, write_h = 100.48, 14.64
+    comb = _synthetic_comb(4, 0.0, 30.0, band_y0, band_h, (write_y0, write_h))
+    cell = _synthetic_cell("p0c0", row_y0, row_y1, comb)
+    layout = {"pages": [{"index": 0, "cells": [cell]}]}
+    fields = FieldPlan(layout, face, [])
+    box = fields.of("p0c0")
+
+    _check(comb_writing_rect(cell, comb) == (write_y0, write_h),
+           "a comb's layout rectangle is its writing box, not its divider band",
+           f"writing ({fmt(write_y0)}, {fmt(write_h)}) chosen over band "
+           f"({fmt(band_y0)}, {fmt(band_h)})", failures)
+
+    # The slot div, and therefore its input: `.s` is absolutely positioned and
+    # `.fi` is `inset:0` inside it, so the rectangle asserted here is the
+    # rectangle a taxpayer's character is typed into.
+    markup = comb_slots_markup(cell, comb, box, fields, True)
+    rects = _SELF_TEST_STYLE_RE.findall(markup)
+    tops = {value[0] for value in rects}
+    heights = {value[2] for value in rects}
+    _check(len(rects) == 4 and tops == {fmt(write_y0 - row_y0)}
+           and heights == {fmt(write_h)}
+           and markup.count("<input") == 4,
+           "every comb slot div, and the input inside it, is the writing box",
+           f"4 slots at top {sorted(tops)} height {sorted(heights)}; the band "
+           f"would give top {fmt(band_y0 - row_y0)} height {fmt(band_h)}",
+           failures)
+
+    # The band template's clones are re-laid out from this JSON, so a clone
+    # whose compartments disagree with the pre-rendered rows beside it is the
+    # same defect one indirection away.
+    payload = cell_json(cell, fields)["comb"]
+    _check(payload["y"] == round(write_y0 - row_y0, 4)
+           and payload["h"] == round(write_h, 4),
+           "the band-data JSON a cloned row is re-laid out from says the same",
+           f"y={payload['y']} h={payload['h']}", failures)
+
+    # The fitted face. `min` still caps it at the sheet's own body size, so the
+    # assertion is that the BOX grew, which is what the cap is applied to.
+    band_only = field_box(_synthetic_cell(
+        "p0c1", row_y0, row_y1,
+        _synthetic_comb(4, 0.0, 30.0, band_y0, band_h)), face)
+    _check(box is not None and band_only is not None
+           and box.line_height_pt == round(write_h, 4)
+           and band_only.line_height_pt == round(band_h, 4)
+           and box.size_pt > band_only.size_pt,
+           "the face is fitted to the writing box, so a 3.12pt band is not a field",
+           f"{fmt(box.size_pt) if box else 'none'}pt in {fmt(write_h)}pt against "
+           f"{fmt(band_only.size_pt) if band_only else 'none'}pt in {fmt(band_h)}pt",
+           failures)
+
+    # The other direction. The subject the emitter was handed is the referee's
+    # input too, and emission must leave its contract untouched.
+    _check(comb["y0"] == band_y0 and comb["height_pt"] == band_h
+           and comb["y1"] == band_y0 + band_h
+           and fmt(band_y0 - row_y0) not in tops
+           and fmt(band_h) not in heights,
+           "the divider band survives emission unmodified and is laid out on by nothing",
+           "y0/y1/height_pt are the referee's contract and stay the source's",
+           failures)
+
+    # A layout that predates the writing rectangle still emits, on the band.
+    legacy_comb = _synthetic_comb(4, 0.0, 30.0, band_y0, band_h)
+    legacy_cell = _synthetic_cell("p0c0", row_y0, row_y1, legacy_comb)
+    legacy_fields = FieldPlan({"pages": [{"index": 0, "cells": [legacy_cell]}]},
+                              face, [])
+    legacy = _SELF_TEST_STYLE_RE.findall(comb_slots_markup(
+        legacy_cell, legacy_comb, legacy_fields.of("p0c0"), legacy_fields, True))
+    _check(comb_writing_rect(legacy_cell, legacy_comb) == (band_y0, band_h)
+           and {value[0] for value in legacy} == {fmt(band_y0 - row_y0)}
+           and {value[2] for value in legacy} == {fmt(band_h)},
+           "a subject with no writing rectangle falls back to its band, and says so",
+           "the fallback is for a layout that predates it, not a preference",
+           failures)
+
+    # A comb's horizontal extent is its own `slot_x`, and that is no longer the
+    # cell's: `lattice.comb_rails` measures the printed rails, and a rectangle
+    # that also rules a caption or a TIN dash box hands the comb only the part
+    # it owns. The emitter lays out on those rails and never widens them back
+    # to the cell, because widening them is exactly how a typeable box lands
+    # over the caption the sheet printed.
+    railed_comb = {**_synthetic_comb(3, 0.0, 30.0, band_y0, band_h,
+                                     (write_y0, write_h)),
+                   "slot_x": [29.9, 59.9, 89.9, 119.9]}
+    railed_cell = _synthetic_cell("p0c0", row_y0, row_y1, railed_comb)
+    railed_fields = FieldPlan(
+        {"pages": [{"index": 0, "cells": [railed_cell]}]}, face, [])
+    railed_markup = comb_slots_markup(
+        railed_cell, railed_comb, railed_fields.of("p0c0"),
+        railed_fields, True)
+    railed_lefts = re.findall(r"left:(-?[\d.]+)pt", railed_markup)
+    railed_widths = [value[1] for value in
+                     _SELF_TEST_STYLE_RE.findall(railed_markup)]
+    _check(railed_lefts == [fmt(29.9), fmt(59.9), fmt(89.9)]
+           and railed_widths == [fmt(30.0), fmt(30.0), fmt(30.0)]
+           and railed_markup.count("<input") == 3,
+           "a comb is laid out on its measured rails, not on its cell's edges",
+           f"lefts {railed_lefts} widths {railed_widths} in a cell 0..120",
+           failures)
+    _check(cell_json(railed_cell, railed_fields)["comb"]["slot_x"]
+           == [29.9, 59.9, 89.9, 119.9],
+           "the band template re-lays cloned rows from the same rails",
+           "the runtime must not rebuild a clone on the cell's edges",
+           failures)
+
+    # The seam. G11's 287 corpus refusals and the 145 statutory constants that
+    # nearly shipped as live inputs depend on the verdicts being asked of the same
+    # rectangle the input occupies: a constant printed in the writing box but
+    # clear of the 3.12pt band is invisible to a band-scoped question.
+    glyph_y0 = write_y0 + 2.0
+    glyph_y1 = glyph_y0 + 8.0
+    constant = {
+        "text": "0", "font": "Arial", "family": "Arial", "size_pt": 8.0,
+        "bold": False, "italic": False, "serif": False, "monospace": False,
+        "superscript": False, "flags": 0, "color": 0,
+        "x0": 8.0, "y0": glyph_y0, "x1": 22.0, "y1": glyph_y1,
+        "baseline_y": glyph_y1, "origin_x": 8.0, "ascender": 0.905,
+        "descender": -0.21, "line_height_pt": glyph_y1 - glyph_y0,
+        "measured_advance_pt": 14.0, "char_origin_offsets_pt": [0.0],
+        "char_advances_pt": [14.0], "char_widths_pt": [14.0],
+        "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+    }
+    _check(comb_slot_verdicts(cell, PrePrintedInk([constant]), None, None)
+           == {0: "pre-printed"}
+           and comb_slot_verdicts(legacy_cell, PrePrintedInk([constant]),
+                                  None, None) == {},
+           "the pre-printed verdict is asked of the rectangle the input occupies",
+           f"a constant at y {fmt(glyph_y0)}..{fmt(glyph_y1)} is inside the writing "
+           f"box and clear of the band; only the writing-box question sees it",
+           failures)
 
 
 def field_surface_assertions(layout: dict[str, Any], plan: dict[str, Any],
@@ -4894,16 +6526,61 @@ def field_debug_assertions(html: str, failures: list[str]) -> None:
            "; ".join(f"{name}:{value.strip()}" for name, value in declarations),
            failures)
 
-    # Barrier 4: the stylesheet leaves the document for the duration of a print.
+    # Barrier 4: the stylesheet AND every element the overlay made leave the
+    # document for the duration of a print. The elements matter now in a way
+    # they did not when the overlay only set attributes on inputs that were
+    # already there: a mark is a real <i> painting a real outline, and a
+    # stylesheet transform that dropped @media print would leave it on paper.
     _check('window.addEventListener("beforeprint",drop)' in FIELD_DEBUG_JS
-           and 'window.addEventListener("afterprint",inject)' in FIELD_DEBUG_JS,
-           "the injected stylesheet is removed for the print itself",
-           "beforeprint drops it, afterprint restores it", failures)
+           and 'window.addEventListener("afterprint",function(){inject();run();})'
+           in FIELD_DEBUG_JS,
+           "the overlay leaves the document for the print itself",
+           "beforeprint drops it, afterprint rebuilds it", failures)
+    _check('nodes=document.querySelectorAll("[data-fg-layer]");' in FIELD_DEBUG_JS
+           and 'nodes=document.querySelectorAll("[data-fg-field]");' in FIELD_DEBUG_JS,
+           "the print drop removes the marks, not only the stylesheet",
+           "layers detached and field marks cleared", failures)
 
-    # The overlay may never relax the threshold the report uses.
-    _check(f"var MIN_SIZE_PT={fmt(FIELD_MIN_SIZE_PT)};" in FIELD_DEBUG_JS,
-           "the overlay's minimum size is the module's own constant",
-           f"{fmt(FIELD_MIN_SIZE_PT)}pt", failures)
+    # The overlay may never relax a threshold the pipeline holds elsewhere.
+    for name, value in (("TOL", RULE_POSITION_TOLERANCE_PT),
+                        ("WALL", RULE_WALL_COVERAGE),
+                        ("MIN_BOX", FIELD_MIN_SIZE_PT)):
+        _check(f"var {name}={fmt(value)};" in FIELD_DEBUG_JS,
+               f"the overlay's {name} is the module's own constant",
+               f"{fmt(value)}", failures)
+
+    # The point of the rewrite, asserted rather than described. The expectation
+    # comes from the rule layer -- a different producer, fed by the PDF's own
+    # painting operators -- and the field layer's own containers are not
+    # readable from the script at all. An overlay that derives its expectation
+    # from the thing it is checking is decoration, not a check, and the way
+    # that failure comes back is by someone reaching for `.c` because it is
+    # convenient.
+    _check('querySelectorAll(".rl rect, .rl .r")' in FIELD_DEBUG_JS,
+           "the overlay's expectation is read from the rule layer",
+           "page_ir rules and area fills, not page_layout cells", failures)
+    for selector in ('".layer-cells"', '".c"', '".s"', "'.c'", "closest("):
+        _check(selector not in FIELD_DEBUG_JS,
+               f"the overlay never reads the field layer's {selector} container",
+               "no path from the subject to the expectation", failures)
+
+    # The erosion moves INWARD, and this is a regression guard for a bug that
+    # was written here: with the sign inverted the "eroded" box included its own
+    # walls, and every field on both test forms reported as too small -- 1069
+    # false positives, the exact failure mode this project keeps producing when
+    # an instrument is trusted before it is looked at.
+    _check("var eL=2*box.L-w.L.outer+TOL,eT=2*box.T-w.T.outer+TOL;" in FIELD_DEBUG_JS
+           and "var eR=2*box.R-w.R.outer-TOL,eB=2*box.B-w.B.outer-TOL;" in FIELD_DEBUG_JS,
+           "the shortfall test erodes the printed box inward",
+           "left/top gain the wall, right/bottom lose it", failures)
+
+    # `.page:last-of-type{break-after:auto}` is the one structural selector in
+    # BASE_CSS. A <div> appended anywhere in the sheet takes that match off the
+    # last page and adds a page break after it, which is a layout change made
+    # by a debug tool -- exactly what the query-string gate exists to prevent.
+    _check('createElement("div")' not in FIELD_DEBUG_JS,
+           "the overlay creates no div, so .page:last-of-type still matches",
+           "chrome is <aside> and <i>", failures)
 
 
 def split_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str, Any],
@@ -5124,6 +6801,27 @@ def print_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     _check('data-converted="true"' in converted and "<object" not in converted,
            "a converted guide PDF is reflowed text, not an embedded viewer",
            f"{len(converted)} bytes", failures)
+
+    # The colspan clamp, asserted at the function rather than only through the
+    # whole-document run census above. A description whose last word crosses
+    # into the next printed column overlaps two columns and would claim a
+    # colspan of 2; the rate that starts in that second column owns a cell
+    # there. Unclamped, the row walk steps from the first cell past the second
+    # cell's index and that rate leaves the document -- silently, and with the
+    # row still looking well formed. This is the narrowest statement of the
+    # loss, and it is a loss of exactly the kind of token this table exists to
+    # publish.
+    def _cell_run(text: str, x0: float, x1: float) -> dict[str, Any]:
+        return {"text": text, "x0": x0, "x1": x1, "origin_x": x0,
+                "baseline_y": 100.0, "size_pt": 8.0}
+
+    crossing = _table_markup(
+        [_cell_run("description", 0.0, 150.0), _cell_run("2%", 110.0, 190.0)],
+        [(0.0, 100.0), (100.0, 200.0), (200.0, 300.0)])
+    _check("description" in crossing and "2%" in crossing
+           and 'colspan="2"' not in crossing,
+           "a run crossing into an occupied column does not swallow its cell",
+           crossing, failures)
     url = esc_attr(urllib.parse.quote(f"guides/{name}"))
     _check(f'<p class="gl-download">Source PDF: <a href="{url}">' in converted,
            "a converted guide PDF is still linked as the pinned artefact",

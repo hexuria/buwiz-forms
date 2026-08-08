@@ -41,6 +41,13 @@ boxes.  Every other partial pattern, unsupported vector geometry, clipped
 candidate, missing provenance, or competing source band is UNEVALUABLE --
 never a pass.
 
+A subject the lattice RETAINS -- published, emitting nothing, blocking the
+gate -- is withdrawn from that adjudication, so the topology it leaves behind
+must not be one the producer certified for itself; see THE RETAINED-TOPOLOGY
+INVARIANT below.  The single exception is a suppression reason whose factual
+claim about the paper this referee can re-derive from the same Poppler output,
+and it is then re-derived rather than believed.
+
 Raster output is not produced and cannot affect a verdict.
 
 Examples:
@@ -83,18 +90,283 @@ REPO = HERE.parent.parent
 
 REPORT_VERSION = 2
 EXPECTED_FORMS = 53
-EXPECTED_COMBS = 4540
+# 4540 -> 4521 (r14, 1e4da29) -> 4538 (2026-08-07, this change). r14's move was
+# WRONG, and the retraction is here rather than in a note because the number is
+# the evidence. This pin is the LEDGER SUBJECT denominator: `validate_comb_ledger`
+# compares it to `len(published_subjects)` and the form report compares it to
+# `len(cells)`, and BOTH enumerate every subject the ledger publishes -- active
+# and `retained_unresolved` alike. A comb that stops being a writing surface does
+# not leave the ledger; that is the ledger's entire purpose ("a retained subject
+# remains published even though no active cell is allowed to emit it"). r14
+# measured comb CELLS, found 4,521, and subtracted the difference from a
+# denominator that does not count cells, so 12 forms failed the referee outright
+# and the corpus report has been partial at 40/53 ever since.
+#
+# Re-measured 2026-08-07 by running 21e0630^'s lattice.py over the unchanged
+# build/ir for all 53 forms and diffing the ledgers against HEAD's: they are
+# IDENTICAL, form for form -- 4,538 subjects, 4,521 active comb cells, 17
+# retained. 21e0630's shaded-paper fix moved neither census. What was genuinely
+# stale at r14 was exactly TWO subjects, both 1700-2018 (143 -> 141), and they
+# were already stale before 21e0630. The other 17 "missing" subjects are the 17
+# retained ones, which never moved at all.
+#
+# 4538 -> 4543 (2026-08-07, r20), re-measured over the regenerated layouts by
+# counting every published subject -- active and retained alike -- exactly as
+# `validate_comb_ledger` does. Six slugs move and no others: 0605 21 -> 19,
+# 1600WP 16 -> 17, 1604CF 12 -> 15, 2550M 23 -> 21, 2551M 15 -> 18, 2553 16 ->
+# 18. All six are extract.py's line-cap model reaching a rail it used to stop
+# short of, which is a divider appearing or a band closing, and each moves the
+# retained half of the census below with it.
+#
+# 4543 -> 4583 (2026-08-07, r21), re-measured the same way over the regenerated
+# layouts. Nine slugs move and no others: 0605 19 -> 27, 1600WP 17 -> 23,
+# 1701MS 136 -> 140, 2200A 42 -> 43, 2316 28 -> 31, 2550-DS 77 -> 79, 2550Q
+# 144 -> 150, 2551M 18 -> 25, 2553 18 -> 21. All nine are `lattice.py`'s
+# bottom-guide-tick recognition (see LATTICE_PRODUCER_SHA256 below): a comb
+# guide the artwork deliberately stops a hair above its baseline is now a
+# divider instead of an unsupported border, so groups that had lost their
+# compartments (2316's TINs, 0605's return-period boxes, 1600WP's item 5)
+# become combs again.
+EXPECTED_COMBS = 4583
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
+# Re-pinned 2026-08-07 (r14): `topmost_covering_fill` became
+# `covering_shading_band`, so `on_shaded_paper` asks whether ONE connected,
+# same-tone band of decorative fill still reaches SHADED_PAPER_MIN_COVERAGE of
+# the cell after occlusion is resolved, instead of asking a single fill's own
+# rectangle. Neither SHADED_PAPER_MAX_GRAY (0.87) nor
+# SHADED_PAPER_MIN_COVERAGE (0.70) moved.
+#
+# Re-pinned 2026-08-07 (r20) for G03/G10: two producer bugs behind
+# `printed_box_peers_all_fillable`. (1) `GroupGeometry.span` filtered coverage
+# by distance to the cluster's mean centre and so could exclude a rule that is
+# itself a member of that cluster -- `line_thickness_gray` already exempts a
+# cluster's own rules and `span` now does the same, so a drawn wall counts as
+# coverage of the line it defines. (2) `assign_points` placed a text run by its
+# bounding-box centre, which is the run's ADVANCE; `glyph_ink_spans` reads the
+# per-character origins the IR already carries, so a run whose home cell holds
+# none of its ink moves to the cell holding the most of it, and a caption's
+# inter-word gap no longer makes the checkbox drawn in it "printed text".
+# CLUSTER_TOL_PT (0.3) did not move and no classification threshold moved.
+# (3) `resolve_retained_partition_overlaps`: a suppressed subject's
+# `mapped_partition_cell_ids` is a partition, and nothing enforced that. Once
+# 2550M's `p1c7` lost its rectangular owner too, it and the row band `p1c6` that
+# contains it both claimed the same three cells, and
+# `validate_comb_owner_registry` correctly invalidated the whole form -- taking
+# all 17 of its comb subjects to `source-topology-unevaluable`. The contested
+# cell now goes to the smallest claiming area. Corpus-wide this contests 3 cells
+# on one page of one form and empties no mapping.
+#
+# Re-pinned 2026-08-07 (r21) for G02d/G02e/G02g and G18. (1)
+# `bottom_guide_tick_baseline`: a vertical supported at NEITHER end can still
+# be a bottom guide tick -- official artwork stops a comb guide a hair above
+# the baseline it visibly sits on (2316's first TIN group 0.25pt, 1600WP item
+# 5 0.345pt), and `supported_at` filed those as borders, so the group lost its
+# compartments and a TIN reached the taxpayer as one unbounded input (F111,
+# F178, F181). The recognition is a PATTERN, not a widened tolerance -- a
+# blanket y-tolerance was tried and refuted (it flipped 45 real combs): the
+# tick must hang from nothing, land within its own stroke width of a baseline,
+# sit between two full-height top-supported walls on that baseline, and be
+# corroborated by same-loop siblings or uniform wall-to-wall pitch. No
+# tolerance constant moved. (2) `comb_on_writing_surface` no longer restates
+# the writing box into the contract's `y0`/`y1` -- those keys stay the SOURCE
+# DIVIDER BAND this referee's `classify_band` seeds from and the reviewed
+# 2551Q control was signed against; the writing box is published BESIDE the
+# band as `writing_y0`/`writing_y1`/`writing_height_pt`. The restatement had
+# made 4,417 of 4,522 active combs source-unevaluable and failed the reviewed
+# control (G18).
+#
+# Re-pinned 2026-08-08 (r24) for G19/F184. (1)
+# `erased_witness_rail_residue`: `definitely_erased` demands one known-later
+# nonstructural layer covering the witness's COMPLETE bbox, but 2550M paints
+# its Schedule date-box knockout only down to the middle of the row's bottom
+# rule, so a sliver of the stale tick survives -- wholly inside the
+# final-visible horizontal rail, where there is no paper the sliver could
+# print on (the same no-paper contract `horizontal_rail_across` documents).
+# The erasure certificate now accepts that one shape, publishes every excused
+# interval as `rail_covered_residue_y`, and an un-covered un-railed portion
+# still fails closed -- both directions mutation-proven in the self-test.
+# (2) A competing endpoint topology proven ONLY inside a full-width
+# horizontal rail exists on no paper, so it no longer de-certifies the
+# paper-bearing topology; it stays published in the evidence with its new
+# `paper_coverage_pt`, and a competitor with any paper coverage still forces
+# `competing-endpoint-topologies` exactly as before. No tolerance constant
+# moved and no threshold moved.
+#
+# Re-pinned 2026-08-08 (r27) for G05/G12: `printed_caption_refutes_comb`. A
+# comb compartment is a CHARACTER cell, and `classify_cell` reached its "mixed"
+# verdict from `has_comb` alone -- so a single stray vertical inside a printed
+# caption block made the whole caption a typing surface (1606 page 2's entire
+# statutory rate table, 566 x 106pt of Exempt / 1.5% / 3.0% / 5.0% / 6.0%, and
+# one masthead on each of four excise forms). The cell's own printed text is
+# now asked what it put IN the compartments: decoration in a character cell is
+# at most one glyph per cell, because the cell is one character wide. The
+# corpus separates the two populations with a gap and no tuned constant -- of
+# 4,561 comb cells, 4,524 have at least one empty compartment, 26 carry exactly
+# one glyph in every compartment (`I I 0 1 1`, `X C 0 1 0`, `0 %` -- the
+# decoration the "mixed" verdict is FOR), and 11 carry 29 or more; nothing lies
+# between 1 and 29. The test is EVERY compartment and never SOME, which is what
+# keeps 2200A `p1c111`'s 29-box money comb (one swallowed caption in the first
+# compartment, 28 empty ones after it) with its money boxes.
+#
+# What this referee adjudicates moves in the direction it is BUILT for, not
+# around it: a refuted subject does not leave the ledger. It loses its comb,
+# `cell_id` goes None, `emission` goes `suppressed`, `blocks_gate` stays True,
+# `requires_independent_evidence` stays True, and `retired_proven_false` is
+# among its permitted transitions for whoever reviews it. Nothing in lattice.py
+# retires it -- a producer does not certify its own promotion -- so
+# EXPECTED_COMBS and EXPECTED_COMBS_BY_SLUG, which count active + retained, do
+# not move; a refuted band that no subject published raises rather than
+# shipping; and a refuted subject that is not an identity mapping onto its own
+# rectangle raises too. No tolerance constant moved and no threshold moved.
+# Re-pinned 2026-08-08 (r29) for the comb RAIL derivation, which is a change
+# to a derivation this referee does adjudicate, so it is stated in full.
+# `comb_bands` no longer takes a comb's outer `slot_x` from the lattice cell
+# box. It measures them: each side is the ink of the owner's own edge WHERE IT
+# CROSSES THIS BAND (a lattice line sits at the mean centre of every collinear
+# bar on the page, and the bar ruling one comb can be a third of a point from
+# that mean -- 1800 fuses 584.26/584.50/584.74 into 584.56 over a comb the
+# 584.26 bar rules), moved inward to the innermost boundary that crosses the
+# owner's whole paper when the comb's tick run does not reach it (1801 rules a
+# TIN dash box, a "Contact Number" caption and 366pt of item-24 caption inside
+# the same rectangles as its digit boxes, and slot 0 was a typeable box over
+# printed text). Two source facts decide it and no constant does: whether a
+# boundary's ink crosses the paper the owner encloses, joined where the paper
+# between fragments is thinner than the ink either side of it and never across
+# a corridor a later layer painted out; and where that ink's own centre is.
+#
+# A rail moves the comb's edge INWARD off the fused mean and only inward: the
+# rectangle is the paper the comb is emitted on, and `emitted_comb_evidence`
+# in audit.py requires every emitted slot to stay inside it. Where the drawn
+# bar's own centre falls outside the rectangle, the rectangle wins and the
+# comb keeps the old edge -- which leaves SIX combs (1701MS p1c166/p1c173/
+# p1c179/p1c187, 2550M p1c203, 2550Q p1c6) whose printed rail is 0.26-0.31pt
+# beyond their owner's fused edge still reported by the audit. That residual
+# is in the lattice POSITION, not in the comb, and it is not touched here.
+#
+# The census does NOT move: 4583 subjects, 33 retained, 4550 active comb cells,
+# form for form. What moves is 773 combs' outer coordinates and 9 combs' slot
+# counts, and the audit -- which reads the compartment count and the rail
+# positions from the pinned PDF's own paint stream, never from the layout --
+# agrees on all 4,531 compartment counts and on 4,422 of the 4,428 rail pairs
+# it can evaluate, where before it named 33 of these combs as defects.
+# `EXPECTED_HTML_STRUCTURE_SHA256` moves with the emitted slot rectangles,
+# per form, below.
 LATTICE_PRODUCER_SHA256 = (
-    "cc32ca68dff75e8924db1955f358d8d992c629a078b39188bab7f6b4d31fab5b"
+    "ca5427ee3186b58d7be8a769d173f805edbe3ada76140b4837bd602ff3b642c6"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
+# Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
+# assertions, `inputs_span_no_printed_divider` and
+# `printed_box_peers_all_fillable`, taking ASSERTION_KEYS from 8 to 10. Neither
+# reads `b.layout`, `b.plan`, emit.py's markers or the IR -- their whole
+# expectation comes from the pinned PDF's own composited paint stream
+# (`ordered_vector_paints`) and its own text operators (`drawn_glyph_boxes`) --
+# so no derivation this referee adjudicates changed. No comb constant moved and
+# no existing assertion's code path was touched.
+#
+# Re-pinned 2026-08-07 (r23): `money_boxes_have_inputs` and
+# `printed_box_peers_all_fillable` now read the reservation the SHEET's own
+# caption places on a blank -- "(To be filled up by the BIR)", "Machine
+# Validation" -- derived in `source_bureau_reservations` from the pinned PDF's
+# own text operators and from nothing else. Not from emit.py's
+# `BureauReservation`, not from the IR, not from the layout: the two answer
+# the same question about the paper through different producers, which is what
+# lets this one still catch an emitter that reserves a box the sheet does not.
+# Corpus-wide the exclusion claims exactly ONE box (0605 `p1c17`, finding
+# F147's blocker), and every caller publishes the count as
+# `boxes_bureau_reserved`, so it can never be silent. `ASSERTION_KEYS` is
+# unchanged at 10, no comb constant moved, and `comb_slots_match_printed`'s
+# code path -- the only derivation this referee adjudicates -- is untouched.
+#
+# Re-pinned 2026-08-08 (r27), two changes, neither of them in a derivation this
+# referee adjudicates:
+#
+# (1) `glyph_boxes` scores an emitted input against the glyph's INK band rather
+# than the font's LINE box. extract.py records a run's y-extent as MuPDF's span
+# bbox, which is `baseline - ascender*size` to `baseline - descender*size`
+# (verified on all 19,333 runs of this corpus), so every glyph in a run was
+# charged with the full descender depth of its face whether or not the
+# character has a descender -- and an input under a caption set in capitals was
+# reported as sitting on printed text with blank paper between them. The lower
+# edge alone moves, per GLYPH and never per run, and only for characters whose
+# depth was MEASURED: `BASELINE_SEATED_INK` is an evidence list, an unmeasured
+# character keeps the full line box, and so do symbol-encoded faces, rotated
+# runs, and a run missing the metrics. `GLYPH_BASELINE_OVERSHOOT_EM` (0.0308,
+# the deepest baseline-seated character over eleven measured faces) ENLARGES
+# the band, so an error in it errs towards reporting a collision. Six mutations
+# that weaken the band are each caught by a named fixture in the self-test.
+# This feeds `inputs_over_printed_text` only. `comb_slots_match_printed` -- the
+# one derivation this referee adjudicates -- takes its printed count from
+# `printed_compartments`, i.e. from the source's own paints and text operators
+# via `drawn_glyph_boxes`, and never from `glyph_boxes`; it is untouched.
+#
+# (2) The retained comb-subject registry admits a THIRD reason tuple,
+# `emission-suppressed-caption-block-not-character-cells`, through exactly the
+# identity branch the no-band tuple goes through. It is added because the shape
+# now EXISTS (see LATTICE_PRODUCER_SHA256 above) and because an unrecognised
+# retained record fails the whole form's registry rather than its own. Nothing
+# is weakened: the record must still be suppressed, blocking, comb-less and an
+# identity mapping onto its own still-present cell, and both directions are
+# asserted in the self-test. `ASSERTION_KEYS` is unchanged at 10 and no comb
+# constant moved.
+#
+# Re-pinned 2026-08-08 (r28), and unlike every re-pin above this one DOES land
+# inside `comb_slots_match_printed`, the single derivation this referee
+# adjudicates. Stated plainly rather than buried: `SourceSlotOracle` decides
+# whether a compartment the emitter left without an input was already spent by
+# the sheet, and both halves of that question moved.
+#
+#   * The rectangle the GLYPH question is asked of is now the compartment's
+#     printed ROW -- the source's own dividers for walls, the cell's own top
+#     and bottom for the other two edges -- instead of the writing rectangle
+#     `emit.comb_writing_rect` chose. The old rectangle made the answer a
+#     function of OUR typography: 85 of 92 identical money bullets read as
+#     blank paper because the bullet's descent falls 0.03-0.41pt below the
+#     writing floor. The row cannot reach outside the cell, and the self-test
+#     drives a glyph above and below the cell as a neighbour's ink.
+#   * The character-class test is gone. A compartment is one character wide,
+#     the source has already put a character in it, and an input laid there is
+#     a typing surface no taxpayer can use whatever the character means. What
+#     protects C4 -- a money comb with no way to enter an amount -- is that
+#     only an OCCUPIED compartment is ever excused, one compartment at a time;
+#     audit.py's self-test drives an emitter that empties a whole comb still
+#     failing on the compartments either side of the printed mark. The kind is
+#     still published per compartment (`printed-constant` vs `printed-mark`),
+#     so a report can still tell a statutory value from a separator.
+#
+# This referee does NOT re-derive that excuse. It re-derives the printed and
+# layout topologies and then checks that audit.py's published relations agree
+# with its own published `emission_state`. So this re-pin carries NO verdict on
+# the oracle: the oracle is bound by audit.py's own mutation-proven self-test
+# cases and by the corpus measurement recorded in STATUS.md r28.
+# `ASSERTION_KEYS` is unchanged at 10, no comb constant moved, no tolerance
+# moved, and the assertion's published SHAPE -- which
+# `_normalise_outer_comb_assertion` is contract-bound to -- is unchanged.
+# Re-pinned 2026-08-08 (r31): the source-topology reader gained six
+# content-stream relations so `comb_slots_match_printed` can DECIDE cases it
+# previously called unevaluable -- a junction block belongs to its rule chain,
+# a break narrower than the stroke it interrupts is not a break, a painted
+# knockout is a break at any size, a wall carries into the rule above where a
+# divider does not, walls cut a frame into cells, and a touching junction is
+# sampled on the rule's side. Checker-only: lattice.py and emit.py are
+# untouched and regeneration is byte-identical, so no shipped geometry moved.
+# `ASSERTION_KEYS` is unchanged at 10 and no tolerance moved -- POSITION_TOL_PT
+# is still 0.25. Unevaluable fell 182 -> 19 and decided-and-failing rose 3 ->
+# 33: the assertion now names producer defects it used to be unable to see.
 AUDIT_PRODUCER_SHA256 = (
-    "7c902be970404e43ca54e61f572dcfd2d3edc8ac8a0336342db1d43faec24ac2"
+    "2ea5b8a163e14eeb42e1e63147c4d5889fc8846ca9c6fd538f6ee64b150834f2"
 )
 AUDIT_DEPENDENCY_SHA256 = {
+    # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
+    # line caps. A round (1) or projecting (2) cap inks half a stroke width past
+    # the declared endpoint of an OPEN subpath, so the IR was publishing 340 of
+    # this corpus's 569 open strokes short of their own ink. Caps are applied to
+    # the two ends of a reconstructed subpath only -- never to `re`/`qu`, never
+    # to a polyline that returns to its start, never to an interior join -- and
+    # a new written-here probe page (`CAP_PROBE_STREAM`) asserts all thirteen
+    # cases with a mutation that restores the old behaviour.
     "tools/formgen/extract.py": (
-        "5f75f191624624b5625a2c08b0d75c4790884fda6dc84768fde2cd354bc32b03"
+        "079ea3c90d67deda371343b51445f13141a88bef3066fbb33a55c07b46e99f98"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -192,34 +464,88 @@ COMB_SUBJECT_STATES = frozenset({
     "retained_unresolved",
 })
 COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
+
+# THE RETAINED-TOPOLOGY INVARIANT, stated once because two different failures
+# hide behind the same word "retained".
+#
+#   A subject the producer has WITHDRAWN FROM ADJUDICATION may not leave behind
+#   a topology that same producer has certified.
+#
+# A retained subject emits nothing, so no emitted-slot assertion can reach it;
+# `comparison` returns `unevaluable` for it, so the four-way agreement is never
+# taken; and `transition_decision` says only that an explicit ledger transition
+# is required.  The one thing it does leave in the ledger is `legacy_comb` --
+# and that is precisely the shape a later transition would be promoted from.
+# Letting a producer publish `resolution.status == "resolved"` there is letting
+# it bank a self-certified shape for a promotion nobody adjudicated, which is
+# the exact mechanism GOAL.md's decision 1 forbids.
+#
+# Until r27 every retained subject published a LEGACY-CONTINUITY band, which
+# `lattice.legacy_comb_bands` marks unresolved by construction, so "a retained
+# legacy_comb is unresolved" was true of every shape that existed and the guard
+# never had to distinguish anything.  r27 created a second shape: a cell whose
+# own printed text refutes the claim that its compartments are character cells
+# keeps the comb the lattice actually measured on it, and that comb may well be
+# RESOLVED -- we know exactly what the source drew; we are declining to emit it
+# as a typing surface.  The topology status answers "could the source shape be
+# determined?"; the suppression reason answers "may it be emitted?".  They are
+# different questions and the guard was reading one for the other.
+#
+# The producer is NOT taken at its word about which of the two it is in.  A
+# retained subject may publish a resolved topology only when its reason tuple
+# is one this referee can RE-DERIVE FROM POPPLER (below), and the re-derivation
+# then runs against the pinned PDF's own vector output.  An unrecognised reason
+# with a resolved topology still fails, exactly as before.
+CHARACTER_CELL_MAX_PRINTED_GLYPHS = 1
+SOURCE_CAPTION_BLOCK_CRITERION = (
+    "source-printed-caption-block-not-character-cells-v1"
+)
+# Retained suppression reason tuples this referee can corroborate from the
+# source, and the criterion each is corroborated under.  A tuple is admitted
+# here only when the referee can answer the reason's OWN factual claim out of
+# Poppler's output; a reason that merely asserts something about the producer's
+# internal state can never appear in this table.
+RETAINED_SUPPRESSION_SOURCE_CRITERIA = {
+    ("emission-suppressed-caption-block-not-character-cells",):
+        SOURCE_CAPTION_BLOCK_CRITERION,
+}
+# Poppler emits every character as a `use` of a `#glyph-*` path, and `parse_svg`
+# records each one as an unsupported region carrying its transformed bound.
+# These two reasons are the ones that carry a MEASURED glyph box; the other
+# glyph reasons are whole-page regions meaning "text exists that this parser
+# could not place", and they are deliberately not counted.
+MEASURED_GLYPH_REASON_PREFIXES = (
+    "glyph use may occlude geometry: ",
+    "stroked glyph use may occlude geometry: ",
+)
 # Corpus identity pins, not geometry exceptions: every slug follows the same
 # parser and decision rules. A substituted/missing form must not pass merely
 # because the replacement keeps the two aggregate counts unchanged.
 EXPECTED_COMBS_BY_SLUG = {
-    "0605-1999": 21,
+    "0605-1999": 27,
     "0619e-2018": 60,
     "0619f-2018": 64,
     "0620-2019": 60,
     "1600-pt-2018": 95,
     "1600-vt-2018": 95,
-    "1600wp-2010": 16,
+    "1600wp-2010": 23,
     "1601-fq-2020": 106,
     "1601c-2018": 132,
     "1601eq-2019": 99,
     "1602q-2019": 175,
     "1603q-2018": 78,
     "1604c-2018": 19,
-    "1604cf-2008": 12,
+    "1604cf-2008": 15,
     "1604e-2018": 15,
     "1604f-2018": 16,
     "1606-2018": 76,
     "1621-2019": 69,
-    "1700-2018": 143,
+    "1700-2018": 141,
     "1701-2018": 283,
     "1701-2018-attachment": 123,
     "1701-2018-conso": 40,
     "1701a-2018": 134,
-    "1701ms-2024": 136,
+    "1701ms-2024": 140,
     "1701q-2018": 128,
     "1702ex-2018": 149,
     "1702mx-2018c": 117,
@@ -234,25 +560,97 @@ EXPECTED_COMBS_BY_SLUG = {
     "1801-2018": 102,
     "2000-dst-2018": 131,
     "2000-ot-2018": 75,
-    "2200a-2020": 42,
+    "2200a-2020": 43,
     "2200an-2018": 87,
     "2200c-2018": 40,
     "2200m-2018": 86,
     "2200p-2020": 42,
     "2200s-2018": 66,
     "2200t-2022": 90,
-    "2316-2021": 28,
-    "2550-ds-2025": 77,
-    "2550m-2007": 23,
-    "2550q-2024": 144,
-    "2551m-2002": 15,
+    "2316-2021": 31,
+    "2550-ds-2025": 79,
+    "2550m-2007": 21,
+    "2550q-2024": 150,
+    "2551m-2002": 25,
     "2551q-2018": 105,
     "2552-2018": 73,
-    "2553-1999": 16,
+    "2553-1999": 21,
 }
 if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
         or sum(EXPECTED_COMBS_BY_SLUG.values()) != EXPECTED_COMBS):
     raise RuntimeError("comb referee corpus pins are internally inconsistent")
+
+# The second half of the census, pinned separately so that the two quantities
+# r14 conflated can never be added or subtracted from each other again. The
+# ledger denominator above is active + retained; this is the retained half, per
+# slug, and the difference is the ACTIVE comb-cell count. A retained subject is
+# a comb the lattice can no longer own a rectangle for: it blocks the gate, it
+# emits nothing, and it stays in the ledger as continuity evidence. Slugs absent
+# from this table are pinned at zero -- retention appearing on a new form is a
+# census move that must be declared here, exactly like a comb count moving.
+# Measured 2026-08-07 over build/layout, and identical under 21e0630^'s lattice.
+# Re-measured 2026-08-07 (r20) over the regenerated layouts: 17 -> 21 retained,
+# on the same six slugs whose subject totals moved. The cause is extract.py's
+# line-cap model (see AUDIT_DEPENDENCY_SHA256): a round-capped tick that reaches
+# its rail is a divider, so bands that were single unbroken rows become combs,
+# and a legacy comb subject that can no longer be given one rectangle is
+# retained rather than dropped. 0605 3 -> 1 and 1604CF 2 -> 1 move the other way
+# for the same reason -- their retained subjects found rectangular owners once
+# the ticks reached.
+# Re-measured 2026-08-07 (r21): 21 -> 22, one slug only -- 2551M 3 -> 4. The
+# bottom-guide-tick recognition gives 2551M seven more subjects (18 -> 25) and
+# one of them, like the four already retained there, cannot be given a single
+# rectangular owner; it is retained rather than dropped, exactly as the r20
+# note above describes for the line-cap model.
+# Re-measured 2026-08-08 (r27): 22 -> 33, on exactly seven slugs, and every
+# one of the eleven new subjects carries the single reason code
+# `emission-suppressed-caption-block-not-character-cells` -- 1606 +1, 2200A +2,
+# 2200AN +1, 2200C +1, 2200P +2, 2200S +1, 2200T +2. This is the caption-block
+# refutation described at LATTICE_PRODUCER_SHA256: a cell whose every comb
+# compartment carries running prose is not a character cell, so the comb comes
+# off the cell and the subject moves to the retained half rather than leaving
+# the ledger. EXPECTED_COMBS does not move and no per-slug comb count moves,
+# because active + retained is what that denominator counts -- which is the
+# whole point of splitting the two quantities here.
+#
+# 2200C's entry goes 1 -> 3 and keeps its original subject: one
+# `emission-suppressed-no-rectangular-owner` / `painted-edge-partition` from
+# r20, plus the two new ones.
+EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
+    "0605-1999": 1,
+    "1600wp-2010": 2,
+    "1604cf-2008": 1,
+    "1604f-2018": 1,
+    "1606-2018": 1,
+    "1707-2021": 1,
+    "1707a-2021": 2,
+    "1800-2018": 1,
+    "2000-ot-2018": 2,
+    "2200a-2020": 2,
+    "2200an-2018": 1,
+    "2200c-2018": 3,
+    "2200p-2020": 2,
+    "2200s-2018": 1,
+    "2200t-2022": 2,
+    "2550m-2007": 4,
+    "2551m-2002": 4,
+    "2553-1999": 2,
+}
+EXPECTED_RETAINED_SUBJECTS = sum(EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
+# The number r14 mistook for the ledger denominator. It is derived here, never
+# written as a literal, so the two can only ever disagree by a declared change.
+EXPECTED_ACTIVE_COMBS = EXPECTED_COMBS - EXPECTED_RETAINED_SUBJECTS
+if (set(EXPECTED_RETAINED_SUBJECTS_BY_SLUG) - set(EXPECTED_COMBS_BY_SLUG)
+        or EXPECTED_ACTIVE_COMBS != sum(
+            EXPECTED_COMBS_BY_SLUG[slug]
+            - EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(slug, 0)
+            for slug in EXPECTED_COMBS_BY_SLUG)
+        or any(count <= 0
+               for count in EXPECTED_RETAINED_SUBJECTS_BY_SLUG.values())
+        or any(EXPECTED_RETAINED_SUBJECTS_BY_SLUG[slug]
+               > EXPECTED_COMBS_BY_SLUG[slug]
+               for slug in EXPECTED_RETAINED_SUBJECTS_BY_SLUG)):
+    raise RuntimeError("comb referee retained-subject pins are inconsistent")
 
 # Reviewed from report payload
 # 15b6454ef9c156435fc33d47b177ff4b2db379207fa694bbcdb87200bb341ca4.
@@ -271,6 +669,14 @@ REVIEWED_2551Q_EXPLICIT_COMPARTMENTS = {
 # independently tunable answer rather than an adjudicator.
 POSITION_TOL_PT = 0.25
 
+# lattice.py publishes every layout coordinate through `lattice.q`, which rounds
+# to `lattice.QUANT` = 2 decimal places.  A source measurement is compared with a
+# published one at exactly that precision: anything finer would only measure
+# Poppler's own coordinate quantum, and anything coarser would let two distinct
+# printed weights read as one -- this corpus draws walls at 0.44pt AND 0.45pt,
+# and at 0.75pt AND 0.76pt, so even POSITION_TOL_PT would conflate them.
+LAYOUT_QUANT_PLACES = 2
+
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 _TRANSFORM_RE = re.compile(r"([A-Za-z]+)\s*\(([^)]*)\)")
 _PATH_TOKEN_RE = re.compile(rf"[A-Za-z]|{_NUMBER}")
@@ -283,6 +689,29 @@ _SUBJECT_KEY_RE = re.compile(
 # emit.py serialises point geometry to four decimal places.  Two independently
 # rounded endpoints can differ by at most two ten-thousandths of a point.
 HTML_GEOMETRY_EPSILON_PT = 0.0002
+# The five published position relations do NOT share one tolerance, and pinning
+# them all to HTML_GEOMETRY_EPSILON_PT was a category error that made every
+# offender record unparseable.  `emission_layout*` compares two of OUR OWN
+# four-decimal serialisations, so it is exact to HTML_GEOMETRY_EPSILON_PT.  The
+# three relations whose name carries `source` cross into raw source geometry,
+# whose floats are not that serialisation; audit.py binds exactly those three
+# to POSITION_TOL_PT and says so at its own declaration ("it applies only to
+# comparisons that cross representations into raw source geometry ... every
+# same-representation emitted/layout comparison keeps EMITTED_GEOMETRY_EPS_PT"),
+# and this file already carries POSITION_TOL_PT under the same name for its own
+# Poppler-space work.  Each relation is still pinned to exactly one fixed
+# constant -- neither is a knob -- and swapping them in either direction is
+# still rejected.
+AUDIT_POSITION_TOLERANCE_PT = {
+    "emission_layout_position": HTML_GEOMETRY_EPSILON_PT,
+    "emission_layout_outer_position": HTML_GEOMETRY_EPSILON_PT,
+    "emission_source_position": POSITION_TOL_PT,
+    "emission_source_outer_position": POSITION_TOL_PT,
+    "layout_source_outer_position": POSITION_TOL_PT,
+}
+if set(AUDIT_POSITION_TOLERANCE_PT) != set(AUDIT_POSITION_FIELDS):
+    raise RuntimeError(
+        "every audit position relation needs exactly one pinned tolerance")
 SVG_INLINE_STYLE_PROPERTIES = frozenset({
     "clip-path",
     "display",
@@ -513,14 +942,33 @@ HTML_STYLESHEET_FIXED_VALUES: dict[tuple[str, str], frozenset[str]] = {
     ("@page", "margin"): frozenset({"0"}),
 }
 # In document order: the band data runtime, the field runtime, and the field
-# debug overlay. The first two are byte-identical to the values reviewed before
-# the overlay existed -- the overlay is appended, it does not modify them, and
-# that is the evidence that adding it changed no shipped behaviour. All 53
-# bundles emit this exact tuple.
+# debug overlay. All 53 bundles emit this exact tuple -- measured, not assumed.
+#
+# The FIRST hash has never moved. It is the band data runtime, and its being
+# byte-identical across every re-pin is the standing evidence that none of the
+# field-layer work has reached into page scaffolding.
+#
+# The SECOND and THIRD moved at r14, and only those two, which is exactly the
+# claim the G11 fix makes about itself:
+#   * field runtime (e2b0b779 -> 1ed88b99). A comb compartment the source
+#     already filled in now emits its slot div with no <input> in it, so the
+#     NodeList a taxpayer tabs through is shorter than the compartment count.
+#     `move` and the paste handler used to index that list with the
+#     `data-slot-index` ATTRIBUTE, which would have stopped advancing at the
+#     first printed box; they now find the element's position in the list with
+#     `positionOf`. `data-slot-index` still means the compartment's number.
+#   * field debug overlay (877c6c01 -> 96754a6a). F172/G15: the corrected
+#     overlay had existed in emit.py and had simply never been regenerated into
+#     the corpus. `printed box with no input` now appears in 53 of 53 bundles
+#     and `no usable box` in none.
+# Re-pinned 2026-08-07 (r14). This pin is the reason r14's first full gate run
+# reported the comb referee UNEVALUABLE on five forms: it is a THIRD reviewed
+# emitter pin, separate from EXPECTED_HTML_STRUCTURE_SHA256 and from the
+# producer SHAs, and it is read only by the referee, which runs last.
 HTML_RUNTIME_SCRIPT_SHA256 = (
     "8822f0d4efe00ffbf32e2e0fe2922139419f08184143699b789a0aa5050e649d",
-    "e2b0b7794d0b72c3d5ab818c290ffca183f3b1fff9797e487450a3ca4b0f4049",
-    "877c6c01ce3d39819c27cc902ca1ddb6eb9f18aeeb298e875a9b88898f0bc03c",
+    "1ed88b99506a819cacf86e3020a2c73c6bac3e12c3d739327b385145d2d13147",
+    "96754a6ab1c7d406d040768c6f13d5da47da75d820ba8a04fe773f683504c004",
 )
 HTML_ROOT_ATTRIBUTES = frozenset({
     "data-form",
@@ -594,60 +1042,234 @@ HTML_ALLOWED_TAGS = frozenset({
     "template",
     "title",
 })
+# All 53 refreshed 2026-08-07 (r14). They had been stale on all 53 since the
+# GOAL.md §Blocked entry, so the referee had been UNEVALUABLE -- a red verdict,
+# not a pass -- for every run since. What was reviewed before refreshing them is
+# recorded here, because "the producer just wrote these bytes" is not a review:
+#
+#   Every one of the 53 emitted documents was diffed against its HEAD (21e0630)
+#   committed self at the level of tags, ids and attributes. Across the whole
+#   corpus the tag inventory changes in exactly ONE direction -- 332 <input>
+#   elements deleted, zero elements of any kind added -- and the attribute-level
+#   changes are 6,384 input[class] renumberings (the field-metric CSS buckets
+#   shift when the field population does), and 46 divs whose data-cell-kind goes
+#   `field` -> `shaded`. Nothing else moved in any document.
+#
+#   Both directions were then checked against the official PDFs by eye, not only
+#   by count: 281 of the 332 are comb compartments the source itself printed a
+#   constant into (`II 011`, `XC 010`, the century `2 0`, the TIN branch code
+#   `0 0 0 0 0`) and 51 are cells sitting on official grey "no entry applies"
+#   shading -- 2200T page 2's Part V header band was rasterised from the pinned
+#   PDF to confirm the band really is grey and the P2.50 row below it really is
+#   white. Rasters in the session scratchpad under preprinted/.
+#
+# 25 of the 53 refreshed 2026-08-07 (r20) -- the other 28 documents are
+# byte-identical and their pins were not touched.
+#
+# This pin hashes `build/html/<slug>.html`, the EMITTED document, not
+# `forms/<slug>/index.html`, the bundled one. r20's refresh was first computed
+# off the bundle and it cost a full 60-minute gate: 25 forms reported "emitted
+# HTML bytes changed from the reviewed pin" and the referee fell to 27 of 53.
+# Exactly the same 25 slugs differ at both levels -- verified by diffing today's
+# `build/html` digests against the r19 pins in git -- so the review below, taken
+# on the bundled documents, covers the same population; only the artifact being
+# hashed was wrong.
+#
+# Reviewed as follows, and the review is again the point rather than the
+# regeneration:
+#
+#   Tag inventory across the 25 changed documents moves in ONE direction:
+#   +60 <input>, +29 <div>, +3 <rect>, and nothing of any kind deleted (2551M's
+#   -1 div is a comb container replaced by its slots). Visible text is
+#   token-for-token identical in every document -- the only text-length changes,
+#   2550M +3,767 and 1604CF -1, are entirely inside the embedded band-data
+#   <script>, which encodes the comb bands and therefore has to grow when a form
+#   gains combs.
+#
+#   The 60 inputs are the two producer fixes, at coordinates: 14 checkboxes and
+#   comb groups a printed-box assertion named (0619-E and 0620 item 3 Amended
+#   YES, 2550Q item 3 2nd quarter, 1701 ATC II016, 2200M item 12, 2200S x3, and
+#   the rest), and 46 compartments on combs the source draws with round-capped
+#   ticks (2550M's year comb, 2553, 1604CF, 2551M).
+#
+#   The 3 new rects were checked against the sheet rather than counted: all
+#   three are on 2550M page 2 at x 574.92, y 568.32/656.16/670.32 -- the LAST
+#   THREE segments of the right-hand column rule, whose mirror image at x 452.28
+#   (v285, v286, v287) was already painted at HEAD and still is. The source
+#   strokes them with a round cap that stopped 0.36pt short of its rails. Every
+#   other rule in the corpus moved by exactly half its stroke width at a capped
+#   end and by nothing at a butt-capped one, which is `check_stroke_caps`'s
+#   probe restated over real artwork.
+#
+# This pin still hashes every emitted byte, so it still invalidates on every
+# legitimate producer change; the design tension recorded in GOAL.md §Blocked is
+# unresolved and this refresh does not resolve it.
+#
+# Refreshed 2026-08-07 (r21), all 53, from build/html/<slug>.html (the emitted
+# document, per the r20 lesson above). Reviewed as follows before re-pinning:
+#
+#   Every one of the 53 documents changed, because the comb contract's
+#   y0/y1 keys reverted to the SOURCE DIVIDER BAND (see the note at
+#   LATTICE_PRODUCER_SHA256): every comb slot div's top/height moved back to
+#   the tick band, corpus-wide. That is the deliberate cost of restoring this
+#   referee's reviewed 2551Q control and the classify_band seeding; the
+#   writing surface is published beside the band as writing_* and the emitter
+#   does not read it yet -- reported loudly in STATUS.md as the r21 cost.
+#
+#   Tag inventory across all 53: +122 <input>, +162 <div>, nothing else moved
+#   and nothing deleted, with visible text token-for-token identical in every
+#   document. The gains are the bottom-guide-tick recognition returning
+#   compartments to groups that had lost them (2316's TINs, 0605's return
+#   period, 1600WP item 5, 2551M, 2553, 2550Q, 1701MS, 2200A). The only lost
+#   inputs are SIX comb compartments on 2200A/C/P's bottom band -- the
+#   "Machine Validation" / "Stamp of Receiving Office" boxes, refused by
+#   emit.BureauReservation because the sheet's own caption reserves them for
+#   the Bureau. Not one previously-refused compartment regained an input:
+#   G11's constants stay refused, because comb_slot_verdicts asks its
+#   questions of the compartment's writing rectangle (writing_y0/writing_y1),
+#   not of the divider band the y0/y1 keys now measure -- the seam fix
+#   documented at that function.
+#
+# Refreshed 2026-08-07 (r23), all 53, from build/html/<slug>.html. This is r21's
+# declared cost being PAID, not a new change: emit.py now lays every rectangle
+# it DRAWS for a comb out on the WRITING box (`emit.comb_writing_rect`) rather
+# than on the divider band, so the typing surface on 2550M's item-4 TIN row is
+# 14.16pt inside a 15.60pt row again instead of the 3.12pt stub r21 shipped
+# (finding F186). The band is untouched and is still the source contract
+# `classify_band` seeds from and the reviewed 2551Q control was signed against
+# -- emit.py restates it nowhere, which its own self-test now drives in both
+# directions.
+#
+#   Reviewed before re-pinning, and the review is unusually strong: the tag
+#   inventory delta across all 53 documents is ZERO for every tag name --
+#   239,562 elements before and 239,562 after, nothing added, nothing deleted
+#   -- and visible text is token-for-token identical in every one. The entire
+#   change is attribute values on `<div class="s">`: 2316's slot 0 goes
+#   `top:8.71pt;height:6.05pt` (the tick band) to `top:0.45pt;height:13.92pt`
+#   (the writing box), 2550M's `top:9.24pt;height:4.32pt` to
+#   `top:0.72pt;height:11.76pt`. Every slot div moved and only slot divs moved.
+#
+#   HTML_RUNTIME_SCRIPT_SHA256 was re-derived and did NOT move: all three
+#   pinned runtime scripts are byte-identical, which is the standing evidence
+#   that a layout change did not reach the page runtime.
+#
+# Refreshed 2026-08-08 (r27): TEN of the 53, from build/html/<slug>.html. The
+# other 43 documents are byte-identical and their pins were not touched --
+# which is itself the first review finding, because two producer changes that
+# could each have moved every document moved ten.
+#
+#   Tag inventory across the ten moves in ONE direction: -110 <input>, -22
+#   <div>, nothing of any kind added, and visible text is token-for-token
+#   identical in every one of the ten (312/313/238/399/330/234/366/279/446/173
+#   text runs, unchanged and in the same order). Every embedded <script> body
+#   is byte-identical, so HTML_RUNTIME_SCRIPT_SHA256 does not move.
+#
+#   The 22 divs are 11 refuted caption blocks x 2 compartments, and the 110
+#   inputs are three named populations, checked against the sheets rather than
+#   counted:
+#
+#   * 92 money decimal-bullet compartments (2000-DST 16, 2200A 20, 2200C 20,
+#     2200P 20, 2200S 16), each ONE compartment of a 14-, 29- or
+#     33-compartment money comb, each the third from the right with the two
+#     centavos boxes to its right. The source prints the bullet INTO that
+#     compartment, so it was a typing surface laid on printed ink.
+#   * 16 on the 8 refuted caption blocks that had inputs -- 1606 p2's whole
+#     Schedule 4 rate table, and the mastheads of 2200A/2200AN/2200C/2200P/
+#     2200S/2200T(x2).
+#   * 2 completing the printed rate `0 %` on 1800 p1c68 and 2550-DS p1c79,
+#     2-compartment combs the sheet fills entirely.
+#
+#   NOT A SHRUNK WRITING SURFACE, which is the regression this pin exists to
+#   catch (r22 lowered the same assertion by cutting every comb to a 3.12pt
+#   stub). All 7,405 slot rectangles that survive in the ten documents were
+#   compared attribute-string to attribute-string against their r26 selves and
+#   ZERO moved; the only rectangles that disappear are the 22 belonging to the
+#   11 refuted blocks. Per-document minimum slot height is unchanged in all
+#   ten (16.32 / 14.88 / 14.52 / 12.96 / 12.96 / 14.52 / 12.96 / 12.96 / 12.84
+#   / 15.09pt); only the MAXIMUM falls, from 103.83pt (1606's rate table) and
+#   47-55pt (the mastheads) to a normal compartment. 2550M and 2316, the two
+#   forms the writing-box check is watched on, are byte-identical documents.
+#
+# Re-pinned 2026-08-08 (r29) for the comb RAIL derivation described at
+# LATTICE_PRODUCER_SHA256. 43 of the 53 documents move and 10 are
+# byte-identical. What moves in them is comb slot RECTANGLES and nothing else:
+#
+#   * 764 combs' slot runs shift horizontally, by 0.02 to 0.47pt, onto the bar
+#     the source rules the band with instead of the mean of every collinear
+#     bar on that lattice line. No slot count and no slot height changes in any
+#     of them.
+#   * 9 combs on 5 documents lose their leading or trailing slot -- 1604F
+#     p1c36, 1800 p1c15 and p1c26, 1801 p1c31/p1c32/p1c33/p1c112, 2200S p1c29,
+#     2552 p1c28 -- because the region they covered is a printed caption or a
+#     TIN dash box that the same rectangle also rules, and the comb's own rail
+#     starts after it. The widest was 365.95pt over "24 TOTAL AMOUNT PAYABLE
+#     (For full payment Sum of Items 20 and 23D)". None of the nine carried an
+#     <input>: emit.py's pre-printed-ink rule had already refused them one,
+#     which is why `inputs_over_printed_text` neither improves nor regresses
+#     here. What goes is the compartment the sheet does not print, and with it
+#     the cell's `data-comb-capacity`; the caption still prints.
+#
+#   NOT A SHRUNK WRITING SURFACE, the regression the pin above exists to catch:
+#   every surviving slot's `top` and `height` is unchanged, and no minimum slot
+#   height moves on any document. The independent evidence is audit.py's, which
+#   reads compartment counts and rail positions from the pinned PDF's own paint
+#   stream: of the 33 combs it named as defects before, 27 are gone and the six
+#   named at LATTICE_PRODUCER_SHA256 remain, and it agrees on all 4,531
+#   compartment counts it can evaluate.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "d0c049f33216d0ac5c866439adeaeaf360a6b69e4c5b998978707236467e4cc2",
-    "0619e-2018": "07f1e4d874a7de212cb00cd8e2bacba486d7d58720c8c80acb42f34851572654",
-    "0619f-2018": "6d6f53bb6df9da1185e025e5fd855a1fa4f711fcf9b572f3e03b72f1ddab3de2",
-    "0620-2019": "f559cc00f73591b172710babbbddf8ca9324f2b139c2dd2b0bfd4b746872c48a",
-    "1600-pt-2018": "a61d0b03cd07eaf7d095d34bae24fd82aab1189484e2669c670615321cab8c22",
-    "1600-vt-2018": "d86905c83345edda96cfa518f9d57eb6c65dd5102d01c89effc0dd121581cff2",
-    "1600wp-2010": "108f5d0778d1c7ca4102beff2dc176046112d6ad851b6d759016d9fad42ea87f",
-    "1601-fq-2020": "a0a1a163377bbb0e983a649e5da26f32c9f5981861a5b80fb3f86819e0a904b9",
-    "1601c-2018": "feec7171562529c51bde38c6ceb54832e526b64460b27e27d4758e03eb2571b4",
-    "1601eq-2019": "f2c7066c9e12a8cc346079d31f993e677e3ed027e3e0d6e73a43247ddf92a01a",
-    "1602q-2019": "7078d44d89ec4b45ce3edeb684a445d24c267e6cfed61cffae1f86a0c619516c",
-    "1603q-2018": "41a796182a44c47d701e2bfeaf5a7369dc33b2e9428becabc973587bf6072c90",
-    "1604c-2018": "0bf6f74562fee966d6971d2bdc390e3a99f224c947a1bfe5cf20f1fdf94aff31",
-    "1604cf-2008": "33477af89702122a7b53aa808e6dc05ec595be4adfecb6b46e0a39c7779bbd03",
-    "1604e-2018": "36cbda664fee08284f34bce289ad2328fa12cdad9f858cfdbd7166544425ed79",
-    "1604f-2018": "b693afb76ea1614dc6fc055aab1e9ff35c0effbd377c37646f848ee0ea1dec1e",
-    "1606-2018": "2a49e01ce5ecf50f90c116c1ec46a8d6d1615a6c8161d5fa3926d359f9ff7bc4",
-    "1621-2019": "851f30fdeb06eb5d4be8ebe5bb20c1f4a6febb180e37f9f615e0d33999ab6dc3",
-    "1700-2018": "d0118cda792bc618001b5b45dec154814bad4f28bf7afbed5ecdd33661eb2da8",
-    "1701-2018": "84b8533400392b8046e4a7d1eb7eead721e4043df3b772d00d2ada799e637a9f",
-    "1701-2018-attachment": "e935ee5153a17ae7366d2c91686bc0aaeb116d619f893e02a0db7b3e9663d048",
-    "1701-2018-conso": "a3101d998289f5acbea99a56b0305bd7ce7574ed7aa194c638369cacf32a2acd",
-    "1701a-2018": "dce64929f2bd105c963dcd4a259632f94ab6f85f5c5c830fad5b53668d63f22d",
-    "1701ms-2024": "3a6c79706dffa2819c680d9e2ca686bfa08c0322973fe48bd99a6bbbf1b193ec",
-    "1701q-2018": "de0c5e5966cb27d211d02fa40afb5969204815b68a0b9fcae64a71257dbe2924",
-    "1702ex-2018": "e48a8dd42b7e4b6738fc443b5231701d196df8914d5fcc4ab9b375c293c35c65",
-    "1702mx-2018c": "bb58e4014c2427096e3a537e4fc22921457534fd0053952b86cd0c979f01e02e",
-    "1702mx-2018c-attachment": "c89c560ec0bc681c8cadcb1bc86f137bdbd0dd97b0299d9cc8ba0e9106d5d7d0",
-    "1702q-2018": "b7fbb265dcfd9ee95ab2e6c6f157d6e94779c866195a508a6902306a563fe990",
-    "1702rt-2018c": "37929d11d5fe85e23d5750f0ed38d8841850ef99af54f5da1d93b81a009696c5",
-    "1706-2018": "632c9076c3d3efc82f677854887d310a3cc68d5f55beed8a4f5bf6f5e81a5b6a",
-    "1707-2021": "f44cff90bb611b7823120059b22d4c5de6fff245aac62e661c6e6cb00641ac72",
-    "1707a-2021": "f4b485b0799eaab7ae34113f40edfce776ec88116e46fb1a4eab11fc045a1e21",
-    "1709-2020": "07be557def0f4e10cd0dabee03d889884e8b4d8cfe0020f834c6d4c36eb9baf6",
-    "1800-2018": "fbc019b37e1404288f64d3e77127a25128678e51e53d368b794c71f91824cfc8",
-    "1801-2018": "4979d3ce15e57ed7768ee9b65bb2171a9e22026b4f22ecf3093995f04958bb8d",
-    "2000-dst-2018": "173c6f75e40fd032941c9eb4328d3f458338fbb2d14e9e98c785d679c09a3a26",
-    "2000-ot-2018": "bd7a377c76ac1b5241a629545dbb8cb8da6600a653f430f9dff097b9b1a57fe0",
-    "2200a-2020": "5ea037349832a3671ca84997301291e64cb70dd1ca744a2d26c91ac4d1b3bb49",
-    "2200an-2018": "84e31d71bb805b1a5d9b02823445f21ffffd5931acab20d16d17e36c023b3214",
-    "2200c-2018": "980a9106cde93ba7968be5cc6e8d6c3be26eeef23800086fa1a5e47691d6ec23",
-    "2200m-2018": "f6ea22fdca55cde673fa216913cfd8419950107011567e14d119663594128ae1",
-    "2200p-2020": "d29732e1ab8d349b677dd90eb70afa04466e861c8b284313c50a55b937624105",
-    "2200s-2018": "80636c03ac7265a54c2922e868f6fd58d6536b34d43773296097ca2ed819b92a",
-    "2200t-2022": "29f3cc5d8753233adf179b2191c5723c201b4871de67d4c83dc2a4f5fc04b2d8",
-    "2316-2021": "4c7521577129f9bcb1b9ce0accb1e78628ff18698a8835cdd65c9dedcd462cb6",
-    "2550-ds-2025": "4ba457f10ef52381bf15228fddc495a9c0519b592b1fe3075c94e1a03393738d",
-    "2550m-2007": "314bcacc03ae91a417be4d27511b77f572932c64fcda2f3d9e6128c3ca17e7bf",
-    "2550q-2024": "8fd965b1a366366f5ac7964753dca9bfb8032ac723e96dcc82e3bcd508e8b5a6",
-    "2551m-2002": "0365905f6eb555bdc475c95332c6e93ca084ec8b82b5d937bcdfe41f1556733e",
-    "2551q-2018": "d8ae641e3213295d7047f6211313576475b214d0f5d5d39fe38d441fe8166ef9",
-    "2552-2018": "e4100185e8c83652efd4706eb78aae6d189b62d0773751b5aeca8a56d44eda52",
-    "2553-1999": "57bad7aefc182c212964a3fd6442e670e190a7ddfcdeb971284758441d986677",
+    "0605-1999": "de35f9386cf28e4078a15c23a479bec2d11e350b5ba37e7867c983e1be11dd4d",
+    "0619e-2018": "74a9c1189c8682674ecb35177ec81b2187417f5ce4021d559e3aad55473aa8cd",
+    "0619f-2018": "2bc72cf30d0cd8ed72b74b3e1cc2adbbe03a8420aa58e294712d312c5f13b4e8",
+    "0620-2019": "16197dd4a83b6c3c399905d4229e7e2f68902d8c219ec3397a44560ceeca05b7",
+    "1600-pt-2018": "6120c5148ab7f95c222d538a7eb77bb563df1016c74112d05a01a48ad142c12d",
+    "1600-vt-2018": "4bc4e38fdd028378505300ee4da5dbf1a990867ace6058215b445719f21ad18c",
+    "1600wp-2010": "2db4ff43d6d4c0762c8a20c2f2d84b8f6d7315215bfb113e73d69b6b2007ccd9",
+    "1601-fq-2020": "02ce73d36302c3192f1a5dbf5cfa147daef3daf56d2463cb74cc42cbd48fa0d1",
+    "1601c-2018": "7d85c2066f207651d55e4529a5b306d540c5d809c987c143c2f617332c79926d",
+    "1601eq-2019": "239ed795e68426066cbc18b345e54a4995b669c4cf62cfcb7700a4720a2c837e",
+    "1602q-2019": "d9b9265f657087bbbc42d782a005cc5b7c5e935c842c300e60d074cb1abf2c19",
+    "1603q-2018": "472127ef62fb1daf6d030183bc7a961e673b07f7e0d429193ac42f0902b908af",
+    "1604c-2018": "854772119dc3684fb28c03b0e0b8fcc1479c82e835bf5097de485bb99b91f101",
+    "1604cf-2008": "048136f0f1a2ed6f051f82476e648d6d2d3a784466d794e78aede4bcce2055e5",
+    "1604e-2018": "e82922d143bae8c8af6f2a65f3d488e25596581fc93ae80b5c4963d34ba6f21a",
+    "1604f-2018": "8ae6e85fd6b767d5bae86c2b2c445dd6ca1d961b41019e9481093cf63ab3707a",
+    "1606-2018": "fcea32039e512a804274b7cd32153418eb9e636e7a594871be00ea72a21f37b2",
+    "1621-2019": "488d7d55cd398fc05b11bf9b12d4a3c267694d95b806b21538b57456a0f990ec",
+    "1700-2018": "0087887dcc2c7a0e9031de32dff3c5ff3bb3a787229bd5e554fec8788812314b",
+    "1701-2018": "ddbecb6f317e9cd1eac0a84e04d74772d18a86fec907f8e40826272fde3ac105",
+    "1701-2018-attachment": "0606245183889693f40fd11b8304746688b3ab2c292603ab9ba2207a4b552ada",
+    "1701-2018-conso": "83df258bb3d7822270a7821be0b5290efc3a73819ae8dc9f96c6f649499ca6b3",
+    "1701a-2018": "cb81bf7a16dac309e2d0a0a393ff94bc5f2150f5a54586c4be7d2bb1793311e9",
+    "1701ms-2024": "3f46aefe5e7e986aa3eec66d3eda9519025db1ba9c4c7e765af1d6a9abcf7581",
+    "1701q-2018": "04a1b2f7908a68ece674aae8cdbc4872c09e11781260b9ed1bf4809ff7c0b4f8",
+    "1702ex-2018": "5e7546a9431a6d93493153db256e4c720b06a06526ff9a24883a8010b7b04049",
+    "1702mx-2018c": "e2e43a024d93d137be5fce936e79c52170823b0ce34ccfdd4e9724146de73503",
+    "1702mx-2018c-attachment": "fa94174dfe4c8bee14085e0cda823461b95ff50bbf280da00379dc5818424f96",
+    "1702q-2018": "badff4ef415d9647bf91e5d2753083ddd81dd508e3831d459ce836a1257b3eea",
+    "1702rt-2018c": "f99eb1fab7ee149abf1cfbd9407df0f786fde21ef57382f4add1738fe2cc5b96",
+    "1706-2018": "489f0c98ab91cc3501c0b45a7cc7d19e8f23f1f4513b4cb65d4d95e3cfa19f65",
+    "1707-2021": "6d8ecd027d880b875fe8b8e7a37279914b815edff2b4ec6efcc1bbac9bd9e656",
+    "1707a-2021": "938a7ae8b74a8b0d6ae021c64111ab33a7e73d7dd5f519fd5ce182104a4b6167",
+    "1709-2020": "206b9b87a260e18ae7cc1ebdf062d6626a4facbdc52bf01097034f411e635ae3",
+    "1800-2018": "1331088d3324e48ca4ab26dd2e9befb765650c67fe8127437bbdbeab550fb8f4",
+    "1801-2018": "d5d3b715e771e5908d3b72e00901a82bf94abc0b6ec81cad8d688b5348cdf927",
+    "2000-dst-2018": "492788eb0a4abe1388094fe14cf8b04dda90f126f5b8da2e99a2ee3555565dfa",
+    "2000-ot-2018": "7da7f3a3ed0a29c6df2b3c9bccfe9c5b58113bc472f7070a24428da245922b5c",
+    "2200a-2020": "10cfb1f0fbb6e7c0aa0877f3344754d10cdec1007ed56dbf7790792163a1cfe8",
+    "2200an-2018": "f337c5fb13b37cdc337a10eb4fe4dc39e2f14c944a3d0b579290c7698ffca40e",
+    "2200c-2018": "08bd5c9dc0525cbf72df1af51804ac302a29d840e8363c8029284d27f20df143",
+    "2200m-2018": "894bebac15201977bc6397078389629fdecdf2ca974b4e6fdc0d3f127df14d5c",
+    "2200p-2020": "f25b46dfc01f40afe7aefccb7dd41090061c6b6c1778ba77bec8c79ca2555886",
+    "2200s-2018": "8254cba6f29db56a0f5a117081def0518faecea53c39b7397d24cfd42cd56207",
+    "2200t-2022": "c0da01d8e1c0ecbe82749ecfef145732f12e34dcaf0dcd362fa3f9b9035c99f2",
+    "2316-2021": "34d97b81d050218b83f7a6d862719addce3d1e898aba5a9d2cade928de8f6653",
+    "2550-ds-2025": "6c396d682cf3db767154e935794a9fb21f5a855dbce51ad379e98657be5797a4",
+    "2550m-2007": "113cb1713252467498d213f1be179d431278b43aa911f1577b5ff8a1d3a1c638",
+    "2550q-2024": "a1aafc5da9935075eab1d3f8f523ef8380ada1282cd86d190a2039efc6d6f595",
+    "2551m-2002": "1bd6acca84c2b53ad2660fb821f8e8c02d467d944ec09c5269264a4202c0acc9",
+    "2551q-2018": "1c27fb36658049f018107cbaa4a18d450420d2bd49a7ba928bcdb4c79bf4d7c1",
+    "2552-2018": "5d720a2bca47f1f8da19d1cb3230c40b803d280fb594a3e64d100ef70db24727",
+    "2553-1999": "871a05e13da1918b29f70278ae942279e1bd6a7a72c5c96cf2970ca62be94543",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
@@ -2095,6 +2717,12 @@ class SlotParser(html.parser.HTMLParser):
             tuple[str, str, str]
         ] = set()
         self.stylesheet_page_sizes: list[tuple[float, float]] = []
+        # A form whose source mixes page sizes (1604-CF) is emitted with one
+        # named `@page page-N` per page plus a `.page-N{page:page-N}` binding.
+        # They are recorded separately so the contract can bind each named rule
+        # to that page's own emitted geometry instead of collapsing them.
+        self.stylesheet_named_page_sizes: dict[int, tuple[float, float]] = {}
+        self.stylesheet_named_page_selectors: set[int] = set()
         self.script_depth = 0
         self.script_attrs: tuple[tuple[str, str | None], ...] | None = None
         self.script_parts: list[str] = []
@@ -2665,6 +3293,23 @@ class SlotParser(html.parser.HTMLParser):
                     assert size is not None
                     self.stylesheet_page_sizes.append((
                         float(size.group(1)), float(size.group(2))))
+                named_page = re.fullmatch(
+                    r"@page page-(\d+)", normalized_selector)
+                if named_page is not None and key == "size":
+                    size = re.fullmatch(
+                        rf"({_NUMBER})pt ({_NUMBER})pt", value)
+                    assert size is not None
+                    index = int(named_page.group(1))
+                    if index in self.stylesheet_named_page_sizes:
+                        self.invalid_bindings.append(
+                            "HTML stylesheet declares a named @page twice")
+                    self.stylesheet_named_page_sizes[index] = (
+                        float(size.group(1)), float(size.group(2)))
+                page_binding = re.fullmatch(
+                    r"\.page-(\d+)", normalized_selector)
+                if page_binding is not None and key == "page":
+                    self.stylesheet_named_page_selectors.add(
+                        int(page_binding.group(1)))
                 if declaration in HTML_STYLESHEET_STRUCTURAL_DECLARATIONS:
                     self.stylesheet_structural_declarations.add(declaration)
 
@@ -2694,6 +3339,22 @@ class SlotParser(html.parser.HTMLParser):
                 and float(values.group(1)) > 0
                 and float(values.group(2)) > 0
             )
+        named_page = re.fullmatch(r"@page page-(\d+)", selector)
+        if named_page is not None:
+            if key == "margin":
+                return value == "0"
+            if key != "size":
+                return False
+            values = re.fullmatch(
+                rf"({_NUMBER})pt ({_NUMBER})pt", value)
+            return (
+                values is not None
+                and float(values.group(1)) > 0
+                and float(values.group(2)) > 0
+            )
+        page_binding = re.fullmatch(r"\.page-(\d+)", selector)
+        if page_binding is not None:
+            return key == "page" and value == f"page-{page_binding.group(1)}"
         return False
 
     def _validate_script(
@@ -2783,16 +3444,44 @@ def slot_records(
         if tuple(parser.runtime_script_hashes) != HTML_RUNTIME_SCRIPT_SHA256:
             parser.invalid_bindings.append(
                 "HTML runtime scripts disagree with the reviewed emitter")
-        page_sizes = {
-            (width, height)
-            for _index, width, height in parser.page_geometry
+        geometry_by_index = {
+            index: (width, height)
+            for index, width, height in parser.page_geometry
         }
+        page_sizes = set(geometry_by_index.values())
         if (len(parser.stylesheet_page_sizes) != 1
-                or len(page_sizes) != 1
-                or parser.stylesheet_page_sizes[0] != next(
-                    iter(page_sizes), None)):
+                or not geometry_by_index
+                or parser.stylesheet_page_sizes[0] != geometry_by_index[
+                    min(geometry_by_index)]):
             parser.invalid_bindings.append(
                 "HTML @page size disagrees with emitted page geometry")
+        # A single-size document must NOT carry named page rules, and a
+        # mixed-size one must carry exactly one per emitted page, each bound to
+        # that page's own geometry and to its own `.page-N{page:page-N}`. The
+        # old contract demanded `len(page_sizes) == 1` outright, which made
+        # 1604-CF's four correct named rules read as thirteen grammar
+        # violations -- and `slot_records` folds `parser.invalid_bindings` into
+        # every cell's `valid`, so all ten of its combs were published as
+        # emission disagreements they are not.
+        named_sizes = parser.stylesheet_named_page_sizes
+        named_selectors = parser.stylesheet_named_page_selectors
+        if len(page_sizes) == 1:
+            if named_sizes or named_selectors:
+                parser.invalid_bindings.append(
+                    "HTML declares named page rules for uniform paper")
+        elif (named_selectors != set(named_sizes)
+              or not set(geometry_by_index) <= set(named_sizes)
+              or any(named_sizes[index] != geometry_by_index[index]
+                     for index in geometry_by_index)
+              or any(index in parser.pages
+                     for index in set(named_sizes) - set(geometry_by_index))):
+            # Every page this document renders must carry a named rule bound to
+            # its own geometry. A named rule may survive for a page the guide
+            # reclaimed (1604-CF's page 4 prints from guide.html), but only if
+            # nothing in this document is bound to it -- an unreferenced rule
+            # cannot move a page that is here, and a referenced one is checked.
+            parser.invalid_bindings.append(
+                "HTML named @page rules disagree with emitted page geometry")
         parser.document_contract_checked = True
     missing_stylesheet_contract = (
         HTML_REQUIRED_STYLESHEET_DECLARATIONS
@@ -2890,15 +3579,17 @@ def slot_records(
             )
         )
         if geometry_valid and geometry:
+            # A comb runs between its own printed RAILS, and those need not be
+            # the container's edges: the container is the lattice cell, whose x
+            # is the mean centre of every collinear bar on that line, and the
+            # cell may also rule a caption or a dash box beside the comb, which
+            # the comb does not own. So the run is no longer required to START
+            # at 0 and END at the container's width. It is still required to
+            # lie inside the container (above, unchanged) and to be contiguous
+            # (below, unchanged), which is what keeps the compartments one
+            # partition of one field rather than a scattering of boxes.
             geometry_valid = (
-                abs(float(geometry[0]["left"]))
-                <= HTML_GEOMETRY_EPSILON_PT
-                and abs(
-                    float(geometry[-1]["left"])
-                    + float(geometry[-1]["width"])
-                    - float(container[0])
-                ) <= HTML_GEOMETRY_EPSILON_PT
-                and all(
+                all(
                     abs(
                         float(right["left"])
                         - (float(left["left"]) + float(left["width"]))
@@ -2960,9 +3651,23 @@ def relocated_cells(data: dict[str, Any]) -> set[str]:
 
 
 def emitted_geometry_contract(
-        layout: dict[str, Any], guide: dict[str, Any]
-        ) -> dict[str, dict[str, Any]]:
-    """Build exact main-form comb geometry, including guide cut straddlers."""
+        layout: dict[str, Any], guide: dict[str, Any],
+        pages: dict[int, SvgPage],
+        ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Build exact main-form comb geometry, including guide cut straddlers.
+
+    The VERTICAL extent of a slot is the comb's WRITING SURFACE
+    (`writing_y0`/`writing_y1`), never its `y0`/`y1`.  Those two keys are the
+    band the source's divider TICKS span -- typically a ~2.9pt stub at the foot
+    of a ~17pt cell -- and `lattice.comb_on_writing_surface` says so at its own
+    declaration.  Expecting the tick band made `layout_binding_valid` false on
+    every emitting comb in the corpus, which forced all 4,550 of them to
+    `stale-generation` and published 4,583 "mismatches" that did not exist.
+
+    Alongside the contract this returns, per cell, the source's own verdict on
+    that writing band: the vertical number is otherwise one the lattice asserts
+    freely, whereas the horizontal one is bound to Poppler's `source_divider_x`.
+    """
     relocated = relocated_cells(guide)
     clipped_form_boxes: dict[str, dict[str, Any]] = {}
     for region in guide.get("inline") or ():
@@ -2980,6 +3685,7 @@ def emitted_geometry_contract(
             clipped_form_boxes[cell_id] = form_box
 
     result: dict[str, dict[str, Any]] = {}
+    corroborations: dict[str, dict[str, Any]] = {}
     for page in layout.get("pages") or ():
         page_index = int(page["index"])
         for cell in page.get("cells") or ():
@@ -3013,8 +3719,10 @@ def emitted_geometry_contract(
                     for name in ("x0", "y0", "x1", "y1")
                 }
                 slot_x = [float(value) for value in comb["slot_x"]]
-                comb_y0 = float(comb["y0"])
-                comb_y1 = float(comb["y1"])
+                writing_y0 = finite_number(
+                    comb["writing_y0"], f"{cell_id} comb writing_y0")
+                writing_y1 = finite_number(
+                    comb["writing_y1"], f"{cell_id} comb writing_y1")
                 count = int(comb["cells"])
             except (KeyError, TypeError, ValueError):
                 raise RefereeError(
@@ -3024,9 +3732,17 @@ def emitted_geometry_contract(
                            for left, right in zip(slot_x, slot_x[1:]))
                     or box_values["x1"] <= box_values["x0"]
                     or box_values["y1"] <= box_values["y0"]
-                    or comb_y1 <= comb_y0):
+                    or writing_y1 <= writing_y0
+                    or writing_y0 < full_box["y0"] - HTML_GEOMETRY_EPSILON_PT
+                    or writing_y1 > full_box["y1"] + HTML_GEOMETRY_EPSILON_PT):
                 raise RefereeError(
                     f"layout comb geometry is invalid: {cell_id}")
+            source_page = pages.get(page_index)
+            if source_page is None:
+                raise RefereeError(
+                    f"no source page raster to corroborate: {cell_id}")
+            corroborations[cell_id] = writing_band_corroboration(
+                full_box, cell.get("border"), comb, source_page)
             result[cell_id] = {
                 "page_index": page_index,
                 "left": box_values["x0"],
@@ -3037,15 +3753,15 @@ def emitted_geometry_contract(
                     {
                         "index": index,
                         "left": left - box_values["x0"],
-                        "top": comb_y0 - box_values["y0"],
+                        "top": writing_y0 - box_values["y0"],
                         "width": right - left,
-                        "height": comb_y1 - comb_y0,
+                        "height": writing_y1 - writing_y0,
                     }
                     for index, (left, right)
                     in enumerate(zip(slot_x, slot_x[1:]))
                 ],
             }
-    return result
+    return result, corroborations
 
 
 def exact_nonnegative_int(value: Any, label: str) -> int:
@@ -3364,9 +4080,22 @@ def validate_comb_topology(
     bbox_numbers = [
         finite_number(value, f"{label} bbox") for value in bbox_value
     ]
-    if (len(bbox_numbers) != 4
-            or not same_numbers((slots[0], slots[-1]),
-                                (bbox_numbers[0], bbox_numbers[2]))):
+    # A comb's outer slot boundaries are its PRINTED RAILS, and those are not
+    # the subject's rectangle. The rectangle's x is a fused lattice position --
+    # the mean centre of every collinear bar on that line -- while the rail is
+    # the bar that crosses THIS band; and a rectangle may rule more than the
+    # comb, a caption or a dash box beside it, in which case the comb starts
+    # where its own rail is drawn.
+    #
+    # What must still hold is that every COMPARTMENT belongs to this subject,
+    # and that is exactly the statement that its centre lies inside the
+    # rectangle. A compartment centred outside it is the subject next door's,
+    # however the rails bounding it were derived, and a rail sitting a fraction
+    # of a point beyond a fused edge takes nothing from anybody. Over this
+    # corpus all 39,573 compartments satisfy it.
+    if len(bbox_numbers) != 4 or not all(
+            bbox_numbers[0] < (left + right) / 2.0 < bbox_numbers[2]
+            for left, right in zip(slots, slots[1:])):
         raise RefereeError(f"{label} slot_x disagrees with subject bbox")
     y0 = finite_number(comb.get("y0"), f"{label} y0")
     y1 = finite_number(comb.get("y1"), f"{label} y1")
@@ -3620,6 +4349,7 @@ def validate_comb_ledger(
                     "source_cell": cell,
                     "topology": topology,
                     "ledger": subject,
+                    "source_suppression_criterion": None,
                 })
                 continue
 
@@ -3634,7 +4364,19 @@ def validate_comb_ledger(
             legacy_topology = validate_comb_topology(
                 subject.get("legacy_comb"), legacy_bbox,
                 f"{label} retained legacy_comb")
-            if legacy_topology["resolution_status"] != "unresolved":
+            # See THE RETAINED-TOPOLOGY INVARIANT above.  `reason_codes` is
+            # already proven to be a unique, non-empty list of non-empty
+            # strings for every non-`active_resolved` subject, so an absent or
+            # malformed reason has failed before this point; what is decided
+            # here is whether the reason it published is one whose factual
+            # claim this referee can re-derive from the source.  Nothing is
+            # granted by this lookup: a hit only defers the decision to
+            # `retained_suppression_corroboration`, which runs against Poppler
+            # and which `form_report` proves it ran.
+            suppression_criterion = RETAINED_SUPPRESSION_SOURCE_CRITERIA.get(
+                tuple(reason_codes))
+            if (legacy_topology["resolution_status"] != "unresolved"
+                    and suppression_criterion is None):
                 raise RefereeError(
                     f"{label} retained legacy_comb is not unresolved")
             mapped_ids = string_list(
@@ -3677,6 +4419,7 @@ def validate_comb_ledger(
                 },
                 "topology": legacy_topology,
                 "ledger": subject,
+                "source_suppression_criterion": suppression_criterion,
             })
 
         comb_cells = [
@@ -3843,9 +4586,28 @@ def validate_comb_ledger(
     retained = sum(
         subject["state"] == "retained_unresolved"
         for subject in published_subjects)
+    expected_retained = EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(slug, 0)
+    if retained != expected_retained:
+        raise RefereeError(
+            f"{slug}: subject ledger retains {retained} suppressed subjects, "
+            f"expected pinned {expected_retained}")
+    expected_active = expected_total - expected_retained
+    if active_resolved + active_unresolved != expected_active:
+        raise RefereeError(
+            f"{slug}: subject ledger has "
+            f"{active_resolved + active_unresolved} active combs, "
+            f"expected pinned {expected_active}")
     blockers = sum(
         subject["blocks_gate"] for subject in published_subjects
     ) + len(published_inferences)
+    # The work order for `form_report`, computed here so that the obligation is
+    # created by the same pass that admits the reason.  A corroboration this
+    # ledger demanded and nobody performed is an ERROR, never a pass.
+    suppression_obligations = {
+        subject["legacy_cell_id"]: subject["source_suppression_criterion"]
+        for subject in published_subjects
+        if subject["source_suppression_criterion"] is not None
+    }
     return {
         "lattice": lattice,
         "subjects": published_subjects,
@@ -3853,6 +4615,7 @@ def validate_comb_ledger(
         "active_cell_ids": active_cell_ids,
         "retained_legacy_ids": retained_legacy_ids,
         "inference_cell_ids": inference_cell_ids,
+        "suppression_obligations": suppression_obligations,
         "counts": {
             "subjects": len(published_subjects),
             "active": active_resolved + active_unresolved,
@@ -4012,6 +4775,209 @@ def near(value: float, target: float) -> bool:
     return abs(value - target) <= POSITION_TOL_PT
 
 
+def layout_quantized(value: float) -> float:
+    """Round to the precision every published layout coordinate carries."""
+    return round(float(value) + 0.0, LAYOUT_QUANT_PLACES)
+
+
+def final_paint_owner(paints: Sequence[Paint], x: float, y: float
+                      ) -> Paint | None:
+    """The paint that finally owns one point, by SVG document order."""
+    active = [paint for paint in paints if paint.covers(x, y)]
+    return max(
+        active,
+        key=lambda paint: (paint.order, paint.element, paint.kind),
+        default=None,
+    )
+
+
+def visible_vertical_runs(
+        paints: Sequence[Paint], x: float, y0: float, y1: float,
+        ) -> list[tuple[float, float, Paint]]:
+    """Each paint's FINALLY VISIBLE vertical extent on the ray at ``x``.
+
+    This is the vertical twin of `composited_segments`: partition at every
+    paint edge, take the last owner of each slab, and merge only slabs the
+    SAME paint owns.  Merging by tone instead would join two stacked rules --
+    1701's row boundaries really are two abutting 0.48pt fills, one per row --
+    into a single 0.96pt wall and mis-measure both cells that share it.
+    """
+    local = [
+        paint for paint in paints
+        if paint.x0 <= x <= paint.x1 and paint.y1 > y0 and paint.y0 < y1
+    ]
+    edges = {y0, y1}
+    for paint in local:
+        for value in (paint.y0, paint.y1):
+            if y0 < value < y1:
+                edges.add(value)
+    runs: list[tuple[float, float, Paint]] = []
+    ordered = sorted(edges)
+    for top, bottom in zip(ordered, ordered[1:]):
+        if bottom - top <= 1e-9:
+            continue
+        owner = final_paint_owner(local, x, (top + bottom) / 2)
+        if owner is None:
+            continue
+        if (runs and runs[-1][2] is owner
+                and abs(runs[-1][1] - top) <= 1e-9):
+            runs[-1] = (runs[-1][0], bottom, owner)
+        else:
+            runs.append((top, bottom, owner))
+    return runs
+
+
+def source_wall_thickness(
+        paints: Sequence[Paint], box: dict[str, float], tone: float,
+        edge: str, probes: Sequence[float],
+        ) -> tuple[float | None, str | None]:
+    """Measure, from Poppler alone, the wall the source paints at one cell edge.
+
+    The measurement is taken on a vertical ray through the middle of EVERY
+    compartment, because that is the paper the writing surface claims: a wall
+    that is present over some compartments and absent or lighter over others
+    does not establish one inset, and this returns no measurement rather than
+    an average.  Rays, not a full-width span test, because Poppler splits a
+    single printed rule into one fill per crossing vertical and leaves
+    one-quantum seams between them (1701 p1c37's top rule is 44 fills with
+    0.0039pt gaps); a span test reads those seams as paper.
+    """
+    y0, y1 = box["y0"], box["y1"]
+    height = y1 - y0
+    window_y0, window_y1 = y0 - height, y1 + height
+    anchor = y0 if edge == "top" else y1
+    centre = (y0 + y1) / 2
+
+    def separation(run: tuple[float, float]) -> float:
+        if run[0] <= anchor <= run[1]:
+            return 0.0
+        return min(abs(run[0] - anchor), abs(run[1] - anchor))
+
+    thicknesses: set[float] = set()
+    for x in probes:
+        candidates: list[tuple[float, float]] = []
+        for top, bottom, owner in visible_vertical_runs(
+                paints, x, window_y0, window_y1):
+            if owner.clipped or abs(owner.tone - tone) > 1e-8:
+                continue
+            if not (bottom > y0 - POSITION_TOL_PT
+                    and top < y1 + POSITION_TOL_PT):
+                continue
+            midpoint = (top + bottom) / 2
+            if edge == "top":
+                if midpoint >= centre:
+                    continue
+            elif midpoint <= centre:
+                continue
+            candidates.append((top, bottom))
+        if not candidates:
+            return None, (
+                f"the source paints no {edge} wall of the declared tone over "
+                "every compartment")
+        nearest = min(candidates, key=separation)
+        thickness = layout_quantized(nearest[1] - nearest[0])
+        if any(
+            abs(separation(run) - separation(nearest)) <= 1e-9
+            and layout_quantized(run[1] - run[0]) != thickness
+            for run in candidates
+        ):
+            return None, (
+                f"two source {edge} walls of different weight are equally "
+                "near the cell edge")
+        if (nearest[0] <= window_y0 + 1e-9
+                or nearest[1] >= window_y1 - 1e-9):
+            return None, (
+                f"the source {edge} wall is not bounded inside the cell's own "
+                "neighbourhood")
+        thicknesses.add(thickness)
+    if len(thicknesses) != 1:
+        return None, (
+            f"the source {edge} wall is not one weight across the "
+            "compartments: "
+            + ", ".join(f"{value:g}pt" for value in sorted(thicknesses)))
+    return thicknesses.pop(), None
+
+
+def writing_band_corroboration(
+        box: dict[str, float], border: Any, comb: dict[str, Any],
+        page: SvgPage,
+        ) -> dict[str, Any]:
+    """Re-derive the comb's writing surface from the source, then compare.
+
+    `slot_x` is corroborated horizontally against Poppler's own
+    `source_divider_x`; without this the VERTICAL extent of every emitted slot
+    would be a number the lattice asserts and nobody checks.  The relation the
+    lattice publishes is `emit.field_box`'s: the writing surface is the cell's
+    printed rectangle inset by its own horizontal wall weights.  So the referee
+    measures those two weights itself, from the pinned PDF's vector output,
+    insets the same rectangle, and demands the published band back to the
+    precision the layout is written at.
+
+    The declared border TONE selects which ink to measure; every number that
+    reaches the verdict is Poppler's.  Selecting by tone is not a courtesy to
+    the producer: many official "rules" are near-invisible grey decoration, and
+    an ink-agnostic search would measure a grey band where the contract claims
+    a black wall (2550M's rows sit inside a 0.7529 band) and silently confirm
+    an inset derived from something else.
+    """
+    slot_x = [float(value) for value in comb["slot_x"]]
+    probes = [
+        (left + right) / 2 for left, right in zip(slot_x, slot_x[1:])
+    ]
+    walls: dict[str, float] = {}
+    for edge in ("top", "bottom"):
+        record = border.get(edge) if isinstance(border, dict) else None
+        tone = record.get("gray") if isinstance(record, dict) else None
+        if (isinstance(tone, bool) or not isinstance(tone, (int, float))
+                or not math.isfinite(float(tone))):
+            return {
+                "status": "uncorroborated",
+                "reason": (
+                    f"the layout declares no {edge} border tone for the "
+                    "source measurement to select"),
+            }
+        thickness, reason = source_wall_thickness(
+            page.paints, box, float(tone), edge, probes)
+        if thickness is None:
+            assert reason is not None
+            return {"status": "uncorroborated", "reason": reason}
+        walls[edge] = thickness
+    source_y0 = layout_quantized(box["y0"] + walls["top"])
+    source_y1 = layout_quantized(box["y1"] - walls["bottom"])
+    evidence = {
+        "source_top_wall_pt": walls["top"],
+        "source_bottom_wall_pt": walls["bottom"],
+        "source_writing_y0": source_y0,
+        "source_writing_y1": source_y1,
+        "layout_writing_y0": float(comb["writing_y0"]),
+        "layout_writing_y1": float(comb["writing_y1"]),
+    }
+    if source_y1 - source_y0 <= 0:
+        return {
+            "status": "uncorroborated",
+            "reason": "the source walls leave the cell no writing surface",
+            **evidence,
+        }
+    if (abs(source_y0 - evidence["layout_writing_y0"]) > 1e-9
+            or abs(source_y1 - evidence["layout_writing_y1"]) > 1e-9):
+        return {
+            "status": "uncorroborated",
+            "reason": (
+                "the source walls inset this cell to "
+                f"{source_y0:g}..{source_y1:g}, not the published writing "
+                f"band {evidence['layout_writing_y0']:g}.."
+                f"{evidence['layout_writing_y1']:g}"),
+            **evidence,
+        }
+    return {
+        "status": "corroborated",
+        "reason": (
+            "the source insets the cell by its own painted walls to the "
+            "published writing band"),
+        **evidence,
+    }
+
+
 def classify_band(
         cell: dict[str, Any],
         page: SvgPage,
@@ -4140,15 +5106,7 @@ def classify_band(
     # This distinguishes a genuinely irregular enclosed comb from two comb runs
     # that lattice.py accidentally joined across a label or gutter.
     def final_owner(x: float, y: float) -> Paint | None:
-        active = [
-            paint for paint in page.paints
-            if paint.x0 <= x <= paint.x1 and paint.y0 <= y <= paint.y1
-        ]
-        return max(
-            active,
-            key=lambda paint: (paint.order, paint.element, paint.kind),
-            default=None,
-        )
+        return final_paint_owner(page.paints, x, y)
 
     def final_target_spans_horizontal(y: float) -> bool:
         endpoints = {x0, x1}
@@ -5393,6 +6351,161 @@ def classify_band(
     }
 
 
+def measured_glyph_boxes(page: SvgPage,
+                         bbox_value: Sequence[float],
+                         ) -> list[UnsupportedRegion]:
+    """Poppler's own glyph bounds that certainly print inside one rectangle.
+
+    Two deliberate narrowings, both of which can only make a glyph count
+    SMALLER, so an error in either errs towards refusing a producer's claim
+    rather than granting it:
+
+    * a `clipped` region is under an unresolved clip/mask/filter, a non-unit
+      opacity, or a non-default paint order, so this parser cannot say it
+      prints at all; and
+    * a bound that leaves the rectangle is not unambiguously this rectangle's
+      text.  Poppler pads a STROKED glyph's bound by its join, so the test is
+      containment of the padded bound, never of a nominal glyph box.
+    """
+    x0, y0, x1, y1 = (float(value) for value in bbox_value)
+    return [
+        region for region in page.unsupported
+        if region.reason.startswith(MEASURED_GLYPH_REASON_PREFIXES)
+        and not region.clipped
+        and region.x0 >= x0 and region.x1 <= x1
+        and region.y0 >= y0 and region.y1 <= y1
+    ]
+
+
+def retained_suppression_corroboration(
+        subject: dict[str, Any],
+        band: dict[str, Any],
+        page: SvgPage,
+        label: str,
+        ) -> dict[str, Any]:
+    """Re-derive a retained subject's suppression reason from the source.
+
+    This is the price of THE RETAINED-TOPOLOGY INVARIANT's one exception.  A
+    subject withdrawn from adjudication may keep a RESOLVED topology only when
+    its published reason makes a claim about the paper that this referee can
+    check against the paper -- and the check is made here, from `pdftocairo`'s
+    vector output for the pinned PDF, never from the reason code itself.  The
+    reason code selects which question to ask; it is not an answer to it.
+
+    `emission-suppressed-caption-block-not-character-cells` claims: the source
+    printed running prose in EVERY compartment, so those compartments are not
+    character cells.  Three things are demanded of the source, in order:
+
+    1. Poppler must be able to measure the band at all, and
+    2. must draw the published compartment walls where the ledger says they
+       are -- the walls the glyphs are then attributed to are POPPLER's
+       `source_divider_x`, not the ledger's `divider_x`; and
+    3. every compartment those walls cut must hold more than one glyph.
+
+    (3) is the producer's own stated test (`lattice.printed_caption_refutes_
+    comb`) re-derived through a different PDF stack: the lattice reaches it
+    from MuPDF text runs assigned to the cell, this reaches it from Poppler
+    glyph `use` bounds contained in the rectangle.  A comb compartment is one
+    character wide, so one glyph is all the pre-printed decoration that can
+    fit -- the `%`, the money point, the TIN dash -- and `> 1` is therefore a
+    statement about character cells rather than a tuned constant.  Measured
+    over all 4,583 published subjects of the 53-form corpus, the minimum
+    per-compartment count is 0 for 4,535 and 1 for 27; all 21 subjects above 1
+    are already RETAINED ones, and the 11 that publish this reason score 28 to
+    87.  No ACTIVE comb in the corpus could carry this claim, which is what
+    gives the refusal its force: the census is not a formality that every comb
+    would pass.
+
+    The returned census is evidence for the caller and for the self-test; it is
+    NOT written into the report, because `gate.CELL_KEYS` and
+    `gate.MEASURED_REFEREE_KEYS` fix the published per-subject schema exactly
+    and this file does not own that schema.  Nothing is hidden by that: the
+    check cannot be skipped (`assert_suppression_corroborations_exhaustive`),
+    and every refusal names the compartment and the whole count vector.
+    """
+    criterion = subject.get("source_suppression_criterion")
+    if criterion != SOURCE_CAPTION_BLOCK_CRITERION:
+        # Unreachable through `validate_comb_ledger`, which only ever stores a
+        # value from RETAINED_SUPPRESSION_SOURCE_CRITERIA.  A new tuple added
+        # to that table without a re-derivation to go with it must fail here
+        # rather than be waved through by the branch below.
+        raise RefereeError(
+            f"{label} suppression criterion has no source re-derivation: "
+            f"{criterion!r}")
+    if band.get("status") != "measured":
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source band is not "
+            f"measurable ({band.get('reason', 'no reason')})")
+    topology = subject["topology"]
+    source_x = [
+        finite_number(value, f"{label} source_divider_x")
+        for value in band.get("source_divider_x") or ()
+    ]
+    if (band.get("compartments") != topology["cells"]
+            or len(source_x) != topology["cells"] - 1
+            or not bool(band.get("positions_match"))):
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source draws "
+            f"{band.get('compartments')} compartments where the retained "
+            f"topology publishes {topology['cells']}")
+    x0, _y0, x1, _y1 = subject["legacy_bbox"]
+    walls = [float(x0), *source_x, float(x1)]
+    if any(right <= left for left, right in zip(walls, walls[1:])):
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source walls are "
+            "not strictly increasing across the subject rectangle")
+    counts = [0] * (len(walls) - 1)
+    for region in measured_glyph_boxes(page, subject["legacy_bbox"]):
+        centre = (region.x0 + region.x1) / 2.0
+        for index in range(len(counts)):
+            if walls[index] <= centre < walls[index + 1]:
+                counts[index] += 1
+                break
+    weakest = min(counts)
+    if weakest <= CHARACTER_CELL_MAX_PRINTED_GLYPHS:
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source prints "
+            f"{weakest} glyph(s) in compartment {counts.index(weakest) + 1} "
+            f"of {len(counts)}, so the source does not agree that these "
+            f"compartments are a caption block; per-compartment counts "
+            f"{counts}")
+    return {
+        "criterion": criterion,
+        "corroborated": True,
+        "source_divider_x": source_x,
+        "compartment_glyph_counts": counts,
+        "compartment_glyph_walls": walls,
+        "min_compartment_glyphs": weakest,
+        "threshold": CHARACTER_CELL_MAX_PRINTED_GLYPHS,
+    }
+
+
+def assert_suppression_corroborations_exhaustive(
+        slug: str,
+        obligations: dict[str, str],
+        corroborations: dict[str, str],
+        ) -> None:
+    """A corroboration that did not run is an error, never a pass.
+
+    `validate_comb_ledger` records the debt at the moment it admits the
+    reason; this is where the debt is proven settled.  Comparing the two
+    inventories -- not just their sizes -- also catches a corroboration
+    performed under a different criterion from the one that was admitted.
+    """
+    if corroborations == obligations:
+        return
+    missing = sorted(set(obligations) - set(corroborations))
+    unexpected = sorted(set(corroborations) - set(obligations))
+    mismatched = sorted(
+        cell_id for cell_id in set(obligations) & set(corroborations)
+        if obligations[cell_id] != corroborations[cell_id])
+    raise RefereeError(
+        f"{slug}: retained suppression corroboration is not exhaustive"
+        + (f"; not re-derived: {', '.join(missing)}" if missing else "")
+        + (f"; not owed: {', '.join(unexpected)}" if unexpected else "")
+        + (f"; wrong criterion: {', '.join(mismatched)}" if mismatched else ""))
+
+
 def _audit_optional_int(value: Any, label: str) -> int | None:
     if value is None:
         return None
@@ -5433,9 +6546,13 @@ def validate_audit_position_evidence(
     comparable = value["comparable"]
     if not isinstance(comparable, bool):
         raise RefereeError(f"audit offender {name}.comparable is not boolean")
+    expected_tolerance = AUDIT_POSITION_TOLERANCE_PT.get(name)
+    if expected_tolerance is None:
+        raise RefereeError(
+            f"audit offender {name} has no pinned position tolerance")
     tolerance = finite_number(
         value["tolerance_pt"], f"audit offender {name}.tolerance_pt")
-    if abs(tolerance - HTML_GEOMETRY_EPSILON_PT) > 1e-12:
+    if abs(tolerance - expected_tolerance) > 1e-12:
         raise RefereeError(
             f"audit offender {name} changes the fixed position tolerance")
     actual = _audit_number_list(
@@ -7359,12 +8476,35 @@ def bind_artifacts(slug: str, layout: dict[str, Any], ir: dict[str, Any],
     source = layout.get("source") or {}
     if int(source.get("page_count", -1)) != len(layout_pages):
         raise RefereeError(f"{slug}: pinned source page count disagrees")
+    # The paper contract is bound PER PAGE, not collapsed to one size. Demanding
+    # `uniform is True` refused 1604-CF outright, and its page 3 really IS
+    # landscape in the pinned source (`pdfinfo`: 612x1008, 612x1008, 1008x612,
+    # 612x1008). A form the referee cannot evaluate is a red verdict, so an
+    # unsupported-but-correct source was scoring the same as a broken one, and
+    # the per-page SVG geometry is checked against `page["width_pt"]` anyway --
+    # uniformity was never what made the measurement sound. Every page is still
+    # bound to the declared inventory, the inventory must be exhaustive and
+    # canonically ordered, and `uniform` must be the true derived claim. That is
+    # strictly MORE than the old check asked of the 52 uniform forms: a false
+    # `distinct_sizes` used to pass and now does not.
     paper = layout.get("paper") or {}
-    if paper.get("uniform") is not True:
-        raise RefereeError(f"{slug}: non-uniform paper is unsupported")
-    if any(abs(width - float(paper.get("width_pt", -1))) > 1e-8
-           or abs(height - float(paper.get("height_pt", -1))) > 1e-8
-           for _, width, height in layout_pages):
+    if set(paper) != {"uniform", "width_pt", "height_pt", "distinct_sizes"}:
+        raise RefereeError(f"{slug}: paper contract schema is unsupported")
+    declared_sizes = paper.get("distinct_sizes")
+    if (not isinstance(declared_sizes, list) or not declared_sizes
+            or declared_sizes != sorted(declared_sizes)
+            or len(declared_sizes) != len(set(declared_sizes))):
+        raise RefereeError(f"{slug}: paper size inventory is not canonical")
+    observed_sizes = sorted({
+        f"{width}x{height}" for _, width, height in layout_pages})
+    if declared_sizes != observed_sizes:
+        raise RefereeError(
+            f"{slug}: paper size inventory does not enumerate the pages")
+    if paper.get("uniform") is not (len(observed_sizes) == 1):
+        raise RefereeError(f"{slug}: paper uniformity claim is false")
+    first_width, first_height = layout_pages[0][1], layout_pages[0][2]
+    if (abs(float(paper.get("width_pt", -1)) - first_width) > 1e-8
+            or abs(float(paper.get("height_pt", -1)) - first_height) > 1e-8):
         raise RefereeError(f"{slug}: layout pages disagree with paper contract")
     form = layout.get("form") or {}
     root = parser.root
@@ -7641,7 +8781,36 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         raise RefereeError(
             f"{slug}: source PDF provenance contract is incomplete")
 
-    emission_contract = emitted_geometry_contract(layout, guide)
+    # Every page is rasterised once, up front, because the emission contract
+    # now has to be corroborated against the same source the subjects are
+    # measured on.  Rendering twice would double the corpus cost and could
+    # answer two questions from two different rasters.
+    page_meta: list[dict[str, Any]] = []
+    svg_pages: dict[int, SvgPage] = {}
+    with tempfile.TemporaryDirectory(prefix=f"comb-referee-{slug}-") as temp:
+        directory = pathlib.Path(temp)
+        pdf_snapshot = directory / "source.pdf"
+        pdf_snapshot.write_bytes(pdf_bytes)
+        for page in sorted(layout["pages"], key=lambda item: int(item["index"])):
+            page_index = int(page["index"])
+            svg_path = render_svg_page(
+                poppler["binary_path"], pdf_snapshot, page_index, directory)
+            svg = parse_svg(svg_path)
+            if (abs(svg.width - float(page["width_pt"])) > POSITION_TOL_PT
+                    or abs(svg.height - float(page["height_pt"]))
+                    > POSITION_TOL_PT):
+                raise RefereeError(
+                    f"{slug} page {page_index}: SVG/page dimensions disagree")
+            page_meta.append({
+                "page": page_index,
+                "svg_sha256": svg.sha256,
+                "vector_paints": len(svg.paints),
+                "unsupported_regions": len(svg.unsupported),
+            })
+            svg_pages[page_index] = svg
+
+    emission_contract, band_corroborations = emitted_geometry_contract(
+        layout, guide, svg_pages)
     if set(emission_contract) != set(ledger["active_cell_ids"]):
         raise RefereeError(
             f"{slug}: guide/layout emission contract does not exactly bind "
@@ -7706,67 +8875,79 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     audit["reason"] = (
         "complete" if audit["complete"] else "; ".join(audit_reasons))
     cells: list[dict[str, Any]] = []
-    page_meta: list[dict[str, Any]] = []
+    # Every retained suppression the ledger admitted on a re-derivable reason
+    # is discharged here, against Poppler, and the two inventories are compared
+    # afterwards.  A corroboration that did not run cannot be mistaken for one
+    # that ran and passed.
+    suppression_corroborations: dict[str, str] = {}
     subjects_by_page: dict[int, list[dict[str, Any]]] = {}
     for subject in ledger["subjects"]:
         subjects_by_page.setdefault(int(subject["page"]), []).append(subject)
 
-    with tempfile.TemporaryDirectory(prefix=f"comb-referee-{slug}-") as temp:
-        directory = pathlib.Path(temp)
-        pdf_snapshot = directory / "source.pdf"
-        pdf_snapshot.write_bytes(pdf_bytes)
-        for page in sorted(layout["pages"], key=lambda item: int(item["index"])):
-            page_index = int(page["index"])
-            svg_path = render_svg_page(
-                poppler["binary_path"], pdf_snapshot, page_index, directory)
-            svg = parse_svg(svg_path)
-            if (abs(svg.width - float(page["width_pt"])) > POSITION_TOL_PT
-                    or abs(svg.height - float(page["height_pt"])) > POSITION_TOL_PT):
-                raise RefereeError(
-                    f"{slug} page {page_index}: SVG/page dimensions disagree")
-            page_meta.append({
+    for page in sorted(layout["pages"], key=lambda item: int(item["index"])):
+        page_index = int(page["index"])
+        svg = svg_pages[page_index]
+        for subject in subjects_by_page.get(page_index, ()):
+            source_cell = subject["source_cell"]
+            result = classify_band(
+                source_cell, svg, ledger_state=subject["state"])
+            if subject["source_suppression_criterion"] is not None:
+                corroboration = retained_suppression_corroboration(
+                    subject, result, svg,
+                    f"{slug} page {page_index} "
+                    f"{subject['legacy_cell_id']}")
+                suppression_corroborations[subject["legacy_cell_id"]] = (
+                    corroboration["criterion"])
+            report_cell_id = (
+                subject["cell_id"] or subject["legacy_cell_id"])
+            # An emitted subject whose writing band the source refuses to
+            # confirm cannot be adjudicated from that source: the vertical
+            # geometry every one of its slots is bound to is unproven.  That
+            # is published as the referee's own UNEVALUABLE verdict -- counted
+            # in `combs_source_unevaluable` and in the unevaluable comparison
+            # bucket -- and never silently dropped.
+            band = band_corroborations.get(report_cell_id)
+            if band is not None and band["status"] != "corroborated":
+                result = {
+                    "status": "unevaluable",
+                    "reason": (
+                        "the source does not corroborate the comb writing "
+                        f"band: {band['reason']}"),
+                    "writing_band_corroboration": band,
+                }
+            emitted = slots.get(report_cell_id)
+            audit_offender = audit["offenders"].get(
+                subject["legacy_cell_id"])
+            audit_printed, audit_relation = audit_relation_for_subject(
+                subject, bool(audit["complete"]), audit_offender)
+            cells.append({
+                "cell": report_cell_id,
+                "subject_key": subject["subject_key"],
+                "legacy_cell_id": subject["legacy_cell_id"],
+                "cell_id": subject["cell_id"],
+                "ledger_state": subject["state"],
+                "ledger_blocks_gate": subject["blocks_gate"],
+                "ledger_reason_codes": subject["reason_codes"],
+                "ledger_topology_sha256": subject["topology"]["sha256"],
+                "ledger_evidence": subject["ledger"],
                 "page": page_index,
-                "svg_sha256": svg.sha256,
-                "vector_paints": len(svg.paints),
-                "unsupported_regions": len(svg.unsupported),
+                "bbox": list(subject["legacy_bbox"]),
+                "latticed": int(subject["topology"]["cells"]),
+                "lattice_divider_x": subject["topology"]["divider_x"],
+                "emitted": emitted["count"] if emitted else None,
+                "emitted_indexes_valid": bool(emitted and emitted["valid"]),
+                "emitted_evidence": emitted,
+                "audit_printed": audit_printed,
+                "audit_relation": audit_relation,
+                "referee": result,
             })
-            for subject in subjects_by_page.get(page_index, ()):
-                source_cell = subject["source_cell"]
-                result = classify_band(
-                    source_cell, svg, ledger_state=subject["state"])
-                report_cell_id = (
-                    subject["cell_id"] or subject["legacy_cell_id"])
-                emitted = slots.get(report_cell_id)
-                audit_offender = audit["offenders"].get(
-                    subject["legacy_cell_id"])
-                audit_printed, audit_relation = audit_relation_for_subject(
-                    subject, bool(audit["complete"]), audit_offender)
-                cells.append({
-                    "cell": report_cell_id,
-                    "subject_key": subject["subject_key"],
-                    "legacy_cell_id": subject["legacy_cell_id"],
-                    "cell_id": subject["cell_id"],
-                    "ledger_state": subject["state"],
-                    "ledger_blocks_gate": subject["blocks_gate"],
-                    "ledger_reason_codes": subject["reason_codes"],
-                    "ledger_topology_sha256": subject["topology"]["sha256"],
-                    "ledger_evidence": subject["ledger"],
-                    "page": page_index,
-                    "bbox": list(subject["legacy_bbox"]),
-                    "latticed": int(subject["topology"]["cells"]),
-                    "lattice_divider_x": subject["topology"]["divider_x"],
-                    "emitted": emitted["count"] if emitted else None,
-                    "emitted_indexes_valid": bool(emitted and emitted["valid"]),
-                    "emitted_evidence": emitted,
-                    "audit_printed": audit_printed,
-                    "audit_relation": audit_relation,
-                    "referee": result,
-                })
 
     cell_ids = {cell["cell"] for cell in cells}
     if len(cell_ids) != len(cells) or len(cells) != expected_combs:
         raise RefereeError(
             f"{slug}: published subject identities are not exhaustive")
+    assert_suppression_corroborations_exhaustive(
+        slug, ledger["suppression_obligations"], suppression_corroborations)
     if slug == "2551q-2018":
         validate_2551q_referee_golden(cells)
     for cell in cells:
@@ -9292,6 +10473,156 @@ def self_test() -> int:
     no_anchor = {**cell, "comb": {**cell["comb"], "cells": 1, "divider_x": []}}
     assert classify_band(no_anchor, page)["status"] == "unevaluable"
 
+    # ---- emitted_geometry_contract binds the WRITING band, and the source
+    # ---- has to confirm it.  Every fixture below is layout-SHAPED and reaches
+    # ---- the contract through the layout's own field names: the defect this
+    # ---- covers survived for the whole corpus precisely because the older
+    # ---- coverage hand-authored the expectation dict and so never named
+    # ---- `comb["writing_y0"]` at all.
+    def band_wall(y0: float, y1: float, order: int, element: str,
+                  x0: float = 0.0, x1: float = 40.0,
+                  tone: float = 0.0, clipped: bool = False) -> Paint:
+        return Paint(x0, y0, x1, y1, tone, order, "fill", element, clipped)
+
+    def band_cell(**comb_overrides: Any) -> dict[str, Any]:
+        comb = {
+            "cells": 2, "slot_x": [0.0, 20.0, 40.0], "divider_x": [20.0],
+            "pitch_pt": 20.0, "divider_gray": 0.0,
+            # The tick band: a short stub at the FOOT of the cell, which is
+            # what the stale contract used and what a typed character must
+            # never be placed in.
+            "y0": 8.0, "y1": 10.0,
+            "writing_y0": 1.0, "writing_y1": 9.0,
+        }
+        comb.update(comb_overrides)
+        for key in [name for name, value in comb.items() if value is None]:
+            del comb[key]
+        return {
+            "id": "p1c1", "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+            "border": {
+                "top": {"thickness_pt": 1.0, "gray": 0.0},
+                "bottom": {"thickness_pt": 1.0, "gray": 0.0},
+            },
+            "comb": comb,
+        }
+
+    def band_layout(cell_record: dict[str, Any]) -> dict[str, Any]:
+        return {"pages": [{"index": 1, "cells": [cell_record]}]}
+
+    band_top_wall = band_wall(0.0, 1.0, 0, "top-wall")
+    band_bottom_wall = band_wall(9.0, 10.0, 1, "bottom-wall")
+
+    def band_page(*paints: Paint) -> SvgPage:
+        return SvgPage(100, 100, list(paints), [], "band")
+
+    band_source = band_page(band_top_wall, band_bottom_wall)
+    band_contract, band_corroboration = emitted_geometry_contract(
+        band_layout(band_cell()), {}, {1: band_source})
+    assert band_contract["p1c1"]["slots"] == [
+        {"index": 0, "left": 0.0, "top": 1.0, "width": 20.0, "height": 8.0},
+        {"index": 1, "left": 20.0, "top": 1.0, "width": 20.0, "height": 8.0},
+    ], band_contract
+    assert band_corroboration["p1c1"]["status"] == "corroborated"
+    assert band_corroboration["p1c1"]["source_top_wall_pt"] == 1.0
+    assert band_corroboration["p1c1"]["source_bottom_wall_pt"] == 1.0
+
+    def band_verdict(cell_record: dict[str, Any],
+                     source: SvgPage = band_source) -> dict[str, Any]:
+        _contract, corroborations = emitted_geometry_contract(
+            band_layout(cell_record), {}, {1: source})
+        return corroborations["p1c1"]
+
+    def band_refuses(cell_record: dict[str, Any], fragment: str,
+                     source: SvgPage = band_source) -> None:
+        verdict = band_verdict(cell_record, source)
+        assert verdict["status"] == "uncorroborated", verdict
+        assert fragment in verdict["reason"], verdict["reason"]
+
+    def band_raises(cell_record: dict[str, Any], fragment: str) -> None:
+        try:
+            emitted_geometry_contract(
+                band_layout(cell_record), {}, {1: band_source})
+        except RefereeError as error:
+            assert fragment in str(error), str(error)
+        else:
+            raise AssertionError(f"contract accepted a layout it must reject: "
+                                 f"{fragment}")
+
+    # Mutation: the tick band substituted for the writing band.  The contract
+    # follows what the layout publishes, so only the source can catch this.
+    band_refuses(
+        band_cell(writing_y0=8.0, writing_y1=10.0),
+        "the source walls inset this cell to 1..9")
+    # Mutation: the writing band is missing.  A missing field is an ERROR.
+    band_raises(band_cell(writing_y0=None), "layout comb geometry is incomplete")
+    band_raises(band_cell(writing_y1=None), "layout comb geometry is incomplete")
+    band_raises(band_cell(writing_y0=float("nan")), "is not finite")
+    band_raises(band_cell(writing_y0="1.0"), "is not numeric")
+    # Mutation: the writing band leaves the cell box.
+    band_raises(band_cell(writing_y1=10.5), "layout comb geometry is invalid")
+    band_raises(band_cell(writing_y0=-0.5), "layout comb geometry is invalid")
+    # Mutation: the writing band is degenerate.
+    band_raises(band_cell(writing_y0=5.0, writing_y1=5.0),
+                "layout comb geometry is invalid")
+    band_raises(band_cell(writing_y0=9.0, writing_y1=1.0),
+                "layout comb geometry is invalid")
+    # Mutation: the inset matches no painted rule -- the wall is absent, is a
+    # different weight, or is painted in a tone the contract does not claim.
+    band_refuses(band_cell(), "paints no top wall", band_page(band_bottom_wall))
+    band_refuses(
+        band_cell(), "paints no bottom wall", band_page(band_top_wall))
+    band_refuses(
+        band_cell(), "the source walls inset this cell to 2..9",
+        band_page(band_wall(0.0, 2.0, 0, "heavy-top"), band_bottom_wall))
+    band_refuses(
+        band_cell(), "paints no top wall",
+        band_page(band_wall(0.0, 1.0, 0, "grey-top", tone=0.85099792),
+                  band_bottom_wall))
+    band_refuses(
+        band_cell(), "paints no top wall",
+        band_page(band_wall(0.0, 1.0, 0, "clipped-top", clipped=True),
+                  band_bottom_wall))
+    # Mutation: the wall is not one weight over every compartment.  An average
+    # is not a measurement.
+    band_refuses(
+        band_cell(), "not one weight across the compartments",
+        band_page(band_wall(0.0, 1.0, 0, "left-top", x1=20.0),
+                  band_wall(0.0, 0.5, 1, "right-top", x0=20.0),
+                  band_bottom_wall))
+    # Mutation: a later opaque paint eats half the wall.  The visible extent is
+    # the measurement, so the shortened wall must not confirm the band.
+    band_refuses(
+        band_cell(), "the source walls inset this cell to 0.5..9",
+        band_page(band_top_wall, band_bottom_wall,
+                  band_wall(0.0, 0.5, 2, "knockout", tone=1.0)))
+    # Mutation: two walls of different weight sit equally near the cell edge.
+    band_refuses(
+        band_cell(), "equally near the cell edge",
+        band_page(band_wall(-1.5, 0.0, 0, "outer-top"), band_top_wall,
+                  band_bottom_wall))
+    # Mutation: the wall runs past the neighbourhood the cell can vouch for.
+    band_refuses(
+        band_cell(), "not bounded inside the cell's own neighbourhood",
+        band_page(band_wall(-12.0, 1.0, 0, "unbounded-top"),
+                  band_bottom_wall))
+    # Mutation: the walls swallow the writing surface entirely.
+    band_refuses(
+        band_cell(writing_y0=5.0, writing_y1=5.01),
+        "leave the cell no writing surface",
+        band_page(band_wall(0.0, 5.0, 0, "fat-top"),
+                  band_wall(5.0, 10.0, 1, "fat-bottom")))
+    # Mutation: the border tone the measurement selects by is missing.
+    toneless = band_cell()
+    toneless["border"]["top"] = {"thickness_pt": 1.0}
+    band_refuses(toneless, "declares no top border tone")
+    # A source page that was never rastered is an error, not an empty pass.
+    try:
+        emitted_geometry_contract(band_layout(band_cell()), {}, {})
+    except RefereeError as error:
+        assert "no source page raster to corroborate" in str(error)
+    else:
+        raise AssertionError("the contract corroborated against no source")
+
     minimal_style = (
         "<style>"
         ".page{position:relative;overflow:hidden}"
@@ -9612,6 +10943,62 @@ def self_test() -> int:
     slot_records(page_size_parser)
     assert any("@page size disagrees" in error
                for error in page_size_parser.invalid_bindings)
+    def named_page_parser(
+            geometry: list[tuple[int, float, float]],
+            named: dict[int, tuple[float, float]],
+            selectors: set[int] | None = None,
+            pages: list[int] | None = None,
+            unnamed: tuple[float, float] = (612.0, 1008.0),
+            ) -> SlotParser:
+        value = SlotParser()
+        value.doctype_count = 1
+        value.style_count = 1
+        value.band_data_scripts = 1
+        value.runtime_script_hashes = list(HTML_RUNTIME_SCRIPT_SHA256)
+        value.page_geometry = list(geometry)
+        value.pages = (
+            [index for index, _w, _h in geometry] if pages is None
+            else list(pages))
+        value.stylesheet_page_sizes = [unnamed]
+        value.stylesheet_named_page_sizes = dict(named)
+        value.stylesheet_named_page_selectors = (
+            set(named) if selectors is None else set(selectors))
+        slot_records(value)
+        return value
+
+    # 1604-CF's real shape: three emitted pages, one of them landscape, plus a
+    # surviving rule for the page the guide reclaimed.
+    mixed_geometry = [(1, 612.0, 1008.0), (2, 612.0, 1008.0),
+                      (3, 1008.0, 612.0)]
+    mixed_named = {1: (612.0, 1008.0), 2: (612.0, 1008.0),
+                   3: (1008.0, 612.0), 4: (612.0, 1008.0)}
+    def page_rule_errors(value: SlotParser) -> list[str]:
+        return [
+            error for error in value.invalid_bindings
+            if "@page" in error or "named page rules" in error
+        ]
+
+    assert not page_rule_errors(
+        named_page_parser(mixed_geometry, mixed_named))
+    for label, geometry, named, selectors, pages in (
+        ("wrong-named-size", mixed_geometry,
+         {**mixed_named, 3: (612.0, 1008.0)}, None, None),
+        ("missing-named-rule", mixed_geometry,
+         {k: v for k, v in mixed_named.items() if k != 2}, None, None),
+        ("selector-without-rule", mixed_geometry, mixed_named,
+         {1, 2, 3, 4, 5}, None),
+        ("rule-without-selector", mixed_geometry, mixed_named,
+         {1, 2, 3}, None),
+        ("referenced-extra-page", mixed_geometry, mixed_named, None,
+         [1, 2, 3, 4]),
+        ("named-rules-on-uniform-paper",
+         [(1, 612.0, 1008.0), (2, 612.0, 1008.0)],
+         {1: (612.0, 1008.0), 2: (612.0, 1008.0)}, None, None),
+    ):
+        broken_pages = named_page_parser(
+            geometry, named, selectors, pages)
+        assert page_rule_errors(broken_pages), label
+
     no_doctype_parser = SlotParser()
     no_doctype_parser.style_count = 1
     no_doctype_parser.band_data_scripts = 1
@@ -9700,10 +11087,17 @@ def self_test() -> int:
                 int(item["comb"]["cells"]) for item in comb_cells_value),
         }
 
+    # The all-active ledger fixtures below are pinned to a slug whose retained
+    # count is zero, so "how many subjects does this form publish" and "how many
+    # of them are suppressed" stay separable in the self-test too. The retained
+    # census gets its own fixture further down, on a slug that really has one.
+    ledger_fixture_slug = "1604e-2018"
+    assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG.get(ledger_fixture_slug, 0) == 0
+
     def synthetic_ledger_layout() -> dict[str, Any]:
         cells_value: list[dict[str, Any]] = []
         subjects_value: list[dict[str, Any]] = []
-        for index in range(EXPECTED_COMBS_BY_SLUG["0605-1999"]):
+        for index in range(EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug]):
             x0 = float(index * 3)
             x1 = x0 + 2.0
             bbox_value = [x0, 0.0, x1, 10.0]
@@ -9749,11 +11143,17 @@ def self_test() -> int:
     lattice_producer_bytes = (HERE / "lattice.py").read_bytes()
     ledger_fixture = synthetic_ledger_layout()
     ledger_result = validate_comb_ledger(
-        "0605-1999", ledger_fixture, lattice_producer_bytes)
+        ledger_fixture_slug, ledger_fixture, lattice_producer_bytes)
+    # Derived from the corpus pin, never restated as a literal. The fixture is
+    # built by looping `range(EXPECTED_COMBS_BY_SLUG[slug])` above, so a
+    # literal here is a second copy of one number in one file -- the shape that
+    # made 4442 and 4540 disagree, and that made this very assertion the last
+    # thing standing between r14 and a 60-minute gate run on stale constants.
+    fixture_subjects = EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug]
     assert ledger_result["counts"] == {
-        "subjects": 21,
-        "active": 21,
-        "active_resolved": 21,
+        "subjects": fixture_subjects,
+        "active": fixture_subjects,
+        "active_resolved": fixture_subjects,
         "active_unresolved": 0,
         "retained_unresolved": 0,
         "inferences_suppressed": 0,
@@ -9810,13 +11210,15 @@ def self_test() -> int:
         mutate(broken_ledger)
         try:
             validate_comb_ledger(
-                "0605-1999", broken_ledger, lattice_producer_bytes)
+                ledger_fixture_slug, broken_ledger,
+                lattice_producer_bytes)
         except RefereeError:
             pass
         else:
             raise AssertionError(f"invalid comb ledger passed: {name}")
     try:
-        validate_comb_ledger("0605-1999", ledger_fixture, b"stale lattice")
+        validate_comb_ledger(
+            ledger_fixture_slug, ledger_fixture, b"stale lattice")
     except RefereeError:
         pass
     else:
@@ -9832,7 +11234,7 @@ def self_test() -> int:
     refresh_ledger_stats(reverse_mismatch)
     try:
         validate_comb_ledger(
-            "0605-1999", reverse_mismatch, lattice_producer_bytes)
+            ledger_fixture_slug, reverse_mismatch, lattice_producer_bytes)
     except RefereeError:
         pass
     else:
@@ -9852,7 +11254,7 @@ def self_test() -> int:
     })
     refresh_ledger_stats(unresolved_ledger)
     unresolved_result = validate_comb_ledger(
-        "0605-1999", unresolved_ledger, lattice_producer_bytes)
+        ledger_fixture_slug, unresolved_ledger, lattice_producer_bytes)
     assert unresolved_result["counts"]["active_unresolved"] == 1
     assert unresolved_result["counts"]["blocking"] == 1
 
@@ -9877,7 +11279,7 @@ def self_test() -> int:
     })
     refresh_ledger_stats(inference_ledger)
     inference_result = validate_comb_ledger(
-        "0605-1999", inference_ledger, lattice_producer_bytes)
+        ledger_fixture_slug, inference_ledger, lattice_producer_bytes)
     assert inference_result["counts"]["inferences_suppressed"] == 1
     assert inference_result["counts"]["blocking"] == 1
 
@@ -9911,8 +11313,47 @@ def self_test() -> int:
         "blocks_gate": True,
     })
     refresh_ledger_stats(retained_ledger)
+    # A ledger carrying one suppressed subject is only valid on a slug whose
+    # retained census is one. Both slugs publish the same number of subjects, so
+    # the same fixture shape exercises retained-zero and retained-one, and the
+    # assertion below fails loudly if a future census move breaks that pairing.
+    #
+    # It did exactly that at r20, which is the check working: 2551M went 15 -> 18
+    # subjects and 1 -> 3 retained, so it is no longer paired with 1604-E and no
+    # longer a retained-ONE slug. 1604-CF replaces it -- 15 subjects, exactly one
+    # retained, the same pairing on today's measured census -- and 2551M is
+    # promoted to the retained-MANY negative control below, where 0605 used to
+    # sit. 0605 had to move for the same reason: it went 3 -> 1 retained, so it
+    # would now reject this fixture on its total alone and stop testing the
+    # retained census at all. Neither the fixture nor the rule was weakened;
+    # only the slugs that satisfy them were re-measured.
+    retained_fixture_slug = "1604cf-2008"
+    assert (EXPECTED_COMBS_BY_SLUG[retained_fixture_slug]
+            == EXPECTED_COMBS_BY_SLUG[ledger_fixture_slug])
+    assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG[retained_fixture_slug] == 1
+    assert EXPECTED_RETAINED_SUBJECTS_BY_SLUG["2551m-2002"] > 1
+    for wrong_slug in (ledger_fixture_slug, "2551m-2002"):
+        try:
+            validate_comb_ledger(
+                wrong_slug, retained_ledger, lattice_producer_bytes)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(
+                f"retained census was not enforced for {wrong_slug}")
+    # And the inverse, which is the exact shape of the r14 census fault: a
+    # ledger whose total is right but which publishes no suppressed subject at
+    # all must not validate against a slug that is pinned to retain one.
+    try:
+        validate_comb_ledger(
+            retained_fixture_slug, ledger_fixture, lattice_producer_bytes)
+    except RefereeError:
+        pass
+    else:
+        raise AssertionError(
+            "a ledger missing its pinned retained subject was accepted")
     retained_result = validate_comb_ledger(
-        "0605-1999", retained_ledger, lattice_producer_bytes)
+        retained_fixture_slug, retained_ledger, lattice_producer_bytes)
     assert retained_result["counts"]["retained_unresolved"] == 1
     retained_emission = {
         subject["cell_id"]: {"valid": True}
@@ -9926,11 +11367,303 @@ def self_test() -> int:
     assert retained_inventory["retained_emitted_cell_ids"] == [
         retained_cell["id"]]
 
-    def unavailable_position(*, outer: bool) -> dict[str, Any]:
-        axis = "outer" if outer else "internal"
+    # ------------------------------------------------------------------
+    # THE RETAINED-TOPOLOGY INVARIANT and its one, source-checked exception.
+    #
+    # Four populations, and the whole point is that they are four and not two:
+    #   (a) retained, topology UNRESOLVED  -> accepted, as it always was, and
+    #       no corroboration is owed because nothing was certified;
+    #   (b) retained, topology RESOLVED, reason re-derivable -> accepted ONLY
+    #       after Poppler is asked the reason's own question;
+    #   (c) retained, topology RESOLVED, reason absent/unknown -> refused;
+    #   (d) (b) with a source that CONTRADICTS the reason -> refused.
+    # ------------------------------------------------------------------
+    # The reason tuple is read out of the registry rather than restated, so a
+    # second entry added to that table without a fixture of its own trips this
+    # pairing instead of quietly riding on the caption block's evidence.
+    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 1
+    caption_reason_codes = list(
+        next(iter(RETAINED_SUPPRESSION_SOURCE_CRITERIA)))
+    assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[tuple(caption_reason_codes)]
+            == SOURCE_CAPTION_BLOCK_CRITERION)
+
+    # (a) An unresolved retained topology stays accepted, and stays free of any
+    # corroboration obligation: there is no certified shape to corroborate.
+    assert retained_result["subjects"][0]["state"] == "retained_unresolved"
+    assert (retained_result["subjects"][0]["source_suppression_criterion"]
+            is None)
+    assert retained_result["suppression_obligations"] == {}
+    assert all(
+        subject["source_suppression_criterion"] is None
+        for subject in retained_result["subjects"])
+
+    def retained_variant(status: str, reason_codes: list[str]
+                         ) -> dict[str, Any]:
+        variant = clone(retained_ledger)
+        subject_value = variant["pages"][0]["comb_subjects"][0]
+        subject_value["reason_codes"] = list(reason_codes)
+        subject_value["legacy_comb"]["resolution"].update({
+            "status": status,
+            # `validate_comb_topology` binds reasons to status, so an
+            # unresolved variant has to carry evidence and a resolved one
+            # must not.  The fixture obeys the schema it is testing.
+            "reason_codes": (
+                [] if status == "resolved" else ["legacy-continuity-only"]),
+        })
+        refresh_ledger_stats(variant)
+        return variant
+
+    # (b) A resolved topology under a re-derivable reason is admitted by the
+    # ledger pass -- and the ledger records the debt rather than settling it.
+    caption_ledger = retained_variant("resolved", caption_reason_codes)
+    caption_result = validate_comb_ledger(
+        retained_fixture_slug, caption_ledger, lattice_producer_bytes)
+    caption_subject = caption_result["subjects"][0]
+    assert caption_subject["state"] == "retained_unresolved"
+    assert caption_subject["topology"]["resolution_status"] == "resolved"
+    assert (caption_subject["source_suppression_criterion"]
+            == SOURCE_CAPTION_BLOCK_CRITERION)
+    assert caption_result["suppression_obligations"] == {
+        retained_cell["id"]: SOURCE_CAPTION_BLOCK_CRITERION}
+    # An UNRESOLVED topology under the same reason owes the same debt: the
+    # corroboration is attached to the CLAIM, not to the topology status, so a
+    # producer cannot dodge it by marking its own measurement unresolved.
+    unresolved_caption = validate_comb_ledger(
+        retained_fixture_slug,
+        retained_variant("unresolved", caption_reason_codes),
+        lattice_producer_bytes)
+    assert unresolved_caption["suppression_obligations"] == {
+        retained_cell["id"]: SOURCE_CAPTION_BLOCK_CRITERION}
+
+    # (c) A resolved topology under a reason this referee cannot re-derive is
+    # the original guard, and it still closes.  Both shapes are covered: a
+    # reason that is real but carries no source claim, and an invented one.
+    for unrecognised in (
+            ["emission-suppressed-no-final-visible-band"],
+            ["emission-suppressed-no-rectangular-owner",
+             "painted-edge-partition"],
+            ["emission-suppressed-because-the-producer-says-so"],
+            [*caption_reason_codes, "and-one-more-reason"],
+    ):
+        assert tuple(unrecognised) not in RETAINED_SUPPRESSION_SOURCE_CRITERIA
+        try:
+            validate_comb_ledger(
+                retained_fixture_slug,
+                retained_variant("resolved", unrecognised),
+                lattice_producer_bytes)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(
+                "a retained subject certified its own resolved topology "
+                f"under {unrecognised}")
+
+    # (d) The corroboration itself, against Poppler's vector output.  The
+    # walls are the ones POPPLER draws; the census is Poppler's glyph bounds.
+    def caption_glyph(x0: float, x1: float, ident: str,
+                      clipped: bool = False,
+                      y0: float = 3.0, y1: float = 4.0,
+                      stroked: bool = False) -> UnsupportedRegion:
+        prefix = MEASURED_GLYPH_REASON_PREFIXES[1 if stroked else 0]
+        return UnsupportedRegion(
+            x0, y0, x1, y1, f"{prefix}#glyph-{ident}", ident, 0.0, 40, clipped)
+
+    caption_comb_contract = {
+        "cells": 2, "divider_count": 1, "pitch_pt": 20.0,
+        "pitch_min_pt": 20.0, "pitch_max_pt": 20.0,
+        "slot_x": [0.0, 20.0, 40.0], "divider_x": [20.0],
+        "divider_thickness_pt": 0.2, "divider_thicknesses_pt": [0.2],
+        "divider_gray": 0.0, "divider_paint_seq": [1],
+        "divider_paint_ranges": [[1, 1]],
+        "y0": 2.0, "y1": 8.0, "height_pt": 6.0,
+        "resolution": {
+            "status": "resolved", "method": "self-test", "reason_codes": []},
+    }
+    caption_bbox = [0.0, 0.0, 40.0, 10.0]
+    caption_source_cell = {
+        "id": "p1c0", "subject_key": "p1@0.00,0.00,40.00,10.00",
+        "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+        "comb": caption_comb_contract,
+    }
+    caption_published = {
+        "legacy_bbox": caption_bbox,
+        "topology": validate_comb_topology(
+            caption_comb_contract, caption_bbox, "caption self-test"),
+        "source_suppression_criterion": SOURCE_CAPTION_BLOCK_CRITERION,
+    }
+
+    # A comb's outer slot boundaries are its printed rails, so they are no
+    # longer required to equal the subject's rectangle -- but the comb must
+    # still be that subject's. It may sit inside the rectangle (the rectangle
+    # rules a caption or a dash box beside the comb), and it may overhang it by
+    # less than one of its own compartments (the rectangle's x is a fused mean
+    # of every collinear bar on the line, and the rail is one of them). It may
+    # not overhang by a whole compartment, and it may not miss the rectangle.
+    for railed in (
+            {"slot_x": [8.0, 20.0, 40.0], "divider_x": [20.0]},
+            {"slot_x": [0.0, 20.0, 32.0], "divider_x": [20.0]},
+            {"slot_x": [-0.4, 20.0, 40.4], "divider_x": [20.0]},
+            {"slot_x": [8.0, 20.0, 32.0], "divider_x": [20.0]},
+    ):
+        validate_comb_topology(
+            {**caption_comb_contract, **railed},
+            caption_bbox, "railed self-test")
+    for stolen in (
+            {"slot_x": [-20.0, 0.0, 20.0], "divider_x": [0.0]},
+            {"slot_x": [20.0, 40.0, 60.0], "divider_x": [40.0]},
+            {"slot_x": [40.0, 60.0, 80.0], "divider_x": [60.0]},
+            {"slot_x": [-40.0, -20.0, 0.0], "divider_x": [-20.0]},
+    ):
+        try:
+            validate_comb_topology(
+                {**caption_comb_contract, **stolen},
+                caption_bbox, "stolen self-test")
+        except RefereeError:
+            continue
+        raise AssertionError(
+            f"a comb with a compartment centred outside its subject passed: "
+            f"{stolen}")
+
+    def caption_page(glyph_regions: Sequence[UnsupportedRegion]) -> SvgPage:
+        return SvgPage(100, 100, [paint(20), *source_frame()],
+                       list(glyph_regions), "caption")
+
+    def caption_band(page_value: SvgPage) -> dict[str, Any]:
+        return classify_band(
+            caption_source_cell, page_value,
+            ledger_state="retained_unresolved")
+
+    prose = [caption_glyph(3, 4, "a"), caption_glyph(6, 7, "b"),
+             caption_glyph(23, 24, "c"), caption_glyph(26, 27, "d")]
+    prose_page = caption_page(prose)
+    prose_band = caption_band(prose_page)
+    assert prose_band["status"] == "measured", prose_band
+    assert prose_band["compartments"] == 2, prose_band
+    corroborated = retained_suppression_corroboration(
+        caption_published, prose_band, prose_page, "caption self-test")
+    assert corroborated["criterion"] == SOURCE_CAPTION_BLOCK_CRITERION
+    assert corroborated["compartment_glyph_counts"] == [2, 2], corroborated
+    # The walls the census used are Poppler's, not the ledger's.
+    assert corroborated["source_divider_x"] == prose_band["source_divider_x"]
+
+    def caption_refused(name: str, subject_value: dict[str, Any],
+                        page_value: SvgPage,
+                        band_value: dict[str, Any] | None = None) -> None:
+        try:
+            retained_suppression_corroboration(
+                subject_value,
+                caption_band(page_value) if band_value is None else band_value,
+                page_value, "caption self-test")
+        except RefereeError:
+            return
+        raise AssertionError(
+            f"an uncorroborated caption suppression was accepted: {name}")
+
+    # A compartment the source left empty is a character cell, not prose.
+    caption_refused("empty compartment", caption_published, caption_page(
+        [caption_glyph(3, 4, "a"), caption_glyph(6, 7, "b")]))
+    # And so is one carrying a single glyph -- the `%`, the money point, the
+    # TIN dash.  This is the boundary the threshold names, tested at it.
+    caption_refused("one decoration glyph", caption_published, caption_page(
+        [caption_glyph(3, 4, "a"), caption_glyph(6, 7, "b"),
+         caption_glyph(23, 24, "c")]))
+    assert CHARACTER_CELL_MAX_PRINTED_GLYPHS == 1
+    two_per_compartment = retained_suppression_corroboration(
+        caption_published,
+        caption_band(caption_page(prose)), caption_page(prose),
+        "caption self-test")
+    assert min(two_per_compartment["compartment_glyph_counts"]) == (
+        CHARACTER_CELL_MAX_PRINTED_GLYPHS + 1)
+    # Ink this parser cannot say is printed, or cannot say belongs to this
+    # rectangle, is not evidence that the rectangle is a caption.
+    caption_refused("clipped glyph", caption_published, caption_page(
+        [*prose[:3], caption_glyph(26, 27, "d", clipped=True)]))
+    caption_refused("glyph outside the rectangle", caption_published,
+                    caption_page([*prose[:3],
+                                  caption_glyph(26, 27, "d", y0=9.5, y1=10.5)]))
+    caption_refused("glyph left of the rectangle", caption_published,
+                    caption_page([*prose[:3],
+                                  caption_glyph(-1.0, 0.5, "d")]))
+    # A stroked glyph bound counts exactly like a filled one: both are text.
+    stroked_prose = [*prose[:3], caption_glyph(26, 27, "d", stroked=True)]
+    assert retained_suppression_corroboration(
+        caption_published, caption_band(caption_page(stroked_prose)),
+        caption_page(stroked_prose), "caption self-test",
+    )["compartment_glyph_counts"] == [2, 2]
+    # A region that merely mentions a glyph but carries no measured bound --
+    # `parse_svg` publishes those over the WHOLE PAGE, meaning "text exists
+    # here that this parser could not place" -- is never counted into a
+    # compartment.  Asserted on the census directly, because such a region
+    # also makes the band itself unmeasurable, which is the fail-closed
+    # outcome the refusal below records.
+    unplaced_glyph = UnsupportedRegion(
+        0.0, 0.0, 100.0, 100.0,
+        "unsupported glyph use target: #glyph-d", "d", 0.0, 40, False)
+    assert measured_glyph_boxes(
+        caption_page([unplaced_glyph]), caption_bbox) == []
+    caption_refused("unplaced glyph region", caption_published, caption_page(
+        [*prose[:3], unplaced_glyph]))
+
+    # The band half of the corroboration: the source must actually draw the
+    # compartments the retained topology claims, or there is nothing to census.
+    caption_refused(
+        "unmeasurable band", caption_published, prose_page,
+        {"status": "unevaluable", "reason": "self-test"})
+    # And the same refusal when the unevaluable verdict arrives carrying a
+    # full measured payload.  `status` is the verdict; the topology fields
+    # beside it are working notes, and a band the referee could not measure
+    # corroborates nothing however complete those notes look.
+    caption_refused(
+        "unevaluable band with a measured payload", caption_published,
+        prose_page,
+        {**prose_band, "status": "unevaluable",
+         "reason": "self-test residue"})
+    caption_refused(
+        "compartment count disagreement", caption_published, prose_page,
+        {**prose_band, "compartments": 3,
+         "source_divider_x": [13.0, 26.0]})
+    caption_refused(
+        "anchors do not sit where the ledger says", caption_published,
+        prose_page, {**prose_band, "positions_match": False})
+    # A criterion with no re-derivation behind it fails closed rather than
+    # falling through to an accept.
+    caption_refused(
+        "criterion with no re-derivation",
+        {**caption_published,
+         "source_suppression_criterion": "some-future-criterion-v1"},
+        prose_page)
+
+    # And the accounting that makes the corroboration unskippable: an admitted
+    # reason whose re-derivation never ran is an error, not a pass.
+    owed = {"p1c0": SOURCE_CAPTION_BLOCK_CRITERION}
+    assert_suppression_corroborations_exhaustive("self-test", {}, {})
+    assert_suppression_corroborations_exhaustive("self-test", owed, dict(owed))
+    for name, obligations_value, corroborations_value in (
+            ("skipped", owed, {}),
+            ("invented", {}, owed),
+            ("substituted criterion", owed, {"p1c0": "other-criterion-v1"}),
+            ("substituted subject", owed,
+             {"p1c9": SOURCE_CAPTION_BLOCK_CRITERION}),
+    ):
+        try:
+            assert_suppression_corroborations_exhaustive(
+                "self-test", obligations_value, corroborations_value)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(
+                f"suppression corroboration accounting was not enforced: "
+                f"{name}")
+
+    def unavailable_position(field: str) -> dict[str, Any]:
+        # The fixture derives BOTH the axis and the tolerance from the field,
+        # never from a literal.  Publishing HTML_GEOMETRY_EPSILON_PT on all
+        # five here is what let the tolerance category error survive: no
+        # producer has ever emitted that record.
+        axis = "outer" if AUDIT_POSITION_FIELDS[field][1] else "internal"
         return {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": AUDIT_POSITION_TOLERANCE_PT[field],
             f"actual_{axis}_edges_x": [1.0, 2.0],
             f"expected_{axis}_edges_x": None,
             "count_matches": None,
@@ -10006,8 +11739,8 @@ def self_test() -> int:
             "failure_kinds": ["source-topology-unevaluable"],
             "why": "self-test source topology is unavailable",
         }
-        for field, (_kind, outer) in AUDIT_POSITION_FIELDS.items():
-            item[field] = unavailable_position(outer=outer)
+        for field in AUDIT_POSITION_FIELDS:
+            item[field] = unavailable_position(field)
         item["effective_emission_state"] = "physical-slots"
         return item
 
@@ -10029,7 +11762,8 @@ def self_test() -> int:
         })
         item["emission_layout_position"] = {
             "comparable": True,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_layout_position"]),
             "actual_internal_edges_x": [1.0],
             "expected_internal_edges_x": [1.0],
             "count_matches": True,
@@ -10038,7 +11772,8 @@ def self_test() -> int:
         }
         item["emission_layout_outer_position"] = {
             "comparable": True,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_layout_outer_position"]),
             "actual_outer_edges_x": [0.0, 2.0],
             "expected_outer_edges_x": [0.0, 2.0],
             "count_matches": True,
@@ -10047,7 +11782,8 @@ def self_test() -> int:
         }
         item["emission_source_position"] = {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_source_position"]),
             "actual_internal_edges_x": [1.0],
             "expected_internal_edges_x": [],
             "count_matches": None,
@@ -10057,7 +11793,8 @@ def self_test() -> int:
         }
         item["emission_source_outer_position"] = {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["emission_source_outer_position"]),
             "actual_outer_edges_x": [0.0, 2.0],
             "expected_outer_edges_x": [0.0, 2.0],
             "count_matches": None,
@@ -10067,7 +11804,8 @@ def self_test() -> int:
         }
         item["layout_source_outer_position"] = {
             "comparable": False,
-            "tolerance_pt": HTML_GEOMETRY_EPSILON_PT,
+            "tolerance_pt": (
+                AUDIT_POSITION_TOLERANCE_PT["layout_source_outer_position"]),
             "actual_outer_edges_x": [0.0, 2.0],
             "expected_outer_edges_x": [0.0, 2.0],
             "count_matches": None,
@@ -10495,6 +12233,31 @@ def self_test() -> int:
         "assertions": {
             "comb_slots_match_printed": false_position_assertion},
     })["assertion_valid"]
+
+    # Each of the five position relations is pinned to its OWN constant, and
+    # the referee must reject a swap in either direction: an audit that widened
+    # a same-representation emitted/layout comparison to the source tolerance
+    # would be hiding real emission drift, and one that narrowed a source
+    # comparison to the emitted epsilon would be inventing mismatches. The
+    # positive case is covered by the corpus itself -- every published offender
+    # carries POSITION_TOL_PT on the three `source` relations.
+    for swap_field, pinned in AUDIT_POSITION_TOLERANCE_PT.items():
+        other = (
+            POSITION_TOL_PT if pinned == HTML_GEOMETRY_EPSILON_PT
+            else HTML_GEOMETRY_EPSILON_PT)
+        assert other != pinned
+        swapped = clone(one_offender)
+        swapped[swap_field]["tolerance_pt"] = other
+        swapped_assertion = clone(broken_assertion)
+        swapped_assertion["offenders"] = [swapped]
+        swapped_result = audit_evidence({
+            "comb_slots_match_printed": False,
+            "assertions": {"comb_slots_match_printed": swapped_assertion},
+        }, self_owner_binding(["p1c1"]))
+        assert not swapped_result["assertion_valid"], swap_field
+        assert any(
+            "changes the fixed position tolerance" in message
+            for message in swapped_result["errors"]), swap_field
 
     missing_without_offender = comb_assertion(
         [], expected_ids=["p1c1"], emitted_ids=[])
@@ -11069,8 +12832,23 @@ def self_test() -> int:
         "form": {"code": "X", "revision": "1"},
         "source": {"file": "external:x.pdf", "sha256": "abc",
                    "page_count": 1},
-        "paper": {"uniform": True, "width_pt": 100.0, "height_pt": 100.0},
+        "paper": {
+            "uniform": True, "width_pt": 100.0, "height_pt": 100.0,
+            "distinct_sizes": ["100.0x100.0"],
+        },
         "pages": [{"index": 1, "width_pt": 100.0, "height_pt": 100.0}],
+    }
+    mixed_artifact = {
+        **artifact,
+        "paper": {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0", "200.0x100.0"],
+        },
+        "source": {**artifact["source"], "page_count": 2},
+        "pages": [
+            {"index": 1, "width_pt": 100.0, "height_pt": 200.0},
+            {"index": 2, "width_pt": 200.0, "height_pt": 100.0},
+        ],
     }
     ir = {**artifact, "schema_version": 2}
     guide = {"form": artifact["form"], "inline": [], "stats": {"pages": 1}}
@@ -11079,6 +12857,51 @@ def self_test() -> int:
         "data-source-sha256": "abc", "data-schema-version": "1",
     }
     bind_artifacts("x-1", artifact, ir, guide, parser)
+    # A genuinely mixed-orientation source (1604-CF) is EVALUABLE, and every
+    # falsifiable part of its paper contract is still bound.
+    mixed_guide = {**guide, "stats": {"pages": 2}}
+    mixed_parser = SlotParser()
+    mixed_parser.root = dict(parser.root)
+    mixed_parser.pages = [1, 2]
+    mixed_parser.page_geometry = [
+        (1, 100.0, 200.0), (2, 200.0, 100.0)]
+    bind_artifacts(
+        "x-2", mixed_artifact, {**mixed_artifact, "schema_version": 2},
+        mixed_guide, mixed_parser)
+    for label, broken_paper in (
+        ("false-uniform", {
+            "uniform": True, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0", "200.0x100.0"]}),
+        ("false-uniform-single", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 100.0,
+            "distinct_sizes": ["100.0x100.0"]}),
+        ("short-inventory", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0"]}),
+        ("unsorted-inventory", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["200.0x100.0", "100.0x200.0"]}),
+        ("undeclared-size", {
+            "uniform": False, "width_pt": 100.0, "height_pt": 200.0,
+            "distinct_sizes": ["100.0x200.0", "300.0x400.0"]}),
+        ("wrong-first-page", {
+            "uniform": False, "width_pt": 200.0, "height_pt": 100.0,
+            "distinct_sizes": ["100.0x200.0", "200.0x100.0"]}),
+        ("missing-inventory", {
+            "uniform": True, "width_pt": 100.0, "height_pt": 100.0}),
+    ):
+        base = (
+            artifact if label == "false-uniform-single" else mixed_artifact)
+        broken = {**base, "paper": broken_paper}
+        try:
+            bind_artifacts(
+                "x-3", broken, {**broken, "schema_version": 2},
+                mixed_guide if base is mixed_artifact else guide,
+                mixed_parser if base is mixed_artifact else parser)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(f"false paper contract accepted: {label}")
     bad_ir = {**ir, "source": {**ir["source"], "sha256": "changed"}}
     try:
         bind_artifacts("x-1", artifact, bad_ir, guide, parser)

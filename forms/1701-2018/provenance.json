@@ -23,10 +23,10 @@
     "Arial Narrow",
     "Calibri"
   ],
-  "rules": 3144,
+  "rules": 3140,
   "text_runs": 699,
   "images": 5,
-  "cells": 882,
+  "cells": 847,
   "comb_cells": 283,
   "growables": [
     {
@@ -75,7 +75,7 @@
           "area_fills": 20,
           "images": 0
         },
-        "straddlers_kept_by_form": 1,
+        "straddlers_kept_by_form": 0,
         "moved_to": "guide.html"
       }
     ],
@@ -92,7 +92,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 1670790,
+  "html_bytes": 1670396,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

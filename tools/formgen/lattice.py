@@ -76,6 +76,21 @@ those fills; the cell grid had not. `wall_boundaries` closes that asymmetry for
 verticals, and the shape test that keeps a character divider out of the x
 lattice is measured there.
 
+A sixth finding is that the *tone of the paper* decides whether a region is a
+writing surface at all, and this module used to ask only about ink. An empty
+three-bordered region on a grey band satisfied "field" exactly as a white one
+did, so 297 cells across 37 forms carried an *emitted input* on decoration --
+on 2200T page 2 a taxpayer can type 999,999.00 into a row the official form
+shades precisely to say NO RATE APPLIES. 347 cells on 40 forms were classified
+`field` there, the difference being cells the emitter already refused on other
+evidence. Nothing had to be inferred to prevent it:
+`extract.classify_tone` stamps every fill structural / decorative / knockout
+from the literal content-stream operand and the IR carries the stamp, but
+`area_fills` reached the lattice only through `wall_boundaries` and
+`comb_boundary_candidates`, which read `role == "structural"` for grid
+geometry. `on_shaded_paper` consults the decorative population the box model
+was discarding, and a cell it answers for becomes `kind == "shaded"`.
+
 Usage:
     python3 tools/formgen/lattice.py --ir build/ir/2551q-2018.ir.json \\
         --out build/layout/2551q-2018.layout.json --summary
@@ -200,23 +215,176 @@ def supported_at(y: float, x: float, horizontals: Sequence[dict[str, Any]]) -> b
                for h in horizontals)
 
 
+def bottom_guide_tick_baseline(rule: dict[str, Any],
+                               verticals: Sequence[dict[str, Any]],
+                               horizontals: Sequence[dict[str, Any]]
+                               ) -> dict[str, Any] | None:
+    """The baseline rule a short bottom guide tick lands on, or None.
+
+    Official artwork draws compartment guides as deliberately short verticals
+    at the FOOT of a walled writing box, and it does not always run the stroke
+    into the baseline's ink: 2316's first TIN group stops 0.25pt above its box
+    bottom (tick y1 137.62 against ink 137.87-138.32) and 1600WP item 5 stops
+    0.345pt short, so `supported_at` -- which demands the endpoint inside the
+    ink -- files both as borders supported at neither end, the group loses its
+    compartments, and the TIN reaches the taxpayer as one unbounded input
+    (F111, F178, F181).
+
+    The recognition here is a PATTERN, not a widened tolerance -- a blanket
+    y-tolerance was tried and refuted (it flipped 45 real combs).  Every clause
+    is a physical statement about the bottom-guide-tick artwork:
+
+      * the tick hangs from nothing: unsupported above, and not even a
+        near-touch above (an almost-touching rule overhead makes it a broken
+        column fragment, not a hanging guide);
+      * it lands ON a baseline: the paper between the tick's end and the
+        baseline's ink is thinner than the tick's own stroke -- the exact
+        ink-versus-paper principle `distinct_boundary`/`band_ink` already use
+        to decide when two marks are one boundary.  A 0.24pt hairline gets
+        0.24pt of grace, never a corpus constant;
+      * it sits in a walled band: on each side, inside the baseline's own
+        span, one FULL-HEIGHT stroke lands on the same baseline, rises above
+        the tick's top, and is itself supported at its own top.  The rise is
+        what makes the tick SHORT -- a guide inside a taller box -- and the
+        top support is what makes the wall a wall: without it, a neighbouring
+        hanging divider could stand in as the "wall" and hide the gap
+        disorder that refuses a stale mark (0605's knocked-out 3pt mark sits
+        3.12pt from a genuine centavo divider that would otherwise wall it
+        in);
+      * sibling ticks landing on the same baseline between the same walls
+        corroborate each other: either a sibling shares this tick's exact y
+        extent (dividers of one comb are drawn by the same loop -- the same
+        signature `comb_bands` groups on), or the landing siblings run at
+        uniform pitch.  Wall-to-tick gaps are deliberately excluded from the
+        pitch: the corpus prints oversized leading slots (G09), and 1600WP's
+        branch-code box prints its three same-loop ticks at 14.15/15.00/12.59pt
+        -- the loop signature is the ground truth there, not the spacing.
+
+    Existing comb dividers cannot reach this function (their landing endpoint
+    is already inside the baseline ink), so the comb->border flip direction is
+    structurally empty: recognition only ever adds dividers.
+    """
+    x = centre(rule)
+    y0, y1 = float(rule["y0"]), float(rule["y1"])
+    thickness = float(rule["thickness_pt"])
+    if thickness <= 0.0:
+        return None
+    spanning = [
+        h for h in horizontals
+        if h["x0"] - CLUSTER_TOL_PT <= x <= h["x1"] + CLUSTER_TOL_PT
+    ]
+    # A near-touch overhead is a broken border, not a hanging guide.
+    if any(0.0 <= y0 - float(h["y1"]) <= thickness for h in spanning):
+        return None
+    baselines = sorted(
+        (h for h in spanning if 0.0 < float(h["y0"]) - y1 <= thickness),
+        key=lambda h: (float(h["y0"]), float(h["x0"])))
+    for baseline in baselines:
+        base_top = float(baseline["y0"])
+        base_x0 = float(baseline["x0"]) - CLUSTER_TOL_PT
+        base_x1 = float(baseline["x1"]) + CLUSTER_TOL_PT
+
+        def lands(v: dict[str, Any]) -> bool:
+            return (float(v["y1"])
+                    >= base_top - float(v["thickness_pt"])
+                    and float(v["y0"]) < base_top)
+
+        members = [
+            v for v in verticals
+            if v is not rule and base_x0 <= centre(v) <= base_x1
+        ]
+        positions: list[list[dict[str, Any]]] = []
+        for v in sorted(members, key=lambda v: (centre(v), v["y0"], v["y1"])):
+            if positions and abs(centre(positions[-1][0]) - centre(v)) \
+                    <= CLUSTER_TOL_PT:
+                positions[-1].append(v)
+            else:
+                positions.append([v])
+        # A wall is one full-height stroke: it reaches this baseline, rises
+        # above the tick's top, and its own top hangs from a rule -- all in
+        # the SAME member.  Anything weaker lets a neighbouring hanging
+        # divider stand in as a "wall" (0605's centavo divider would wall in
+        # the stale mark beside it and hide the gap disorder that refuses it).
+        wall_xs = [
+            centre(group[0]) for group in positions
+            if any(
+                lands(v)
+                and float(v["y0"]) < y0 - CLUSTER_TOL_PT
+                and supported_at(float(v["y0"]), centre(v), horizontals)
+                for v in group
+            )
+        ]
+        left_walls = [wx for wx in wall_xs if wx < x - CLUSTER_TOL_PT]
+        right_walls = [wx for wx in wall_xs if wx > x + CLUSTER_TOL_PT]
+        if not left_walls or not right_walls:
+            continue
+        wall_left, wall_right = max(left_walls), min(right_walls)
+        landing = [
+            v for group in positions for v in group
+            if wall_left + CLUSTER_TOL_PT < centre(v)
+            < wall_right - CLUSTER_TOL_PT
+            and lands(v)
+        ]
+        same_loop = any(
+            abs(float(v["y0"]) - y0) <= JOIN_EPSILON_PT
+            and abs(float(v["y1"]) - y1) <= JOIN_EPSILON_PT
+            for v in landing
+        )
+        # Gap-order corroboration applies from TWO interior positions up,
+        # measured WALL TO WALL: every landing boundary between the walls
+        # plus the walls themselves.  A stale mark beside a genuine divider
+        # is only detectable as gap disorder when both are present -- 0605
+        # prints a knocked-out 3pt mark 3.12pt from its centavo divider,
+        # turning the run 14.16/3.12/10.32, and is refused -- whereas a
+        # SINGLETON guide has no run to be disordered in: its corroboration
+        # is the pattern itself (hangs, lands within its own ink, walled),
+        # and demanding that it halve its box within the pitch tolerance
+        # would refuse 1600WP's genuine item-2 guide over a 21.24/19.68
+        # split.  Same-loop runs are already corroborated by their extent.
+        interior = {q(centre(v)) for v in landing} | {q(x)}
+        siblings = sorted(interior | {q(wall_left), q(wall_right)})
+        gaps = [b - a for a, b in zip(siblings, siblings[1:])]
+        if (not same_loop
+                and len(interior) >= 2
+                and gaps and max(gaps) - min(gaps) > PITCH_TOL_PT):
+            continue
+        return baseline
+    return None
+
+
 def split_verticals(verticals: Sequence[dict[str, Any]],
-                    horizontals: Sequence[dict[str, Any]]
+                    horizontals: Sequence[dict[str, Any]],
+                    guide_tick_pool: Sequence[dict[str, Any]] | None = None,
                     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Partition structural verticals into (comb dividers, box borders).
 
     The discriminator is geometric support, never thickness. A comb divider
     hangs from nothing and lands on its row's baseline rule; anything else --
     supported at both ends, or a fragment of a border interrupted by a comb
-    band -- is a border.
+    band -- is a border.  One exception is a recognition, not a tolerance: a
+    rule supported at neither end can still be a BOTTOM GUIDE TICK whose
+    stroke stops a hair short of the baseline it visibly sits on -- see
+    `bottom_guide_tick_baseline` for the pattern and its evidence.
+
+    ``guide_tick_pool`` supplies the page's full vertical inventory when the
+    caller classifies a subset (`split_final_vertical_corridors` classifies
+    one rule at a time); the tick pattern needs the surrounding walls.
     """
+    pool = verticals if guide_tick_pool is None else guide_tick_pool
     combs: list[dict[str, Any]] = []
     borders: list[dict[str, Any]] = []
     for rule in verticals:
         x = centre(rule)
         top = supported_at(rule["y0"], x, horizontals)
         bottom = supported_at(rule["y1"], x, horizontals)
-        (combs if bottom and not top else borders).append(rule)
+        if bottom and not top:
+            combs.append(rule)
+        elif (not top and not bottom
+              and bottom_guide_tick_baseline(
+                  rule, pool, horizontals) is not None):
+            combs.append(rule)
+        else:
+            borders.append(rule)
     return combs, borders
 
 
@@ -250,7 +418,8 @@ def split_final_vertical_corridors(
     borders: list[dict[str, Any]] = []
 
     def old_role(rule: dict[str, Any]) -> None:
-        old_combs, old_borders = split_verticals([rule], horizontals)
+        old_combs, old_borders = split_verticals(
+            [rule], horizontals, guide_tick_pool=verticals)
         combs.extend(old_combs)
         borders.extend(old_borders)
 
@@ -287,7 +456,7 @@ def split_final_vertical_corridors(
             continue
 
         parent_combs, _parent_borders = split_verticals(
-            [rule], horizontals)
+            [rule], horizontals, guide_tick_pool=verticals)
         parent_was_comb = bool(parent_combs)
 
         breakpoints = {y0, y1}
@@ -1624,8 +1793,24 @@ class GroupGeometry:
         self.ink_hi = q(max(r[far] for r in rules))
         # Coverage is measured against this cluster's own centre, so fusing two
         # clusters later cannot move the span of either one.
-        self.span = union_intervals((r[along[0]], r[along[1]]) for r in all_ink
-                                    if abs(centre(r) - self.position) <= CLUSTER_TOL_PT)
+        #
+        # A cluster's OWN rules count whatever their distance from that centre,
+        # exactly as `line_thickness_gray` already counts them for weight and
+        # tone. `cluster_collinear` chains by *adjacency*, so a cluster is wider
+        # than the tolerance whenever three or more fragments step across it,
+        # and its centre is a mean the outermost member need not sit within.
+        # Filtering on distance alone then drops a defining rule from the
+        # coverage of the very line it defines: on 0619-E the "Amended Return?
+        # Yes" checkbox's left wall (x centre 275.64) is one of ten fragments in
+        # the cluster at 275.99, so the column claimed no ink over the box's own
+        # 12pt and the box merged leftward into the caption -- a printed box a
+        # taxpayer must tick, with nowhere to tick it. A drawn rule is evidence
+        # of a boundary where it was drawn; which side of a mean it falls on is
+        # not a fact about the paper.
+        own = union_intervals((r[along[0]], r[along[1]]) for r in rules)
+        near_centre = union_intervals((r[along[0]], r[along[1]]) for r in all_ink
+                                      if abs(centre(r) - self.position) <= CLUSTER_TOL_PT)
+        self.span = union_intervals([*own, *near_centre])
 
 
 def bars_over(bars: Sequence[Bar], where: Sequence[Interval]) -> list[Bar]:
@@ -1933,6 +2118,14 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
             if not horizontal_rail:
                 slab_records.append(record)
 
+    # Paper-bearing coverage per topology, measured before the rail-only
+    # fallback below can substitute conflict evidence for selection slabs.
+    # Published with each evidence entry so a consumer can tell a topology
+    # that exists on paper from one proven only inside a horizontal rail.
+    paper_coverage: dict[tuple[float, ...], float] = collections.defaultdict(float)
+    for a, b, topology, _ in slab_records:
+        paper_coverage[topology] += b - a
+
     horizontal_rail_only = not slab_records and bool(evidence_slab_records)
     if horizontal_rail_only:
         # Preserve an already-published subject as unresolved evidence.  It
@@ -1996,6 +2189,7 @@ def endpoint_band(seed: Sequence[dict[str, Any]],
         topology_evidence.append({
             "divider_x": list(topology),
             "coverage_pt": q(evidence_coverage[topology]),
+            "paper_coverage_pt": q(paper_coverage.get(topology, 0.0)),
             "runs": [[q(a), q(b)] for a, b in runs],
             "corridors_continuous": corridors_continuous,
         })
@@ -2094,10 +2288,289 @@ def band_ink(extra: Sequence[dict[str, Any]], x0: float, x1: float,
     return found
 
 
+class CombOwnerPaper:
+    """The paper one comb owner encloses, as its rails are measured against.
+
+    ``y0``/``y1`` are the owner's own paper -- its top border's inner edge to
+    its bottom border's inner edge, i.e. ``yl.ink_hi[j0]``/``yl.ink_lo[j1]``,
+    the same numbers ``comb_band_owners`` binds ownership to. A boundary that
+    crosses all of it is a WALL: it closes a box. A boundary that stops inside
+    it is a guide TICK, which is what `comb_writing_surface` already says the
+    source draws at the foot of a taller box.
+
+    ``left``/``right`` are the ink of the owner's own vertical edges, which is
+    not the same thing as the lattice line's position: fusion moves a line to
+    the MEAN centre of every collinear fragment it gathered, and the fragment
+    that actually crosses the comb band can be a third of a point away from
+    that mean (1800 fuses 584.26/584.50/584.74x2 into 584.56 while the bar
+    over the comb is the one at 584.26).
+    """
+
+    __slots__ = ("y0", "y1", "left", "right")
+
+    def __init__(self, y0: float, y1: float,
+                 left: Sequence[dict[str, Any]],
+                 right: Sequence[dict[str, Any]]) -> None:
+        self.y0 = float(y0)
+        self.y1 = float(y1)
+        self.left = list(left)
+        self.right = list(right)
+
+
+def owner_paper_from_lattice(xl: Lattice, yl: Lattice,
+                             i0: int, i1: int, j0: int, j1: int,
+                             all_ink: Sequence[dict[str, Any]],
+                             ) -> CombOwnerPaper:
+    """The paper and edge ink of the cell spanning lattice box (i0,j0)-(i1,j1).
+
+    An edge's ink is the boundary's own defining bars PLUS anything else drawn
+    inside that boundary's measured ink. Both halves are needed and neither is
+    redundant: the defining list is the only place a bar the compositor
+    proved erased survives (`build_page` retains it as a companion so the
+    line's centre does not move), and the ink list is the only place a bar
+    `split_verticals` filed as a comb divider appears -- 1801's item-24 money
+    comb is closed on the right by a 0.48pt stroke that hangs from nothing.
+    """
+    def edge(index: int) -> list[dict[str, Any]]:
+        lo = xl.ink_lo[index] - JOIN_EPSILON_PT
+        hi = xl.ink_hi[index] + JOIN_EPSILON_PT
+        seen: set[tuple[float, float, float, float, float]] = set()
+        out: list[dict[str, Any]] = []
+        for ink in [*xl.members[index], *all_ink]:
+            if float(ink["x1"]) <= lo or float(ink["x0"]) >= hi:
+                continue
+            key = (float(ink["x0"]), float(ink["y0"]),
+                   float(ink["x1"]), float(ink["y1"]),
+                   float(ink["thickness_pt"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(ink)
+        return out
+
+    return CombOwnerPaper(yl.ink_hi[j0], yl.ink_lo[j1], edge(i0), edge(i1))
+
+
+def ink_runs(candidates: Sequence[dict[str, Any]],
+             final_paint: FinalPaint | None,
+             ) -> list[tuple[float, float, float]]:
+    """The y runs one column of collinear ink covers, with their own weight.
+
+    Fragments join where the paper between them is thinner than the ink either
+    side of it -- `distinct_boundary`'s test, turned through a right angle,
+    which is also how `is_one_boundary` decides that two bars draw one line.
+    A wall regularly arrives in pieces: 1800 breaks the column closing its
+    middle date box where that box's own top rule crosses it, leaving 0.24pt
+    of paper between two strokes 0.48 and 0.24pt wide. A break that cannot be
+    as wide as the stroke is thick does not print as a break.
+
+    They do NOT join across an erased corridor, however narrow. A knockout
+    painted over the junction is the source saying the stroke stops there --
+    the same reading `source_owned_comb_frame.separated_top_rail_stub` already
+    takes of the same evidence -- and it is exactly what separates two forms
+    that draw the same shape: 2200-A erases the junction between its YYYY
+    column and the row above, 1800 leaves 0.24pt of paper beside its knockout
+    and the column carries through.
+
+    `final_paint` is optional because the legacy continuity detector is
+    deliberately raw: it measures the ink the source drew, without asking
+    whether a later knockout removed it. Passing it here would give the
+    continuity denominator a final-paint opinion it is defined not to have.
+    """
+    spans: list[tuple[float, float, float, dict[str, Any]]] = []
+    for ink in candidates:
+        weight = float(ink["thickness_pt"])
+        if final_paint is None:
+            spans.append((float(ink["y0"]), float(ink["y1"]), weight, ink))
+        else:
+            spans.extend(
+                (lo, hi, weight, ink)
+                for lo, hi in final_paint.visible_intervals(ink))
+
+    def junction_erased(previous: dict[str, Any], ink: dict[str, Any],
+                        gap_y0: float, gap_y1: float) -> bool:
+        if final_paint is None or gap_y1 <= gap_y0:
+            return False
+        x0 = max(float(previous["x0"]), float(ink["x0"]))
+        x1 = min(float(previous["x1"]), float(ink["x1"]))
+        if x1 <= x0:
+            x0 = min(float(previous["x0"]), float(ink["x0"]))
+            x1 = max(float(previous["x1"]), float(ink["x1"]))
+        # Later than the stroke it interrupts, not later than both: the sheet
+        # draws the column, paints the slice out, and draws the rest below it.
+        last = min(paint_ordinal_range(previous)[1],
+                   paint_ordinal_range(ink)[1])
+        return final_paint.definitely_erased({
+            "x0": x0, "y0": gap_y0, "x1": x1, "y1": gap_y1,
+            "paint_seq": last, "paint_seq_max": last,
+        })
+
+    runs: list[tuple[float, float, float, dict[str, Any]]] = []
+    for lo, hi, weight, ink in sorted(spans, key=lambda item: item[:3]):
+        if (runs
+                and lo - runs[-1][1] <= runs[-1][2] + weight + JOIN_EPSILON_PT
+                and not junction_erased(runs[-1][3], ink, runs[-1][1], lo)):
+            runs[-1] = (runs[-1][0], max(runs[-1][1], hi),
+                        max(runs[-1][2], weight), ink)
+        else:
+            runs.append((lo, hi, weight, ink))
+    return [(lo, hi, weight) for lo, hi, weight, _ink in runs]
+
+
+def edge_rail(edge_ink: Sequence[dict[str, Any]], edge: InkSpan,
+              band_y0: float, band_y1: float) -> float | None:
+    """Where the owner's own edge actually rules the comb band, or None.
+
+    Two restrictions, and they are the whole difference from the lattice line
+    the edge belongs to:
+
+      * only the bars that CROSS THIS BAND count. A lattice line is fused from
+        every collinear fragment on the page and sits at their mean centre, so
+        it answers "where is this column", not "where is this comb's edge".
+        1800's right column fuses bars at 584.26, 584.50 and 584.74 into a line
+        at 584.56 while the bar ruling the comb band is the one at 584.26.
+      * only ink the band-boundary test would already have refused as a slot
+        divider counts -- `distinct_boundary` against the edge's own span, the
+        same question `band_ink` asks -- so nothing that could have been a
+        compartment boundary is quietly promoted to a rail.
+
+    The position is then the mean centre of those bars, which is how a
+    boundary drawn as a stack of bars has always been positioned here
+    (`GroupGeometry.position`), applied to this band rather than to the page.
+
+    Membership is deliberately the drawn stack, knocked-out companions
+    included: `build_page` already retains every bar of a fused composite
+    boundary once one of them survives, precisely so that a later knockout
+    cannot move a published centre, and a rail measured on a different
+    membership rule from the line it stands on would be a second answer to
+    the same question. 2550M draws its date-box columns as two 0.72pt bars and
+    covers the second one's shaft; the boundary is still the pair.
+    """
+    hits = [
+        ink for ink in edge_ink
+        if float(ink["y0"]) <= band_y0 + JOIN_EPSILON_PT
+        and float(ink["y1"]) >= band_y1 - JOIN_EPSILON_PT
+        and not distinct_boundary(
+            (float(ink["x0"]), float(ink["x1"]),
+             float(ink["thickness_pt"])), edge)
+    ]
+    if not hits:
+        return None
+    return q(sum(centre(ink) for ink in hits) / len(hits))
+
+
+def divides_owner_paper(x: float, candidates: Sequence[dict[str, Any]],
+                        paper_y0: float, paper_y1: float,
+                        final_paint: FinalPaint | None) -> bool:
+    """Whether the ink at one boundary crosses the whole of the owner's paper.
+
+    The chain is assembled from every collinear fragment at that x by
+    `ink_runs`, and meets the paper's own top and bottom rails on the same
+    terms it joins its own fragments: a stroke that stops within its own width
+    of the rule closing the box has met that rule (1800's column stops 0.12pt
+    short of the 1.44pt rule above it). Where final paint is available only
+    visible span counts: a wall a later knockout erased no longer closes
+    anything.
+    """
+    return any(
+        lo - paper_y0 <= weight + JOIN_EPSILON_PT
+        and paper_y1 - hi <= weight + JOIN_EPSILON_PT
+        for lo, hi, weight in ink_runs(
+            [ink for ink in candidates
+             if abs(centre(ink) - x) <= CLUSTER_TOL_PT],
+            final_paint))
+
+
+def comb_rails(boundaries: Sequence[dict[str, Any]],
+               extra: Sequence[dict[str, Any]],
+               x0: float, x1: float,
+               band_y0: float, band_y1: float,
+               edge_thickness: tuple[float, float],
+               paper: CombOwnerPaper | None,
+               final_paint: FinalPaint | None,
+               ) -> tuple[float, float, list[dict[str, Any]]]:
+    """One comb's own outer rails, and the boundaries they still enclose.
+
+    A comb's outer edges are printed rails, not the lattice cell box, and the
+    two differ in two ways that both put a typeable box where the sheet prints
+    none:
+
+      * the cell box is a FUSED lattice position -- the mean centre of every
+        collinear fragment on that line -- while the rail is the one bar that
+        crosses this band, up to 0.47pt away from that mean;
+      * a cell may legitimately hold more than the comb. 1801 rules its TIN
+        dash box and its "Contact Number" caption inside the same rectangle as
+        the digit boxes, and 1801 item 24 rules 366pt of caption before its
+        money comb starts. Bounding the comb by the cell then publishes a
+        compartment the sheet does not print, lays a slot rectangle over the
+        caption, and hands the field one more character of capacity than the
+        artwork has boxes for.
+
+    The rails are therefore measured: each side is the owner's own edge ink
+    where it crosses the band, moved inward to the innermost WALL outside the
+    tick run when the owner encloses one. A wall closes a box (it crosses the
+    owner's whole paper); a tick is a guide mark hanging inside one. Boundaries
+    outside the resulting rails are the neighbouring compartment's, not this
+    comb's, and are dropped from it.
+
+    Nothing is trimmed without a wall to trim at, and a comb drawn entirely
+    from walls -- a row of full-height boxes -- keeps every one of them: there
+    is no tick run to sit outside of, so the cell's own edges stay the rails.
+    """
+    left, right = edge_thickness
+    left_edge = (x0 - left / 2.0, x0 + left / 2.0, left)
+    right_edge = (x1 - right / 2.0, x1 + right / 2.0, right)
+    left_rail = x0
+    right_rail = x1
+    if paper is not None:
+        # The rail has to rule the band's PAPER, not the rule the band ends
+        # inside. 2550M's raw date-box ticks run 0.72pt down into the row's
+        # bottom rule, and requiring the rail to follow them there would reject
+        # the bar that plainly rules the box (the two readings of one band then
+        # measure two different outer edges, and the erased-divider certificate
+        # correctly refuses to bridge them).
+        rail_y0 = max(band_y0, paper.y0)
+        rail_y1 = min(band_y1, paper.y1)
+        measured_left = edge_rail(paper.left, left_edge, rail_y0, rail_y1)
+        measured_right = edge_rail(paper.right, right_edge, rail_y0, rail_y1)
+        # A measured rail moves the comb's edge INWARD off the fused mean, and
+        # only inward. The rectangle is the paper this comb is emitted on and
+        # nothing may be typed off it, so where the drawn bar's own centre
+        # falls outside the rectangle the rectangle wins: half the bar is
+        # already the neighbour's and the neighbour's comb measures the same
+        # rail from its own side, where it lies inside.
+        if measured_left is not None and measured_left > x0:
+            left_rail = measured_left
+        if measured_right is not None and measured_right < x1:
+            right_rail = measured_right
+        kinds = [
+            divides_owner_paper(
+                q(centre(ink)), extra, paper.y0, paper.y1, final_paint)
+            for ink in boundaries
+        ]
+        ticks = [q(centre(ink))
+                 for ink, wall in zip(boundaries, kinds) if not wall]
+        if ticks:
+            walls_left = [q(centre(ink))
+                          for ink, wall in zip(boundaries, kinds)
+                          if wall and q(centre(ink)) < ticks[0]]
+            walls_right = [q(centre(ink))
+                           for ink, wall in zip(boundaries, kinds)
+                           if wall and q(centre(ink)) > ticks[-1]]
+            if walls_left:
+                left_rail = max(walls_left)
+            if walls_right:
+                right_rail = min(walls_right)
+    enclosed = [ink for ink in boundaries
+                if left_rail < q(centre(ink)) < right_rail]
+    return q(left_rail), q(right_rail), enclosed
+
+
 def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]],
                x0: float, x1: float,
                edge_thickness: tuple[float, float],
-               final_paint: FinalPaint) -> list[dict[str, Any]]:
+               final_paint: FinalPaint,
+               paper: CombOwnerPaper | None = None) -> list[dict[str, Any]]:
     """Group a cell's comb dividers into bands, one band per field.
 
     Dividers of one comb share a y extent exactly (they are drawn by the same
@@ -2142,8 +2615,16 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             continue
         (band, band_y0, band_y1, topology_evidence,
          horizontal_rail_only) = selected
+        band = sorted(band, key=lambda ink: q(centre(ink)))
+        left_rail, right_rail, band = comb_rails(
+            band, extra, x0, x1, band_y0, band_y1, edge_thickness,
+            paper, final_paint)
+        if not band:
+            # Every measured boundary belongs to a neighbouring compartment of
+            # the same rectangle. There is no comb here to publish.
+            continue
         xs = sorted(q(centre(d)) for d in band)
-        boundaries = [q(x0), *xs, q(x1)]
+        boundaries = [left_rail, *xs, right_rail]
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
         # A single divider cannot prove two character compartments when one
         # side can hold at least two copies of the other. Likewise, a large
@@ -2165,7 +2646,21 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
             reason_codes.append("unequal-two-slot-topology")
         if split_anchor_runs:
             reason_codes.append("split-anchor-run-topology")
-        if len(topology_evidence) > 1:
+        # A topology whose entire proof lies inside a full-width horizontal
+        # rail can neither win selection nor certify a comb (`endpoint_band`),
+        # so it cannot de-certify one either: inside the rail there is no
+        # paper on which its extra boundary could print.  2550M's knocked-out
+        # date-box tick survives only inside the row's bottom rule and would
+        # otherwise keep a printed two-compartment box unresolved forever.
+        # The rail-only topology stays published in the evidence below.  A
+        # band with no paper-bearing topology at all keeps the conservative
+        # comparison and is already unresolved via
+        # `horizontal-rail-only-topology`.
+        paper_topologies = [
+            evidence for evidence in topology_evidence
+            if float(evidence["paper_coverage_pt"]) > 0.0
+        ]
+        if len(paper_topologies or topology_evidence) > 1:
             reason_codes.append("competing-endpoint-topologies")
         if horizontal_rail_only:
             reason_codes.append("horizontal-rail-only-topology")
@@ -2267,7 +2762,8 @@ def comb_bands(members: Sequence[dict[str, Any]], extra: Sequence[dict[str, Any]
 def legacy_comb_bands(members: Sequence[dict[str, Any]],
                       extra: Sequence[dict[str, Any]],
                       x0: float, x1: float,
-                      edge_thickness: tuple[float, float]
+                      edge_thickness: tuple[float, float],
+                      paper: CombOwnerPaper | None = None,
                       ) -> list[dict[str, Any]]:
     """Reconstruct the pre-partition subject ledger without promoting it.
 
@@ -2279,6 +2775,14 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
     unless exact source-order evidence proves that every omitted legacy
     divider was fully erased; a nonrectangular owner remains retained and
     unresolved.
+
+    It measures its comb's outer rails the same way `comb_bands` does, and for
+    the same reason: where a comb's edge is printed is a fact about the sheet,
+    not about which detector is reading it. Continuity is preserved by this,
+    not weakened -- a denominator that kept counting a caption as a compartment
+    would report every corrected comb as a REDUCTION and preserve the wrong
+    contract in the name of continuity. What it still refuses to do is consult
+    final paint, which is why it passes none: this is the raw reading.
     """
     inside = [d for d in members
               if x0 + CLUSTER_TOL_PT < centre(d) < x1 - CLUSTER_TOL_PT]
@@ -2305,8 +2809,13 @@ def legacy_comb_bands(members: Sequence[dict[str, Any]],
         ordered = sorted(ink, key=lambda divider: (
             q(centre(divider)), -paint_ordinal(divider),
             -float(divider["thickness_pt"])))
+        left_rail, right_rail, ordered = comb_rails(
+            ordered, extra, x0, x1, band_y0, band_y1, edge_thickness,
+            paper, None)
+        if not ordered:
+            continue
         xs = [q(centre(divider)) for divider in ordered]
-        boundaries = [q(x0), *xs, q(x1)]
+        boundaries = [left_rail, *xs, right_rail]
         deltas = [q(b - a) for a, b in zip(boundaries, boundaries[1:])]
         thicknesses = collections.Counter(d["thickness_pt"] for d in ordered)
         grays = sorted({d["gray"] for d in ordered if d["gray"] is not None})
@@ -2456,8 +2965,295 @@ def cell_paper_gap(cell: dict[str, Any], xl: Lattice, yl: Lattice,
     return right - left, bottom - top
 
 
+# BIR's "this is not a writing surface" shading is `gray <= 0.8509`; that one
+# population alone is 17,740 of the corpus's 26,027 decorative fills.  The
+# whole decorative histogram is 0.502, 0.5882, 0.651, 0.7489, 0.7529, 0.8509 --
+# and then, above 0.87 and with nothing in between, exactly 7 near-white fills.
+# 5 of the cells those 7 cover are REAL fields, proved by their own labels:
+# 1604cf-2008 p1c8/c10/c12 (0.8902, beside item "7" and "(Last Name, First
+# Name, Middle Name)") and 2200an-2018 p2c247/c255 (0.9489, one labelled "(To
+# Schedule 1C)").  `role == "decorative"` alone would take those 5 away from
+# the taxpayer; 0.87 sits in the empty gap, spares them, and still moves 347
+# cells across 40 forms out of `field`.  Coverage is asked of the cell, not of
+# the fill: a tint band runs the width of a table and only the part under this
+# cell is paper this cell could have offered.
+SHADED_PAPER_MAX_GRAY = 0.87
+SHADED_PAPER_MIN_COVERAGE = 0.70
+
+# Published on the retained subject a refuted caption block leaves behind, and
+# named for what was measured rather than for what was done about it. Declared
+# here because it crosses a file boundary: `audit.validate_comb_owner_registry`
+# admits a retained subject only on a reason-code tuple it knows.
+REFUTED_CAPTION_BLOCK_REASON_CODE = (
+    "emission-suppressed-caption-block-not-character-cells")
+
+
+def covering_shading_band(cell: dict[str, Any],
+                          area_fills: Sequence[dict[str, Any]],
+                          needed: float) -> float:
+    """Paper this cell loses to ONE connected band of a single shading tone.
+
+    Asking whether one fill covers the cell is a false negative for any cell
+    taller than one source shading strip, and the source draws shading in
+    strips: 2550M p3c9 is grey on paper, and grey in the raster, because two
+    7.8pt 0.7529 strips are painted back to back across a 15.6pt cell.  Neither
+    reaches the coverage rule alone (0.508 and 0.500), so the cell kept a field
+    and an input over shading that says NO ENTRY HERE.  What is fixed here is
+    how coverage is *computed*; what counts as shaded -- `role == "decorative"`
+    at or below `SHADED_PAPER_MAX_GRAY` -- is unchanged.
+
+    Three properties the single-fill test had, kept exactly:
+
+    * **Topmost, not any**, and topmost among ALL fills, not among shading.
+      A tint painted early and anything opaque painted over it leave paper that
+      is not that tint: a white knockout (2551Q), a *chromatic* fill with no
+      gray at all (2553 p1c16/c18/c20, where a coloured box sits on the page's
+      0.7529 band), or a second decorative tint above the cut (1604cf-2008
+      p1c8/c10/c12, whose 0.8902 boxes are the REAL fields the cut exists to
+      spare, painted at seq 283-287 over a seq-1 band).  Every point of the cell
+      is resolved to the last fill painted there and counts only if that fill is
+      the shading itself, which is `topmost_covering_fill` asked per point
+      instead of per cell.
+    * **Deterministic.**  Ties -- two fills at one ordinal -- break on source
+      order, which `extract.extract_area_fills` fixes by ``(y0, x0)``.
+    * **Coverage is asked of the cell**, not of the fill.
+
+    Two properties that are new, and both are what makes a union safe:
+
+    * **One tone.**  Strips of one band share the operand that drew them.
+      Unioning 0.502 against 0.8509 would be inventing a band the source never
+      painted, so tones accumulate separately and the largest wins.
+    * **One connected region.**  Strips must touch.  Two tinted strips with
+      white paper -- or a knockout -- between them are two bands with a writing
+      surface in the middle, and their areas must not be added into a verdict
+      about the middle.  Resolving each point against everything painted over
+      it *before* the connectivity test is what stops a union reaching across a
+      whited-out centre.
+
+    Returns the largest such band's area in pt², or 0.0 when no band can reach
+    `needed` -- the short-circuit is exact, since the clipped areas summed
+    without regard to overlap bound every union from above.
+    """
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+
+    # (x0, y0, x1, y1, paint key, tone) per fill overlapping this cell's paper.
+    # Tone is None for every fill that is not shading -- those are carried
+    # because they can COVER shading, not because they can be it.
+    layers: list[tuple[float, float, float, float,
+                       tuple[int, int], float | None]] = []
+    bound = 0.0
+    floor: tuple[int, int] | None = None
+    for index, fill in enumerate(area_fills):
+        cx0 = max(float(fill["x0"]), x0)
+        cx1 = min(float(fill["x1"]), x1)
+        if cx1 <= cx0:
+            continue
+        cy0 = max(float(fill["y0"]), y0)
+        cy1 = min(float(fill["y1"]), y1)
+        if cy1 <= cy0:
+            continue
+        gray = fill.get("gray")
+        tone_value: float | None = None
+        if (fill["role"] == "decorative" and gray is not None
+                and float(gray) <= SHADED_PAPER_MAX_GRAY):
+            tone_value = float(gray)
+        key = (paint_ordinal(fill), index)
+        if tone_value is not None:
+            bound += (cx1 - cx0) * (cy1 - cy0)
+            if floor is None or key < floor:
+                floor = key
+        layers.append((cx0, cy0, cx1, cy1, key, tone_value))
+    if floor is None or bound < needed:
+        return 0.0
+
+    # A fill painted before every shading strip here is under all of them.
+    # Where shading covers it, the shading wins anyway; where it does not, the
+    # point is unshaded either way.  Dropping it is exact, and it keeps the
+    # atom grid at the single strip the old test measured whenever one strip is
+    # involved, so a cell already shaded by one fill keeps that fill's area.
+    layers = [layer for layer in layers
+              if layer[5] is not None or layer[4] > floor]
+
+    xs = sorted({x0, x1} | {edge for r in layers for edge in (r[0], r[2])})
+    ys = sorted({y0, y1} | {edge for r in layers for edge in (r[1], r[3])})
+    columns, rows = len(xs) - 1, len(ys) - 1
+
+    # Every atom lies wholly inside or wholly outside each clipped rectangle,
+    # because the grid is cut on those rectangles' own edges; its midpoint
+    # therefore decides containment for the whole atom.
+    tone: list[list[float | None]] = []
+    for j in range(rows):
+        my = (ys[j] + ys[j + 1]) / 2.0
+        row: list[float | None] = []
+        for i in range(columns):
+            mx = (xs[i] + xs[i + 1]) / 2.0
+            top: tuple[int, int] | None = None
+            gray = None
+            for cx0, cy0, cx1, cy1, key, value in layers:
+                if cx0 < mx < cx1 and cy0 < my < cy1:
+                    if top is None or key > top:
+                        top, gray = key, value
+            row.append(gray)
+        tone.append(row)
+
+    best = 0.0
+    seen = [[False] * columns for _ in range(rows)]
+    for j in range(rows):
+        for i in range(columns):
+            if seen[j][i] or tone[j][i] is None:
+                continue
+            band = tone[j][i]
+            seen[j][i] = True
+            stack = [(j, i)]
+            area = 0.0
+            while stack:
+                cj, ci = stack.pop()
+                area += (xs[ci + 1] - xs[ci]) * (ys[cj + 1] - ys[cj])
+                for nj, ni in ((cj - 1, ci), (cj + 1, ci),
+                               (cj, ci - 1), (cj, ci + 1)):
+                    if (0 <= nj < rows and 0 <= ni < columns
+                            and not seen[nj][ni] and tone[nj][ni] == band):
+                        seen[nj][ni] = True
+                        stack.append((nj, ni))
+            if area > best:
+                best = area
+    return best
+
+
+def on_shaded_paper(cell: dict[str, Any],
+                    area_fills: Sequence[dict[str, Any]]) -> bool:
+    """Whether the source shaded this cell to say "do not write here".
+
+    `extract.classify_tone` already decides structural / decorative / knockout
+    from the literal content-stream operand, and the IR carries that decision
+    on every fill.  The box model then threw it away: `classify_cell` was asked
+    only whether a region was empty and bordered, so an empty three-bordered
+    region on a grey band satisfied "field" exactly as a white one did, and
+    `page["area_fills"]` reached this module only through `wall_boundaries` and
+    `comb_boundary_candidates`, both of which read `role == "structural"` for
+    grid geometry.  The decorative population -- the tint that means NO RATE
+    APPLIES -- was never consulted by anything that decides where a taxpayer
+    may type.  This is that consultation; the fact was computed correctly at
+    extraction and is only being restored here.
+
+    `emit.field_verdict`'s "a blank the source printed over is not a blank"
+    protects statutory TEXT.  Shading is the same statement made with tone
+    instead of glyphs, and no ink-coverage test can see it.
+    """
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    area = (x1 - x0) * (y1 - y0)
+    if area <= 0.0:
+        return False
+    needed = area * SHADED_PAPER_MIN_COVERAGE
+    return covering_shading_band(cell, area_fills, needed) >= needed
+
+
+def printed_glyph_boxes(run: dict[str, Any]) -> list[Interval]:
+    """One x box per non-blank character of the run: the glyph's own extent.
+
+    `char_widths_pt` is the character's own bounding box, not its advance, so
+    this is where the ink is rather than where the next glyph starts.
+    `glyph_ink_spans` answers a different question -- "where does this whole run
+    mark the paper" -- and unions its intervals, which is the wrong shape for a
+    caller that COUNTS glyphs: a union of 176 characters is one interval.
+
+    Where the per-character arrays are missing the whole run collapses to a
+    single box, which is the conservative direction for every caller here --
+    they refuse on MANY glyphs, so under-counting can only leave a comb alone.
+    """
+    origin = float(run.get("origin_x", run["x0"]))
+    offsets = run.get("char_origin_offsets_pt") or ()
+    widths = run.get("char_widths_pt") or ()
+    text = run.get("text") or ""
+    if len(offsets) != len(text) or len(widths) != len(text):
+        return [(float(run["x0"]), float(run["x1"]))] if text.strip() else []
+    return [(origin + float(o), origin + float(o) + float(w))
+            for ch, o, w in zip(text, offsets, widths) if ch.strip()]
+
+
+def comb_compartment_glyph_counts(
+        comb: dict[str, Any],
+        runs: Sequence[dict[str, Any]]) -> list[int]:
+    """How many printed glyphs the cell's own text puts in each compartment.
+
+    Each glyph is counted once, for the compartment its own box is centred in,
+    so the counts partition the cell's printed characters rather than
+    double-counting the one glyph that straddles a divider.  Measured over the
+    53-form corpus this choice is inert: midpoint, any-overlap and
+    overlap-beyond-0.01pt give character-for-character the same counts on every
+    one of the 4,561 comb cells.
+    """
+    slot_x = [float(value) for value in comb["slot_x"]]
+    counts = [0] * max(len(slot_x) - 1, 0)
+    for run in runs:
+        for x0, x1 in printed_glyph_boxes(run):
+            midpoint = (x0 + x1) / 2.0
+            for index in range(len(counts)):
+                if slot_x[index] <= midpoint < slot_x[index + 1]:
+                    counts[index] += 1
+                    break
+    return counts
+
+
+def printed_caption_refutes_comb(comb: dict[str, Any],
+                                 runs: Sequence[dict[str, Any]]) -> bool:
+    """Whether the cell's own printed text says these are not character cells.
+
+    A comb compartment IS a character cell: one box, one typed character. That
+    is what makes `classify_cell`'s "mixed" verdict sound -- the ink the source
+    puts inside a comb is per-character decoration, "the % glyph, the money
+    decimal point, the TIN group dashes", and a taxpayer still types in the
+    boxes around it.  The verdict was reached from `has_comb` alone, so it was
+    also given to every cell where a single stray vertical inside a printed
+    caption block was read as a 2-compartment comb, and there the whole caption
+    became a typing surface.  Shipping at the time of writing: a 566 x 106pt
+    input pair over 1606 page 2's entire statutory rate table (Exempt / 1.5% /
+    3.0% / 5.0% / 6.0%), and one over each of four excise mastheads.
+
+    So ask the source what it printed IN the compartments.  Decoration in a
+    character cell is at most one glyph per cell, because the cell is one
+    character wide; running prose in every compartment is a caption, and the
+    vertical that made those compartments is a column border the segmentation
+    should have cut on, not a character tick.
+
+    The corpus separates the two populations with nothing in between.  Over all
+    4,561 comb cells (53 forms, `build/ir` + regenerated layouts, 2026-08-08),
+    the minimum per-compartment glyph count of the cell's OWN assigned text is:
+
+        0 glyphs   4,524 cells   (nothing printed in at least one compartment)
+        1 glyph       26 cells   `I I 0 1 1`, `X C 0 1 0`, `W I 1 6 5`,
+                                 `0 0 0 0 0`, `0 %` -- exactly the decoration
+                                 the "mixed" comment names
+        29+           11 cells   the whole selected population
+
+    There is no cell between 1 and 29, so the test is "more than one" and
+    carries no tuned constant.  It is deliberately EVERY compartment and never
+    SOME: 2200A `p1c111` (and its 2200C/2200P twins) is a real 29-compartment
+    money comb whose first compartment has swallowed the caption "27 Tax Debit
+    Memo"; its other 28 compartments are empty, so the minimum is 0 and the
+    comb keeps its money boxes.  That cell's first compartment is a separate,
+    unfixed segmentation defect and is reported as one rather than folded in
+    here.
+
+    The 6 real combs that a WRITING-SURFACE overlap test would catch -- 2316
+    `p1c37`/`p1c38` and 2550M `p1c83`/`p1c84`/`p1c89`/`p1c90`, whose 11.89 to
+    13.44pt compartments merely sit under a neighbouring caption's descender
+    pad -- are not at risk here and never were: the runs are assigned to the
+    caption's own cell, so all six are `is_empty` and `classify_cell` calls
+    them `field`.  Asking the cell's assigned text, which is the same evidence
+    `is_empty` is computed from, is what keeps them out of the population.
+    """
+    counts = comb_compartment_glyph_counts(comb, runs)
+    return bool(counts) and min(counts) > 1
+
+
 def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
-                  is_sliver_text_strip: bool = False) -> str:
+                  is_sliver_text_strip: bool = False,
+                  is_shaded_paper: bool = False) -> str:
     if is_empty and border_count >= 3:
         # An empty bordered strip whose paper cannot hold one glyph of the
         # smallest body line the form prints is a ruled gap -- the leading
@@ -2465,11 +3261,22 @@ def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
         # 2026-08 triage census: the 120 sliver offenders and no wide real
         # field move.  Mark boxes (narrower than the smallest two-glyph
         # line) and comb owners are exempt by construction.
-        return "blank" if is_sliver_text_strip else "field"
+        if is_sliver_text_strip:
+            return "blank"
+        # Shaded paper is a separate kind, not "blank": "blank" asserts there
+        # is no ink, and there IS ink -- the tint the source painted to say
+        # this row takes no entry.  Naming it keeps the reason inspectable
+        # downstream (`emit.field_verdict` publishes the kind as its refusal
+        # reason) instead of hiding 347 cells inside an unrelated bucket.
+        return "shaded" if is_shaded_paper else "field"
     if is_empty:
         return "blank"
     # Pre-printed text sitting in a comb -- the "%" glyph, the money decimal
-    # point, the TIN group dashes -- is decoration on a fillable field.
+    # point, the TIN group dashes -- is decoration on a fillable field.  That
+    # holds because a compartment is one character wide, and it is checked
+    # rather than assumed: `printed_caption_refutes_comb` has already taken the
+    # comb off any cell whose every compartment carries running prose, so
+    # `has_comb` here means a comb the source's own printing agrees with.
     return "mixed" if has_comb else "label"
 
 
@@ -2807,12 +3614,19 @@ def retained_replacement_covers_inference(
     band_y0, band_y1 = (float(value) for value in band_y)
     dividers = [float(value) for value in divider_x]
     slots = [float(value) for value in slot_x]
+    # The outer slots are the comb's own measured rails (`comb_rails`), so they
+    # are not required to be the rectangle's edges: a rectangle may rule a
+    # caption beside the comb, and its x is a fused mean the rail need not sit
+    # on. What must hold is that every COMPARTMENT is this rectangle's, which
+    # is exactly that its centre is inside the rectangle -- a compartment
+    # centred outside belongs to the subject next door, however the rails that
+    # bound it were derived.
     return (
         x0 < x1
         and y0 < y1
         and y0 <= band_y0 < band_y1 <= y1
-        and slots[0] == x0
-        and slots[-1] == x1
+        and all(x0 < (left + right) / 2.0 < x1
+                for left, right in zip(slots, slots[1:]))
         and slots[1:-1] == dividers
         and all(left < right for left, right in zip(slots, slots[1:]))
     )
@@ -2840,6 +3654,66 @@ def boundary_topology_subset(left: Sequence[float],
     return True
 
 
+def erased_witness_rail_residue(
+        final_paint: FinalPaint, witness: dict[str, Any],
+        ) -> list[Interval] | None:
+    """Rail-covered residue completing a partial knockout's erasure proof.
+
+    ``FinalPaint.definitely_erased`` demands one known-later nonstructural
+    layer covering the witness's complete bbox.  2550M paints its Schedule
+    date-box knockout only down to the middle of the row's bottom rule, so a
+    0.36pt sliver of the stale tick survives the knockout -- wholly inside
+    the final-visible horizontal rail, where there is no paper on which the
+    sliver could print (the same no-paper contract
+    ``horizontal_rail_across`` documents).  On the composited page the mark
+    is then exactly as absent as a fully covered one.
+
+    Returns the rail-covered y intervals when one known-later nonstructural
+    rectangular layer covers everything else of the witness's own bbox, or
+    None when any part of it is neither covered nor inside a final-visible
+    horizontal rail across the witness's full width.  The single-layer
+    requirement, the strict paint-order requirement and the exact
+    rectangular-path restriction are ``definitely_erased``'s own; only the
+    no-paper residue is new, and every excused interval is returned so the
+    caller publishes what the rail absorbed.
+    """
+    x0, y0, x1, y1 = (
+        float(witness["x0"]), float(witness["y0"]),
+        float(witness["x1"]), float(witness["y1"]),
+    )
+    if x1 <= x0 or y1 <= y0:
+        return None
+    _ink_first, ink_last = paint_ordinal_range(witness)
+    best: list[Interval] | None = None
+    for paint in final_paint.paints:
+        if paint.get("role") == "structural":
+            continue
+        paint_first, _paint_last = paint_ordinal_range(paint)
+        if paint_first <= ink_last:
+            continue
+        px0, py0, px1, py1 = paint_bounds(paint)
+        if not (px0 <= x0 and px1 >= x1):
+            continue
+        cov0, cov1 = max(y0, py0), min(y1, py1)
+        if cov1 <= cov0:
+            continue
+        if "_path_layer" in paint and not exact_rectangular_path_fill_covers(
+                paint, x0, cov0, x1, cov1):
+            continue
+        residue = [
+            (lo, hi) for lo, hi in ((y0, cov0), (cov1, y1))
+            if hi - lo > JOIN_EPSILON_PT
+        ]
+        if not all(
+                final_paint.horizontal_rail_across(x0, x1, lo, hi)
+                for lo, hi in residue):
+            continue
+        if best is None or sum(hi - lo for lo, hi in residue) < sum(
+                hi - lo for lo, hi in best):
+            best = residue
+    return best
+
+
 def erased_legacy_divider_reduction_certificate(
         legacy_comb: dict[str, Any],
         final_comb: dict[str, Any],
@@ -2859,8 +3733,11 @@ def erased_legacy_divider_reduction_certificate(
     Every surviving final divider must be a one-to-one subset of the legacy
     positions at the established clustering tolerance.  Every omitted position
     must have its exact full-band raw witness, that witness must be covered by a
-    known-later nonstructural layer, and no final structural corridor may have
-    been repainted at the same position.  Anything partial, path-shaped,
+    known-later nonstructural layer -- except where the uncovered remainder
+    lies wholly inside a final-visible horizontal rail, which carries no paper
+    (``erased_witness_rail_residue``; 2550M's knockout stops at the middle of
+    the row's bottom rule) -- and no final structural corridor may have been
+    repainted at the same position.  Anything partial, path-shaped,
     source-order-ranged, multiply matched, or newly positioned fails closed.
     """
     raw_legacy_x = legacy_comb.get("divider_x") or ()
@@ -3002,19 +3879,32 @@ def erased_legacy_divider_reduction_certificate(
         if (float(witness["y0"]) > band_y0 + 1e-9
                 or float(witness["y1"]) < band_y1 - 1e-9
                 or later_structural_paths
-                or not final_paint.definitely_erased(witness)
                 or final_paint.structural_across_axis(
                     witness, band_y0, band_y1, "v")):
+            return None
+        # The complete-coverage proof, or the same proof with the un-covered
+        # remainder shown to lie wholly inside a final-visible horizontal
+        # rail -- where there is no paper the remainder could print on.  Any
+        # un-covered, un-railed portion fails closed exactly as before.
+        rail_residue: list[Interval] | None = (
+            [] if final_paint.definitely_erased(witness)
+            else erased_witness_rail_residue(final_paint, witness))
+        if rail_residue is None:
             return None
         witness_id = witness.get("id")
         if not isinstance(witness_id, str) or not witness_id:
             return None
-        erased.append({
+        entry: dict[str, Any] = {
             "divider_x": q(legacy_x[index]),
             "rule_id": witness_id,
             "paint_range": list(paint_ordinal_range(witness)),
             "band_y": [q(band_y0), q(band_y1)],
-        })
+        }
+        if rail_residue:
+            entry["rail_covered_residue_y"] = [
+                [q(lo), q(hi)] for lo, hi in rail_residue
+            ]
+        erased.append(entry)
 
     return {
         "criterion": "final-visible-erased-legacy-divider-reduction-v1",
@@ -3124,6 +4014,29 @@ def comb_has_cell_owner(cell: dict[str, Any],
     return comb_owner_failure_reason(cell, comb) is None
 
 
+def comb_rail_span(comb: dict[str, Any]) -> Interval:
+    """The outer rails one comb contract claims."""
+    slot_x = comb.get("slot_x") or ()
+    return (float(slot_x[0]), float(slot_x[-1]))
+
+
+def dividers_within(comb: dict[str, Any], rails: Interval) -> int:
+    """How many of one comb's boundaries fall strictly inside a rail pair.
+
+    Two readings of the same field can now bound it differently -- one detector
+    finds the printed rail, the other still ends on the cell -- so comparing
+    their raw slot COUNTS compares different questions. A boundary outside a
+    comb's rails was never one of that comb's compartment boundaries, and
+    counting it as one is how a rail correction reads as a lost divider (and
+    is then "preserved" by restoring the reading that was wrong).
+    """
+    lo, hi = rails
+    return sum(
+        1 for value in comb.get("divider_x") or ()
+        if lo < float(value) < hi
+    )
+
+
 def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
     """The vertical paper a comb's compartments are written on.
 
@@ -3170,22 +4083,33 @@ def comb_writing_surface(cell: dict[str, Any]) -> tuple[float, float] | None:
 
 def comb_on_writing_surface(comb: dict[str, Any],
                             surface: tuple[float, float]) -> dict[str, Any]:
-    """Restate one comb contract's vertical extent as its writing surface.
+    """Attach the writing surface to a comb contract, beside the measured band.
 
-    The tick band stays published as `divider_band_y0`/`divider_band_y1`: it is
-    the measurement the boundaries came from and the provenance any independent
-    re-derivation of those boundaries needs.  What changes is only which extent
-    the contract calls its own -- the box, not the guide.
+    `y0`/`y1`/`height_pt` are the SOURCE DIVIDER BAND -- the vertical extent
+    the measured boundaries actually span.  That is the meaning every
+    adjudicator of this contract binds to: `comb_referee.classify_band` seeds
+    its open-compartment search from these two keys and demands that the
+    source topology occupy a strict majority of that band, and its
+    human-reviewed control (`REVIEWED_2551Q_EXPLICIT_COMPARTMENTS`) was signed
+    against exactly that reading -- 2551Q p2c5 measures 14 compartments over
+    its 6.96pt tick band, and can never measure anything over the 17.70pt
+    writing box a previous revision published here (6.96 <= 17.70/2, so the
+    majority rule correctly refuses the wider claim).  Restating the box into
+    `y0`/`y1`, as that revision did, made 4,417 of 4,522 active combs
+    source-unevaluable and failed the reviewed control.
+
+    The writing box is still a real fact the emitter needs -- a guide tick is
+    short ON PURPOSE and the taxpayer writes in the walled box above it -- so
+    it is published beside the band as `writing_y0`/`writing_y1`/
+    `writing_height_pt`, computed by `comb_writing_surface` from the cell's
+    own walls with `emit.field_box`'s inset.  Two questions, two sets of keys;
+    neither reading overwrites the other.
     """
     surface_y0, surface_y1 = surface
     resolved = dict(comb)
-    resolved["divider_band_y0"] = q(float(comb["y0"]))
-    resolved["divider_band_y1"] = q(float(comb["y1"]))
-    resolved["divider_band_height_pt"] = q(
-        float(comb["y1"]) - float(comb["y0"]))
-    resolved["y0"] = surface_y0
-    resolved["y1"] = surface_y1
-    resolved["height_pt"] = q(surface_y1 - surface_y0)
+    resolved["writing_y0"] = surface_y0
+    resolved["writing_y1"] = surface_y1
+    resolved["writing_height_pt"] = q(surface_y1 - surface_y0)
     return resolved
 
 
@@ -3249,7 +4173,8 @@ def source_owned_comb_frame(
             default=q(xl.ink_hi[i1] - xl.ink_lo[i1])),
     )
     bands = comb_bands(
-        members, extra_ink, x0, x1, edge_thickness, final_paint)
+        members, extra_ink, x0, x1, edge_thickness, final_paint,
+        owner_paper_from_lattice(xl, yl, i0, i1, j0, j1, extra_ink))
     bands = [
         band for band in bands
         if float(band["y0"]) >= y0 - CLUSTER_TOL_PT
@@ -3271,11 +4196,18 @@ def source_owned_comb_frame(
             if not any(boundary_topology_subset(topology, other)
                        for other in topologies)
         ]
+        # The published evidence is untrimmed -- `endpoint_band` measures every
+        # competing topology across the whole rectangle -- while the band has
+        # since been bounded by its own rails. Compare the part of the winning
+        # topology that lies inside those rails, or a comb whose rails cut off
+        # a boundary would look like a different topology from the one that won.
+        rail_lo, rail_hi = comb_rail_span(band)
         frame_resolves_competition = (
             len(maximal) == 1
             and same_boundary_topology(
                 tuple(float(value) for value in band["divider_x"]),
-                maximal[0])
+                tuple(value for value in maximal[0]
+                      if rail_lo < value < rail_hi))
         )
     if not has_internal_edges and not frame_resolves_competition:
         return None
@@ -3467,7 +4399,12 @@ def source_owned_comb_frame(
 
     return {
         "method": "final-visible-framed-comb",
-        "outer_rail_x": [q(x0), q(x1)],
+        # The band's own measured rails, not the component box: `comb_rails`
+        # has already established which printed bars bound this comb, and a
+        # certificate that restated the box would be claiming a frame the
+        # source does not draw.
+        "outer_rail_x": [
+            q(float(band["slot_x"][0])), q(float(band["slot_x"][-1]))],
         "baseline_y": q(yl.positions[baseline_index]),
         "band_y": [q(band["y0"]), q(band["y1"])],
         "divider_x": list(band["divider_x"]),
@@ -3502,6 +4439,7 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 legacy_h_ink: Sequence[dict[str, Any]] | None = None,
                 uncertain_geometry_ids: set[str] | None = None,
                 fillable_metrics: dict[str, float] | None = None,
+                area_fills: Sequence[dict[str, Any]] | None = None,
                 ) -> tuple[list[dict[str, Any]], list[str],
                            list[dict[str, Any]], list[dict[str, Any]]]:
     nx, ny = len(xl) - 1, len(yl) - 1
@@ -3732,8 +4670,14 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             0.0 if cell["border"][side] is None
             else cell["border"][side]["thickness_pt"]
             for side in ("left", "right"))
+        legacy_paper = owner_paper_from_lattice(
+            continuity_xl, continuity_yl,
+            int(cell["col"]), int(cell["col"] + cell["col_span"]),
+            int(cell["row"]), int(cell["row"] + cell["row_span"]),
+            continuity_extra)
         bands = legacy_comb_bands(
-            members, continuity_extra, cell["x0"], cell["x1"], edges)
+            members, continuity_extra, cell["x0"], cell["x1"], edges,
+            legacy_paper)
         if not bands:
             continue
         selected = max(
@@ -3758,7 +4702,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         )
         final_candidates = comb_bands(
             supported_members,
-            continuity_extra, cell["x0"], cell["x1"], edges, final_paint)
+            continuity_extra, cell["x0"], cell["x1"], edges, final_paint,
+            legacy_paper)
         final_candidate = (
             max(final_candidates,
                 key=lambda band: (band["divider_count"], -band["y0"]))
@@ -3786,7 +4731,12 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                       else cell["border"][side]["thickness_pt"]
                       for side in ("left", "right"))
         bands = comb_bands(
-            members, extra_ink, cell["x0"], cell["x1"], edges, final_paint)
+            members, extra_ink, cell["x0"], cell["x1"], edges, final_paint,
+            owner_paper_from_lattice(
+                xl, yl,
+                int(cell["col"]), int(cell["col"] + cell["col_span"]),
+                int(cell["row"]), int(cell["row"] + cell["row_span"]),
+                extra_ink))
         retained_bands: list[dict[str, Any]] = []
         rejected_owner_bands: list[dict[str, Any]] = []
         for band in bands:
@@ -4224,8 +5174,12 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 erased_legacy_divider_reduction_certificate(
                     legacy_comb, final_candidate,
                     subject["legacy_divider_witnesses"], final_paint))
+        # Counts are compared inside the candidate's own rails, never as raw
+        # slot totals: `dividers_within` says why.
         if (resolved is not None and final_candidate is not None
-                and int(final_candidate["cells"]) > int(resolved["cells"])):
+                and int(final_candidate["divider_count"])
+                > dividers_within(
+                    resolved, comb_rail_span(final_candidate))):
             if final_candidate_has_unique_owner:
                 cell["comb"] = final_candidate
                 if final_candidate_path_conflicts:
@@ -4243,7 +5197,9 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 cell["comb"] = mark_comb_unresolved(
                     legacy_comb, "no-final-visible-band",
                     method="legacy-continuity")
-            elif int(final_candidate["cells"]) < int(legacy_comb["cells"]):
+            elif (int(final_candidate["divider_count"])
+                  < dividers_within(
+                      legacy_comb, comb_rail_span(final_candidate))):
                 if erased_reduction_certificate is not None:
                     cell["comb"] = certify_erased_legacy_reduction(
                         final_candidate, erased_reduction_certificate)
@@ -4267,7 +5223,8 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
                 else:
                     cell["comb"] = mark_comb_unresolved(
                         final_candidate, "no-final-visible-owned-band")
-        elif int(resolved["cells"]) < int(legacy_comb["cells"]):
+        elif (int(resolved["divider_count"])
+              < dividers_within(legacy_comb, comb_rail_span(resolved))):
             reduction_matches_current = (
                 erased_reduction_certificate is not None
                 and final_candidate is not None
@@ -4410,26 +5367,127 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
 
     assigned, unplaced = assign_points(
         cells, [((r["x0"] + r["x1"]) / 2.0, (r["y0"] + r["y1"]) / 2.0, index)
-                for index, r in enumerate(text_runs)])
+                for index, r in enumerate(text_runs)],
+        [glyph_ink_spans(r) for r in text_runs])
     for cell, members in zip(cells, assigned):
         cell["text_run_ids"] = [f"p{page_index}t{i}" for i in sorted(members)]
     unassigned = [f"p{page_index}t{i}" for i in sorted(unplaced)]
 
+    # The last word on whether a claimed comb is a comb, taken once, after
+    # every band has been selected, owned and restated, and on the same
+    # evidence `is_empty` is about to be computed from.  It has to be last:
+    # the legacy reconciliation above re-attaches a band to a cell that has
+    # none, so a refusal made earlier would simply come back.
+    #
+    # `emit.field_verdict` gives an input to any cell carrying `comb`,
+    # whatever kind the lattice assigned -- deliberately, because a comb IS
+    # the field.  A refutation therefore has to take the comb off the cell;
+    # returning a different kind beside a comb the emitter still honours would
+    # leave the layout and the markup contradicting each other, which is worse
+    # than either verdict alone.
+    #
+    # The subject does NOT leave the ledger.  That is the ledger's whole
+    # purpose -- "a comb that stops being a writing surface does not leave the
+    # ledger" -- so the reviewed subject denominator is untouched and the
+    # subject moves to the retained half, published, emitting nothing, blocking
+    # the gate, and carrying `retired_proven_false` among its permitted
+    # transitions for whoever reviews it.  Nothing here retires it: a producer
+    # does not certify its own promotion, and this is the fail-closed side of
+    # that rule, not an exception to it.
+    refuted: dict[str, dict[str, Any]] = {}
+    for cell in cells:
+        comb = cell.get("comb")
+        if comb is None:
+            continue
+        runs = [text_runs[int(run_id.split("t")[1])]
+                for run_id in cell["text_run_ids"]]
+        if not printed_caption_refutes_comb(comb, runs):
+            continue
+        cell.pop("comb", None)
+        cell.pop("combs", None)
+        refuted[str(cell["subject_key"])] = {
+            "cell": cell,
+            "comb": comb,
+            "compartment_glyph_counts": comb_compartment_glyph_counts(
+                comb, runs),
+        }
+    for index, subject in enumerate(subject_ledger):
+        evidence = refuted.pop(str(subject["subject_key"]), None)
+        if evidence is None:
+            continue
+        cell = evidence["cell"]
+        # The retained shape is an IDENTITY mapping: one legacy subject, one
+        # layout rectangle, same bbox.  A refuted caption block is always that
+        # -- the band was selected on this rectangle's own anchors -- and if it
+        # ever is not, the ledger would be claiming a partition it cannot
+        # support, so fail closed rather than publish it.
+        if (subject.get("cell_id") != cell["id"]
+                or subject.get("legacy_cell_id") != cell["id"]
+                or [q(float(value)) for value in subject["legacy_bbox"]]
+                != [q(float(cell[name])) for name in ("x0", "y0", "x1", "y1")]):
+            raise ValueError(
+                f"{cell['id']}: refuted comb subject is not an identity "
+                f"mapping onto its own rectangle")
+        subject_ledger[index] = {
+            "subject_key": subject["subject_key"],
+            "legacy_cell_id": subject["legacy_cell_id"],
+            "legacy_bbox": subject["legacy_bbox"],
+            "cell_id": None,
+            "mapped_partition_cell_ids": [subject["legacy_cell_id"]],
+            "mapped_partition_subject_keys": [subject["subject_key"]],
+            "state": "retained_unresolved",
+            "emission": "suppressed",
+            "reason_codes": [REFUTED_CAPTION_BLOCK_REASON_CODE],
+            "legacy_comb": evidence["comb"],
+            "requires_independent_evidence": True,
+            "permitted_transitions": [
+                "active_composite",
+                "retired_proven_false",
+            ],
+            "blocks_gate": True,
+        }
+        cell["comb_refutation"] = {
+            "reason_codes": [REFUTED_CAPTION_BLOCK_REASON_CODE],
+            "compartment_glyph_counts": evidence["compartment_glyph_counts"],
+            "refused_slot_x": [q(float(value))
+                               for value in evidence["comb"]["slot_x"]],
+        }
+    if refuted:
+        # A refuted band that no subject published would be a comb this module
+        # emitted with no ledger entry at all -- exactly the unreviewed
+        # inference the suppression path below exists to prevent.
+        raise ValueError(
+            "refuted comb has no ledger subject: "
+            + ", ".join(sorted(refuted)))
+
+    page_area_fills = () if area_fills is None else area_fills
     for cell in cells:
         cell["is_empty"] = not cell["text_run_ids"]
         sliver = False
-        if (fillable_metrics is not None
-                and cell["is_empty"]
+        shaded = False
+        if (cell["is_empty"]
                 and cell["border_count"] >= 3
                 and "comb" not in cell):
-            paper_width, paper_height = cell_paper_gap(cell, xl, yl)
-            sliver = (
-                paper_height < fillable_metrics["glyph_height_pt"]
-                and paper_width >= fillable_metrics["line_width_pt"]
-            )
+            if fillable_metrics is not None:
+                paper_width, paper_height = cell_paper_gap(cell, xl, yl)
+                sliver = (
+                    paper_height < fillable_metrics["glyph_height_pt"]
+                    and paper_width >= fillable_metrics["line_width_pt"]
+                )
+            # Comb owners are exempt, as they are from the sliver rule, and
+            # for a stronger reason: printed character ticks are the source
+            # itself drawing N boxes to receive typing, and `emit.field_verdict`
+            # gives a comb an input whatever the kind says.  Demoting one here
+            # would leave the layout claiming "not a writing surface" over an
+            # emitted input -- worse than either verdict alone.  On the 53-form
+            # corpus this exempts nothing: no comb owner is covered by
+            # decorative shading, so the rule is stated, not measured into.
+            shaded = on_shaded_paper(cell, page_area_fills)
         cell["kind"] = classify_cell(
-            cell["is_empty"], cell["border_count"], "comb" in cell, sliver)
+            cell["is_empty"], cell["border_count"], "comb" in cell, sliver,
+            shaded)
         cell.pop("_component_root")
+    resolve_retained_partition_overlaps(subject_ledger)
     # The gate binds the reviewed active-owner registry to the exact order of
     # the current layout cell stream.  Legacy subjects are discovered in
     # legacy-bbox order, but a repaired lattice can split/reuse those subjects
@@ -4451,8 +5509,94 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
     return cells, unassigned, subject_ledger, inference_ledger
 
 
+def resolve_retained_partition_overlaps(
+        subject_ledger: list[dict[str, Any]]) -> None:
+    """A suppressed subject's partition mapping is a partition, not a cover.
+
+    A `painted-edge-partition` subject records which of today's cells its area
+    became, and `audit.validate_comb_owner_registry` requires each such cell to
+    be claimed exactly once: a cell owned by two suppressed subjects is not a
+    partition of either, and the audit invalidates the whole form's registry
+    rather than guess.  Nothing enforced that here, because until a legacy comb
+    subject nested inside another one lost its rectangular owner too, no two
+    partition subjects ever overlapped.  2550M page 1 now has exactly that --
+    `p1c7` (66.00, 118.80, 99.84, 134.40) sits wholly inside the row band
+    `p1c6` (28.80, 117.12, 582.72, 136.32), and both enumerated `p1c116`,
+    `p1c122` and `p1c123`.
+
+    The contested cell goes to the SMALLEST claiming area, which is the most
+    specific claim on it: those three cells are what `p1c7` became, and `p1c6`
+    still records the nineteen that are its own.  Ties cannot occur between
+    distinct subjects with the same bbox -- the registry rejects duplicate
+    identities before it gets here -- but the order is fully stated anyway so
+    the ledger cannot depend on dict insertion.  A subject is never emptied:
+    that would be a subject whose every cell lies inside strictly smaller
+    subjects, and the audit refuses an empty mapping, so it must fail closed
+    rather than be papered over here.  Measured over the 53-form corpus at r20:
+    3 cells contested, on one page of one form, and no mapping emptied.
+    """
+    claims: dict[str, list[int]] = {}
+    for index, subject in enumerate(subject_ledger):
+        if subject.get("state") != "retained_unresolved":
+            continue
+        if "painted-edge-partition" not in (subject.get("reason_codes") or ()):
+            continue
+        for cell_id in subject.get("mapped_partition_cell_ids") or ():
+            claims.setdefault(str(cell_id), []).append(index)
+
+    def specificity(index: int) -> tuple[float, tuple[float, ...], str]:
+        subject = subject_ledger[index]
+        x0, y0, x1, y1 = (float(value) for value in subject["legacy_bbox"])
+        return ((x1 - x0) * (y1 - y0),
+                tuple(float(value) for value in subject["legacy_bbox"]),
+                str(subject["subject_key"]))
+
+    drop: dict[int, set[str]] = {}
+    for cell_id, owners in claims.items():
+        if len(owners) < 2:
+            continue
+        keeper = min(owners, key=specificity)
+        for index in owners:
+            if index != keeper:
+                drop.setdefault(index, set()).add(cell_id)
+    for index, dropped in drop.items():
+        subject = subject_ledger[index]
+        kept = [(cell_id, key) for cell_id, key
+                in zip(subject["mapped_partition_cell_ids"],
+                       subject["mapped_partition_subject_keys"])
+                if str(cell_id) not in dropped]
+        if not kept:
+            continue
+        subject["mapped_partition_cell_ids"] = [cell_id for cell_id, _ in kept]
+        subject["mapped_partition_subject_keys"] = [key for _, key in kept]
+
+
+def glyph_ink_spans(run: dict[str, Any]) -> list[Interval]:
+    """The x extents the run's non-blank characters actually mark.
+
+    A text run's bounding box is its *advance*, not its ink: the run
+    "Calendar        Fiscal" reserves the paper between the two words, and a
+    caption laid out that way with a checkbox drawn in the gap owns none of the
+    paper the box encloses. Every run in the corpus carries per-character
+    origins and advances, so the marked spans are read off the source rather
+    than estimated.
+    """
+    origin = float(run.get("origin_x", run["x0"]))
+    offsets = run.get("char_origin_offsets_pt") or ()
+    advances = run.get("char_advances_pt") or ()
+    text = run.get("text") or ""
+    if len(offsets) != len(text) or len(advances) != len(text):
+        return [(float(run["x0"]), float(run["x1"]))]
+    marked = [(origin + float(o), origin + float(o) + float(a))
+              for ch, o, a in zip(text, offsets, advances) if ch.strip()]
+    if not marked:
+        return []
+    return union_intervals(marked)
+
+
 def assign_points(cells: Sequence[dict[str, Any]],
-                  points: Sequence[tuple[float, float, Any]]
+                  points: Sequence[tuple[float, float, Any]],
+                  ink: Sequence[Sequence[Interval]] | None = None
                   ) -> tuple[list[list[Any]], list[Any]]:
     """Give each point to exactly one cell -- the smallest one containing it.
 
@@ -4461,6 +5605,17 @@ def assign_points(cells: Sequence[dict[str, Any]],
     necessarily overlaps a neighbour; without the smallest-area rule those
     overlaps double-count, which is how a page reported more comb slots than it
     had dividers. Area then reading order makes the choice deterministic.
+
+    `ink` states, per point, where the thing being placed actually marks the
+    paper. The point stays the anchor -- a run whose home cell holds any of its
+    ink does not move -- but a home cell holding NONE of it is not the run's
+    cell at all, only the cell its advance happens to be centred over. The run
+    then goes to the cell carrying the most of its ink on that line. Nine of the
+    fourteen `printed_box_peers_all_fillable` offenders are this: a two-word
+    caption ("Calendar    Fiscal", "Yes      No", " 2nd      3rd") whose gap is
+    exactly where the source drew the box to be ticked, so the box counted as
+    printed text and was classified `label` -- unfillable -- on ink it does not
+    contain. Without `ink` the placement is unchanged.
     """
     order = sorted(range(len(cells)),
                    key=lambda n: ((cells[n]["x1"] - cells[n]["x0"])
@@ -4468,14 +5623,31 @@ def assign_points(cells: Sequence[dict[str, Any]],
                                   cells[n]["y0"], cells[n]["x0"]))
     buckets: list[list[Any]] = [[] for _ in cells]
     unplaced: list[Any] = []
-    for cx, cy, payload in points:
-        for n in order:
-            cell = cells[n]
-            if cell["x0"] <= cx <= cell["x1"] and cell["y0"] <= cy <= cell["y1"]:
-                buckets[n].append(payload)
-                break
-        else:
+    for index, (cx, cy, payload) in enumerate(points):
+        spans = list(ink[index]) if ink is not None else []
+        home = next((n for n in order
+                     if cells[n]["x0"] <= cx <= cells[n]["x1"]
+                     and cells[n]["y0"] <= cy <= cells[n]["y1"]), None)
+        if home is None:
             unplaced.append(payload)
+            continue
+        if spans and overlap_length([(cells[home]["x0"], cells[home]["x1"])],
+                                    spans) <= 0:
+            best = None
+            for n in order:
+                cell = cells[n]
+                if not (cell["y0"] <= cy <= cell["y1"]):
+                    continue
+                held = overlap_length([(cell["x0"], cell["x1"])], spans)
+                if held <= 0:
+                    continue
+                key = (-held, (cell["x1"] - cell["x0"]) * (cell["y1"] - cell["y0"]),
+                       cell["y0"], cell["x0"], n)
+                if best is None or key < best[0]:
+                    best = (key, n)
+            if best is not None:
+                home = best[1]
+        buckets[home].append(payload)
     return buckets, unplaced
 
 
@@ -4892,7 +6064,8 @@ def build_page(page: dict[str, Any],
             legacy_v_ink=raw_verticals,
             legacy_h_ink=raw_horizontals,
             uncertain_geometry_ids=uncertain_ids,
-            fillable_metrics=fillable_metrics)
+            fillable_metrics=fillable_metrics,
+            area_fills=page["area_fills"])
         growables = detect_growables(index, xl, yl, v_at, h_at, cells, page["text_runs"])
         regions = detect_regions(index, xl, yl, v_at, cells, growables)
 
@@ -5392,6 +6565,264 @@ def self_test(ir_path: pathlib.Path) -> int:
         "a horizontal painted wall entered the vertical-only lattice",
     )
 
+    # Shaded paper. 2551Q shades none of its cells, so the tone cut is asserted
+    # on the exact corpus tones it has to separate: BIR's 0.8509 "no entry here"
+    # band against the two near-white fills that cover REAL fields -- 1604cf-2008
+    # p1c8/c10/c12 at 0.8902 and 2200an-2018 p2c247/c255 at 0.9489. Those five
+    # must keep their inputs, which is why the rule is a tone and not merely
+    # `role == "decorative"`.
+    def toned_fill(x0: float, y0: float, x1: float, y1: float,
+                   gray: float, seq: int = 1) -> dict[str, Any]:
+        return {"x0": q(x0), "y0": q(y0), "x1": q(x1), "y1": q(y1),
+                "gray": gray, "role": tone_role(gray),
+                "paint_seq": seq, "paint_seq_max": seq}
+
+    shaded_cell = {"x0": 100.0, "y0": 200.0, "x1": 200.0, "y1": 210.0}
+    bir_shading = toned_fill(90.0, 198.0, 260.0, 212.0, 0.8509)
+    check(
+        on_shaded_paper(shaded_cell, [bir_shading]),
+        "BIR's 0.8509 no-entry shading did not reach the cell it covers",
+    )
+    check(
+        classify_cell(True, 4, False, False,
+                      on_shaded_paper(shaded_cell, [bir_shading])) == "shaded",
+        "an empty bordered cell on decorative shading was called a field",
+    )
+    for gray, where in ((0.8902, "1604cf-2008 p1c8/c10/c12"),
+                        (0.9489, "2200an-2018 p2c247/c255")):
+        near_white = toned_fill(90.0, 198.0, 260.0, 212.0, gray)
+        check(
+            not on_shaded_paper(shaded_cell, [near_white]),
+            f"a near-white {gray} fill took the real fields at {where}",
+        )
+        check(
+            classify_cell(True, 4, False, False,
+                          on_shaded_paper(shaded_cell, [near_white])) == "field",
+            f"a real field at {where} lost its input to its own tint",
+        )
+    check(
+        not on_shaded_paper(
+            shaded_cell, [toned_fill(90.0, 198.0, 150.0, 212.0, 0.8509)]),
+        "shading over less than 70% of a cell shaded the whole cell",
+    )
+    check(
+        not on_shaded_paper(shaded_cell, [
+            bir_shading, toned_fill(90.0, 198.0, 260.0, 212.0, 1.0, seq=9)]),
+        "paper a later white knockout restored was still read as shaded",
+    )
+    check(
+        on_shaded_paper(shaded_cell, [
+            toned_fill(90.0, 198.0, 260.0, 212.0, 1.0, seq=1),
+            toned_fill(90.0, 198.0, 260.0, 212.0, 0.8509, seq=9)]),
+        "shading painted over a knockout was hidden by the earlier white",
+    )
+    check(
+        not on_shaded_paper(
+            shaded_cell, [toned_fill(90.0, 198.0, 260.0, 212.0, 0.0)]),
+        "a black structural fill was reported as decorative shading",
+    )
+    check(
+        classify_cell(True, 4, False, True, True) == "blank",
+        "a ruled-gap sliver lost its established kind to the shading rule",
+    )
+
+    # Strip unions. Asserted on 2550M p3c9's exact source geometry: a 15.6pt
+    # cell shaded by two 7.8pt 0.7529 strips covering 0.508 and 0.500, which no
+    # single-fill coverage test can see. The negatives beside it are the three
+    # ways a union would be wrong -- two tones are not one band, two strips with
+    # paper between them leave that paper writable, and a knockout through the
+    # middle restores it -- and each is the SAME two strips with one fact
+    # changed, so a union that passes them cannot be passing by luck.
+    strip_cell = {"x0": 537.36, "y0": 98.52, "x1": 591.00, "y1": 114.12}
+    upper_strip = toned_fill(537.36, 98.52, 591.12, 106.44, 0.7529, seq=4)
+    lower_strip = toned_fill(537.36, 106.32, 591.12, 114.24, 0.7529, seq=6)
+    check(
+        not on_shaded_paper(strip_cell, [upper_strip]),
+        "one 0.508-coverage strip shaded a cell on its own",
+    )
+    check(
+        on_shaded_paper(strip_cell, [upper_strip, lower_strip]),
+        "2550M p3c9's two abutting 0.7529 strips did not shade the cell",
+    )
+    check(
+        classify_cell(True, 4, False, False,
+                      on_shaded_paper(strip_cell,
+                                      [upper_strip, lower_strip])) == "shaded",
+        "a cell shaded by a strip pair kept the input the raster refutes",
+    )
+    check(
+        not on_shaded_paper(strip_cell, [
+            upper_strip,
+            toned_fill(537.36, 106.32, 591.12, 114.24, 0.8509, seq=6)]),
+        "two different tones were unioned into one band the source never drew",
+    )
+    check(
+        not on_shaded_paper(strip_cell, [
+            toned_fill(537.36, 98.52, 591.12, 103.00, 0.7529, seq=4),
+            toned_fill(537.36, 109.00, 591.12, 114.24, 0.7529, seq=6)]),
+        "a union reached across white paper between two separated strips",
+    )
+    check(
+        not on_shaded_paper(strip_cell, [
+            upper_strip, lower_strip,
+            toned_fill(537.36, 104.00, 591.12, 108.00, 1.0, seq=9)]),
+        "a union reached across a knockout that whited out the middle",
+    )
+    check(
+        on_shaded_paper(strip_cell, [
+            toned_fill(537.36, 104.00, 591.12, 108.00, 1.0, seq=1),
+            upper_strip, lower_strip]),
+        "a knockout painted UNDER the strips broke a band drawn over it",
+    )
+
+    # White is not the only thing that covers a tint, and a per-point rule that
+    # only subtracts knockouts is a NEW way to lose a real field. Both shapes
+    # below are corpus geometry over a page-wide band: 2553 p1c16/c18/c20 paint
+    # a chromatic box (no gray at all) over the 0.7529 sheet band, and
+    # 1604cf-2008 p1c8/c10/c12 paint their 0.8902 boxes -- the five near-white
+    # fields the tone cut exists to spare -- over it at seq 283-287.
+    band_cell = {"x0": 91.80, "y0": 189.36, "x1": 96.60, "y1": 208.80}
+    sheet_band = toned_fill(20.64, 131.76, 591.60, 652.56, 0.7529, seq=1)
+    check(
+        on_shaded_paper(band_cell, [sheet_band]),
+        "the page-wide 0.7529 sheet band did not shade a cell inside it",
+    )
+    chromatic = {"x0": q(91.68), "y0": q(189.36), "x1": q(96.72),
+                 "y1": q(208.80), "gray": None, "role": tone_role(None),
+                 "paint_seq": 303, "paint_seq_max": 303}
+    check(
+        not on_shaded_paper(band_cell, [sheet_band, chromatic]),
+        "a chromatic box painted over the band was read through as shading",
+    )
+    check(
+        not on_shaded_paper(band_cell, [
+            sheet_band,
+            toned_fill(91.68, 189.36, 96.72, 208.80, 0.8902, seq=283)]),
+        "a near-white 0.8902 field box painted over the band lost its input",
+    )
+    check(
+        on_shaded_paper(band_cell, [
+            {**chromatic, "paint_seq": 0, "paint_seq_max": 0}, sheet_band]),
+        "a chromatic box painted UNDER the band suppressed the band above it",
+    )
+
+    # A comb compartment is a character cell, and a caption block is not.  Both
+    # sides are the corpus's own numbers: the refused one is 2200S `p1c0`, the
+    # masthead whose single 0.48pt vertical at x = 115.70 gave a taxpayer two
+    # live inputs over "BIR Form No. / 2200-S" and "EXCISE TAX RETURN"; the
+    # spared one is 1800 `p1c68`, a 2-compartment comb the source fills with the
+    # printed rate `0 %`, one glyph per compartment, which is exactly the
+    # decoration `classify_cell`'s "mixed" verdict is FOR.  The pair differ only
+    # in how many glyphs each compartment carries, so a rule that passed both by
+    # luck would have to be measuring something neither of them varies.
+    def printed_run(text: str, x0: float, advance: float) -> dict[str, Any]:
+        return {
+            "text": text, "origin_x": q(x0),
+            "x0": q(x0), "x1": q(x0 + advance * len(text)),
+            "char_origin_offsets_pt": [q(advance * i)
+                                       for i in range(len(text))],
+            "char_widths_pt": [q(advance)] * len(text),
+        }
+
+    masthead_comb = {"cells": 2, "slot_x": [23.16, 115.70, 430.51]}
+    masthead_runs = [
+        printed_run("BIR Form No.", 44.88, 4.26),
+        printed_run("2200-S", 37.08, 11.67),
+        printed_run("EXCISE TAX RETURN", 189.98, 10.04),
+    ]
+    check(
+        comb_compartment_glyph_counts(masthead_comb, masthead_runs)
+        == [16, 15],
+        "the masthead's own glyphs were not counted into its two compartments",
+    )
+    check(
+        printed_caption_refutes_comb(masthead_comb, masthead_runs),
+        "2200S p1c0's masthead caption still read as a 2-box comb, so a "
+        "taxpayer keeps two inputs over the form's own title",
+    )
+    printed_rate_comb = {"cells": 2, "slot_x": [520.44, 534.06, 547.68]}
+    printed_rate_runs = [printed_run("0", 524.0, 6.6),
+                         printed_run("%", 537.5, 6.6)]
+    check(
+        comb_compartment_glyph_counts(printed_rate_comb, printed_rate_runs)
+        == [1, 1],
+        "the printed rate `0 %` was not one glyph per compartment",
+    )
+    check(
+        not printed_caption_refutes_comb(printed_rate_comb, printed_rate_runs),
+        "1800 p1c68's printed rate comb was refused as a caption block",
+    )
+    # The money comb the refusal must NOT take: 2200A `p1c111`'s first
+    # compartment has swallowed the caption "27 Tax Debit Memo" and its other
+    # 28 are empty, so SOME compartment is multi-glyph and EVERY one is not.
+    # The rule is stated over every compartment precisely so this keeps its
+    # money boxes; the swallowed first compartment is a separate segmentation
+    # defect and is not fixed here.
+    debit_memo_comb = {
+        "cells": 29,
+        "slot_x": [16.32, 189.98] + [q(189.98 + 14.52 * i)
+                                     for i in range(1, 29)],
+    }
+    debit_memo_runs = [printed_run("27 Tax Debit Memo", 18.36, 5.03)]
+    counts = comb_compartment_glyph_counts(debit_memo_comb, debit_memo_runs)
+    check(
+        counts[0] > 1 and min(counts) == 0,
+        "2200A p1c111's swallowed caption did not land in its first "
+        "compartment alone",
+    )
+    check(
+        not printed_caption_refutes_comb(debit_memo_comb, debit_memo_runs),
+        "a 29-box money comb lost every box to one swallowed caption",
+    )
+    check(
+        not printed_caption_refutes_comb(masthead_comb, []),
+        "a comb with no printed text of its own was refused",
+    )
+    # The two ends of the refusal, asserted over whichever form was given
+    # rather than over the one it happens to be: no published comb may fail
+    # the test, and a refused one must have left the cell AND stayed in the
+    # ledger as a suppressed, blocking, reviewable subject.  On 2551Q both
+    # halves are vacuous by construction -- it prints no caption block of this
+    # shape, so nothing here can move the pinned counts above -- and on a form
+    # that does they are the whole contract.
+    ir_pages = {int(page["index"]): page for page in ir["pages"]}
+    for page in layout["pages"]:
+        runs_by_id = {f"p{page['index']}t{index}": run
+                      for index, run in enumerate(
+                          ir_pages[int(page["index"])]["text_runs"])}
+        retained_by_key = {
+            str(subject["subject_key"]): subject
+            for subject in page["comb_subjects"]
+            if subject["state"] == "retained_unresolved"
+        }
+        for cell in page["cells"]:
+            comb = cell.get("comb")
+            check(
+                comb is None or not printed_caption_refutes_comb(
+                    comb, [runs_by_id[run_id]
+                           for run_id in cell["text_run_ids"]]),
+                f"{cell['id']}: a published comb fails the caption-block test",
+            )
+            refutation = cell.get("comb_refutation")
+            if refutation is None:
+                continue
+            subject = retained_by_key.get(str(cell["subject_key"]))
+            check(
+                comb is None and cell["kind"] != "mixed",
+                f"{cell['id']}: a refuted caption block kept its comb or its "
+                f"fillable kind",
+            )
+            check(
+                subject is not None
+                and subject["reason_codes"]
+                == [REFUTED_CAPTION_BLOCK_REASON_CODE]
+                and subject["cell_id"] is None
+                and subject["emission"] == "suppressed"
+                and subject["blocks_gate"] is True,
+                f"{cell['id']}: a refuted comb left the ledger instead of "
+                f"being retained as suppressed, blocking evidence",
+            )
+
     malformed_span_contracts: list[tuple[str, dict[str, Any]]] = [
         ("empty", {**exact_repainted_seed, "paint_spans": []}),
         ("wrong-container",
@@ -5661,6 +7092,47 @@ def self_test(ir_path: pathlib.Path) -> int:
             reduction_retained,
         ])) is None,
         "partial-width knockout coverage certified a count reduction")
+
+    # 2550M's mechanism: the knockout stops inside the row's bottom rule, so
+    # the stale tick's last sliver survives only where there is no paper.
+    # The proof must carry the rail-absorbed residue; without the rail, or
+    # with a residue reaching past the rail, it must fail closed exactly as
+    # the plain partial knockout does.
+    railed_partial_knockout = {
+        **reduction_knockout,
+        "y1": 9.4,
+    }
+    railed_partial_certificate = erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, railed_partial_knockout,
+            reduction_retained, reduction_bottom_rail,
+        ]))
+    check(
+        railed_partial_certificate is not None
+        and railed_partial_certificate.get("erased_dividers") == [{
+            "divider_x": 20.0,
+            "rule_id": "reduction-stale",
+            "paint_range": [1, 1],
+            "band_y": [5.0, 10.0],
+            "rail_covered_residue_y": [[9.4, 10.0]],
+        }],
+        f"a knockout stopping inside the bottom rail was not certified: "
+        f"{railed_partial_certificate}",
+    )
+    unrailed_residue_knockout = {
+        **reduction_knockout,
+        "y1": 8.5,
+    }
+    check(erased_legacy_divider_reduction_certificate(
+        reduction_legacy, reduction_final,
+        [reduction_retained, reduction_stale],
+        FinalPaint([
+            reduction_stale, unrailed_residue_knockout,
+            reduction_retained, reduction_bottom_rail,
+        ])) is None,
+        "a residue reaching past the bottom rail certified a count reduction")
 
     ranged_reduction_stale = {
         **reduction_stale,
@@ -6093,6 +7565,65 @@ def self_test(ir_path: pathlib.Path) -> int:
               "coverage winner silently resolved competing endpoint topologies")
         check(carried == {(10.0, 20.0), (10.0, 15.0, 20.0)},
               f"competing endpoint topology evidence was lost: {carried}")
+
+    # A competitor proven only inside a full-width horizontal rail exists on
+    # no paper, so it stays published as evidence without de-certifying the
+    # paper topology.  Give the same competitor one sliver of paper and the
+    # band must fall back to unresolved competing evidence -- the paper
+    # coverage test, not the evidence count, is what gates.
+    rail_competitor_rail = synthetic_horizontal(9.75, 0.0, 30.0, 0.5, 16)
+    rail_competitor_seed = synthetic_vertical(15, 0, 10, 0.2, 13)
+    rail_competitor_stale = synthetic_vertical(20, 0, 10, 0.2, 14)
+    railed_competitor_bands = comb_bands(
+        [rail_competitor_seed],
+        [rail_competitor_seed, rail_competitor_stale],
+        0.0, 30.0, (0.2, 0.2),
+        FinalPaint([
+            rail_competitor_seed, rail_competitor_stale,
+            {
+                **rail_competitor_stale,
+                "role": "knockout", "gray": 1.0,
+                "paint_seq": 15, "paint_seq_max": 15,
+                "y1": 9.5,
+            },
+            rail_competitor_rail,
+        ]))
+    check(bool(railed_competitor_bands)
+          and railed_competitor_bands[0]["divider_x"] == [15.0]
+          and railed_competitor_bands[0]["resolution"]["status"] == "resolved"
+          and "competing-endpoint-topologies"
+          not in railed_competitor_bands[0]["resolution"]["reason_codes"],
+          f"a rail-only competitor de-certified the paper topology: "
+          f"{railed_competitor_bands}")
+    if railed_competitor_bands:
+        railed_evidence = {
+            tuple(item["divider_x"]): float(item["paper_coverage_pt"])
+            for item in railed_competitor_bands[0]["resolution"].get(
+                "endpoint_topologies") or ()
+        }
+        check(railed_evidence.get((15.0,), 0.0) > 0.0
+              and railed_evidence.get((15.0, 20.0)) == 0.0,
+              f"rail-only evidence was not published with its paper "
+              f"coverage: {railed_evidence}")
+    paper_competitor_bands = comb_bands(
+        [rail_competitor_seed],
+        [rail_competitor_seed, rail_competitor_stale],
+        0.0, 30.0, (0.2, 0.2),
+        FinalPaint([
+            rail_competitor_seed, rail_competitor_stale,
+            {
+                **rail_competitor_stale,
+                "role": "knockout", "gray": 1.0,
+                "paint_seq": 15, "paint_seq_max": 15,
+                "y1": 9.0,
+            },
+            rail_competitor_rail,
+        ]))
+    check(bool(paper_competitor_bands)
+          and paper_competitor_bands[0]["resolution"]["status"] == "unresolved"
+          and "competing-endpoint-topologies"
+          in paper_competitor_bands[0]["resolution"]["reason_codes"],
+          "a competitor holding one sliver of paper was silently resolved")
     check(boundary_topology_subset(
         [10.2, 20.0], [10.0, 20.0, 30.0]),
         "near-identical physical boundaries were not matched as a subset")
@@ -6214,11 +7745,103 @@ def self_test(ir_path: pathlib.Path) -> int:
         [topology_left, topology_right, topology_middle],
         ordinary_frame_paint,
     )
+    # The two outer boundaries here run the frame's full height while the
+    # middle one hangs inside it, so they are this comb's printed RAILS and it
+    # owns one compartment boundary, not three. The certificate must publish
+    # the rails it measured rather than restating the component box, and it
+    # must still resolve the competition -- against the winning topology's own
+    # enclosed part, since the published evidence is untrimmed.
     check(
         ordinary_certificate is not None
         and ordinary_certificate.get("resolved_competing_topologies") is True
-        and ordinary_certificate.get("divider_x") == [10.0, 15.0, 20.0],
+        and ordinary_certificate.get("divider_x") == [15.0]
+        and ordinary_certificate.get("outer_rail_x") == [10.0, 20.0],
         "an ordinary framed comb did not certify its unique maximal topology",
+    )
+    # Same frame, same evidence, with the outer boundaries stopping inside the
+    # paper: nothing is a rail, so every boundary stays a compartment divider
+    # and the comb is the whole box. This is the pair that makes the rule above
+    # a measurement rather than a preference.
+    hung_left = synthetic_vertical(10, 3, 10, 0.2, 25)
+    hung_right = synthetic_vertical(20, 3, 10, 0.2, 26)
+    hung_certificate = source_owned_comb_frame(
+        ordinary_frame_box, ordinary_frame_x, ordinary_frame_y,
+        ordinary_frame_v_at, ordinary_frame_h_at,
+        [hung_left, hung_right],
+        [hung_left, hung_right, topology_middle],
+        FinalPaint([
+            frame_left, frame_right, frame_top, frame_bottom,
+            hung_left, hung_right, topology_middle,
+        ]),
+    )
+    check(
+        hung_certificate is not None
+        and hung_certificate.get("divider_x") == [10.0, 15.0, 20.0]
+        and hung_certificate.get("outer_rail_x") == [0.0, 30.0],
+        "a comb of hanging ticks was bounded by one of its own dividers",
+    )
+
+    # ---- the rail derivation itself, on the two questions it asks ----
+    #
+    # (1) WHERE the owner's edge rules this band. The lattice line here is a
+    # composite: two bars, 0.2 apart, only the left one crossing the band. The
+    # line's own position is their mean, and taking it would put the comb's
+    # edge on paper the source rules nothing at.
+    rail_band = (4.0, 10.0)
+    rail_edge_near = synthetic_vertical(30.0, 0, 10, 0.2, 60)
+    rail_edge_far = synthetic_vertical(30.2, -5, 3, 0.2, 61)
+    rail_edge_paint = FinalPaint([rail_edge_near, rail_edge_far])
+    check(
+        edge_rail([rail_edge_near, rail_edge_far],
+                  (30.0, 30.2, 0.2), *rail_band) == 30.0,
+        "a comb rail was measured on a bar that does not cross its band",
+    )
+    check(
+        edge_rail([rail_edge_far], (30.0, 30.2, 0.2), *rail_band) is None,
+        "an edge that rules nothing across the band still produced a rail",
+    )
+    # A bar far enough from the edge to be its own boundary is a compartment
+    # divider, and a rail measured on it would be a comb eating its neighbour.
+    rail_separate = synthetic_vertical(28.0, 0, 10, 0.2, 62)
+    check(
+        edge_rail([rail_separate], (30.0, 30.2, 0.2), *rail_band) is None,
+        "a distinct boundary beside the edge was promoted to a rail",
+    )
+    #
+    # (2) WHETHER a boundary closes a box. The wall below is drawn in two
+    # pieces meeting where the band's own top rule crosses it; the same two
+    # pieces with the junction painted out are the source saying the stroke
+    # stops there, and then it divides nothing.
+    wall_upper = synthetic_vertical(15, 0.1, 4.0, 0.4, 63)
+    wall_lower = synthetic_vertical(15, 4.2, 9.9, 0.2, 64)
+    wall_paint = FinalPaint([wall_upper, wall_lower])
+    check(
+        divides_owner_paper(
+            15.0, [wall_upper, wall_lower], 0.1, 9.9, wall_paint),
+        "a wall broken by its own crossing rule stopped dividing the paper",
+    )
+    knockout_junction = {
+        **synthetic_horizontal(4.1, 0.0, 30.0, 0.2, 65, role="knockout"),
+        "paint_seq": 65, "paint_seq_max": 65,
+    }
+    check(
+        not divides_owner_paper(
+            15.0, [wall_upper, wall_lower], 0.1, 9.9,
+            FinalPaint([wall_upper, knockout_junction, wall_lower])),
+        "a stroke the source painted out at the junction still closed a box",
+    )
+    # The break itself has to be narrower than the ink either side of it.
+    wide_break_lower = synthetic_vertical(15, 5.0, 9.9, 0.2, 66)
+    check(
+        not divides_owner_paper(
+            15.0, [wall_upper, wide_break_lower], 0.1, 9.9,
+            FinalPaint([wall_upper, wide_break_lower])),
+        "two strokes with paper between them were joined into one wall",
+    )
+    check(
+        not divides_owner_paper(
+            15.0, [wall_lower], 0.1, 9.9, FinalPaint([wall_lower])),
+        "a tick hanging inside the paper was read as a wall",
     )
 
     off_baseline_middle = synthetic_vertical(15, 5, 9, 0.2, 24)
@@ -6705,13 +8328,33 @@ def self_test(ir_path: pathlib.Path) -> int:
             represented_cell, represented_comb),
         "an off-grid retained band suppressed an inference",
     )
+    # An outer slot INSIDE the rectangle is the comb's own measured rail: the
+    # rectangle rules a caption beside the comb, and the comb starts where its
+    # rail is drawn. That is evidence, not malformation, and it is covered.
+    railed_outer_comb = {
+        **represented_comb,
+        "divider_x": [10.0, 20.0],
+        "slot_x": [1.0, 10.0, 20.0, 30.4],
+    }
+    check(
+        retained_replacement_covers_inference(
+            [represented_subject_with(
+                new_slot_x=railed_outer_comb["slot_x"])],
+            represented_cell, railed_outer_comb),
+        "a rail-bounded inference was refused by its own retained blocker",
+    )
+    # A whole compartment outside the rectangle is not a rail on any reading:
+    # it is a comb claiming paper the subject next door owns.
     malformed_outer_comb = {
         **represented_comb,
-        "slot_x": [1.0, 10.0, 20.0, 30.0],
+        "divider_x": [10.0, 20.0],
+        "slot_x": [-11.0, 10.0, 20.0, 30.0],
     }
+    assert (-11.0 + 10.0) / 2.0 < 0.0
     check(
         not retained_replacement_covers_inference(
             [represented_subject_with(
+                divider_x=malformed_outer_comb["divider_x"],
                 new_slot_x=malformed_outer_comb["slot_x"])],
             represented_cell, malformed_outer_comb),
         "mutually malformed outer-slot evidence suppressed an inference",
@@ -6761,9 +8404,14 @@ def self_test(ir_path: pathlib.Path) -> int:
         owned_band_cells[0].get("comb")
         if len(owned_band_cells) == 1 else None
     )
+    # Two slots, not four: the boundaries at 10 and 20 run past the cell's own
+    # rails and are this band's outer edges, so the band owns the one tick
+    # between them. What the case is about is the ownership verdict, and that
+    # must still be clean.
     check(
         owned_band_comb is not None
-        and owned_band_comb.get("cells") == 4
+        and owned_band_comb.get("cells") == 2
+        and owned_band_comb.get("slot_x") == [10.0, 15.0, 20.0]
         and comb_has_cell_owner(owned_band_cells[0], owned_band_comb)
         and "no-final-visible-owned-band" not in (
             owned_band_comb.get("resolution") or {}).get("reason_codes", [])
@@ -6779,7 +8427,8 @@ def self_test(ir_path: pathlib.Path) -> int:
     )
     check(
         richer_current_comb is not None
-        and richer_current_comb.get("cells") == 4
+        and richer_current_comb.get("cells") == 2
+        and richer_current_comb.get("slot_x") == [10.0, 15.0, 20.0]
         and "anchor-ownership-disagreement" not in (
             richer_current_comb.get("resolution") or {}).get(
                 "reason_codes", [])

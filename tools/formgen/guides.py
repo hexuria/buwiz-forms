@@ -1048,6 +1048,165 @@ def check_clips(entry: dict[str, Any], ir_page: dict[str, Any],
 
 
 # --------------------------------------------------------------------------
+# column structure of a relocated text-only table
+# --------------------------------------------------------------------------
+#
+# A relocated reference table is frequently drawn with no rules at all. 2551M
+# page 2's ATC schedule has exactly one horizontal rule anywhere in its 170pt
+# band, and that rule is the *foot* of the table, so lattice.py can offer only a
+# single 568 x 185pt `label` cell for the whole thing and the ruled-grid reflow
+# has nothing to rebuild from. The column structure of such a table exists only
+# in where the source set its glyphs.
+#
+# Reading it in scanline order and concatenating is what shipped a wrong
+# statutory rate. The sheet prints SIX columns -- (ATC, Percentage Tax On, Tax
+# Rate) twice, side by side -- so one scanline carries two independent table
+# rows. Row y 202.02 is `PT 060 | Franchises on electric utilities, gas and
+# water utility | 2%` on the left and the middle line of PT 111's description
+# with its `5%` on the right. Concatenated, PT 060 came out carrying 5%; the
+# official rate is 2%.
+#
+# So the association has to come from x, and it must not come from a coverage
+# histogram either. The histogram that was doing this job asks "how many runs
+# cover this 1pt bin", and on 2551M the real gutter between the left
+# description and the left rate sits at 4-5 runs against a peak of 18 -- it is
+# not empty, because descriptions in that column are long and two page titles
+# cross the sheet. Every one of the four missing boundaries was a bin the
+# histogram called occupied.
+#
+# What is unambiguous is where a *cell* starts. A table column is a stack of
+# cells that begin at the same x, and the gap that separates one cell from the
+# next on a line is nothing like the gap inside one. Measured over all 178
+# intra-line run gaps in the corpus's four text-table regions (0605 p2, 2000-OT
+# p2, 2550M p3, 2551M p2): every gap inside a cell is <= 8.2pt and every gap
+# between cells is >= 15.4pt, with nothing at all in between.
+#
+# Nothing here rasterises and nothing here reads a form code.
+
+# The midpoint of that measured empty band. A run further than this from the
+# ink to its left starts a new cell; anything closer continues the current one,
+# which is what keeps "1)" attached to the description it hangs off and "PT",
+# " " and "060" -- three glyph runs -- as one ATC code.
+CELL_GAP_MIN_PT = 12.0
+
+# Cell starts in one column agree to well under a point (2551M's ATC column
+# starts at 24.00 and 24.24; its right description column at 323.04 and 337.20
+# are different columns 14pt apart). This absorbs the former without reaching
+# the latter.
+COLUMN_START_TOL_PT = 1.5
+
+# One line cannot establish a column. Two can: a column is a repetition, and a
+# lone start is a title, a centred caption or a stray. This is what keeps
+# 2551M's "BIR Form No. 2551M Percentage Tax Return" (one line, x 222.24) from
+# cutting the left description column in half.
+MIN_COLUMN_SUPPORT = 2
+
+# Distinct starts closer than this are one column: a paragraph indent, a
+# hanging list marker, or a second setting of the same column. Measured on the
+# same four regions, the widest false separation is 14.28pt (0605's continuation
+# indent at 451.90 under its description column at 437.62) and the narrowest
+# true one is 27.12pt (0605's second tax-type code column at 224.81 against its
+# description at 251.93); 2551M's narrowest true separation is 28.32pt. This
+# sits in that band.
+MIN_COLUMN_SEPARATION_PT = 20.0
+
+# Runs are on one line when their baselines agree to this. emit.py's reflow
+# groups lines with the same constant and self_test() asserts the two agree,
+# because a column structure measured on one line grouping and applied to
+# another is not a column structure.
+LINE_BASELINE_TOLERANCE_PT = 2.0
+
+
+def text_lines(runs: Sequence[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Runs grouped into lines by baseline, each line ordered left to right.
+
+    The anchor is the line's first baseline rather than a running mean, so a
+    tightly leaded column cannot drift a line's tolerance downward until it
+    swallows the next one.
+    """
+    lines: list[list[dict[str, Any]]] = []
+    anchor: float | None = None
+    for run in sorted(runs, key=lambda r: (float(r["baseline_y"]), float(r["origin_x"]))):
+        baseline = float(run["baseline_y"])
+        if anchor is None or baseline - anchor > LINE_BASELINE_TOLERANCE_PT:
+            anchor = baseline
+            lines.append([])
+        lines[-1].append(run)
+    return [sorted(line, key=lambda r: float(r["origin_x"])) for line in lines]
+
+
+def cell_starts(runs: Sequence[dict[str, Any]]) -> list[float]:
+    """Every x at which a line begins a new cell, across the whole region.
+
+    The first run on a line always starts one. After that a run starts a cell
+    when the nearest ink to its left on the same line ends at least
+    CELL_GAP_MIN_PT away. `reach` is the rightmost x seen so far rather than the
+    previous run's own right edge, because a source may set a short run inside
+    the horizontal extent of a longer one it already emitted.
+    """
+    starts: list[float] = []
+    for line in text_lines(runs):
+        reach: float | None = None
+        for run in line:
+            if reach is None or float(run["x0"]) - reach >= CELL_GAP_MIN_PT:
+                starts.append(float(run["x0"]))
+            reach = float(run["x1"]) if reach is None else max(reach, float(run["x1"]))
+    return sorted(starts)
+
+
+def table_columns(runs: Sequence[dict[str, Any]]) -> list[tuple[float, float]]:
+    """The x intervals of a text-only table's columns, left to right.
+
+    Returned in the shape emit.py's table reflow already consumes for its
+    column grid, so it is a replacement for that grid and for nothing else: the
+    prose path and the ruled-lattice path are untouched by it.
+
+    A region with no repeated cell start is not a table and comes back as one
+    column spanning it, which is what 2000-OT p2 and 2550M p3 are and what they
+    already emitted.
+    """
+    if not runs:
+        return []
+    x0 = min(float(run["x0"]) for run in runs)
+    x1 = max(float(run["x1"]) for run in runs)
+
+    clusters: list[list[float]] = []
+    for start in cell_starts(runs):
+        if clusters and start - clusters[-1][0] <= COLUMN_START_TOL_PT:
+            clusters[-1][1] += 1
+        else:
+            clusters.append([start, 1])
+
+    merged: list[list[float]] = []
+    for start, support in clusters:
+        if support < MIN_COLUMN_SUPPORT:
+            continue
+        if merged and start - merged[-1][1] <= MIN_COLUMN_SEPARATION_PT:
+            merged[-1][1] = start
+        else:
+            merged.append([start, start])
+
+    starts = [group[0] for group in merged] or [x0]
+    starts[0] = min(starts[0], x0)
+    edges = [*starts, max(x1, starts[-1])]
+    return [(edges[i], edges[i + 1]) for i in range(len(edges) - 1)]
+
+
+def column_of(run: dict[str, Any], columns: Sequence[tuple[float, float]]) -> int:
+    """The column a run's own left edge sits in. Diagnostic, not emission.
+
+    emit.py decides a run's cell from overlap, so that a run genuinely spanning
+    columns gets a colspan rather than being dropped into one of them. This
+    answers the narrower question the self-test needs -- "which column did the
+    source start this run in" -- and is the question that binds a rate to a code.
+    """
+    for index in range(len(columns) - 1, -1, -1):
+        if float(run["x0"]) >= columns[index][0] - COLUMN_START_TOL_PT:
+            return index
+    return 0
+
+
+# --------------------------------------------------------------------------
 # corpus sweep
 # --------------------------------------------------------------------------
 
@@ -1222,15 +1381,19 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
 
     guide_pages = [(slug, e) for slug, p in rows for e in p["inline"]]
     forms_with = [slug for slug, p in rows if p["inline"]]
-    check(len(guide_pages) == 29, f"expected 29 guide pages, got {len(guide_pages)}")
-    check(len(forms_with) == 28, f"expected 28 forms with a guide, got {len(forms_with)}")
+    # 29 -> 30 pages and 28 -> 29 forms is one page arriving: 1601-EQ p2, which
+    # is pinned in `expected` below with the reason it was previously refused.
+    # No page left, and no page that already had a cut changed where it cuts.
+    check(len(guide_pages) == 30, f"expected 30 guide pages, got {len(guide_pages)}")
+    check(len(forms_with) == 29, f"expected 29 forms with a guide, got {len(forms_with)}")
 
     pcts = [e["reclaimed_pct"] for _, e in guide_pages]
     # 60 -> 62 is arithmetic, not drift: the 29th guide page (2200-AN, which
     # reclaims 100% of its page) pulls a 28-page mean of 60 up by two points.
+    # 62 -> 63 is the same arithmetic again for the 30th (1601-EQ p2, 86%).
     # min and max are unmoved, which is the check that the distribution's shape
     # did not change -- only its membership.
-    check(round(sum(pcts) / len(pcts)) == 62, f"expected mean reclaim 62%, got {pcts}")
+    check(round(sum(pcts) / len(pcts)) == 63, f"expected mean reclaim 63%, got {pcts}")
     check(min(pcts) == 9, f"expected min reclaim 9%, got {min(pcts)}")
     check(max(pcts) == 100, f"expected max reclaim 100%, got {max(pcts)}")
 
@@ -1239,6 +1402,20 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
     # hundredth. `field_cells_below` counts cells lattice.py called `field`,
     # including the ones a pre-printed run crosses; the corpus-wide assertion
     # further down is what proves none of them is actually fillable.
+    #
+    # Four of those counts dropped when lattice.py learned to read the tone of
+    # the paper: a cell whose topmost covering fill is decorative shading at
+    # gray <= 0.87 is no longer `field` but a new kind, `shaded`. Nothing left a
+    # page and no cut moved -- each of these cuts is at the same y, relocating
+    # the same runs, at the same percentage, found by the same detector. What
+    # moved is only what the census calls the grey blocks BIR prints inside a
+    # reference table to mean "no code applies in this column": 1700 p2 9 -> 1
+    # (8 cells, gray 0.8509), 1701MS p2 6 -> 5 (1, 0.8509), 2000-DST p2 7 -> 2
+    # (5, 0.651 and 0.8509), 2550M p3 6 -> 1 (5, 0.7529). Every dropped cell was
+    # checked one at a time: each is `shaded` in the new layout, each has a
+    # decorative covering fill beneath it, and no cell anywhere in the corpus
+    # became `field` that was not one before. 1601-FQ p2 (24 -> 0) and 1602Q p3
+    # (4 -> 0) moved for the same reason and are not pinned here.
     expected = {
         ("1603q-2018", 2): (284.54, 0, 171, 70, "marker"),
         ("1600-pt-2018", 2): (283.91, 4, 126, 70, BAND_PATTERN),
@@ -1249,12 +1426,27 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         # The tax-bracket tables C6 called a blocker: a taxpayer could type over
         # "Not over P 250,000". Partial cuts -- the fillable face above them is
         # untouched, which is what the seven-page guard below proves.
-        ("1700-2018", 2): (837.56, 9, 22, 11, BAND_PATTERN),
-        ("1701ms-2024", 2): (838.43, 6, 22, 10, BAND_PATTERN),
+        ("1700-2018", 2): (837.56, 1, 22, 11, BAND_PATTERN),
+        ("1701ms-2024", 2): (838.43, 5, 22, 10, BAND_PATTERN),
         ("1701q-2018", 2): (769.46, 9, 22, 18, BAND_PATTERN),
         ("1701a-2018", 2): (854.84, 9, 22, 9, BAND_PATTERN),
-        ("2000-dst-2018", 2): (538.03, 7, 137, 43, BAND_PATTERN),
+        ("2000-dst-2018", 2): (538.03, 2, 137, 43, BAND_PATTERN),
         ("2552-2018", 2): (801.52, 2, 23, 14, BAND_PATTERN),
+        # 1601-EQ p2 held the "no cut at all" line until lattice.py started
+        # reading paper tone, and it was holding it for a defect. The page is a
+        # masthead, a TIN comb, a Withholding Agent's Name comb, and then
+        # nothing but the "Schedule of Alphanumeric Tax Codes (ATC)" -- the
+        # reference material this module exists to move, on the same page design
+        # 1602Q p3 has, which has always cut at 128.42 for 86%. What refused it
+        # was admissible_cut_limit stopping at 831.84 on "cut would sever
+        # fillable column p2c222 -> p2c226": two grey blocks (0.7489/0.8509) in
+        # the bottom-right corner of the ATC table, where the right-hand column
+        # runs out of codes before the left one does. They are decoration, they
+        # were never an entry column, and now that they are `shaded` the walk
+        # stops where it should -- at the TIN comb, y 110.06 -- so the band cut
+        # lands at 129.62, the lattice line under the comb row. Both combs stay
+        # on the form, and the corpus-wide comb assertion below is the proof.
+        ("1601eq-2019", 2): (129.62, 26, 339, 86, BAND_PATTERN),
         # Whole pages: 2550M p3 is nothing but its ATC table, so the marker cut at
         # 72.52 that left the running head behind is superseded by cutting at 0.
         #
@@ -1272,7 +1464,29 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         # claimed by a cut at 0 -- so the count grew where the census counts, inside
         # the reclaimed region, while the corpus-wide non-fillable assertion below
         # is unmoved. The cut, runs, reclaim and detector are all unchanged.
-        ("2550m-2007", 3): (0.0, 6, 125, 100, UNFILLABLE_PATTERN),
+        #
+        # 6 -> 1 is the paper-tone change described at the head of this table, and
+        # it half-supersedes the paragraph above: of the two blanks a group heading
+        # leaves in 2550M's ATC column, the one beside "12. Others:" is one of the
+        # five cells here that BIR fills with its 0.7529 grey, so it is `shaded`
+        # now and no longer counted. The one beside "9. Real Estate, Renting &
+        # Business Activity" is grey on paper too but stays `field`: it is a
+        # two-row-tall cell and the source paints that block as two 7.8pt strips,
+        # neither of which covers 70% of it on its own. 0605 p2 keeps all 8 -- its
+        # blanks are white. Cut, runs, reclaim and detector are again unchanged.
+        #
+        # 1 -> 0 (2026-08-07, r14) is the rest of that same sentence arriving.
+        # `lattice.on_shaded_paper` no longer asks a single fill's own rectangle;
+        # `covering_shading_band` clips every overlapping fill to the cell,
+        # resolves each atom to the TOPMOST fill, then measures the largest
+        # CONNECTED region of one exact tone. The two 7.8pt 0.7529 strips over
+        # "9. Real Estate, Renting & Business Activity" touch, so they are one
+        # band and do reach 70% -- the cell is `shaded`, which is what the
+        # paragraph above says the paper actually is. Neither threshold moved
+        # (SHADED_PAPER_MAX_GRAY 0.87, SHADED_PAPER_MIN_COVERAGE 0.70). Cut,
+        # runs, reclaim and detector are again unchanged, and 0605 p2 still
+        # keeps all 8.
+        ("2550m-2007", 3): (0.0, 0, 125, 100, UNFILLABLE_PATTERN),
         ("2550m-2007", 4): (0.0, 0, 143, 100, UNFILLABLE_PATTERN),
         ("2553-1999", 2): (0.0, 0, 94, 100, UNFILLABLE_PATTERN),
         ("0605-1999", 2): (0.0, 8, 281, 100, UNFILLABLE_PATTERN),
@@ -1292,13 +1506,17 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         check(entry["detector"] == detector,
               f"{slug} p{page}: detector {entry['detector']}, expected {detector}")
 
-    # The seven pages a cut must never eat. Four take no cut at all. Three --
+    # The six pages a cut must never eat. Three take no cut at all. Three --
     # 1700 p2, 1701MS p2, 2552 p2 -- end in a statutory rate or ATC table and
     # take a small partial cut, leaving the fillable face above it untouched;
     # C6 lists two of them as blockers for exactly that table. So the assertion
     # is the property that matters rather than "no cut": nothing fillable moves.
-    for slug, page in (("1701-2018", 1), ("1701q-2018", 1), ("1702ex-2018", 1),
-                       ("1601eq-2019", 2)):
+    #
+    # 1601-EQ p2 was a fourth "no cut" page and is one no longer. It is pinned
+    # in `expected` above instead, on all five of its values rather than on the
+    # single fact that it was refused, because the thing that refused it was two
+    # shaded ATC-table blocks read as an entry column and not any form content.
+    for slug, page in (("1701-2018", 1), ("1701q-2018", 1), ("1702ex-2018", 1)):
         entry = next((e for e in plans[slug]["inline"] if e["page"] == page), None)
         check(entry is None, f"{slug} p{page}: cut a guide out of fillable form")
     for slug, page in (("1700-2018", 2), ("1701ms-2024", 2), ("2552-2018", 2)):
@@ -1352,6 +1570,90 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         split_runs = [s for s in entry["straddlers"] if s["kind"] == "text_run"]
         check(not split_runs, f"{slug} p{entry['page']}: text run straddles the cut {split_runs}")
 
+    # ------------------------------------------------------------------
+    # Column structure of a text-only table.
+    # ------------------------------------------------------------------
+    # The defect this exists to prevent, stated as geometry rather than as a
+    # form: two independent table rows printed side by side on one scanline,
+    # each with its own rate. Read in scanline order they concatenate and the
+    # left row's code takes the right row's rate. The first assertion is the
+    # one that shipped wrong: `2%` must be the cell that follows PT 060.
+    def run(text: str, x0: float, x1: float, baseline: float) -> dict[str, Any]:
+        return {"text": text, "x0": x0, "x1": x1, "origin_x": x0,
+                "baseline_y": baseline, "y0": baseline - 6.0, "y1": baseline}
+
+    # Six scanlines, each carrying two independent source rows. Two shapes of
+    # right-hand row occur and both have to be here: one whose description
+    # follows a code on the same line, and one that is a continuation with no
+    # code beside it -- it is the second that establishes the description
+    # column, and the pair that makes the two settings one column rather than
+    # two. Scanline index 2 is the PT 060 row: a left rate and a right rate on
+    # one line, with a continuation between them.
+    scanlines = [
+        # code   description       rate            code2         description2   rate2
+        (24.0, 49.7, 66.5, 234.7, 251.5, 261.6, None, None, 323.0, 404.4, None, None),
+        (24.0, 49.7, 66.5, 196.3, 251.5, 261.6, 294.7, 317.3, 337.2, 529.7, None, None),
+        (24.0, 49.7, 66.5, 226.3, 251.5, 261.6, None, None, 337.2, 450.2, 549.1, 559.2),
+        (24.0, 49.7, 66.5, 241.4, 251.5, 261.6, 294.7, 317.3, 337.2, 525.6, None, None),
+        (None, None, 66.5, 241.4, 251.5, 261.6, None, None, 323.0, 447.6, None, None),
+        (24.0, 49.7, 66.5, 204.0, 251.5, 261.6, 294.7, 317.3, 323.0, 399.1, 549.1, 559.2),
+    ]
+    labels = ("code", "desc", "rate", "code2", "desc2", "rate2")
+    table = []
+    for row, spans in enumerate(scanlines):
+        baseline = 200.0 + 8.64 * row
+        for index, label in enumerate(labels):
+            x0, x1 = spans[2 * index], spans[2 * index + 1]
+            if x0 is None:
+                continue
+            text = "2%" if (row == 2 and label == "rate") else label
+            table.append(run(text, x0, x1, baseline))
+    columns = table_columns(table)
+    check(len(columns) == 6,
+          f"a six-column source table came back as {len(columns)} column(s): "
+          f"{[(round(a, 2), round(b, 2)) for a, b in columns]}")
+    third = [r for r in table if abs(float(r["baseline_y"]) - (200.0 + 8.64 * 2)) < 0.5]
+    placed = {column_of(r, columns): r["text"] for r in third}
+    check(placed.get(0) == "code" and placed.get(1) == "desc" and placed.get(2) == "2%",
+          f"a rate bound to the wrong column on a two-row scanline: {placed}")
+    check(placed.get(5) == "rate2",
+          f"the right half's rate did not stay in the right half: {placed}")
+
+    # The two measured bands the constants sit in, asserted as behaviour rather
+    # than as arithmetic on the constants themselves.
+    pair = [run("a", 10.0, 20.0, 100.0), run("b", 28.2, 40.0, 100.0)]
+    check(cell_starts(pair) == [10.0], "an 8.2pt gap inside a cell started a new one")
+    pair = [run("a", 10.0, 20.0, 100.0), run("b", 35.4, 50.0, 100.0)]
+    check(cell_starts(pair) == [10.0, 35.4], "a 15.4pt gap between cells did not start one")
+
+    # And against the real pages, on the two bands the corpus actually draws
+    # without rules. The y windows are facts about the source sheets, not
+    # tuning: 2551M page 2's ATC schedule runs from the cut at 154.32 down to
+    # the "BIR Form No. 2551M" title at 307.2, and 0605 page 2's tax-type table
+    # and two-column guidelines begin below its ATC table's last row at 274.5.
+    bands = {
+        ("2551m-2002", 2, 154.32, 305.0): [
+            (24.0, 66.48), (66.48, 251.52), (251.52, 294.72),
+            (294.72, 323.04), (323.04, 534.96), (534.96, 582.96)],
+        ("0605-1999", 2, 280.0, 1e6): [
+            (37.44, 94.8), (94.8, 224.81), (224.81, 251.93), (251.93, 317.83),
+            (317.83, 388.15), (388.15, 437.62), (437.62, 576.94)],
+    }
+    for (slug, page, low, high), want in bands.items():
+        ir, _layout = load_pair(ir_dir, layout_dir, slug)
+        entry = next((e for e in plans[slug]["inline"] if e["page"] == page), None)
+        if entry is None:
+            failures.append(f"{slug} p{page}: no guide region to read columns from")
+            continue
+        ir_page = next(p for p in ir["pages"] if p["index"] == page)
+        claimed = set(entry["text_run_indices"])
+        band_runs = [r for i, r in enumerate(ir_page["text_runs"])
+                     if i in claimed and low - EPS_PT <= r["y0"] < high]
+        got = [(round(a, 2), round(b, 2)) for a, b in table_columns(band_runs)]
+        check(got == want, f"{slug} p{page}: columns {got} != {want}")
+
+    failures.extend(emit_agreement_failures())
+
     # Determinism: the plan is a pure function of its inputs.
     ir, layout = load_pair(ir_dir, layout_dir, "1603q-2018")
     standalone = standalone_guide_pdfs(source_root)
@@ -1373,6 +1675,31 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         print(f"FAIL {message}", file=sys.stderr)
     print(f"guides self-test: {len(failures)} failure(s)", file=sys.stderr)
     return 1 if failures else 0
+
+
+def emit_agreement_failures() -> list[str]:
+    """The line grouping this module measures columns on must be emit.py's.
+
+    `table_columns` reads a column structure off the lines it groups; emit.py's
+    reflow then lays runs out on lines it groups itself. If the two tolerances
+    ever differ, the structure is measured on one partition of the runs and
+    applied to another, which is a defect of exactly the shape this module was
+    written to remove. One constant, asserted rather than assumed -- the same
+    trade REVISION_OVERRIDES makes against batch.py.
+    """
+    sys.path.insert(0, str(HERE))
+    try:
+        import emit  # noqa: PLC0415 - optional, and only for this cross-check
+    except Exception as error:  # noqa: BLE001 - a broken emit.py is not our failure
+        return [f"(skipped emit.py cross-check: {error})"]
+    finally:
+        sys.path.pop(0)
+
+    theirs = getattr(emit, "LINE_BASELINE_TOLERANCE_PT", None)
+    if theirs != LINE_BASELINE_TOLERANCE_PT:
+        return [f"LINE_BASELINE_TOLERANCE_PT drifted from emit.py: "
+                f"{theirs} vs {LINE_BASELINE_TOLERANCE_PT}"]
+    return []
 
 
 def batch_agreement_failures(source_root: pathlib.Path) -> list[str]:
