@@ -3613,7 +3613,7 @@ FORM_PAGE_KEYS = {
     "page", "svg_sha256", "vector_paints", "unsupported_regions",
 }
 MEASURED_REFEREE_KEYS = {
-    "status", "reason", "y0", "y1", "source_divider_x",
+    "status", "reason", "y0", "y1", "source_divider_x", "source_rail_x",
     "extra_divider_x", "compartments", "anchor_matches",
     "positions_match", "anchors_complete", "subject_gap_proofs",
     "unproven_subject_gaps", "components", "contract_y0", "contract_y1",
@@ -4731,11 +4731,13 @@ def _measured_referee_certificate_errors(
 
     lattice = cell.get("lattice_divider_x")
     source = referee.get("source_divider_x")
+    rails = referee.get("source_rail_x")
     extras = referee.get("extra_divider_x")
     chosen = referee.get("chosen_topology")
     compartments = referee.get("compartments")
     if (not _finite_number_list(lattice)
             or not _finite_number_list(source)
+            or not _finite_number_list(rails, length=2)
             or not _finite_number_list(extras)
             or not _finite_number_list(chosen)
             or not _is_count(compartments)
@@ -4743,25 +4745,48 @@ def _measured_referee_certificate_errors(
         return [*errors, f"measured source topology is malformed: {label}"]
     lattice_values = [_rounded_six(value) for value in lattice]
     source_values = [_rounded_six(value) for value in source]
+    rail_values = [_rounded_six(value) for value in rails]
     extra_values = [_rounded_six(value) for value in extras]
     chosen_values = [_rounded_six(value) for value in chosen]
     if (any(float(value) != rounded for value, rounded in zip(
                 source, source_values))
             or any(float(value) != rounded for value, rounded in zip(
+                rails, rail_values))
+            or any(float(value) != rounded for value, rounded in zip(
                 extras, extra_values))
             or any(float(value) != rounded for value, rounded in zip(
                 chosen, chosen_values))):
         errors.append(f"measured source coordinates exceed fixed precision: {label}")
+    # A comb is bounded by the RAILS the referee measured, not by the subject
+    # rectangle: one rectangle can rule a caption or a dash box beside the
+    # comb. So the compartment count is the count between those rails, and the
+    # rails must be a pair the published dividers actually sit inside.
+    enclosed_values = [
+        value for value in source_values
+        if rail_values[0] < value < rail_values[1]
+    ]
     if (source_values != sorted(set(source_values))
             or extra_values != sorted(set(extra_values))
             or chosen_values != source_values
-            or compartments != len(source_values) + 1):
+            or rail_values[0] >= rail_values[1]
+            or compartments != len(enclosed_values) + 1):
         errors.append(f"measured source topology relation is false: {label}")
     bbox = cell.get("bbox")
-    if (_finite_number_list(bbox, length=4)
-            and any(not (float(bbox[0]) < value < float(bbox[2]))
-                    for value in source_values)):
-        errors.append(f"measured source divider lies outside its owner: {label}")
+    if _finite_number_list(bbox, length=4):
+        if any(not (float(bbox[0]) < value < float(bbox[2]))
+               for value in source_values):
+            errors.append(
+                f"measured source divider lies outside its owner: {label}")
+        # A rail is either a boundary the source drew inside the rectangle or
+        # the rectangle's own edge; it is never outside, and never a value the
+        # referee did not measure.
+        if any(
+            not (float(bbox[0]) <= value <= float(bbox[2]))
+            or (float(bbox[0]) < value < float(bbox[2])
+                and value not in source_values)
+            for value in rail_values
+        ):
+            errors.append(f"measured source rail is not the owner's: {label}")
 
     anchor_matches = referee.get("anchor_matches")
     anchor_sources: list[float] = []
@@ -5048,12 +5073,14 @@ def _partial_anchor_referee_certificate_errors(
 
     lattice = cell.get("lattice_divider_x")
     source = referee.get("source_divider_x")
+    rails = referee.get("source_rail_x")
     extras = referee.get("extra_divider_x")
     chosen = referee.get("chosen_topology")
     missing = referee.get("missing_anchor_x")
     compartments = referee.get("compartments")
     if (not _finite_number_list(lattice)
             or not _finite_number_list(source)
+            or not _finite_number_list(rails, length=2)
             or not _finite_number_list(extras)
             or not _finite_number_list(chosen)
             or not _finite_number_list(missing)
@@ -5063,19 +5090,29 @@ def _partial_anchor_referee_certificate_errors(
                 f"partial-anchor source topology is malformed: {label}"]
     lattice_values = [_rounded_six(value) for value in lattice]
     source_values = [_rounded_six(value) for value in source]
+    rail_values = [_rounded_six(value) for value in rails]
     chosen_values = [_rounded_six(value) for value in chosen]
     missing_values = [_rounded_six(value) for value in missing]
     if (any(float(value) != rounded for value, rounded in zip(
                 source, source_values))
+            or any(float(value) != rounded for value, rounded in zip(
+                rails, rail_values))
             or any(float(value) != rounded for value, rounded in zip(
                 chosen, chosen_values))
             or any(float(value) != rounded for value, rounded in zip(
                 missing, missing_values))):
         errors.append(
             f"partial-anchor coordinates exceed fixed precision: {label}")
+    # Same relation as the full-anchor path: the count is the compartments
+    # between the measured rails, not across the subject rectangle.
+    enclosed_values = [
+        value for value in source_values
+        if rail_values[0] < value < rail_values[1]
+    ]
     if (source_values != sorted(set(source_values))
             or chosen_values != source_values
-            or compartments != len(source_values) + 1):
+            or rail_values[0] >= rail_values[1]
+            or compartments != len(enclosed_values) + 1):
         errors.append(
             f"partial-anchor source topology relation is false: {label}")
     if list(extras):
@@ -5087,11 +5124,20 @@ def _partial_anchor_referee_certificate_errors(
         errors.append(
             f"partial-anchor missing-anchor inventory is invalid: {label}")
     bbox = cell.get("bbox")
-    if (_finite_number_list(bbox, length=4)
-            and any(not (float(bbox[0]) < value < float(bbox[2]))
-                    for value in source_values)):
-        errors.append(
-            f"partial-anchor source divider lies outside its owner: {label}")
+    if _finite_number_list(bbox, length=4):
+        if any(not (float(bbox[0]) < value < float(bbox[2]))
+               for value in source_values):
+            errors.append(
+                f"partial-anchor source divider lies outside its owner: "
+                f"{label}")
+        if any(
+            not (float(bbox[0]) <= value <= float(bbox[2]))
+            or (float(bbox[0]) < value < float(bbox[2])
+                and value not in source_values)
+            for value in rail_values
+        ):
+            errors.append(
+                f"partial-anchor source rail is not the owner's: {label}")
 
     anchor_matches = referee.get("anchor_matches")
     matched_layout: list[float] = []
@@ -10037,6 +10083,7 @@ def _synthetic_comb_fixture(
             "y0": 0.0,
             "y1": 10.0,
             "source_divider_x": [5.0],
+            "source_rail_x": [0.0, 10.0],
             "extra_divider_x": [],
             "compartments": 2,
             "anchor_matches": [{
@@ -11456,6 +11503,7 @@ def self_test() -> int:
             "occupies a strict majority of the comb band"),
         "y1": 6.0,
         "source_divider_x": [3.0, 7.0],
+        "source_rail_x": [0.0, 10.0],
         "extra_divider_x": [],
         "compartments": 3,
         "anchor_matches": [
@@ -11527,6 +11575,7 @@ def self_test() -> int:
         "y0": 0.0,
         "y1": 10.0,
         "source_divider_x": [3.0],
+        "source_rail_x": [0.0, 10.0],
         "extra_divider_x": [],
         "compartments": 2,
         "anchor_matches": [{
@@ -12169,6 +12218,29 @@ def self_test() -> int:
             "unproven subject gap",
             lambda value: value["forms"][0]["cells"][0]["referee"][
                 "unproven_subject_gaps"].append({"reason": "forged"}),
+        ),
+        # A comb is counted between the rails the referee measured. Counting
+        # it across the whole rectangle again is the defect this key exists to
+        # close, and each way of forging a rail is refused separately.
+        (
+            "compartments counted across the rectangle, not the rails",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [5.0, 10.0]}),
+        ),
+        (
+            "a rail the referee never measured",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [4.0, 10.0]}),
+        ),
+        (
+            "a rail outside the owner",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [-1.0, 10.0]}),
+        ),
+        (
+            "rails that do not enclose anything",
+            lambda value: value["forms"][0]["cells"][0]["referee"].update({
+                "source_rail_x": [10.0, 0.0]}),
         ),
         (
             "zero measured span",

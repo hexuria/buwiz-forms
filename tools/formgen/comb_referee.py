@@ -4827,6 +4827,95 @@ def visible_vertical_runs(
     return runs
 
 
+def closes_subject_box(paints: Sequence[Paint], x: float,
+                       y0: float, y1: float, tone: float) -> bool:
+    """Does the source's own ink at `x` close this rectangle top to bottom?
+
+    This is the referee's WALL test, and it is what separates a comb's outer
+    RAIL from its compartment dividers.  A rail closes the box: its ink runs
+    from the rule that shuts the rectangle at the top to the rule that shuts
+    it at the bottom.  A divider tick hangs inside that box and stops on
+    paper.  Both are the same tone, the same width and the same shape, so
+    neither the tone filter nor the width filter above can tell them apart;
+    only the ray can.
+
+    Everything here is Poppler's.  The ray is walked with
+    `visible_vertical_runs`, so a mark a later fill covers is already gone,
+    and the rectangle comes from the subject the ledger names -- never from
+    the producer's own answer about where the comb's edges are.
+
+    Two joins, and they are the only tolerances:
+
+      * a break narrower than the STROKE either side of it is not a break.
+        Poppler splits one printed rule into a fill per crossing vertical and
+        leaves one-quantum seams between them, and official sheets break a
+        wall where the band's own rule crosses it (1800 leaves 0.24pt of
+        paper between a 0.48 and a 0.24pt stroke) or stop it a hair short of
+        the rule above (0.12pt under a 1.44pt rule).  The bound is the
+        stroke's own thickness, `min(width, height)`, so it is always a
+        fraction of a point and can never bridge a compartment's worth of
+        paper.
+      * a break the source PAINTED OVER is never joined, however narrow. An
+        erasure across the junction is the sheet saying the stroke stops
+        there, and it is exactly what separates two forms that draw the same
+        shape: 2200-A paints out the junction between its YYYY column and the
+        row above, 1800 leaves paper beside its knockout and the column
+        carries through.
+
+    The search window is the rectangle plus its own height either side -- the
+    same neighbourhood `source_wall_thickness` measures a wall in -- because
+    the rules that close a box are drawn outside it.
+    """
+    height = y1 - y0
+    segments: list[tuple[float, float, bool, float]] = []
+    cursor = y0 - height
+    for top, bottom, owner in visible_vertical_runs(
+            paints, x, y0 - height, y1 + height):
+        if top > cursor + 1e-9:
+            segments.append((cursor, top, False, 0.0))
+        segments.append((
+            top, bottom,
+            abs(owner.tone - tone) <= 1e-8 and not owner.clipped,
+            min(owner.width, owner.height),
+        ))
+        cursor = bottom
+    if cursor < y1 + height - 1e-9:
+        segments.append((cursor, y1 + height, False, 0.0))
+
+    chains: list[tuple[float, float]] = []
+    chain: tuple[float, float, float] | None = None
+    paper_gap: tuple[float, float] | None = None
+    for top, bottom, on_tone, weight in segments:
+        if on_tone:
+            if chain is not None and paper_gap is not None:
+                gap, before = paper_gap
+                if gap <= max(before, weight) + 1e-9:
+                    chain = (chain[0], bottom, weight)
+                    paper_gap = None
+                    continue
+                chains.append((chain[0], chain[1]))
+                chain = None
+            paper_gap = None
+            chain = ((top, bottom, weight) if chain is None
+                     else (chain[0], bottom, weight))
+            continue
+        if chain is None:
+            continue
+        if weight == 0.0:
+            # Unpainted paper: a candidate break, decided when ink resumes.
+            paper_gap = (bottom - top, chain[2])
+            continue
+        chains.append((chain[0], chain[1]))
+        chain = None
+        paper_gap = None
+    if chain is not None:
+        chains.append((chain[0], chain[1]))
+    return any(
+        top <= y0 + POSITION_TOL_PT and bottom >= y1 - POSITION_TOL_PT
+        for top, bottom in chains
+    )
+
+
 def source_wall_thickness(
         paints: Sequence[Paint], box: dict[str, float], tone: float,
         edge: str, probes: Sequence[float],
@@ -5077,6 +5166,49 @@ def classify_band(
     # retry it prevents an unrelated frame inside the cell from proving an
     # empty multi-pitch gap in the external source band.
     proof_y0, proof_y1 = evaluation_y0, evaluation_y1
+
+    wall_verdicts: dict[float, bool] = {}
+
+    def is_rail(value: float) -> bool:
+        """Whether the source closes the subject's box at this boundary."""
+        key = round(float(value), 6)
+        verdict = wall_verdicts.get(key)
+        if verdict is None:
+            verdict = closes_subject_box(
+                page.paints, float(value), cell_y0, cell_y1, divider_tone)
+            wall_verdicts[key] = verdict
+        return verdict
+
+    def rail_bounded(values: Sequence[float]
+                     ) -> tuple[float, float, list[float]]:
+        """Split one slab's measured boundaries into rails and dividers.
+
+        A comb ends where the source closes its box, not where the ledger's
+        rectangle ends: one rectangle can rule a caption, a TIN dash box or a
+        neighbouring field beside the comb, and counting `len(dividers) + 1`
+        across the whole rectangle then invents a compartment the sheet does
+        not print.  A wall OUTSIDE the tick run is that comb's rail; a wall
+        between two ticks stays a divider, because a box closed on both sides
+        of a compartment is still one of this comb's compartments (1801's TIN
+        rules its dash boxes with exactly such walls).  With no wall outside
+        the run -- and with no ticks at all, a row of full-height boxes -- the
+        rectangle's own edges stand, exactly as before.
+        """
+        ticks = [value for value in values if not is_rail(value)]
+        left, right = x0, x1
+        if ticks:
+            walls_left = [value for value in values
+                          if value < ticks[0] and is_rail(value)]
+            walls_right = [value for value in values
+                           if value > ticks[-1] and is_rail(value)]
+            if walls_left:
+                left = max(walls_left)
+            if walls_right:
+                right = min(walls_right)
+        return left, right, [
+            value for value in values if left < value < right
+        ]
+
     max_width = pitch / 2
     candidates = [
         paint for paint in page.paints
@@ -5443,12 +5575,16 @@ def classify_band(
                 missing_anchor_x = sorted(
                     round(float(anchor), 6)
                     for anchor in available_anchors)
+                partial_left, partial_right, partial_enclosed = (
+                    rail_bounded(partial_x))
                 bands.append({
                     "status": "measured",
                     "y0": round(a, 6), "y1": round(b, 6),
                     "source_divider_x": partial_x,
+                    "source_rail_x": [
+                        round(partial_left, 6), round(partial_right, 6)],
                     "extra_divider_x": [],
-                    "compartments": len(partial_x) + 1,
+                    "compartments": len(partial_enclosed) + 1,
                     "anchor_matches": partial_matches,
                     "missing_anchor_x": missing_anchor_x,
                     "anchors_complete": False,
@@ -5742,12 +5878,14 @@ def classify_band(
                 "invalid_gaps": invalid_source_gaps,
             })
             continue
+        rail_left, rail_right, enclosed_x = rail_bounded(source_x)
         bands.append({
             "status": "measured",
             "y0": round(a, 6), "y1": round(b, 6),
             "source_divider_x": source_x,
+            "source_rail_x": [round(rail_left, 6), round(rail_right, 6)],
             "extra_divider_x": sorted(unique_extras),
-            "compartments": len(source_x) + 1,
+            "compartments": len(enclosed_x) + 1,
             "anchor_matches": [
                 {key: value for key, value in match.items()
                  if key != "group_index"}
@@ -6441,15 +6579,27 @@ def retained_suppression_corroboration(
         finite_number(value, f"{label} source_divider_x")
         for value in band.get("source_divider_x") or ()
     ]
+    # The compartments the glyphs are attributed to run between the source's
+    # own RAILS, not between the subject rectangle's edges: `classify_band`
+    # measures where the box closes, and a rectangle that also rules a caption
+    # would otherwise hand this census a compartment the sheet never printed.
+    rails = [
+        finite_number(value, f"{label} source_rail_x")
+        for value in band.get("source_rail_x") or ()
+    ]
+    if len(rails) != 2 or rails[1] <= rails[0]:
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source publishes no "
+            "rail pair for the retained band")
+    enclosed = [value for value in source_x if rails[0] < value < rails[1]]
     if (band.get("compartments") != topology["cells"]
-            or len(source_x) != topology["cells"] - 1
+            or len(enclosed) != topology["cells"] - 1
             or not bool(band.get("positions_match"))):
         raise RefereeError(
             f"{label} suppression is uncorroborated: the source draws "
             f"{band.get('compartments')} compartments where the retained "
             f"topology publishes {topology['cells']}")
-    x0, _y0, x1, _y1 = subject["legacy_bbox"]
-    walls = [float(x0), *source_x, float(x1)]
+    walls = [rails[0], *enclosed, rails[1]]
     if any(right <= left for left, right in zip(walls, walls[1:])):
         raise RefereeError(
             f"{label} suppression is uncorroborated: the source walls are "
@@ -9377,6 +9527,81 @@ def self_test() -> int:
     assert result["status"] == "measured", result
     assert result["compartments"] == 4, result
     assert result["extra_divider_x"] == [20.0], result
+    assert result["source_rail_x"] == [0.0, 40.0], result
+
+    # ---- the comb's own RAILS, measured from Poppler ------------------------
+    #
+    # Every boundary above hangs inside the box, so the rectangle's edges are
+    # the rails and the count is unchanged.  Close the box at one of them and
+    # the comb starts there instead: the rectangle also rules something else,
+    # and the compartment beyond the rail is not this comb's.
+    rail_cell = {
+        **cell,
+        "comb": {**cell["comb"], "cells": 3, "divider_x": [20.0, 30.0]},
+    }
+    closing_wall = Paint(9.9, 0.1, 10.1, 9.9, 0.0, 20, "stroke", "wall-10")
+    railed = classify_band(rail_cell, SvgPage(
+        100, 100,
+        [*source_frame(), closing_wall, paint(20), paint(30)], [], "x"))
+    assert railed["status"] == "measured", railed
+    assert railed["source_divider_x"] == [10.0, 20.0, 30.0], railed
+    assert railed["source_rail_x"] == [10.0, 40.0], railed
+    assert railed["compartments"] == 3, railed
+
+    # The same shape with the junction PAINTED OUT is the sheet saying the
+    # stroke stops there.  It divides nothing, so it stays a divider and the
+    # comb keeps the rectangle's edges.
+    erased_junction = Paint(9.8, 0.05, 10.2, 0.45, 1.0, 21, "fill", "knockout")
+    unrailed = classify_band(rail_cell, SvgPage(
+        100, 100,
+        [*source_frame(), closing_wall, erased_junction,
+         paint(20), paint(30)], [], "x"))
+    assert unrailed["status"] == "measured", unrailed
+    assert unrailed["source_rail_x"] == [0.0, 40.0], unrailed
+    assert unrailed["compartments"] == 4, unrailed
+
+    # A wall BETWEEN two ticks is a compartment boundary the source closed on
+    # both sides -- 1801 rules its TIN dash boxes exactly so -- and a comb
+    # drawn entirely from such walls keeps every one of them.
+    interior_wall_cell = {
+        **cell,
+        "comb": {**cell["comb"], "cells": 4, "divider_x": [10.0, 20.0, 30.0]},
+    }
+    interior_walled = classify_band(interior_wall_cell, SvgPage(
+        100, 100,
+        [*source_frame(), paint(10),
+         Paint(19.9, 0.1, 20.1, 9.9, 0.0, 20, "stroke", "wall-20"),
+         paint(30)], [], "x"))
+    assert interior_walled["status"] == "measured", interior_walled
+    assert interior_walled["source_rail_x"] == [0.0, 40.0], interior_walled
+    assert interior_walled["compartments"] == 4, interior_walled
+
+    # `closes_subject_box` itself, on the two joins that are its only
+    # tolerances and on the case they must not reach.
+    frame_paints = source_frame()
+    assert closes_subject_box(
+        [*frame_paints, closing_wall], 10.0, 0.0, 10.0, 0.0)
+    assert not closes_subject_box(
+        [*frame_paints, paint(20)], 20.0, 0.0, 10.0, 0.0)
+    hairline_break = [
+        Paint(9.9, 0.1, 10.1, 5.0, 0.0, 20, "stroke", "wall-upper"),
+        Paint(9.9, 5.15, 10.1, 9.9, 0.0, 21, "stroke", "wall-lower"),
+    ]
+    assert closes_subject_box(
+        [*frame_paints, *hairline_break], 10.0, 0.0, 10.0, 0.0)
+    paper_break = [
+        Paint(9.9, 0.1, 10.1, 5.0, 0.0, 20, "stroke", "wall-upper"),
+        Paint(9.9, 5.4, 10.1, 9.9, 0.0, 21, "stroke", "wall-lower"),
+    ]
+    assert not closes_subject_box(
+        [*frame_paints, *paper_break], 10.0, 0.0, 10.0, 0.0)
+    assert not closes_subject_box(
+        [*frame_paints, closing_wall, erased_junction],
+        10.0, 0.0, 10.0, 0.0)
+    # A rail is a fact about the SUBJECT's box: the same ink closes nothing
+    # for a rectangle it does not reach the bottom of.
+    assert not closes_subject_box(
+        [*frame_paints, closing_wall], 10.0, 0.0, 20.0, 0.0)
 
     # A source guide band may live immediately outside one cell edge because
     # the shared horizontal owns the partition.  The whole attached band is
