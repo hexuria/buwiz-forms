@@ -95,6 +95,41 @@ Current stage-2 ledger: exactly ONE true correction is known -- the TIN branch
 code 3 -> 5 on 2550M (see the table above). The applier gets built when stage 1
 closes, against this section.
 
+## Rule 4, wired at r27 — the checkable half
+
+`gate.py` gained a `corrected-tree` check. It is the minimum honest version and
+its branches are stated here so that a later widening is a visible change:
+
+| State | Verdict |
+| --- | --- |
+| `forms-corrected/` absent | **PASS** — stage 2 is unbuilt; nothing downstream reads a tree that is not there |
+| present, no manifest | **FAIL** — bytes nobody can re-derive from a named batch |
+| a manifest `correct.py --verify` cannot re-derive | **FAIL** — the check demands that verification rather than re-implementing it, so the second opinion does not share this file's assumptions |
+| verified, no divergence declared | **PASS** |
+| a declared divergence, no fidelity report | **FAIL** |
+| a declared divergence the report does not name | **FAIL** — this is rule 1's silent override, and it is the branch that must never go green |
+
+All seven branches are fixtures in `gate.self_test`. The four interesting ones
+were also proven end to end at r27 against a real corrected tree built from
+`corpus/r27`: no report FAILs; a report naming the sentence PASSes; a report
+that paraphrases it into "the tree matches the official form" FAILs; and one
+byte edited by hand after the applier ran FAILs, naming the file. That tree was
+removed afterwards — this round does not land stage 2.
+
+One defect the end-to-end proof caught that the fixtures had not: the divergence
+sentence `build_manifest` generates contains double quotes, so a raw substring
+search against a JSON report reported a sentence as absent from a report that
+plainly contained it. The check now decodes a JSON report's strings before
+looking, and falls back to raw text otherwise, so it does not depend on a report
+format that has not been decided.
+
+**What is still missing, precisely.** There is no fidelity run over
+`forms-corrected/`, so `build/corrected-fidelity.json` does not exist. Until it
+does, declaring any correction turns the gate red — the fail-closed direction,
+and the reason this check could land before that report. The gate also does not
+yet run the stage-1 checks a second time over the corrected tree; that is the
+other half of rule 4 and is not wired.
+
 ## Why rule 3 matters here specifically
 
 Every integrity defect found today had the same shape: a checker that shared an

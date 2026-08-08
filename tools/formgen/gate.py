@@ -63,6 +63,14 @@ FINDINGS = HERE / "review-findings.json"
 COMB_REFEREE_REPORT = BUILD / "comb-referee.json"
 COMB_REFEREE_ATTESTATION = BUILD / "comb-referee-attested.json"
 COMB_REFEREE_SOURCE_ROOT = pathlib.Path.home() / "Downloads/forms"
+# Stage 2 (ARCHITECTURE.md). The corrected tree, its ledger, and the report a
+# fidelity run over that tree must write. The last of the three DOES NOT EXIST
+# yet and is named here on purpose: `check_corrected_tree` fails when a
+# divergence is declared and no report publishes it, so naming the path is what
+# makes that failure legible instead of mysterious.
+CORRECTED_TREE = REPO / "forms-corrected"
+CORRECTED_MANIFEST = REPO / "forms-corrected.manifest.json"
+CORRECTED_FIDELITY_REPORT = BUILD / "corrected-fidelity.json"
 
 # Corpus census. Pins, not thresholds: a form that appears or disappears has to
 # be declared here, in a commit that says which one and why. 51 -> 53 and
@@ -9398,6 +9406,150 @@ def check_no_tracked_deletions() -> Result:
     return _tracked_deletion_result(proc.stdout)
 
 
+def corrected_tree_result(*, tree_exists: bool, manifest_exists: bool,
+                          verify_code: int | None, verify_output: str,
+                          divergence_reports: list[str],
+                          fidelity_text: str | None) -> Result:
+    """ARCHITECTURE.md rule 4, in the half that is checkable today.
+
+    The rule: "The gate runs on BOTH trees. On forms-corrected/, fidelity must
+    fail ONLY at the declared divergences, each named per rule 1; an undeclared
+    diff between the trees is a build failure, not a shrug."
+
+    Pure, so the fixtures in `self_test` drive every branch without a
+    filesystem or a subprocess. What it does NOT do is as important as what it
+    does, so it is stated rather than implied:
+
+      * **No corrected tree -> PASS.** Stage 2 is unbuilt. That is a true
+        statement about a tree that does not exist, not a check that was
+        skipped, and it is the one branch where absence is an answer -- because
+        nothing downstream reads a tree that is not there.
+      * **A corrected tree with no manifest -> FAIL.** Bytes nobody can
+        re-derive from a named batch are exactly the parallel corpus rule 2
+        forbids.
+      * **A manifest `correct.py verify` cannot re-derive -> FAIL.** That
+        command is the independent re-derivation: it rebuilds copy(batch) +
+        records from the batch and the ledger and treats the tree on disk as a
+        suspect. This check does not re-implement it; re-implementing it here
+        would be a second opinion that shares this file's assumptions.
+      * **A verified manifest declaring NO divergence -> PASS.**
+      * **A declared divergence with no fidelity report naming it -> FAIL.**
+        This is the branch that must never become a pass. A correction whose
+        divergence nothing publishes is precisely the silent override rule 1
+        exists to forbid, and `correct.build_manifest` generates the exact
+        sentence a report has to print so a downstream reporter cannot
+        paraphrase it into a green tick. There is no fidelity report over
+        forms-corrected/ yet, so today this branch means "declare a correction
+        and the gate goes red until the report exists" -- the fail-closed
+        direction, and the reason this check can land before that report does.
+    """
+    if not tree_exists:
+        return Result("corrected-tree", Verdict.PASS,
+                      "forms-corrected/ does not exist; stage 2 is unbuilt")
+    if not manifest_exists:
+        return Result("corrected-tree", Verdict.FAIL,
+                      "forms-corrected/ exists with no manifest, so nothing "
+                      "says which batch it came from or what was applied")
+    if verify_code != 0:
+        tail = " ".join((verify_output or "").split())[-160:]
+        return Result("corrected-tree", Verdict.FAIL,
+                      "correct.py verify does not re-derive the corrected "
+                      f"tree: {tail or 'no output'}")
+    if not divergence_reports:
+        return Result("corrected-tree", Verdict.PASS,
+                      "manifest verifies; no divergence declared")
+    if fidelity_text is None:
+        return Result(
+            "corrected-tree", Verdict.FAIL,
+            f"{len(divergence_reports)} declared divergence(s) and no fidelity "
+            f"report at {CORRECTED_FIDELITY_REPORT.name} to publish them")
+    missing = [report for report in divergence_reports
+               if report not in fidelity_text]
+    if missing:
+        return Result(
+            "corrected-tree", Verdict.FAIL,
+            f"{len(missing)}/{len(divergence_reports)} declared divergence(s) "
+            f"absent from the fidelity report: {'; '.join(missing[:2])[:140]}")
+    return Result(
+        "corrected-tree", Verdict.PASS,
+        f"manifest verifies; all {len(divergence_reports)} declared "
+        f"divergence(s) named in the fidelity report")
+
+
+def check_corrected_tree() -> Result:
+    tree_exists = CORRECTED_TREE.is_dir()
+    manifest_exists = CORRECTED_MANIFEST.is_file()
+    if not tree_exists or not manifest_exists:
+        return corrected_tree_result(
+            tree_exists=tree_exists, manifest_exists=manifest_exists,
+            verify_code=None, verify_output="", divergence_reports=[],
+            fidelity_text=None)
+    code, output = run([str(HERE / "correct.py"), "--verify",
+                        "--manifest", str(CORRECTED_MANIFEST)])
+    reports: list[str] = []
+    try:
+        manifest = json.loads(CORRECTED_MANIFEST.read_text(encoding="utf-8"))
+        declared = manifest.get("divergences")
+        if isinstance(declared, list):
+            reports = [str(entry.get("report")) for entry in declared
+                       if isinstance(entry, dict)]
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        # An unreadable manifest is `correct.py verify`'s failure to report,
+        # not this function's to guess at. If verify somehow passed on it, an
+        # empty divergence list is not treated as "no divergence": the verify
+        # branch above has already decided, and a manifest this file cannot
+        # parse is named here so the two can never disagree silently.
+        return Result("corrected-tree", Verdict.FAIL,
+                      "the corrected tree's manifest cannot be read as JSON, "
+                      "so its declared divergences cannot be checked")
+    return corrected_tree_result(
+        tree_exists=True, manifest_exists=True, verify_code=code,
+        verify_output=output, divergence_reports=reports,
+        fidelity_text=fidelity_report_text())
+
+
+def _json_strings(value: Any, out: list[str]) -> None:
+    if isinstance(value, str):
+        out.append(value)
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            out.append(str(key))
+            _json_strings(child, out)
+    elif isinstance(value, list):
+        for child in value:
+            _json_strings(child, out)
+
+
+def fidelity_report_text() -> str | None:
+    """The corrected tree's fidelity report, as text a sentence can be found in.
+
+    The report's FORMAT is not fixed yet -- it is the half of rule 4 that does
+    not exist -- so this reads it both ways and never depends on the choice. If
+    it parses as JSON, every string it contains is decoded and joined, because
+    the divergence sentence `correct.build_manifest` generates contains double
+    quotes and would not survive a raw substring search against the escaped
+    bytes. That was not a hypothetical: the first end-to-end run of this check
+    reported a sentence as absent from a report that plainly contained it. If
+    it is not JSON, the raw text is used unchanged.
+    """
+    if not CORRECTED_FIDELITY_REPORT.is_file():
+        return None
+    try:
+        raw = CORRECTED_FIDELITY_REPORT.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        # Unreadable is not absent, and it is certainly not "published".
+        # Returning empty text keeps the caller on the FAIL branch that names
+        # the missing sentences rather than the one that names a missing file.
+        return ""
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    strings: list[str] = []
+    _json_strings(parsed, strings)
+    return "\n".join(strings)
+
+
 CHECKS: dict[str, Callable[[], Result]] = {
     "self-tests": check_self_tests,
     "conversion": check_conversion,
@@ -9409,6 +9561,7 @@ CHECKS: dict[str, Callable[[], Result]] = {
     "comb-referee": check_comb_referee,
     "findings": check_findings,
     "tracked-files": check_no_tracked_deletions,
+    "corrected-tree": check_corrected_tree,
 }
 
 
@@ -10538,6 +10691,48 @@ def self_test() -> int:
     findings_fixture["findings"] = []
     if not findings_payload_errors(findings_fixture):
         failures.append("an empty findings ledger must fail closed")
+
+    # ARCHITECTURE.md rule 4. Six fixtures, one per branch, and the two that
+    # matter are the ones that must never go green: a corrected tree whose
+    # manifest does not re-derive, and a declared divergence no fidelity report
+    # publishes. The absent-tree branch is the only PASS on absence, and it is
+    # asserted explicitly so that a later edit widening it is a test change
+    # rather than a silent one.
+    def _corrected(**over: Any) -> Result:
+        fixture: dict[str, Any] = {
+            "tree_exists": True, "manifest_exists": True,
+            "verify_code": 0, "verify_output": "",
+            "divergence_reports": [], "fidelity_text": None,
+        }
+        fixture.update(over)
+        return corrected_tree_result(**fixture)
+
+    declared = ["diverges by declared override C001, authorised by RR 11-2018"]
+    corrected_cases: tuple[tuple[str, Result, Verdict], ...] = (
+        ("an unbuilt stage 2 is not a skipped check",
+         _corrected(tree_exists=False, manifest_exists=False), Verdict.PASS),
+        ("a corrected tree with no manifest is a build failure",
+         _corrected(manifest_exists=False), Verdict.FAIL),
+        ("a manifest that does not re-derive is a build failure",
+         _corrected(verify_code=1,
+                    verify_output="manifest does not re-derive: files[3]"),
+         Verdict.FAIL),
+        ("a verified manifest declaring nothing passes",
+         _corrected(), Verdict.PASS),
+        ("a declared divergence with no fidelity report is a build failure",
+         _corrected(divergence_reports=declared), Verdict.FAIL),
+        ("a declared divergence absent from the report is a build failure",
+         _corrected(divergence_reports=declared,
+                    fidelity_text="{\"forms\": []}"), Verdict.FAIL),
+        ("a declared divergence the report names passes",
+         _corrected(divergence_reports=declared,
+                    fidelity_text=f"report: {declared[0]}"), Verdict.PASS),
+    )
+    for label, result, expected in corrected_cases:
+        if result.verdict is not expected or result.name != "corrected-tree":
+            failures.append(f"corrected-tree rule 4: {label}")
+    if "corrected-tree" not in CHECKS:
+        failures.append("rule 4 is not wired into the gate's check inventory")
 
     huge_json_integer = ("[" + "9" * 5000 + "]").encode("ascii")
     try:
