@@ -41,6 +41,13 @@ boxes.  Every other partial pattern, unsupported vector geometry, clipped
 candidate, missing provenance, or competing source band is UNEVALUABLE --
 never a pass.
 
+A subject the lattice RETAINS -- published, emitting nothing, blocking the
+gate -- is withdrawn from that adjudication, so the topology it leaves behind
+must not be one the producer certified for itself; see THE RETAINED-TOPOLOGY
+INVARIANT below.  The single exception is a suppression reason whose factual
+claim about the paper this referee can re-derive from the same Poppler output,
+and it is then re-derived rather than believed.
+
 Raster output is not produced and cannot affect a verdict.
 
 Examples:
@@ -413,6 +420,60 @@ COMB_SUBJECT_STATES = frozenset({
     "retained_unresolved",
 })
 COMB_INFERENCE_STATE = "suppressed_unreviewed_inference"
+
+# THE RETAINED-TOPOLOGY INVARIANT, stated once because two different failures
+# hide behind the same word "retained".
+#
+#   A subject the producer has WITHDRAWN FROM ADJUDICATION may not leave behind
+#   a topology that same producer has certified.
+#
+# A retained subject emits nothing, so no emitted-slot assertion can reach it;
+# `comparison` returns `unevaluable` for it, so the four-way agreement is never
+# taken; and `transition_decision` says only that an explicit ledger transition
+# is required.  The one thing it does leave in the ledger is `legacy_comb` --
+# and that is precisely the shape a later transition would be promoted from.
+# Letting a producer publish `resolution.status == "resolved"` there is letting
+# it bank a self-certified shape for a promotion nobody adjudicated, which is
+# the exact mechanism GOAL.md's decision 1 forbids.
+#
+# Until r27 every retained subject published a LEGACY-CONTINUITY band, which
+# `lattice.legacy_comb_bands` marks unresolved by construction, so "a retained
+# legacy_comb is unresolved" was true of every shape that existed and the guard
+# never had to distinguish anything.  r27 created a second shape: a cell whose
+# own printed text refutes the claim that its compartments are character cells
+# keeps the comb the lattice actually measured on it, and that comb may well be
+# RESOLVED -- we know exactly what the source drew; we are declining to emit it
+# as a typing surface.  The topology status answers "could the source shape be
+# determined?"; the suppression reason answers "may it be emitted?".  They are
+# different questions and the guard was reading one for the other.
+#
+# The producer is NOT taken at its word about which of the two it is in.  A
+# retained subject may publish a resolved topology only when its reason tuple
+# is one this referee can RE-DERIVE FROM POPPLER (below), and the re-derivation
+# then runs against the pinned PDF's own vector output.  An unrecognised reason
+# with a resolved topology still fails, exactly as before.
+CHARACTER_CELL_MAX_PRINTED_GLYPHS = 1
+SOURCE_CAPTION_BLOCK_CRITERION = (
+    "source-printed-caption-block-not-character-cells-v1"
+)
+# Retained suppression reason tuples this referee can corroborate from the
+# source, and the criterion each is corroborated under.  A tuple is admitted
+# here only when the referee can answer the reason's OWN factual claim out of
+# Poppler's output; a reason that merely asserts something about the producer's
+# internal state can never appear in this table.
+RETAINED_SUPPRESSION_SOURCE_CRITERIA = {
+    ("emission-suppressed-caption-block-not-character-cells",):
+        SOURCE_CAPTION_BLOCK_CRITERION,
+}
+# Poppler emits every character as a `use` of a `#glyph-*` path, and `parse_svg`
+# records each one as an unsupported region carrying its transformed bound.
+# These two reasons are the ones that carry a MEASURED glyph box; the other
+# glyph reasons are whole-page regions meaning "text exists that this parser
+# could not place", and they are deliberately not counted.
+MEASURED_GLYPH_REASON_PREFIXES = (
+    "glyph use may occlude geometry: ",
+    "stroked glyph use may occlude geometry: ",
+)
 # Corpus identity pins, not geometry exceptions: every slug follows the same
 # parser and decision rules. A substituted/missing form must not pass merely
 # because the replacement keeps the two aggregate counts unchanged.
@@ -4169,6 +4230,7 @@ def validate_comb_ledger(
                     "source_cell": cell,
                     "topology": topology,
                     "ledger": subject,
+                    "source_suppression_criterion": None,
                 })
                 continue
 
@@ -4183,7 +4245,19 @@ def validate_comb_ledger(
             legacy_topology = validate_comb_topology(
                 subject.get("legacy_comb"), legacy_bbox,
                 f"{label} retained legacy_comb")
-            if legacy_topology["resolution_status"] != "unresolved":
+            # See THE RETAINED-TOPOLOGY INVARIANT above.  `reason_codes` is
+            # already proven to be a unique, non-empty list of non-empty
+            # strings for every non-`active_resolved` subject, so an absent or
+            # malformed reason has failed before this point; what is decided
+            # here is whether the reason it published is one whose factual
+            # claim this referee can re-derive from the source.  Nothing is
+            # granted by this lookup: a hit only defers the decision to
+            # `retained_suppression_corroboration`, which runs against Poppler
+            # and which `form_report` proves it ran.
+            suppression_criterion = RETAINED_SUPPRESSION_SOURCE_CRITERIA.get(
+                tuple(reason_codes))
+            if (legacy_topology["resolution_status"] != "unresolved"
+                    and suppression_criterion is None):
                 raise RefereeError(
                     f"{label} retained legacy_comb is not unresolved")
             mapped_ids = string_list(
@@ -4226,6 +4300,7 @@ def validate_comb_ledger(
                 },
                 "topology": legacy_topology,
                 "ledger": subject,
+                "source_suppression_criterion": suppression_criterion,
             })
 
         comb_cells = [
@@ -4406,6 +4481,14 @@ def validate_comb_ledger(
     blockers = sum(
         subject["blocks_gate"] for subject in published_subjects
     ) + len(published_inferences)
+    # The work order for `form_report`, computed here so that the obligation is
+    # created by the same pass that admits the reason.  A corroboration this
+    # ledger demanded and nobody performed is an ERROR, never a pass.
+    suppression_obligations = {
+        subject["legacy_cell_id"]: subject["source_suppression_criterion"]
+        for subject in published_subjects
+        if subject["source_suppression_criterion"] is not None
+    }
     return {
         "lattice": lattice,
         "subjects": published_subjects,
@@ -4413,6 +4496,7 @@ def validate_comb_ledger(
         "active_cell_ids": active_cell_ids,
         "retained_legacy_ids": retained_legacy_ids,
         "inference_cell_ids": inference_cell_ids,
+        "suppression_obligations": suppression_obligations,
         "counts": {
             "subjects": len(published_subjects),
             "active": active_resolved + active_unresolved,
@@ -5951,6 +6035,161 @@ def classify_band(
         "chosen_topology": list(chosen_topology),
         "topology_superset_relations": superset_relations,
     }
+
+
+def measured_glyph_boxes(page: SvgPage,
+                         bbox_value: Sequence[float],
+                         ) -> list[UnsupportedRegion]:
+    """Poppler's own glyph bounds that certainly print inside one rectangle.
+
+    Two deliberate narrowings, both of which can only make a glyph count
+    SMALLER, so an error in either errs towards refusing a producer's claim
+    rather than granting it:
+
+    * a `clipped` region is under an unresolved clip/mask/filter, a non-unit
+      opacity, or a non-default paint order, so this parser cannot say it
+      prints at all; and
+    * a bound that leaves the rectangle is not unambiguously this rectangle's
+      text.  Poppler pads a STROKED glyph's bound by its join, so the test is
+      containment of the padded bound, never of a nominal glyph box.
+    """
+    x0, y0, x1, y1 = (float(value) for value in bbox_value)
+    return [
+        region for region in page.unsupported
+        if region.reason.startswith(MEASURED_GLYPH_REASON_PREFIXES)
+        and not region.clipped
+        and region.x0 >= x0 and region.x1 <= x1
+        and region.y0 >= y0 and region.y1 <= y1
+    ]
+
+
+def retained_suppression_corroboration(
+        subject: dict[str, Any],
+        band: dict[str, Any],
+        page: SvgPage,
+        label: str,
+        ) -> dict[str, Any]:
+    """Re-derive a retained subject's suppression reason from the source.
+
+    This is the price of THE RETAINED-TOPOLOGY INVARIANT's one exception.  A
+    subject withdrawn from adjudication may keep a RESOLVED topology only when
+    its published reason makes a claim about the paper that this referee can
+    check against the paper -- and the check is made here, from `pdftocairo`'s
+    vector output for the pinned PDF, never from the reason code itself.  The
+    reason code selects which question to ask; it is not an answer to it.
+
+    `emission-suppressed-caption-block-not-character-cells` claims: the source
+    printed running prose in EVERY compartment, so those compartments are not
+    character cells.  Three things are demanded of the source, in order:
+
+    1. Poppler must be able to measure the band at all, and
+    2. must draw the published compartment walls where the ledger says they
+       are -- the walls the glyphs are then attributed to are POPPLER's
+       `source_divider_x`, not the ledger's `divider_x`; and
+    3. every compartment those walls cut must hold more than one glyph.
+
+    (3) is the producer's own stated test (`lattice.printed_caption_refutes_
+    comb`) re-derived through a different PDF stack: the lattice reaches it
+    from MuPDF text runs assigned to the cell, this reaches it from Poppler
+    glyph `use` bounds contained in the rectangle.  A comb compartment is one
+    character wide, so one glyph is all the pre-printed decoration that can
+    fit -- the `%`, the money point, the TIN dash -- and `> 1` is therefore a
+    statement about character cells rather than a tuned constant.  Measured
+    over all 4,583 published subjects of the 53-form corpus, the minimum
+    per-compartment count is 0 for 4,535 and 1 for 27; all 21 subjects above 1
+    are already RETAINED ones, and the 11 that publish this reason score 28 to
+    87.  No ACTIVE comb in the corpus could carry this claim, which is what
+    gives the refusal its force: the census is not a formality that every comb
+    would pass.
+
+    The returned census is evidence for the caller and for the self-test; it is
+    NOT written into the report, because `gate.CELL_KEYS` and
+    `gate.MEASURED_REFEREE_KEYS` fix the published per-subject schema exactly
+    and this file does not own that schema.  Nothing is hidden by that: the
+    check cannot be skipped (`assert_suppression_corroborations_exhaustive`),
+    and every refusal names the compartment and the whole count vector.
+    """
+    criterion = subject.get("source_suppression_criterion")
+    if criterion != SOURCE_CAPTION_BLOCK_CRITERION:
+        # Unreachable through `validate_comb_ledger`, which only ever stores a
+        # value from RETAINED_SUPPRESSION_SOURCE_CRITERIA.  A new tuple added
+        # to that table without a re-derivation to go with it must fail here
+        # rather than be waved through by the branch below.
+        raise RefereeError(
+            f"{label} suppression criterion has no source re-derivation: "
+            f"{criterion!r}")
+    if band.get("status") != "measured":
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source band is not "
+            f"measurable ({band.get('reason', 'no reason')})")
+    topology = subject["topology"]
+    source_x = [
+        finite_number(value, f"{label} source_divider_x")
+        for value in band.get("source_divider_x") or ()
+    ]
+    if (band.get("compartments") != topology["cells"]
+            or len(source_x) != topology["cells"] - 1
+            or not bool(band.get("positions_match"))):
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source draws "
+            f"{band.get('compartments')} compartments where the retained "
+            f"topology publishes {topology['cells']}")
+    x0, _y0, x1, _y1 = subject["legacy_bbox"]
+    walls = [float(x0), *source_x, float(x1)]
+    if any(right <= left for left, right in zip(walls, walls[1:])):
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source walls are "
+            "not strictly increasing across the subject rectangle")
+    counts = [0] * (len(walls) - 1)
+    for region in measured_glyph_boxes(page, subject["legacy_bbox"]):
+        centre = (region.x0 + region.x1) / 2.0
+        for index in range(len(counts)):
+            if walls[index] <= centre < walls[index + 1]:
+                counts[index] += 1
+                break
+    weakest = min(counts)
+    if weakest <= CHARACTER_CELL_MAX_PRINTED_GLYPHS:
+        raise RefereeError(
+            f"{label} suppression is uncorroborated: the source prints "
+            f"{weakest} glyph(s) in compartment {counts.index(weakest) + 1} "
+            f"of {len(counts)}, so the source does not agree that these "
+            f"compartments are a caption block; per-compartment counts "
+            f"{counts}")
+    return {
+        "criterion": criterion,
+        "corroborated": True,
+        "source_divider_x": source_x,
+        "compartment_glyph_counts": counts,
+        "compartment_glyph_walls": walls,
+        "min_compartment_glyphs": weakest,
+        "threshold": CHARACTER_CELL_MAX_PRINTED_GLYPHS,
+    }
+
+
+def assert_suppression_corroborations_exhaustive(
+        slug: str,
+        obligations: dict[str, str],
+        corroborations: dict[str, str],
+        ) -> None:
+    """A corroboration that did not run is an error, never a pass.
+
+    `validate_comb_ledger` records the debt at the moment it admits the
+    reason; this is where the debt is proven settled.  Comparing the two
+    inventories -- not just their sizes -- also catches a corroboration
+    performed under a different criterion from the one that was admitted.
+    """
+    if corroborations == obligations:
+        return
+    missing = sorted(set(obligations) - set(corroborations))
+    unexpected = sorted(set(corroborations) - set(obligations))
+    mismatched = sorted(
+        cell_id for cell_id in set(obligations) & set(corroborations)
+        if obligations[cell_id] != corroborations[cell_id])
+    raise RefereeError(
+        f"{slug}: retained suppression corroboration is not exhaustive"
+        + (f"; not re-derived: {', '.join(missing)}" if missing else "")
+        + (f"; not owed: {', '.join(unexpected)}" if unexpected else "")
+        + (f"; wrong criterion: {', '.join(mismatched)}" if mismatched else ""))
 
 
 def _audit_optional_int(value: Any, label: str) -> int | None:
@@ -8294,6 +8533,11 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         "complete" if audit["complete"] else "; ".join(audit_reasons))
     cells: list[dict[str, Any]] = []
     page_meta: list[dict[str, Any]] = []
+    # Every retained suppression the ledger admitted on a re-derivable reason
+    # is discharged here, against Poppler, and the two inventories are compared
+    # afterwards.  A corroboration that did not run cannot be mistaken for one
+    # that ran and passed.
+    suppression_corroborations: dict[str, str] = {}
     subjects_by_page: dict[int, list[dict[str, Any]]] = {}
     for subject in ledger["subjects"]:
         subjects_by_page.setdefault(int(subject["page"]), []).append(subject)
@@ -8321,6 +8565,13 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
                 source_cell = subject["source_cell"]
                 result = classify_band(
                     source_cell, svg, ledger_state=subject["state"])
+                if subject["source_suppression_criterion"] is not None:
+                    corroboration = retained_suppression_corroboration(
+                        subject, result, svg,
+                        f"{slug} page {page_index} "
+                        f"{subject['legacy_cell_id']}")
+                    suppression_corroborations[subject["legacy_cell_id"]] = (
+                        corroboration["criterion"])
                 report_cell_id = (
                     subject["cell_id"] or subject["legacy_cell_id"])
                 emitted = slots.get(report_cell_id)
@@ -8354,6 +8605,8 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     if len(cell_ids) != len(cells) or len(cells) != expected_combs:
         raise RefereeError(
             f"{slug}: published subject identities are not exhaustive")
+    assert_suppression_corroborations_exhaustive(
+        slug, ledger["suppression_obligations"], suppression_corroborations)
     if slug == "2551q-2018":
         validate_2551q_referee_golden(cells)
     for cell in cells:
@@ -10622,6 +10875,262 @@ def self_test() -> int:
     assert not retained_inventory["complete"]
     assert retained_inventory["retained_emitted_cell_ids"] == [
         retained_cell["id"]]
+
+    # ------------------------------------------------------------------
+    # THE RETAINED-TOPOLOGY INVARIANT and its one, source-checked exception.
+    #
+    # Four populations, and the whole point is that they are four and not two:
+    #   (a) retained, topology UNRESOLVED  -> accepted, as it always was, and
+    #       no corroboration is owed because nothing was certified;
+    #   (b) retained, topology RESOLVED, reason re-derivable -> accepted ONLY
+    #       after Poppler is asked the reason's own question;
+    #   (c) retained, topology RESOLVED, reason absent/unknown -> refused;
+    #   (d) (b) with a source that CONTRADICTS the reason -> refused.
+    # ------------------------------------------------------------------
+    # The reason tuple is read out of the registry rather than restated, so a
+    # second entry added to that table without a fixture of its own trips this
+    # pairing instead of quietly riding on the caption block's evidence.
+    assert len(RETAINED_SUPPRESSION_SOURCE_CRITERIA) == 1
+    caption_reason_codes = list(
+        next(iter(RETAINED_SUPPRESSION_SOURCE_CRITERIA)))
+    assert (RETAINED_SUPPRESSION_SOURCE_CRITERIA[tuple(caption_reason_codes)]
+            == SOURCE_CAPTION_BLOCK_CRITERION)
+
+    # (a) An unresolved retained topology stays accepted, and stays free of any
+    # corroboration obligation: there is no certified shape to corroborate.
+    assert retained_result["subjects"][0]["state"] == "retained_unresolved"
+    assert (retained_result["subjects"][0]["source_suppression_criterion"]
+            is None)
+    assert retained_result["suppression_obligations"] == {}
+    assert all(
+        subject["source_suppression_criterion"] is None
+        for subject in retained_result["subjects"])
+
+    def retained_variant(status: str, reason_codes: list[str]
+                         ) -> dict[str, Any]:
+        variant = clone(retained_ledger)
+        subject_value = variant["pages"][0]["comb_subjects"][0]
+        subject_value["reason_codes"] = list(reason_codes)
+        subject_value["legacy_comb"]["resolution"].update({
+            "status": status,
+            # `validate_comb_topology` binds reasons to status, so an
+            # unresolved variant has to carry evidence and a resolved one
+            # must not.  The fixture obeys the schema it is testing.
+            "reason_codes": (
+                [] if status == "resolved" else ["legacy-continuity-only"]),
+        })
+        refresh_ledger_stats(variant)
+        return variant
+
+    # (b) A resolved topology under a re-derivable reason is admitted by the
+    # ledger pass -- and the ledger records the debt rather than settling it.
+    caption_ledger = retained_variant("resolved", caption_reason_codes)
+    caption_result = validate_comb_ledger(
+        retained_fixture_slug, caption_ledger, lattice_producer_bytes)
+    caption_subject = caption_result["subjects"][0]
+    assert caption_subject["state"] == "retained_unresolved"
+    assert caption_subject["topology"]["resolution_status"] == "resolved"
+    assert (caption_subject["source_suppression_criterion"]
+            == SOURCE_CAPTION_BLOCK_CRITERION)
+    assert caption_result["suppression_obligations"] == {
+        retained_cell["id"]: SOURCE_CAPTION_BLOCK_CRITERION}
+    # An UNRESOLVED topology under the same reason owes the same debt: the
+    # corroboration is attached to the CLAIM, not to the topology status, so a
+    # producer cannot dodge it by marking its own measurement unresolved.
+    unresolved_caption = validate_comb_ledger(
+        retained_fixture_slug,
+        retained_variant("unresolved", caption_reason_codes),
+        lattice_producer_bytes)
+    assert unresolved_caption["suppression_obligations"] == {
+        retained_cell["id"]: SOURCE_CAPTION_BLOCK_CRITERION}
+
+    # (c) A resolved topology under a reason this referee cannot re-derive is
+    # the original guard, and it still closes.  Both shapes are covered: a
+    # reason that is real but carries no source claim, and an invented one.
+    for unrecognised in (
+            ["emission-suppressed-no-final-visible-band"],
+            ["emission-suppressed-no-rectangular-owner",
+             "painted-edge-partition"],
+            ["emission-suppressed-because-the-producer-says-so"],
+            [*caption_reason_codes, "and-one-more-reason"],
+    ):
+        assert tuple(unrecognised) not in RETAINED_SUPPRESSION_SOURCE_CRITERIA
+        try:
+            validate_comb_ledger(
+                retained_fixture_slug,
+                retained_variant("resolved", unrecognised),
+                lattice_producer_bytes)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(
+                "a retained subject certified its own resolved topology "
+                f"under {unrecognised}")
+
+    # (d) The corroboration itself, against Poppler's vector output.  The
+    # walls are the ones POPPLER draws; the census is Poppler's glyph bounds.
+    def caption_glyph(x0: float, x1: float, ident: str,
+                      clipped: bool = False,
+                      y0: float = 3.0, y1: float = 4.0,
+                      stroked: bool = False) -> UnsupportedRegion:
+        prefix = MEASURED_GLYPH_REASON_PREFIXES[1 if stroked else 0]
+        return UnsupportedRegion(
+            x0, y0, x1, y1, f"{prefix}#glyph-{ident}", ident, 0.0, 40, clipped)
+
+    caption_comb_contract = {
+        "cells": 2, "divider_count": 1, "pitch_pt": 20.0,
+        "pitch_min_pt": 20.0, "pitch_max_pt": 20.0,
+        "slot_x": [0.0, 20.0, 40.0], "divider_x": [20.0],
+        "divider_thickness_pt": 0.2, "divider_thicknesses_pt": [0.2],
+        "divider_gray": 0.0, "divider_paint_seq": [1],
+        "divider_paint_ranges": [[1, 1]],
+        "y0": 2.0, "y1": 8.0, "height_pt": 6.0,
+        "resolution": {
+            "status": "resolved", "method": "self-test", "reason_codes": []},
+    }
+    caption_bbox = [0.0, 0.0, 40.0, 10.0]
+    caption_source_cell = {
+        "id": "p1c0", "subject_key": "p1@0.00,0.00,40.00,10.00",
+        "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+        "comb": caption_comb_contract,
+    }
+    caption_published = {
+        "legacy_bbox": caption_bbox,
+        "topology": validate_comb_topology(
+            caption_comb_contract, caption_bbox, "caption self-test"),
+        "source_suppression_criterion": SOURCE_CAPTION_BLOCK_CRITERION,
+    }
+
+    def caption_page(glyph_regions: Sequence[UnsupportedRegion]) -> SvgPage:
+        return SvgPage(100, 100, [paint(20), *source_frame()],
+                       list(glyph_regions), "caption")
+
+    def caption_band(page_value: SvgPage) -> dict[str, Any]:
+        return classify_band(
+            caption_source_cell, page_value,
+            ledger_state="retained_unresolved")
+
+    prose = [caption_glyph(3, 4, "a"), caption_glyph(6, 7, "b"),
+             caption_glyph(23, 24, "c"), caption_glyph(26, 27, "d")]
+    prose_page = caption_page(prose)
+    prose_band = caption_band(prose_page)
+    assert prose_band["status"] == "measured", prose_band
+    assert prose_band["compartments"] == 2, prose_band
+    corroborated = retained_suppression_corroboration(
+        caption_published, prose_band, prose_page, "caption self-test")
+    assert corroborated["criterion"] == SOURCE_CAPTION_BLOCK_CRITERION
+    assert corroborated["compartment_glyph_counts"] == [2, 2], corroborated
+    # The walls the census used are Poppler's, not the ledger's.
+    assert corroborated["source_divider_x"] == prose_band["source_divider_x"]
+
+    def caption_refused(name: str, subject_value: dict[str, Any],
+                        page_value: SvgPage,
+                        band_value: dict[str, Any] | None = None) -> None:
+        try:
+            retained_suppression_corroboration(
+                subject_value,
+                caption_band(page_value) if band_value is None else band_value,
+                page_value, "caption self-test")
+        except RefereeError:
+            return
+        raise AssertionError(
+            f"an uncorroborated caption suppression was accepted: {name}")
+
+    # A compartment the source left empty is a character cell, not prose.
+    caption_refused("empty compartment", caption_published, caption_page(
+        [caption_glyph(3, 4, "a"), caption_glyph(6, 7, "b")]))
+    # And so is one carrying a single glyph -- the `%`, the money point, the
+    # TIN dash.  This is the boundary the threshold names, tested at it.
+    caption_refused("one decoration glyph", caption_published, caption_page(
+        [caption_glyph(3, 4, "a"), caption_glyph(6, 7, "b"),
+         caption_glyph(23, 24, "c")]))
+    assert CHARACTER_CELL_MAX_PRINTED_GLYPHS == 1
+    two_per_compartment = retained_suppression_corroboration(
+        caption_published,
+        caption_band(caption_page(prose)), caption_page(prose),
+        "caption self-test")
+    assert min(two_per_compartment["compartment_glyph_counts"]) == (
+        CHARACTER_CELL_MAX_PRINTED_GLYPHS + 1)
+    # Ink this parser cannot say is printed, or cannot say belongs to this
+    # rectangle, is not evidence that the rectangle is a caption.
+    caption_refused("clipped glyph", caption_published, caption_page(
+        [*prose[:3], caption_glyph(26, 27, "d", clipped=True)]))
+    caption_refused("glyph outside the rectangle", caption_published,
+                    caption_page([*prose[:3],
+                                  caption_glyph(26, 27, "d", y0=9.5, y1=10.5)]))
+    caption_refused("glyph left of the rectangle", caption_published,
+                    caption_page([*prose[:3],
+                                  caption_glyph(-1.0, 0.5, "d")]))
+    # A stroked glyph bound counts exactly like a filled one: both are text.
+    stroked_prose = [*prose[:3], caption_glyph(26, 27, "d", stroked=True)]
+    assert retained_suppression_corroboration(
+        caption_published, caption_band(caption_page(stroked_prose)),
+        caption_page(stroked_prose), "caption self-test",
+    )["compartment_glyph_counts"] == [2, 2]
+    # A region that merely mentions a glyph but carries no measured bound --
+    # `parse_svg` publishes those over the WHOLE PAGE, meaning "text exists
+    # here that this parser could not place" -- is never counted into a
+    # compartment.  Asserted on the census directly, because such a region
+    # also makes the band itself unmeasurable, which is the fail-closed
+    # outcome the refusal below records.
+    unplaced_glyph = UnsupportedRegion(
+        0.0, 0.0, 100.0, 100.0,
+        "unsupported glyph use target: #glyph-d", "d", 0.0, 40, False)
+    assert measured_glyph_boxes(
+        caption_page([unplaced_glyph]), caption_bbox) == []
+    caption_refused("unplaced glyph region", caption_published, caption_page(
+        [*prose[:3], unplaced_glyph]))
+
+    # The band half of the corroboration: the source must actually draw the
+    # compartments the retained topology claims, or there is nothing to census.
+    caption_refused(
+        "unmeasurable band", caption_published, prose_page,
+        {"status": "unevaluable", "reason": "self-test"})
+    # And the same refusal when the unevaluable verdict arrives carrying a
+    # full measured payload.  `status` is the verdict; the topology fields
+    # beside it are working notes, and a band the referee could not measure
+    # corroborates nothing however complete those notes look.
+    caption_refused(
+        "unevaluable band with a measured payload", caption_published,
+        prose_page,
+        {**prose_band, "status": "unevaluable",
+         "reason": "self-test residue"})
+    caption_refused(
+        "compartment count disagreement", caption_published, prose_page,
+        {**prose_band, "compartments": 3,
+         "source_divider_x": [13.0, 26.0]})
+    caption_refused(
+        "anchors do not sit where the ledger says", caption_published,
+        prose_page, {**prose_band, "positions_match": False})
+    # A criterion with no re-derivation behind it fails closed rather than
+    # falling through to an accept.
+    caption_refused(
+        "criterion with no re-derivation",
+        {**caption_published,
+         "source_suppression_criterion": "some-future-criterion-v1"},
+        prose_page)
+
+    # And the accounting that makes the corroboration unskippable: an admitted
+    # reason whose re-derivation never ran is an error, not a pass.
+    owed = {"p1c0": SOURCE_CAPTION_BLOCK_CRITERION}
+    assert_suppression_corroborations_exhaustive("self-test", {}, {})
+    assert_suppression_corroborations_exhaustive("self-test", owed, dict(owed))
+    for name, obligations_value, corroborations_value in (
+            ("skipped", owed, {}),
+            ("invented", {}, owed),
+            ("substituted criterion", owed, {"p1c0": "other-criterion-v1"}),
+            ("substituted subject", owed,
+             {"p1c9": SOURCE_CAPTION_BLOCK_CRITERION}),
+    ):
+        try:
+            assert_suppression_corroborations_exhaustive(
+                "self-test", obligations_value, corroborations_value)
+        except RefereeError:
+            pass
+        else:
+            raise AssertionError(
+                f"suppression corroboration accounting was not enforced: "
+                f"{name}")
 
     def unavailable_position(field: str) -> dict[str, Any]:
         # The fixture derives BOTH the axis and the tolerance from the field,
