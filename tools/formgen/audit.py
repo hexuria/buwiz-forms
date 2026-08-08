@@ -3630,6 +3630,27 @@ def _baseline_contact_segments(
     )
 
 
+def _junction_sample_y(
+        member_y0: float, member_y1: float,
+        base_y0: float, base_y1: float) -> float:
+    """Where to measure the ink at one vertical/baseline junction.
+
+    Inside the overlap when the two rectangles overlap. When they only touch,
+    their intersection is empty and its midpoint lies inside neither: 2200-A's
+    comb rails end at y=432.6499939 where the baseline starts at
+    y=432.6500244, three hundredths of a thousandth of a point apart, and
+    sampling between them found no ink at all -- no comb on that sheet had a
+    frame. The caller has already refused any gap wider than source-coordinate
+    noise, so the touch is a junction; measure it on the rule's own side of
+    the touch, where a knockout that erases the junction erases it too.
+    """
+    contact_y0 = max(member_y0, base_y0)
+    contact_y1 = min(member_y1, base_y1)
+    if contact_y1 >= contact_y0:
+        return (contact_y0 + contact_y1) / 2.0
+    return (base_y0 + base_y1) / 2.0
+
+
 def _vertical_baseline_contact_intervals(
         page: VectorPage,
         tone: float,
@@ -3664,9 +3685,8 @@ def _vertical_baseline_contact_intervals(
             right = min(member.x1, base_right)
             if right < left - SOURCE_COORD_EPS_PT:
                 continue
-            contact_y0 = max(member.y0, base_y0)
-            contact_y1 = min(member.y1, base_y1)
-            sample_y = (contact_y0 + contact_y1) / 2.0
+            sample_y = _junction_sample_y(
+                member.y0, member.y1, base_y0, base_y1)
             active = [
                 paint for paint in page.paints
                 if (paint.y0 <= sample_y + SOURCE_COORD_EPS_PT
@@ -3923,6 +3943,39 @@ def _published_vertical_geometry(
     }
 
 
+def _adds_no_ink_outside_rule(
+        owner: VectorPaint, rule: VectorPaint) -> bool:
+    """A same-tone paint confined to one rule's own thickness buries nothing.
+
+    Official rule chains are emitted segment by segment, with a square junction
+    block wherever a divider crosses the rule (1707's date box, 2200A's comb
+    baseline: 0.48pt wide by 0.48pt tall).  Such a block is neither wider than
+    tall nor tall enough to read as a divider, so neither of the other two
+    ownership clauses recognises it -- and because consecutive segments of one
+    chain overlap by source-coordinate noise (0.004pt on 1707), one junction
+    block was enough to discard the 13.3pt segment beside it and cut the chain
+    in half.
+
+    Burial is what this ownership test exists to catch: a later broad fill that
+    swallows a narrow rule leaves nothing a reader could call a rule.  A paint
+    that adds no ink above or below the rule's own thickness cannot do that --
+    the visible top and bottom edge of the ink stay exactly where the rule drew
+    them -- so it is the same rule, however far it runs sideways.
+    """
+    return (round(owner.tone, 4) == round(rule.tone, 4)
+            and owner.y0 >= rule.y0 - SOURCE_COORD_EPS_PT
+            and owner.y1 <= rule.y1 + SOURCE_COORD_EPS_PT)
+
+
+def _is_rule_shaped(paint: VectorPaint) -> bool:
+    """Paint that lies ALONG a rule rather than across it.
+
+    Materially taller than wide is a stroke crossing the rule; anything else
+    lies along it, the square junction block where a divider meets it included.
+    """
+    return (paint.y1 - paint.y0) - (paint.x1 - paint.x0) <= SOURCE_COORD_EPS_PT
+
+
 def _baseline_spans(
         page: VectorPage, band_y1: float, tone: float,
         ) -> list[_SourceBaselineSpan]:
@@ -3933,14 +3986,20 @@ def _baseline_spans(
     frame endpoints, making a shrunk layout self-validating. Each returned run
     therefore retains its source-operation lineage and its real merged source
     endpoints.
+
+    The shape test rejects paint that is MATERIALLY taller than wide. A rule
+    chain's junction blocks are square to the last bit -- 2000-DST paints the
+    same 0.48pt block at x=206.33 with width 0.4799957 and at x=262.37 with
+    width 0.4799805, one either side of its 0.4799805 height -- so a strict
+    `width <= height` decided whether a 39-divider baseline chain survived on
+    1.5e-5pt of float noise. Which side of a float the two identical blocks
+    land on is not a fact about the paper.
     """
     wanted_tone = round(tone, 4)
     raw: list[VectorPaint] = []
     for paint in page.paints:
-        width = paint.x1 - paint.x0
-        height = paint.y1 - paint.y0
-        if (width <= height
-                or height > COMB_MAX_WIDTH_PT
+        if (not _is_rule_shaped(paint)
+                or paint.y1 - paint.y0 > COMB_MAX_WIDTH_PT
                 or round(paint.tone, 4) != wanted_tone
                 or band_y1 < paint.y0 - COMB_YSLACK_PT
                 or band_y1 > paint.y1 + COMB_YSLACK_PT):
@@ -3979,6 +4038,7 @@ def _baseline_spans(
                     and owner.x1 - owner.x0 > owner.y1 - owner.y0
                 )
                 or _is_comb_vertical(owner)
+                or _adds_no_ink_outside_rule(owner, paint)
                 for owner in owners
             )
             if (right > left
@@ -4003,6 +4063,74 @@ def _baseline_spans(
     return spans
 
 
+def _components_cut_at_source_walls(
+        page: VectorPage,
+        tone: float,
+        band_y0: float,
+        band_y1: float,
+        components: Sequence[_SourceBaselineSpan],
+        ) -> list[_SourceBaselineSpan]:
+    """Each baseline chain, plus the cells the source's own walls cut it into.
+
+    A chain is a run of ink, not a box. On 2200-A the comb's baseline is the
+    bottom rule of a full-width table row and runs from x=15.6 to x=596.04,
+    so the run's endpoints are page furniture and the rails that bound the
+    comb -- x=392.71 and x=595.32 -- are interior to it. Requiring the outer
+    rails to stand on the chain's own ends therefore rejected a comb the sheet
+    prints perfectly clearly.
+
+    Cutting at walls fixes that without loosening the endpoint requirement:
+    each cut is a source-painted box edge (``_carries_band_into_rule_above``),
+    the cell's ends are that edge, and a rail must still stand exactly on the
+    end of the piece it bounds. The uncut chain is retained beside the pieces,
+    so a comb whose baseline really does end at its rails is unaffected.
+    """
+    expanded: list[_SourceBaselineSpan] = []
+    for component in components:
+        expanded.append(component)
+        cuts = _source_wall_partition(
+            page, tone, band_y0, band_y1,
+            component.left, component.right, component)
+        if len(cuts) < 3:
+            continue
+        for cut_left, cut_right in zip(cuts, cuts[1:]):
+            if cut_right - cut_left <= 2 * COMB_MERGE_PT:
+                continue
+            segments = tuple(sorted({
+                (max(left, cut_left), min(right, cut_right), y0, y1)
+                for left, right, y0, y1 in _baseline_segments(component)
+                if right > cut_left and left < cut_right
+            }))
+            if not segments:
+                continue
+            expanded.append(_SourceBaselineSpan(
+                y=component.y,
+                y0=min(segment[2] for segment in segments),
+                y1=max(segment[3] for segment in segments),
+                left=cut_left,
+                right=cut_right,
+                operations=component.operations,
+                segments=segments,
+            ))
+    return expanded
+
+
+def _rule_ink_meets(
+        left_x0: float, left_x1: float, left_y0: float, left_y1: float,
+        right_x0: float, right_x1: float, right_y0: float, right_y1: float,
+        ) -> bool:
+    """Do two collinear rule segments' ink meet, at the ink's own scale?
+
+    Overlap and exact touch always meet. Beyond that the only admitted gap is
+    one strictly narrower than the thinner of the two strokes: a break that
+    cannot be as wide as the rule is thick cannot be seen as a break in it.
+    """
+    gap = max(right_x0 - left_x1, left_x0 - right_x1, 0.0)
+    if gap <= SOURCE_COORD_EPS_PT:
+        return True
+    return gap < min(left_y1 - left_y0, right_y1 - right_y0)
+
+
 def _segmented_u_frame_candidates(
         page: VectorPage,
         baselines: Sequence[_SourceBaselineSpan],
@@ -4024,6 +4152,15 @@ def _segmented_u_frame_candidates(
     A large non-comb table cell sharing that y is separated by its incompatible
     pitch, while group-separator variation remains inside a 30% source-derived
     pitch envelope.
+
+    Segments join where their ink meets, and the bound on "meets" is the ink's
+    own thickness rather than a fixed slack. Two official sheets leave a gap in
+    an otherwise exact chain -- 2000-DST at x=206.324/206.330 and x=473.134/
+    473.140, 2200-A at x=464.014/464.020 -- 0.006pt of paper interrupting a
+    0.48pt rule, one twentieth of a pixel at 600dpi. A break narrower than the
+    stroke it interrupts cannot print as a break, so it is not one; a gap as
+    wide as the rule is thick still separates two rules, which is what keeps a
+    missing junction block from being bridged into existence.
     """
     remaining = list(sorted(
         baselines,
@@ -4042,10 +4179,12 @@ def _segmented_u_frame_candidates(
                 connected = any(
                     any(
                         (
-                            candidate_left
-                            <= member_right + SOURCE_COORD_EPS_PT
-                            and candidate_right
-                            >= member_left - SOURCE_COORD_EPS_PT
+                            _rule_ink_meets(
+                                candidate_left, candidate_right,
+                                candidate_y0, candidate_y1,
+                                member_left, member_right,
+                                member_y0, member_y1,
+                            )
                             and candidate_y0
                             <= member_y1 + SOURCE_COORD_EPS_PT
                             and candidate_y1
@@ -4092,7 +4231,8 @@ def _segmented_u_frame_candidates(
         ))
 
     candidates = []
-    for component in components:
+    for component in _components_cut_at_source_walls(
+            page, tone, band_y0, band_y1, components):
         if component.y0 <= band_y0 + SOURCE_COORD_EPS_PT:
             continue
         verticals = _stable_source_verticals(
@@ -4216,6 +4356,172 @@ def _segmented_u_frame_candidates(
     return candidates
 
 
+def _erasure_ends_run(owners: Sequence[VectorPaint]) -> bool:
+    """Is the break in this stroke PAINTED, rather than merely unreached?
+
+    The two look identical from the stroke's end and are opposite facts.
+    2200-A knocks the rule above its comb out with a white rectangle 0.48pt
+    tall across a 0.48pt stroke: that is the sheet saying the stroke stops
+    there, at any size. 1700's walls simply miss each other by 0.006pt with
+    nothing drawn in between: that is two operations meeting, and the paper
+    in the gap was never claimed by anybody.
+    """
+    return bool(owners)
+
+
+def _stroke_break_ends_run(
+        gap: float, reachable: Sequence[tuple[float, float]]) -> bool:
+    """Is a break ALONG a stroke long enough to read as a break in it?
+
+    ``_rule_ink_meets`` turned through a right angle. The stroke's own width
+    is the scale: 1700 draws each date-box wall as two operations that miss
+    each other by 0.006pt across a 0.24pt stroke, and no printer resolves
+    that. A break as long as the stroke is wide still ends the run, which is
+    what stops a divider from reaching over the paper above it and claiming
+    the rule that closes some other box.
+    """
+    return gap > min(right - left for left, right in reachable)
+
+
+def _carries_band_into_rule_above(
+        page: VectorPage, tone: float, rail: dict[str, Any] | None,
+        band_y0: float) -> bool:
+    """Does this vertical carry the comb band up into a rule above it?
+
+    This is the source's own difference between a compartment divider and a
+    wall, and it is visible in the content stream without asking anybody what
+    the box is supposed to be. A divider hangs from the baseline and stops
+    inside the field: above the band there is paper (1600WP's date ticks stop
+    at the box's white fill), or a knockout (2200-A erases the rule above its
+    comb), or nothing at all. A wall carries on until it joins the rule that
+    closes the box above -- and joining a rule is exactly what shows up here,
+    because at that level the connected same-tone ink stops being a stroke and
+    starts running sideways.
+
+    The walk is slab by slab upward from the band, keeping only ink connected
+    to what the slab below reached, so an unrelated rule crossing this x at
+    some higher level cannot be claimed by a divider that never reaches it.
+    "Runs sideways" is measured against ``COMB_MAX_WIDTH_PT``, already this
+    file's bound on how wide a comb stroke may be: a 1.44pt thousands
+    separator stays a stroke, a rule does not.
+
+    A wall is often two operations meeting at the band's own top edge, and
+    official sheets miss that meeting by a hair -- 1700's date-box walls stop
+    0.006pt above the band their own ticks start at. The gap bound is the same
+    one ``_rule_ink_meets`` applies along a rule, turned through a right
+    angle: a break shorter than the stroke is wide cannot print as a break.
+    Anything longer ends the walk, which is what keeps a divider from
+    claiming the rule that happens to run above the field it stops inside.
+    """
+    if rail is None:
+        return False
+    centre_x = float(rail["center_x"])
+    seed = (float(rail["ink_x0"]), float(rail["ink_x1"]))
+    wanted_tone = round(tone, 4)
+    window_x0 = centre_x - COMB_MAX_WIDTH_PT
+    window_x1 = centre_x + COMB_MAX_WIDTH_PT
+    relevant = [
+        paint for paint in page.paints
+        if paint.x1 >= window_x0
+        and paint.x0 <= window_x1
+        and paint.y0 < band_y0 - SOURCE_COORD_EPS_PT
+    ]
+    if not relevant:
+        return False
+    edges = {band_y0}
+    for paint in relevant:
+        edges.add(paint.y0)
+        edges.add(min(paint.y1, band_y0))
+    slabs = [
+        (a, b)
+        for a, b in zip(sorted(edges), sorted(edges)[1:])
+        if b - a > SOURCE_COORD_EPS_PT and b <= band_y0 + SOURCE_COORD_EPS_PT
+    ]
+    reachable: list[tuple[float, float]] = [seed]
+    last_ink_y = band_y0
+    for a, b in sorted(slabs, reverse=True):
+        sample_y = (a + b) / 2.0
+        active = [
+            paint for paint in relevant
+            if paint.y0 <= sample_y <= paint.y1
+        ]
+        x_edges = {window_x0, window_x1}
+        for paint in active:
+            clipped_left = max(window_x0, paint.x0)
+            clipped_right = min(window_x1, paint.x1)
+            if clipped_right >= clipped_left:
+                x_edges.update((clipped_left, clipped_right))
+        visible: list[tuple[float, float]] = []
+        ordered_x = sorted(x_edges)
+        for left, right in zip(ordered_x, ordered_x[1:]):
+            if right <= left:
+                continue
+            final_tone = _final_tone(active, (left + right) / 2.0, sample_y)
+            if round(final_tone, 4) == wanted_tone:
+                visible.append((left, right))
+        visible = _merge_intervals(visible, SOURCE_COORD_EPS_PT)
+        connected = [
+            interval for interval in visible
+            if any(
+                interval[0] <= prior[1] + SOURCE_COORD_EPS_PT
+                and interval[1] >= prior[0] - SOURCE_COORD_EPS_PT
+                for prior in reachable
+            )
+        ]
+        if not connected:
+            if _erasure_ends_run(
+                    _final_tone_and_owner(active, centre_x, sample_y)[1]):
+                return False
+            continue
+        if _stroke_break_ends_run(last_ink_y - b, reachable):
+            return False
+        if any(right - left > COMB_MAX_WIDTH_PT for left, right in connected):
+            return True
+        reachable = connected
+        last_ink_y = a
+    return False
+
+
+def _source_wall_partition(
+        page: VectorPage,
+        tone: float,
+        band_y0: float,
+        band_y1: float,
+        left: float,
+        right: float,
+        baseline: _SourceBaselineSpan,
+        ) -> list[float]:
+    """The source's own walls inside one U-frame, left rail to right rail.
+
+    A U-frame proves a rail pair and a baseline. It does not prove that the
+    span between them is ONE box: 1600WP's date field is a single stroked
+    rectangle carrying three sub-boxes (MM, DD, YYYY) on full-height interior
+    verticals, and 1707 draws the same shape as one row rule with the box
+    walls standing on it. Each interior wall is source paint that reaches both
+    the baseline and the rule above (``_carries_band_into_rule_above``), so
+    the partition is read off the page, never off a claimed rectangle.
+    """
+    walls: list[float] = []
+    for source_x in _stable_source_verticals(
+            page,
+            left - COMB_MAX_WIDTH_PT,
+            right + COMB_MAX_WIDTH_PT,
+            band_y0,
+            baseline.y0,
+            tone):
+        if (source_x <= left + COMB_MERGE_PT
+                or source_x >= right - COMB_MERGE_PT):
+            continue
+        geometry = _source_vertical_ink_geometry(
+            page, source_x, band_y0, band_y1, tone)
+        if not _vertical_has_connected_baseline_contact(
+                page, tone, geometry, band_y0, source_x, baseline):
+            continue
+        if _carries_band_into_rule_above(page, tone, geometry, band_y0):
+            walls.append(source_x)
+    return [left, *sorted(walls), right]
+
+
 def _local_baseline_spans(
         page: VectorPage, x0: float, x1: float, band_y1: float,
         tone: float,
@@ -4284,6 +4590,68 @@ def _local_baseline_spans(
                 group_spans, verify.DEFAULT_POSITION_TOL_PT)
         )
     return spans
+
+
+def _frame_cut_at_source_walls(
+        page: VectorPage,
+        tone: float,
+        band_y0: float,
+        band_y1: float,
+        x0: float,
+        x1: float,
+        topology: Sequence[float],
+        candidate: tuple[
+            float, float, tuple[float, ...], _SourceBaselineSpan,
+            tuple[float, ...], tuple[tuple[int, int], ...],
+        ],
+        ) -> tuple[
+            float, float, tuple[float, ...], _SourceBaselineSpan,
+            tuple[float, ...], tuple[tuple[int, int], ...],
+        ]:
+    """Reduce one U-frame to the source cell of it the owner claims.
+
+    Maximality is what stops a shrunk rectangle from nominating two of its own
+    dividers as counterfeit rails, and it stays: this cuts ONLY at walls the
+    source itself paints, so every endpoint offered here was drawn as a box
+    edge on the sheet. What it removes is the assumption that one rail pair
+    bounds one comb. Official sheets draw a row of boxes as a single rule with
+    walls standing on it, and the maximal frame then spans the whole row --
+    1707's MM|DD|YYYY, 1600WP's three date boxes inside one stroked rectangle.
+    Reporting those as "the owner cropped a wider frame" said nothing about
+    the owner and hid the compartment count behind an unevaluable verdict.
+
+    An owner that does not coincide with one source cell keeps its original
+    frame, so cropping a genuine comb and absorbing a neighbouring one are
+    still reported exactly as before.
+    """
+    left, right, interior, baseline, _external, lineage = candidate
+    cuts = _source_wall_partition(
+        page, tone, band_y0, band_y1, left, right, baseline)
+    if len(cuts) < 3:
+        return candidate
+    claimed = [
+        (cut_left, cut_right)
+        for cut_left, cut_right in zip(cuts, cuts[1:])
+        if abs(cut_left - x0) <= COMB_MERGE_PT
+        and abs(cut_right - x1) <= COMB_MERGE_PT
+    ]
+    if len(claimed) != 1:
+        return candidate
+    cut_left, cut_right = claimed[0]
+    cut_interior = tuple(
+        divider for divider in interior
+        if divider > cut_left + COMB_MERGE_PT
+        and divider < cut_right - COMB_MERGE_PT
+    )
+    if not cut_interior:
+        return candidate
+    cut_external = tuple(
+        divider for divider in topology
+        if (divider < cut_left - COMB_MERGE_PT
+            or divider > cut_right + COMB_MERGE_PT)
+    )
+    return (
+        cut_left, cut_right, cut_interior, baseline, cut_external, lineage)
 
 
 def _source_u_frame(
@@ -4371,6 +4739,12 @@ def _source_u_frame(
     ))
     if not candidates:
         return None
+
+    candidates = [
+        _frame_cut_at_source_walls(
+            page, tone, band_y0, band_y1, x0, x1, topology, candidate)
+        for candidate in candidates
+    ]
 
     widest = max(
         right - left
@@ -13554,6 +13928,309 @@ def self_test() -> int:
         repainted_baseline == (
             6, [10.0, 15.0, 20.0, 25.0, 30.0]),
     )
+
+    # ---------------------------------------------------------------- #
+    # Rule chains, junction blocks and the source's own walls.
+    #
+    # Five relations that all answer one question the sheets forced: what
+    # counts as ONE printed comb when the ink that proves it is emitted in
+    # dozens of pieces and shared with the table around it. Each has its own
+    # fixture below and its own mutation in the sweep that follows, and the
+    # plain comb is carried through every mutation as a control.
+    # ---------------------------------------------------------------- #
+
+    def chain_comb_page(*segments: tuple[float, float, float, float],
+                        order: int = 40) -> VectorPage:
+        """A 6-slot comb whose baseline is drawn as the given ink pieces."""
+        return source_page(
+            *(
+                source_paint(x, order=index)
+                for index, x in enumerate((5, 10, 15, 20, 25, 30, 35))
+            ),
+            *(
+                VectorPaint(
+                    left, y0, right, y1, 0.0, 1.0, order + index,
+                    "chain-baseline-piece")
+                for index, (left, y0, right, y1) in enumerate(segments)
+            ),
+            framed=False,
+        )
+
+    def block_chain(block_width: float, *, overlap: float = 0.0,
+                    ) -> tuple[tuple[float, float, float, float], ...]:
+        """One rule chain: a junction block per divider, ink between them.
+
+        The chain runs rail centre to rail centre, so its own ends are the
+        frame's rails and only the interior junctions are blocks. `overlap`
+        pushes each run a hair into the block that follows it, which is what
+        1707 does at 0.004pt.
+        """
+        edges: list[tuple[float, float]] = [(5.0, 5.0)]
+        for divider in (10.0, 15.0, 20.0, 25.0, 30.0):
+            edges.append((
+                divider - block_width / 2.0, divider + block_width / 2.0))
+        edges.append((35.0, 35.0))
+        pieces = [
+            (left, 8.0, right, 8.75) for left, right in edges[1:-1]
+        ]
+        for index, ((_left, run_start), (run_end, _right)) in enumerate(
+                zip(edges, edges[1:])):
+            reach = 0.0 if index == len(edges) - 2 else overlap
+            pieces.append((run_start, 8.0, run_end + reach, 8.75))
+        return tuple(pieces)
+
+    def frame_resolves(page: VectorPage, expected: tuple[int, list[float]],
+                       subject: dict[str, Any] | None = None) -> bool:
+        try:
+            resolved = printed_compartments(
+                page, comb_subject() if subject is None else subject)
+        except ValueError:
+            return False
+        return resolved == expected
+
+    plain_comb_page = source_page(
+        *(
+            source_paint(x, order=index)
+            for index, x in enumerate((5, 10, 15, 20, 25, 30, 35))
+        ),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 40, "plain-baseline"),
+        framed=False,
+    )
+    six_slots = (6, [10.0, 15.0, 20.0, 25.0, 30.0])
+    check(
+        "one unsegmented baseline still frames a plain comb",
+        frame_resolves(plain_comb_page, six_slots),
+    )
+
+    # 1707 overlaps consecutive pieces of one chain by 0.004pt. The junction
+    # block owning that sliver is neither wider than tall nor long enough to
+    # read as a divider, so it used to hide the 13pt piece beside it.
+    noisy_overlap_chain_page = chain_comb_page(
+        *block_chain(0.752, overlap=0.004))
+    check(
+        "a junction block does not hide the chain piece it overlaps",
+        frame_resolves(noisy_overlap_chain_page, six_slots),
+    )
+
+    # 2000-DST paints the same block at two x with widths either side of its
+    # own height. Both are junctions; neither is a stroke across the rule.
+    square_block_chain_page = chain_comb_page(*block_chain(0.75))
+    check(
+        "an exactly square junction block belongs to its rule chain",
+        frame_resolves(square_block_chain_page, six_slots),
+    )
+
+    # 2000-DST and 2200-A each leave one 0.006pt gap in an otherwise exact
+    # chain. A break narrower than the rule is thick cannot print as a break.
+    hairline_gap_chain_page = chain_comb_page(
+        (5.0, 8.0, 10.0, 8.75),
+        (10.01, 8.0, 35.0, 8.75),
+    )
+    check(
+        "a gap narrower than the rule is thick does not cut its chain",
+        frame_resolves(hairline_gap_chain_page, six_slots),
+    )
+    wide_gap_chain_page = chain_comb_page(
+        (5.0, 8.0, 10.0, 8.75),
+        (10.75, 8.0, 35.0, 8.75),
+    )
+    check(
+        "a gap as wide as the rule is thick still cuts its chain",
+        not frame_resolves(wide_gap_chain_page, six_slots),
+    )
+
+    # 1600WP draws MM|DD|YYYY as one stroked rectangle carrying two
+    # full-height interior walls. The maximal frame is the rectangle; the comb
+    # is the cell of it between two walls.
+    nested_cell_page = source_page(
+        *(source_paint(x, order=index) for index, x in enumerate((10, 20, 30))),
+        source_paint(5, a=0.5, b=8.0, order=10),
+        source_paint(15, a=0.5, b=8.0, order=11),
+        source_paint(25, a=0.5, b=8.0, order=12),
+        source_paint(35, a=0.5, b=8.0, order=13),
+        VectorPaint(5.0, 0.5, 35.0, 0.75, 0.0, 1.0, 20, "nested-top-rule"),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 21, "nested-baseline"),
+        framed=False,
+    )
+    nested_subject = comb_subject(x0=5.0, x1=15.0)
+    check(
+        "a comb inside a walled rectangle is the cell its owner claims",
+        frame_resolves(nested_cell_page, (2, [10.0]), nested_subject),
+    )
+    check(
+        "an owner spanning two walled cells keeps its wider-frame verdict",
+        not frame_resolves(
+            nested_cell_page, (3, [10.0, 20.0]),
+            comb_subject(x0=5.0, x1=25.0)),
+    )
+
+    # 1700 draws each date-box wall as two operations that miss each other by
+    # 0.006pt exactly where the comb band starts.
+    split_wall_page = source_page(
+        *(source_paint(x, order=index) for index, x in enumerate((10, 20, 30))),
+        *(
+            paint
+            for index, x in enumerate((5.0, 15.0, 25.0, 35.0))
+            for paint in (
+                source_paint(x, a=0.5, b=1.994, order=10 + 2 * index),
+                source_paint(x, a=2.0, b=8.0, order=11 + 2 * index),
+            )
+        ),
+        VectorPaint(5.0, 0.5, 35.0, 0.75, 0.0, 1.0, 20, "split-wall-top-rule"),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 21, "split-wall-baseline"),
+        framed=False,
+    )
+    check(
+        "a wall drawn as two operations a hair apart is still one wall",
+        frame_resolves(split_wall_page, (2, [10.0]), nested_subject),
+    )
+
+    # 2200-A's comb sits on the bottom rule of a full-width table row, so the
+    # chain's own ends are page furniture and the rails are interior to it.
+    row_rule_page = source_page(
+        *(
+            source_paint(x, order=index)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(5, a=0.5, b=8.0, order=10),
+        source_paint(35, a=0.5, b=8.0, order=11),
+        VectorPaint(0.0, 0.5, 50.0, 0.75, 0.0, 1.0, 20, "row-top-rule"),
+        VectorPaint(0.0, 8.0, 50.0, 8.75, 0.0, 1.0, 21, "row-bottom-rule"),
+        framed=False,
+    )
+    row_subject = comb_subject(x0=5.0, x1=35.0, cell_y1=9.0)
+    check(
+        "a comb standing on a row rule is framed by its own walls",
+        frame_resolves(row_rule_page, six_slots, row_subject),
+    )
+
+    # 2200-A knocks the rule above its comb out with a white rectangle as
+    # thick as the stroke it erases. A divider whose upper half is cut off
+    # that way is a divider, whatever stands above the cut.
+    erased_wall_page = source_page(
+        *(
+            source_paint(x, order=index)
+            for index, x in enumerate((10, 15, 20, 25, 30))
+        ),
+        source_paint(5, a=0.5, b=8.0, order=10),
+        source_paint(35, a=0.5, b=8.0, order=11),
+        source_paint(20, a=0.5, b=1.9, order=12),
+        VectorPaint(
+            19.88, 1.9, 20.12, 2.0, 1.0, 1.0, 13, "erased-wall-knockout"),
+        VectorPaint(0.0, 0.5, 50.0, 0.75, 0.0, 1.0, 20, "erased-wall-top-rule"),
+        VectorPaint(0.0, 8.0, 50.0, 8.75, 0.0, 1.0, 21, "erased-wall-baseline"),
+        framed=False,
+    )
+    check(
+        "a divider cut off from the rule above it is not a wall",
+        frame_resolves(erased_wall_page, six_slots, row_subject),
+    )
+
+    # 2200-A's rails stop 3e-5pt short of the baseline they stand on. The
+    # midpoint of that non-overlap is inside neither rectangle.
+    touching_rail_page = source_page(
+        *(
+            source_paint(x, b=8.0 - 0.0001, order=index)
+            for index, x in enumerate((5, 10, 15, 20, 25, 30, 35))
+        ),
+        VectorPaint(5.0, 8.0, 35.0, 8.75, 0.0, 1.0, 40, "touching-baseline"),
+        framed=False,
+    )
+    check(
+        "a rail that stops a hair short of its baseline still meets it",
+        frame_resolves(touching_rail_page, six_slots),
+    )
+
+    # Mutation test, in the style of the ink-band sweep above: each entry
+    # restores the behaviour the fixture beside it was written to refute, and
+    # that fixture must stop resolving. The plain comb is re-measured under
+    # every mutation, so a mutation that simply breaks comb framing outright
+    # is not mistaken for a mutation the fixture caught.
+    _measured_rule_shaped = _is_rule_shaped
+    _measured_junction_sample = _junction_sample_y
+
+    def _shape_without_noise_allowance(paint: VectorPaint) -> bool:
+        return paint.x1 - paint.x0 > paint.y1 - paint.y0
+
+    def _meets_only_on_touch(
+            left_x0: float, left_x1: float, left_y0: float, left_y1: float,
+            right_x0: float, right_x1: float,
+            right_y0: float, right_y1: float) -> bool:
+        return max(right_x0 - left_x1, left_x0 - right_x1, 0.0) \
+            <= SOURCE_COORD_EPS_PT
+
+    def _sample_intersection_midpoint(
+            member_y0: float, member_y1: float,
+            base_y0: float, base_y1: float) -> float:
+        return (max(member_y0, base_y0) + min(member_y1, base_y1)) / 2.0
+
+    frame_mutations = (
+        ("a junction block hides the chain piece it overlaps",
+         {"_adds_no_ink_outside_rule": lambda owner, rule: False},
+         lambda: frame_resolves(noisy_overlap_chain_page, six_slots)),
+        ("a square junction block reads as a stroke across its rule",
+         {"_is_rule_shaped": _shape_without_noise_allowance},
+         lambda: frame_resolves(square_block_chain_page, six_slots)),
+        ("any gap at all cuts a rule chain",
+         {"_rule_ink_meets": _meets_only_on_touch},
+         lambda: frame_resolves(hairline_gap_chain_page, six_slots)),
+        ("no vertical is ever a wall",
+         {"_carries_band_into_rule_above":
+          lambda page, tone, rail, band_y0: False},
+         lambda: frame_resolves(nested_cell_page, (2, [10.0]),
+                                nested_subject)),
+        ("a chain is never cut into the cells its walls make",
+         {"_components_cut_at_source_walls":
+          lambda page, tone, band_y0, band_y1, components: list(components)},
+         lambda: frame_resolves(row_rule_page, six_slots, row_subject)),
+        ("a frame is never reduced to the cell its owner claims",
+         {"_frame_cut_at_source_walls":
+          lambda page, tone, band_y0, band_y1, x0, x1, topology, candidate:
+          candidate},
+         lambda: frame_resolves(nested_cell_page, (2, [10.0]),
+                                nested_subject)),
+        ("a junction is measured between two rectangles that only touch",
+         {"_junction_sample_y": _sample_intersection_midpoint},
+         lambda: frame_resolves(touching_rail_page, six_slots)),
+        ("any break at all ends a stroke's run",
+         {"_stroke_break_ends_run":
+          lambda gap, reachable: gap > SOURCE_COORD_EPS_PT},
+         lambda: frame_resolves(split_wall_page, (2, [10.0]),
+                                nested_subject)),
+        ("a painted break in a stroke reads as unclaimed paper",
+         {"_erasure_ends_run": lambda owners: False},
+         lambda: frame_resolves(erased_wall_page, six_slots, row_subject)),
+    )
+    frame_module = globals()
+    for label, patches, probe in frame_mutations:
+        restore = {name: frame_module[name] for name in patches}
+        frame_module.update(patches)
+        try:
+            still_resolves = probe()
+            control_resolves = frame_resolves(plain_comb_page, six_slots)
+        finally:
+            frame_module.update(restore)
+        check(
+            f"weakening source comb framing ({label}) is caught by the suite",
+            still_resolves is False,
+        )
+        check(
+            f"weakening source comb framing ({label}) leaves the plain comb",
+            control_resolves is True,
+        )
+    check(
+        "source comb framing is restored after the mutation sweep",
+        frame_resolves(plain_comb_page, six_slots)
+        and frame_resolves(noisy_overlap_chain_page, six_slots)
+        and frame_resolves(square_block_chain_page, six_slots)
+        and frame_resolves(hairline_gap_chain_page, six_slots)
+        and frame_resolves(touching_rail_page, six_slots)
+        and frame_resolves(nested_cell_page, (2, [10.0]), nested_subject)
+        and frame_resolves(split_wall_page, (2, [10.0]), nested_subject)
+        and frame_resolves(row_rule_page, six_slots, row_subject)
+        and frame_resolves(erased_wall_page, six_slots, row_subject),
+    )
+    _ = (_measured_rule_shaped, _measured_junction_sample)
 
     expanded_frame_page = source_page(
         *maximal_frame_page.paints,

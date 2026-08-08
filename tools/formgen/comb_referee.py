@@ -309,8 +309,19 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # `ASSERTION_KEYS` is unchanged at 10, no comb constant moved, no tolerance
 # moved, and the assertion's published SHAPE -- which
 # `_normalise_outer_comb_assertion` is contract-bound to -- is unchanged.
+# Re-pinned 2026-08-08 (r31): the source-topology reader gained six
+# content-stream relations so `comb_slots_match_printed` can DECIDE cases it
+# previously called unevaluable -- a junction block belongs to its rule chain,
+# a break narrower than the stroke it interrupts is not a break, a painted
+# knockout is a break at any size, a wall carries into the rule above where a
+# divider does not, walls cut a frame into cells, and a touching junction is
+# sampled on the rule's side. Checker-only: lattice.py and emit.py are
+# untouched and regeneration is byte-identical, so no shipped geometry moved.
+# `ASSERTION_KEYS` is unchanged at 10 and no tolerance moved -- POSITION_TOL_PT
+# is still 0.25. Unevaluable fell 182 -> 19 and decided-and-failing rose 3 ->
+# 33: the assertion now names producer defects it used to be unable to see.
 AUDIT_PRODUCER_SHA256 = (
-    "ef78cf64e8e93c56451d570e298d42a094ce4ebd0006eb2023a4478166fead15"
+    "2ea5b8a163e14eeb42e1e63147c4d5889fc8846ca9c6fd538f6ee64b150834f2"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
