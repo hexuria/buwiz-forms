@@ -19,9 +19,15 @@ makes a structural choice to enforce one of them, the comment names the rule.
  1. A BATCH IS IMMUTABLE once a sighted gate scores it. This tool opens the
     stage-1 tree read-only and refuses any output path that would put a byte
     inside it -- or inside `forms/` at all, whatever `--source-tree` says.
- 2. ONE GENERATOR VERSION PER BATCH. `--batch` names the batch (`corpus/r23`);
-    the manifest records the name AND a Merkle hash of the tree, because a name
-    is a label and only the hash is a binding.
+ 2. ONE GENERATOR VERSION PER BATCH. `--batch` names the batch (`corpus/r23`),
+    and the name is RESOLVED, not believed: it must name a git object in the
+    repository, and every file that object tracks under the source tree's path
+    must be present on disk with identical bytes, compared by git blob
+    identity. A tree that does not match is a refusal, so a corrected tree can
+    never claim provenance from a batch it was not built from. What git cannot
+    represent -- repository-ignored files, empty directories -- is enumerated
+    with its sha256 in `batch_binding`, never silently accepted. The manifest
+    records the resolved commit id, not the operator's string.
  3. NO RECORD => BYTE-IDENTICAL COPY. Enforced by construction, not by care: a
     file is rewritten only when some record's edit matched a span inside it.
     Every other file is copied byte-for-byte, and the manifest carries the
@@ -41,6 +47,13 @@ makes a structural choice to enforce one of them, the comment names the rule.
          delete a file, or rename one -- the applier compares the written file
          set against the source's and refuses on any difference. A correction
          therefore cannot make an inconvenient artefact disappear.
+
+Every declared effect is measured on BOTH sides -- the batch and the corrected
+tree -- and at least one of them must come out DIFFERENT. An effect that reads
+the same on both says nothing about whether the correction landed, so a record
+whose whole effect list is insensitive to its own edit is a refusal: otherwise
+"effect re-derived from the written bytes" is a true sentence about a
+measurement that would have held if the edit had never happened.
 
 Independence, stated plainly because the project keeps paying for the opposite:
 this tool checks each record's `expected_effect` against the bytes it actually
@@ -80,6 +93,7 @@ import os
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from typing import Any, Iterable, Sequence
@@ -109,10 +123,15 @@ REQUIRED_RECORD_KEYS = ("id", "form", "subject", "what", "reason", "authority",
 OPTIONAL_RECORD_KEYS = ("record_version", "notes")
 EDIT_KEYS = ("file", "find", "replace", "occurrences")
 
-# `expected_effect` vocabulary. Each kind is re-derived from bytes on disk:
-# `count_delta` reads the SOURCE and the WRITTEN output and demands both
-# numbers, which is the only kind that states something the edit itself does
-# not trivially imply -- so at least one non-`sha256` effect is required.
+# `expected_effect` vocabulary. Every kind is re-derived from bytes on disk, on
+# BOTH sides: the source batch and the written output. Two independent rules
+# apply, and they catch different lies:
+#   * at least one effect must be semantic (`occurs`/`absent`/`count_delta`),
+#     because a post-image `sha256` restates the edit and declares nothing;
+#   * at least one effect must MEASURE DIFFERENTLY on the two sides, because an
+#     effect that already held in the batch is satisfied by a document the edit
+#     never touched. `<!doctype html> occurs once` is a true sentence, a
+#     semantic one, and completely insensitive to whether the correction landed.
 EFFECT_KEYS = {
     "occurs":      ("kind", "file", "text", "count"),
     "absent":      ("kind", "file", "text"),
@@ -163,6 +182,217 @@ def tree_sha256(files: dict[str, str], dirs: Sequence[str]) -> str:
     lines = [f"{sha}  f {path}" for path, sha in sorted(files.items())]
     lines += [f"{'0' * 64}  d {path}" for path in sorted(dirs)]
     return sha256_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+
+
+# --------------------------------------------------------------------------
+# rule 2: the batch label has to BIND
+#
+# `--batch corpus/r23` used to be a string the manifest repeated back as fact.
+# It is now resolved as a git object and the source tree is compared against
+# what that object tracks, file by file, by git blob identity. Three things
+# follow, and all three are the point:
+#   * a batch that does not exist is a refusal, not a provenance claim;
+#   * a source tree that drifted from the batch by one byte is a refusal, so a
+#     corrected tree cannot claim a batch it was not built from;
+#   * what git cannot represent -- ignored files, empty directories -- is
+#     LISTED with its hash rather than quietly absorbed into the claim.
+# --------------------------------------------------------------------------
+
+GIT_BLOB_MODES = {"100644", "100755"}
+GIT_MODE_NAMES = {"120000": "a symlink", "160000": "a submodule", "040000": "a tree"}
+
+
+def _git(repo: pathlib.Path, args: Sequence[str], code: str, *,
+         stdin_bytes: bytes | None = None,
+         ok_codes: Sequence[int] = (0,)) -> bytes:
+    """Run one git plumbing command, or refuse. Never a warning, never a skip."""
+    try:
+        proc = subprocess.run(["git", "-C", str(repo), *args], input=stdin_bytes,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError as exc:
+        raise Refusal("git-unavailable",
+                      f"git could not be run ({exc}); the batch label cannot be bound "
+                      f"without it, and an unbindable label is a refusal") from exc
+    if proc.returncode not in ok_codes:
+        message = proc.stderr.decode("utf-8", "replace").strip().splitlines()
+        raise Refusal(code, f"git {' '.join(args)}: "
+                            f"{message[0] if message else f'exit {proc.returncode}'}")
+    return proc.stdout
+
+
+def git_toplevel(repo: pathlib.Path) -> pathlib.Path:
+    if not repo.is_dir():
+        raise Refusal("batch-repo-missing", f"{repo} is not a directory")
+    out = _git(repo, ["rev-parse", "--show-toplevel"], "batch-repo-not-git")
+    return pathlib.Path(os.fsdecode(out.strip())).resolve()
+
+
+def git_object_format(repo: pathlib.Path) -> str:
+    fmt = _git(repo, ["rev-parse", "--show-object-format"],
+               "batch-repo-not-git").decode("ascii", "replace").strip()
+    if fmt not in ("sha1", "sha256"):
+        raise Refusal("batch-repo-object-format",
+                      f"unsupported git object format {fmt!r}")
+    return fmt
+
+
+def git_resolve_commit(repo: pathlib.Path, rev: str, code: str, what: str) -> str:
+    out = _git(repo, ["rev-parse", "--verify", "--end-of-options", f"{rev}^{{commit}}"],
+               code).decode("ascii", "replace").strip()
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", out):
+        raise Refusal(code, f"{what} {rev!r} did not resolve to a commit id ({out!r})")
+    return out
+
+
+def git_blob_id(path: pathlib.Path, algo: str) -> str:
+    """The id git WOULD give this file's bytes: hash("blob <len>\\0" + content).
+
+    Comparing this against `ls-tree`'s object id is a full content comparison
+    that reads the working file once and no git object at all.
+    """
+    size = path.stat().st_size
+    digest = hashlib.new(algo)
+    digest.update(b"blob %d\0" % size)
+    read = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            read += len(chunk)
+            digest.update(chunk)
+    if read != size:
+        raise Refusal("source-tree-changed",
+                      f"{path} changed size while it was being read")
+    return digest.hexdigest()
+
+
+def git_tracked_subtree(repo: pathlib.Path, commit: str, subtree: str) -> dict[str, str]:
+    """path -> blob id for every file the commit tracks under `subtree`."""
+    spec = commit if subtree == "." else f"{commit}:{subtree}"
+    out = _git(repo, ["ls-tree", "-r", "-z", "--full-tree", spec], "batch-subtree-missing")
+    tracked: dict[str, str] = {}
+    for chunk in out.split(b"\0"):
+        if not chunk:
+            continue
+        meta, _, raw_path = chunk.partition(b"\t")
+        fields = meta.split()
+        if len(fields) != 3:                                     # pragma: no cover - defensive
+            raise Refusal("batch-subtree-unreadable", f"unparseable ls-tree entry {chunk!r}")
+        mode, _kind, oid = (f.decode("ascii", "replace") for f in fields)
+        try:
+            path = raw_path.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise Refusal("batch-path-not-utf8", f"{raw_path!r} is not UTF-8") from exc
+        if mode not in GIT_BLOB_MODES:
+            raise Refusal("batch-subtree-not-plain",
+                          f"{path} is {GIT_MODE_NAMES.get(mode, 'mode ' + mode)} in the batch; "
+                          f"the tree must be plain files on both sides")
+        tracked[path] = oid
+    return tracked
+
+
+def git_ignored(repo: pathlib.Path, relpaths: Sequence[str]) -> set[str]:
+    """Which of these repo-relative paths the repository itself ignores."""
+    if not relpaths:
+        return set()
+    payload = ("\0".join(relpaths) + "\0").encode("utf-8")
+    # exit 1 means "none of them", which is an answer, not a failure.
+    out = _git(repo, ["check-ignore", "-z", "--stdin"], "git-check-ignore",
+               stdin_bytes=payload, ok_codes=(0, 1))
+    return {p.decode("utf-8") for p in out.split(b"\0") if p}
+
+
+def bind_batch(*, batch: str, source_root: pathlib.Path, batch_repo: pathlib.Path,
+               source_commit: str | None, src_files: dict[str, str],
+               src_dirs: Sequence[str]) -> dict[str, Any]:
+    """Resolve the batch label and prove the source tree IS that batch."""
+    if not batch or not batch.strip():
+        raise Refusal("batch-unnamed",
+                      "--batch must name the stage-1 batch this tree is built from")
+    batch = batch.strip()
+    repo_root = git_toplevel(batch_repo)
+    algo = git_object_format(batch_repo)
+    commit = git_resolve_commit(
+        batch_repo, batch, "batch-unresolved", "--batch")
+
+    if source_commit is not None:
+        if not source_commit.strip():
+            raise Refusal("source-commit-empty",
+                          "--source-commit was given but is empty; omit it or name an object")
+        resolved_source_commit = git_resolve_commit(
+            batch_repo, source_commit.strip(), "source-commit-unresolved", "--source-commit")
+        if resolved_source_commit != commit:
+            raise Refusal("source-commit-mismatch",
+                          f"--source-commit resolves to {resolved_source_commit} but --batch "
+                          f"{batch!r} resolves to {commit}; the manifest may not record two "
+                          f"provenances that disagree")
+
+    source = source_root.resolve()
+    try:
+        subtree = source.relative_to(repo_root).as_posix()
+    except ValueError as exc:
+        raise Refusal("source-tree-outside-batch-repo",
+                      f"{source} is not inside the batch repository {repo_root}; a tree that "
+                      f"the repository does not contain cannot be shown to be a batch of "
+                      f"it") from exc
+
+    tracked = git_tracked_subtree(batch_repo, commit, subtree)
+    if not tracked:
+        raise Refusal("batch-subtree-empty",
+                      f"{batch} ({commit[:12]}) tracks no file under {subtree!r}")
+
+    missing = sorted(set(tracked) - set(src_files))
+    if missing:
+        raise Refusal("batch-file-missing",
+                      f"{len(missing)} file(s) the batch {batch} tracks are absent from "
+                      f"{source}: {missing[:5]}")
+    differing = sorted(path for path, oid in tracked.items()
+                       if git_blob_id(source / path, algo) != oid)
+    if differing:
+        raise Refusal("batch-file-differs",
+                      f"{len(differing)} file(s) differ from {batch} ({commit[:12]}): "
+                      f"{differing[:5]}; this tree is not that batch, and a corrected tree "
+                      f"may not claim a batch it was not built from")
+
+    prefix = "" if subtree == "." else subtree + "/"
+    extra = sorted(set(src_files) - set(tracked))
+    ignored = git_ignored(repo_root, [prefix + path for path in extra])
+    unexplained = [path for path in extra if prefix + path not in ignored]
+    if unexplained:
+        raise Refusal("batch-file-untracked",
+                      f"{len(unexplained)} file(s) in {source} are neither tracked by {batch} "
+                      f"nor ignored by the repository: {unexplained[:5]}")
+
+    implied = {parent for path in tracked
+               for parent in _ancestor_dirs(path)}
+    extra_dirs = sorted(set(src_dirs) - implied)
+
+    return {
+        "method": "git-tracked-blob-identity",
+        "repository": tree_label(repo_root),
+        "object_format": algo,
+        "batch": batch,
+        "resolved_commit": commit,
+        # `--source-commit` deliberately leaves NO trace here. It either names
+        # the same object as --batch or the run is refused, so recording it
+        # would add nothing except a dependence on how the applier happened to
+        # be invoked -- and a manifest that depends on its own command line
+        # cannot be re-derived from the batch, the ledger and the tree.
+        "subtree": subtree,
+        "tracked_files": len(tracked),
+        "files_not_in_batch_commit": [
+            {"path": path, "sha256": src_files[path], "ignored_by_repository": True}
+            for path in extra],
+        "directories_not_in_batch_commit": extra_dirs,
+        "binds": ("every file the batch commit tracks under the subtree is present in the "
+                  "source tree with identical bytes, compared by git blob identity"),
+        "does_not_bind": ("paths git cannot commit: repository-ignored files and empty "
+                          "directories. Each is listed above with its sha256, so the residue "
+                          "is visible rather than absorbed into the claim"),
+    }
+
+
+def _ancestor_dirs(path: str) -> list[str]:
+    parts = path.split("/")[:-1]
+    return ["/".join(parts[:i + 1]) for i in range(len(parts))]
 
 
 # --------------------------------------------------------------------------
@@ -380,6 +610,34 @@ def validate_record(raw: Any, where: str) -> dict[str, Any]:
     return record
 
 
+def _refuse_hidden_records(records_dir: pathlib.Path) -> None:
+    """A record may not hide in a subdirectory of the ledger.
+
+    Evidence and schema deliberately live under `evidence/` and `schema/` where
+    the loader never looks, so "every nested .json is a record" would be wrong.
+    The test is therefore what the file IS, not where it sits: anything below
+    the root that VALIDATES as a correction record is a record the loader would
+    have skipped in silence, and that is a refusal.
+    """
+    for path in sorted(records_dir.rglob("*.json")):
+        if path.parent == records_dir or path.is_symlink() or not path.is_file():
+            continue
+        try:
+            parsed = json.loads(path.read_bytes().decode("utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue                      # not parseable, so not a record
+        for raw in (parsed if isinstance(parsed, list) else [parsed]):
+            try:
+                validate_record(raw, "probe")
+            except Refusal:
+                continue
+            raise Refusal("record-outside-ledger-root",
+                          f"{path.relative_to(records_dir).as_posix()} validates as a "
+                          f"correction record but the loader reads only the ledger root; "
+                          f"a record in a subdirectory would apply to nothing and report "
+                          f"a clean run")
+
+
 def load_records(records_dir: pathlib.Path) -> list[dict[str, Any]]:
     """Read every `*.json` under the ledger directory, sorted by file name.
 
@@ -392,9 +650,21 @@ def load_records(records_dir: pathlib.Path) -> list[dict[str, Any]]:
                       f"{records_dir} is not a directory; an absent ledger is not an empty one")
     paths = sorted(p for p in records_dir.iterdir()
                    if p.is_file() and p.suffix == ".json" and not p.name.startswith("."))
-    for path in records_dir.iterdir():
+    loaded = {p.name for p in paths}
+    for path in sorted(records_dir.iterdir(), key=lambda p: p.name):
         if path.is_symlink():
             raise Refusal("records-symlink", f"{path.name} is a symlink")
+        # A file the loader would SKIP while looking like a record is the same
+        # defect as an absent ledger read as an empty one: `c01.json.bak`,
+        # `c01.JSON` and `.c01.json` all used to make the run report "records: 0"
+        # and call itself clean. The ledger root carries prose and tooling too,
+        # so the rule is narrow: a name that mentions .json must be loadable.
+        if path.is_file() and path.name not in loaded and ".json" in path.name.lower():
+            raise Refusal("record-file-not-loaded",
+                          f"{path.name} sits in the ledger and names itself JSON but the "
+                          f"loader takes only '*.json'; a record that is silently skipped "
+                          f"is a correction that did not happen")
+    _refuse_hidden_records(records_dir)
     records: list[dict[str, Any]] = []
     seen: dict[str, str] = {}
     for path in paths:
@@ -493,6 +763,12 @@ def check_effects(record: dict[str, Any], src_root: pathlib.Path,
     Not from the in-memory string the edit produced: a number measured on a
     tree that was not written is the failure this project has already paid for
     more than once. Everything here reads back off disk.
+
+    Every effect is also measured on the SOURCE, and the record must contain at
+    least one whose two measurements differ. Without that, `met: true` can be
+    published for a measurement the edit cannot influence -- an effect the
+    batch already satisfied -- and the manifest would be stating, truthfully
+    and uselessly, that something unrelated to the correction is the case.
     """
     results = []
     for index, effect in enumerate(record["expected_effect"]):
@@ -502,26 +778,41 @@ def check_effects(record: dict[str, Any], src_root: pathlib.Path,
             raise Refusal("effect-target-missing",
                           f"{tag}: {relpath} is not in the corrected tree")
         out_path = out_root / relpath
+        src_path = src_root / relpath
         kind = effect["kind"]
         if kind == "sha256":
             got: Any = out_files[relpath]
             want: Any = effect["value"].lower()
+            on_source: Any = sha256_path(src_path)
         elif kind == "occurs":
             got = _read_text(out_path, relpath, "output").count(effect["text"])
             want = effect["count"]
+            on_source = _read_text(src_path, relpath, "source").count(effect["text"])
         elif kind == "absent":
             got = _read_text(out_path, relpath, "output").count(effect["text"])
             want = 0
-        else:  # count_delta -- the only kind that also measures the SOURCE
-            before = _read_text(src_root / relpath, relpath, "source").count(effect["text"])
+            on_source = _read_text(src_path, relpath, "source").count(effect["text"])
+        else:  # count_delta -- states both sides in the record itself
+            before = _read_text(src_path, relpath, "source").count(effect["text"])
             after = _read_text(out_path, relpath, "output").count(effect["text"])
             got = {"before": before, "after": after}
             want = {"before": effect["before"], "after": effect["after"]}
+            on_source = before
         if got != want:
             raise Refusal("effect-unmet",
                           f"{tag}: declared {want!r}, measured {got!r} on {relpath}")
+        measured_output = got["after"] if kind == "count_delta" else got
         results.append({"index": index, "kind": kind, "file": relpath,
-                        "measured": got, "declared": want, "met": True})
+                        "measured": got, "declared": want, "met": True,
+                        "measured_on_source": on_source,
+                        "measured_on_output": measured_output,
+                        "distinguishes_source_from_output": on_source != measured_output})
+    if not any(entry["distinguishes_source_from_output"] for entry in results):
+        raise Refusal("record-effect-insensitive",
+                      f"{record['id']}: every declared effect measures the same on the batch "
+                      f"as on the corrected tree, so none of them can tell whether the "
+                      f"correction landed; at least one expected_effect must distinguish the "
+                      f"two trees")
     return results
 
 
@@ -550,14 +841,19 @@ def guard_paths(src_root: pathlib.Path, out_root: pathlib.Path,
 
 
 def build_tree(src_root: pathlib.Path, records: Sequence[dict[str, Any]],
-               staging: pathlib.Path) -> dict[str, Any]:
+               staging: pathlib.Path,
+               scanned: tuple[dict[str, str], list[str]]) -> dict[str, Any]:
     """Materialise copy(batch) + records into `staging` and measure the result.
 
     Rule 3 is structural here: `edited` is keyed by the files some record's
     edit actually names. Every other path goes through a byte copy. There is no
     branch in which an unnamed file is rewritten, reformatted, or normalised.
+
+    `scanned` is the source scan the batch binding already measured -- the same
+    numbers, so the tree that was PROVED to be the batch is the tree that gets
+    copied, with no second look in between.
     """
-    src_files, src_dirs = scan_tree(src_root, "source-tree")
+    src_files, src_dirs = scanned
 
     # Group edits by target path, across records, so two records touching the
     # same file are checked for overlap against each other and not just against
@@ -629,7 +925,7 @@ def build_tree(src_root: pathlib.Path, records: Sequence[dict[str, Any]],
             "edited": sorted(edited), "by_target": by_target}
 
 
-def build_manifest(*, batch: str, source_commit: str | None,
+def build_manifest(*, binding: dict[str, Any],
                    labels: dict[str, str], built: dict[str, Any],
                    records: Sequence[dict[str, Any]],
                    effects: dict[str, list[dict[str, Any]]],
@@ -692,8 +988,11 @@ def build_manifest(*, batch: str, source_commit: str | None,
         "manifest_version": MANIFEST_VERSION,
         "tool": "tools/formgen/correct.py",
         "tool_sha256": tool_sha,
-        "source_batch": batch,
-        "source_commit": source_commit,
+        "source_batch": binding["batch"],
+        # The RESOLVED commit, never the operator's string: the label is only a
+        # name, and this is the object it was proved against.
+        "source_commit": binding["resolved_commit"],
+        "batch_binding": binding,
         "source_tree": labels["source_tree"],
         "source_tree_sha256": tree_sha256(src_files, built["src_dirs"]),
         "records_dir": labels["records_dir"],
@@ -715,6 +1014,8 @@ def build_manifest(*, batch: str, source_commit: str | None,
         "divergence_count": len(divergences),
         "hides_divergence": False,
         "suppressions_expressible": False,
+        "batch_label_is_bound": True,
+        "effects_measured_on_both_trees": True,
         "self_check_is_not_independent_verification": True,
         "divergences": divergences,
         "records": manifest_records,
@@ -732,12 +1033,20 @@ def tool_sha256() -> str:
 
 def run_build(*, src_root: pathlib.Path, records_dir: pathlib.Path,
               staging: pathlib.Path, batch: str, source_commit: str | None,
+              batch_repo: pathlib.Path,
               labels: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
     records = load_records(records_dir)
-    built = build_tree(src_root, records, staging)
+    scanned = scan_tree(src_root, "source-tree")
+    # Rule 2, before a single byte is staged: the label must resolve and the
+    # tree must BE that batch. Nothing downstream can restore this if it is
+    # skipped, because everything downstream measures the tree against itself.
+    binding = bind_batch(batch=batch, source_root=src_root, batch_repo=batch_repo,
+                         source_commit=source_commit, src_files=scanned[0],
+                         src_dirs=scanned[1])
+    built = build_tree(src_root, records, staging, scanned)
     effects = {r["id"]: check_effects(r, src_root, staging, built["out_files"])
                for r in records}
-    manifest = build_manifest(batch=batch, source_commit=source_commit, labels=labels,
+    manifest = build_manifest(binding=binding, labels=labels,
                               built=built, records=records, effects=effects,
                               tool_sha=tool_sha256())
     return manifest, built
@@ -753,6 +1062,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
     out_root = args.out or (REPO / "forms-corrected")
     manifest_path = args.manifest or out_root.parent / (out_root.name + ".manifest.json")
 
+    batch_repo = args.batch_repo or REPO
     if not args.batch or not args.batch.strip():
         raise Refusal("batch-unnamed",
                       "--batch must name the stage-1 batch this tree is built from")
@@ -785,7 +1095,8 @@ def cmd_apply(args: argparse.Namespace) -> int:
     try:
         manifest, built = run_build(src_root=src_root, records_dir=records_dir,
                                     staging=staging, batch=args.batch,
-                                    source_commit=args.source_commit, labels=labels)
+                                    source_commit=args.source_commit,
+                                    batch_repo=batch_repo, labels=labels)
         payload = manifest_bytes(manifest)
         if args.dry_run:
             summary = _summary(manifest, dry_run=True)
@@ -816,6 +1127,9 @@ def _summary(manifest: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
         "ok": True,
         "dry_run": dry_run,
         "source_batch": manifest["source_batch"],
+        "source_commit": manifest["source_commit"],
+        "batch_binding": {k: manifest["batch_binding"][k]
+                          for k in ("method", "resolved_commit", "subtree", "tracked_files")},
         "source_tree_sha256": manifest["source_tree_sha256"],
         "output_tree_sha256": manifest["output_tree_sha256"],
         "counts": manifest["counts"],
@@ -873,7 +1187,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
         staging = holding / "tree"
         rebuilt, _built = run_build(src_root=src_root, records_dir=records_dir,
                                     staging=staging, batch=given["source_batch"],
-                                    source_commit=given.get("source_commit"), labels=labels)
+                                    # NOT the manifest's own commit: feeding a
+                                    # recorded value back in as an argument
+                                    # would make it self-confirming. The label
+                                    # is re-resolved from scratch, and the
+                                    # commit the manifest recorded has to equal
+                                    # what comes back or it does not re-derive.
+                                    source_commit=args.source_commit,
+                                    batch_repo=args.batch_repo or REPO, labels=labels)
         if args.allow_tool_drift:
             rebuilt["tool_sha256"] = given.get("tool_sha256")
         rebuilt_bytes = manifest_bytes(rebuilt)
@@ -895,9 +1216,17 @@ def cmd_verify(args: argparse.Namespace) -> int:
     finally:
         shutil.rmtree(holding, ignore_errors=True)
 
+    # The sentence follows the result. It used to be a constant, so a run that
+    # had just listed its problems still printed "the corrected tree is exactly
+    # copy(batch) + declared records" beside `ok: false` -- a true-looking
+    # statement backed by nothing, which is the class of defect this file is
+    # supposed to be about.
     result = {
         "ok": not problems,
-        "verified": "the corrected tree is exactly copy(batch) + declared records",
+        "verified": ("the corrected tree is exactly copy(batch) + declared records"
+                     if not problems else
+                     "NOT VERIFIED: the corrected tree is not copy(batch) + declared records"),
+        "claim_checked": "the corrected tree is exactly copy(batch) + declared records",
         "source_batch": given["source_batch"],
         "records": [r["id"] for r in given.get("records", [])],
         "divergences": [d["report"] for d in given.get("divergences", [])],
@@ -964,6 +1293,50 @@ def _make_batch(root: pathlib.Path) -> None:
     (root / "empty-dir").mkdir()
 
 
+def _git_selftest(repo: pathlib.Path, *args: str) -> str:
+    """git, hermetically: no system config, no user config, no signing, no hooks."""
+    env = dict(os.environ,
+               GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull,
+               GIT_AUTHOR_NAME="formgen", GIT_AUTHOR_EMAIL="formgen@invalid",
+               GIT_COMMITTER_NAME="formgen", GIT_COMMITTER_EMAIL="formgen@invalid",
+               GIT_AUTHOR_DATE="2000-01-01T00:00:00+0000",
+               GIT_COMMITTER_DATE="2000-01-01T00:00:00+0000")
+    proc = subprocess.run(["git", "-C", str(repo), *args], env=env,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if proc.returncode:
+        raise Refusal("self-test-git",
+                      f"git {' '.join(args)}: {proc.stderr.decode('utf-8', 'replace').strip()}")
+    return proc.stdout.decode("utf-8", "replace").strip()
+
+
+def _make_batch_repo(repo: pathlib.Path) -> tuple[str, str]:
+    """A real git repository whose `forms/` IS the miniature batch.
+
+    The self-test resolves against real git objects for the same reason the
+    tool now does: a batch label that is not resolved against an object is not
+    a binding, and a self-test that faked the resolution would prove nothing.
+
+    Two commits and two tags, because "the label resolves" and "the label
+    resolves to THIS object" are different claims and both are under test. The
+    batch also carries one ignored file and one empty directory -- the two
+    things git cannot represent -- so the residue the binding must LIST rather
+    than absorb is exercised on every run.
+    """
+    repo.mkdir(parents=True)
+    _make_batch(repo / "forms")
+    (repo / ".gitignore").write_text("forms/assets/art.png\n", encoding="utf-8")
+    _git_selftest(repo, "init", "-q")
+    _git_selftest(repo, "add", "-A")
+    _git_selftest(repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "the batch")
+    _git_selftest(repo, "tag", "corpus/rTEST")
+    batch_commit = _git_selftest(repo, "rev-parse", "HEAD")
+    (repo / "NOTES.md").write_text("a later commit, which is not the batch\n", encoding="utf-8")
+    _git_selftest(repo, "add", "-A")
+    _git_selftest(repo, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "later")
+    _git_selftest(repo, "tag", "corpus/rOTHER")
+    return batch_commit, _git_selftest(repo, "rev-parse", "HEAD")
+
+
 def _good_record() -> dict[str, Any]:
     """The shape of C01, on the miniature batch: 12 TIN slots -> 14."""
     return {
@@ -999,6 +1372,7 @@ def _write_record(records: pathlib.Path, record: dict[str, Any],
 
 
 _LAST_STDERR = ""
+_LAST_STDOUT = ""
 
 
 def _run(argv: Sequence[str]) -> int:
@@ -1006,14 +1380,22 @@ def _run(argv: Sequence[str]) -> int:
 
     The summary and the refusal message are captured rather than printed: the
     self-test's own PASS/FAIL lines are the report, and a failing case quotes
-    the captured refusal in its detail so nothing is lost.
+    the captured refusal in its detail so nothing is lost. Both streams are
+    kept, because what a failing run PRINTS is itself under test.
     """
-    global _LAST_STDERR
+    global _LAST_STDERR, _LAST_STDOUT
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         rc = main(list(argv))
     _LAST_STDERR = err.getvalue().strip()
+    _LAST_STDOUT = out.getvalue().strip()
     return rc
+
+
+def _refused_with(code: str) -> bool:
+    """The refusal CODE, not just a non-zero exit: a case that fails for the
+    wrong reason is a case that is not testing what it claims to test."""
+    return _LAST_STDERR.startswith(f"REFUSED {code}:")
 
 
 class _Checker:
@@ -1049,8 +1431,10 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
     check = _Checker()
     with tempfile.TemporaryDirectory() as tmp:
         base = pathlib.Path(tmp)
-        src = base / "batch"
-        _make_batch(src)
+        repo = base / "repo"
+        src = repo / "forms"
+        batch_commit, other_commit = _make_batch_repo(repo)
+        batch_argv = ["--batch", "corpus/rTEST", "--batch-repo", str(repo)]
         empty_records = base / "records-empty"
         empty_records.mkdir()
         src_files_before, src_dirs_before = scan_tree(src, "src")
@@ -1062,7 +1446,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         # ------------------------------------------------------------------
         out = base / "corrected"
         manifest_path = base / "corrected.manifest.json"
-        rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+        rc = _run([*batch_argv, "--source-tree", str(src),
                    "--records", str(empty_records), "--out", str(out),
                    "--manifest", str(manifest_path)])
         check("an empty ledger applies cleanly", rc == 0, f"rc={rc}")
@@ -1095,6 +1479,74 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
               str(base) not in manifest_path.read_text())
 
         # ------------------------------------------------------------------
+        # 2b. RULE 2, D1. The batch label is resolved as a git object and the
+        #     source tree is proved to BE that object's tree. `--batch
+        #     corpus/r1 --source-commit 0000000deadbeef` used to succeed, write
+        #     372 files and record that provenance as fact; every clause below
+        #     is one way of telling that lie.
+        # ------------------------------------------------------------------
+        binding = manifest["batch_binding"]
+        check("the fixture's two tags name two different objects",
+              batch_commit != other_commit and len(batch_commit) in (40, 64))
+        check("the manifest records the RESOLVED commit, not the operator's string",
+              manifest["source_commit"] == batch_commit, manifest["source_commit"])
+        check("the binding names the object the tree was proved against",
+              binding["resolved_commit"] == batch_commit
+              and binding["method"] == "git-tracked-blob-identity"
+              and binding["subtree"] == "forms", binding["resolved_commit"])
+        check("the binding covers every file the batch commit tracks",
+              binding["tracked_files"] == 6, binding["tracked_files"])
+        check("what git cannot commit is listed with its hash, not absorbed",
+              [f["path"] for f in binding["files_not_in_batch_commit"]] == ["assets/art.png"]
+              and binding["files_not_in_batch_commit"][0]["sha256"] == sha256_bytes(_PNG)
+              and binding["directories_not_in_batch_commit"] == ["assets", "empty-dir"],
+              binding["files_not_in_batch_commit"])
+
+        def batch_refusal(name: str, argv: Sequence[str], code: str, *,
+                          source: pathlib.Path | None = None) -> None:
+            target = base / f"batch-out-{abs(hash(name)) % 10**8}"
+            rc = _run([*argv, "--source-tree", str(source or src),
+                       "--records", str(empty_records), "--out", str(target),
+                       "--manifest", str(target.with_suffix(".manifest.json"))])
+            check(name, rc != 0 and not target.exists() and _refused_with(code),
+                  f"rc={rc} out_exists={target.exists()} {_LAST_STDERR}")
+
+        # The exact command from the adversarial report, both halves of it.
+        batch_refusal("refuses a batch label that names no object in the repository",
+                      ["--batch", "corpus/r1", "--batch-repo", str(repo)], "batch-unresolved")
+        batch_refusal("refuses a --source-commit that names no object",
+                      [*batch_argv, "--source-commit", "0000000deadbeef"],
+                      "source-commit-unresolved")
+        batch_refusal("refuses a --source-commit that disagrees with --batch",
+                      [*batch_argv, "--source-commit", "corpus/rOTHER"],
+                      "source-commit-mismatch")
+        outside = base / "outside-the-repo" / "forms"
+        shutil.copytree(src, outside)
+        batch_refusal("refuses a source tree outside the batch repository",
+                      list(batch_argv), "source-tree-outside-batch-repo", source=outside)
+
+        drifted = src / "base.css"
+        kept = drifted.read_bytes()
+        drifted.write_bytes(kept + b"/* one byte of drift */\n")
+        batch_refusal("refuses a source tree that drifted from the named batch",
+                      list(batch_argv), "batch-file-differs")
+        drifted.write_bytes(kept)
+
+        stray = src / "alpha-2007" / "not-in-the-batch.html"
+        stray.write_text("<html>stray</html>\n", encoding="utf-8")
+        batch_refusal("refuses a file the batch does not track and the repo does not ignore",
+                      list(batch_argv), "batch-file-untracked")
+        stray.unlink()
+
+        hidden_away = base / "base.css.moved"
+        shutil.move(str(drifted), str(hidden_away))
+        batch_refusal("refuses when a file the batch tracks is missing from the tree",
+                      list(batch_argv), "batch-file-missing")
+        shutil.move(str(hidden_away), str(drifted))
+        check("the batch binding left the source tree exactly as it found it",
+              drifted.read_bytes() == kept and not stray.exists())
+
+        # ------------------------------------------------------------------
         # 3. The applier never writes into the source tree.
         # ------------------------------------------------------------------
         src_files_after, src_dirs_after = scan_tree(src, "src")
@@ -1106,7 +1558,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         # ------------------------------------------------------------------
         out2 = base / "corrected2"
         manifest2 = base / "corrected2.manifest.json"
-        _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+        _run([*batch_argv, "--source-tree", str(src),
               "--records", str(empty_records), "--out", str(out2),
               "--manifest", str(manifest2)])
         same, why = _dirs_identical(out, out2)
@@ -1126,7 +1578,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         _write_record(records, _good_record())
         cout = base / "corrected-c01"
         cmanifest = base / "corrected-c01.manifest.json"
-        rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+        rc = _run([*batch_argv, "--source-tree", str(src),
                    "--records", str(records), "--out", str(cout),
                    "--manifest", str(cmanifest)])
         check("a declared record applies", rc == 0, f"rc={rc}")
@@ -1149,6 +1601,19 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         check("the manifest re-derives the declared effects",
               all(e["met"] for e in cm["records"][0]["effects_re_derived"])
               and len(cm["records"][0]["effects_re_derived"]) == 2)
+        # D2. `met: true` on its own is compatible with an effect the batch
+        # already satisfied, so every effect is measured on BOTH trees and the
+        # manifest publishes both numbers.
+        declared_effects = cm["records"][0]["effects_re_derived"]
+        check("every effect is measured on the batch as well as the corrected tree",
+              all("measured_on_source" in e and "measured_on_output" in e
+                  for e in declared_effects), declared_effects)
+        check("at least one declared effect distinguishes the two trees",
+              any(e["distinguishes_source_from_output"] for e in declared_effects)
+              and cm["effects_measured_on_both_trees"] is True)
+        check("the count_delta's source measurement is the batch's own number",
+              declared_effects[0]["measured_on_source"] == 12
+              and declared_effects[0]["measured_on_output"] == 14, declared_effects[0])
         check("the manifest hashes the record file itself",
               cm["records"][0]["record_sha256"]
               == sha256_bytes((records / "c01.json").read_bytes()))
@@ -1174,7 +1639,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         # ------------------------------------------------------------------
         # 7. --verify re-derives the tree without trusting the run that made it.
         # ------------------------------------------------------------------
-        rc = _run(["--verify", "--manifest", str(cmanifest), "--source-tree", str(src),
+        rc = _run(["--verify", "--batch-repo", str(repo), "--manifest", str(cmanifest), "--source-tree", str(src),
                    "--records", str(records), "--out", str(cout)])
         check("--verify accepts a tree that re-derives", rc == 0, f"rc={rc}")
 
@@ -1182,21 +1647,29 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         shutil.copytree(cout, tampered)
         victim = tampered / "extra" / "beta-2019" / "index.html"
         victim.write_text(victim.read_text().replace("beta", "gamma"), encoding="utf-8")
-        rc = _run(["--verify", "--manifest", str(cmanifest), "--source-tree", str(src),
+        rc = _run(["--verify", "--batch-repo", str(repo), "--manifest", str(cmanifest), "--source-tree", str(src),
                    "--records", str(records), "--out", str(tampered)])
         check("--verify rejects a hand-edited byte", rc != 0, f"rc={rc}")
+        # The sentence has to follow the result. `ok: false` used to be printed
+        # beside the constant "the corrected tree is exactly copy(batch) +
+        # declared records", which is the same defect one field over.
+        failed = json.loads(_LAST_STDOUT)
+        check("a failing --verify does not print the success sentence",
+              failed["ok"] is False and failed["verified"].startswith("NOT VERIFIED")
+              and failed["claim_checked"].startswith("the corrected tree is exactly"),
+              failed["verified"])
 
         added = base / "added"
         shutil.copytree(cout, added)
         (added / "alpha-2007" / "sneaked.html").write_text("x\n", encoding="utf-8")
-        rc = _run(["--verify", "--manifest", str(cmanifest), "--source-tree", str(src),
+        rc = _run(["--verify", "--batch-repo", str(repo), "--manifest", str(cmanifest), "--source-tree", str(src),
                    "--records", str(records), "--out", str(added)])
         check("--verify rejects an added file", rc != 0, f"rc={rc}")
 
         removed = base / "removed"
         shutil.copytree(cout, removed)
         (removed / "base.css").unlink()
-        rc = _run(["--verify", "--manifest", str(cmanifest), "--source-tree", str(src),
+        rc = _run(["--verify", "--batch-repo", str(repo), "--manifest", str(cmanifest), "--source-tree", str(src),
                    "--records", str(records), "--out", str(removed)])
         check("--verify rejects a deleted file", rc != 0, f"rc={rc}")
 
@@ -1204,7 +1677,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         bent_obj = json.loads(cmanifest.read_text())
         bent_obj["divergences"][0]["still_diverges_from_official"] = False
         bent.write_bytes(manifest_bytes(bent_obj))
-        rc = _run(["--verify", "--manifest", str(bent), "--source-tree", str(src),
+        rc = _run(["--verify", "--batch-repo", str(repo), "--manifest", str(bent), "--source-tree", str(src),
                    "--records", str(records), "--out", str(cout)])
         check("--verify rejects a manifest edited to soften a divergence", rc != 0, f"rc={rc}")
 
@@ -1213,11 +1686,11 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         rogue = _good_record()
         rogue["authority"] = "because I said so"
         _write_record(swapped, rogue)
-        rc = _run(["--verify", "--manifest", str(cmanifest), "--source-tree", str(src),
+        rc = _run(["--verify", "--batch-repo", str(repo), "--manifest", str(cmanifest), "--source-tree", str(src),
                    "--records", str(swapped), "--out", str(cout)])
         check("--verify rejects a record rewritten after the fact", rc != 0, f"rc={rc}")
 
-        rc = _run(["--verify", "--manifest", str(base / "nope.json")])
+        rc = _run(["--verify", "--batch-repo", str(repo), "--manifest", str(base / "nope.json")])
         check("--verify refuses when the manifest is missing", rc != 0, f"rc={rc}")
 
         # ------------------------------------------------------------------
@@ -1232,7 +1705,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
                 mutate(record)
                 _write_record(rdir, record)
             target = base / f"out-{abs(hash(name)) % 10**8}"
-            argv = ["--batch", "corpus/rTEST", "--source-tree", str(src),
+            argv = [*batch_argv, "--source-tree", str(src),
                     "--records", str(rdir), "--out", str(target),
                     "--manifest", str(target.with_suffix(".manifest.json"))]
             rc = _run([*argv, *extra_argv])
@@ -1263,6 +1736,13 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
                 lambda r: r.__setitem__("expected_effect",
                                         [{"kind": "sha256", "file": "index.html",
                                           "value": "0" * 64}]))
+        # D2, both shapes: an effect that is TRUE of the corrected tree and
+        # equally true of the batch it came from proves nothing about the
+        # correction, however semantic it looks.
+        refusal("refuses an effect the batch already satisfied",
+                lambda r: r.__setitem__("expected_effect",
+                                        [{"kind": "occurs", "file": "index.html",
+                                          "text": "<div class=tin>", "count": 1}]))
         refusal("refuses an effect the written bytes do not satisfy",
                 lambda r: r["expected_effect"][0].__setitem__("after", 15))
         refusal("refuses a count_delta that states no change",
@@ -1338,13 +1818,70 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         _write_record(binary, bin_record)
         refusal("refuses a text edit against a non-UTF-8 file", None, records_dir=binary)
 
+        # The adversarial probe verbatim: a record that DELETES the whole comb
+        # and declares only "<!doctype html> occurs once". Every word of that
+        # is true, it is a semantic kind, it is re-derived from the written
+        # bytes -- and it would hold if the record had never run. It used to
+        # apply, and the manifest used to publish `met: true` for it.
+        lied = base / "records-insensitive"
+        lied.mkdir()
+        lie = _good_record()
+        lie["id"] = "C99"
+        lie["edits"] = [{"file": "index.html", "find": _slots(12),
+                         "replace": "", "occurrences": 1}]
+        lie["expected_effect"] = [{"kind": "occurs", "file": "index.html",
+                                   "text": "<!doctype html>", "count": 1}]
+        _write_record(lied, lie)
+        refusal("refuses a record that deletes a comb and declares an unrelated truth",
+                None, records_dir=lied)
+
+        # A record the loader would have SKIPPED is a correction that did not
+        # happen, reported as a clean run with `records: 0`.
+        for label, name in (("a stale suffix", "c01.json.bak"),
+                            ("an unloadable case", "c01.JSON"),
+                            ("a dotfile", ".c01.json")):
+            skipped = base / f"records-skipped-{name}"
+            skipped.mkdir()
+            _write_record(skipped, _good_record(), name)
+            refusal(f"refuses a record file the loader would skip ({label})",
+                    None, records_dir=skipped)
+
+        hidden = base / "records-hidden"
+        (hidden / "wave2").mkdir(parents=True)
+        _write_record(hidden / "wave2", _good_record(), "c01.json")
+        refusal("refuses a record hiding in a ledger subdirectory",
+                None, records_dir=hidden)
+
+        # ...and the ledger's real shape still loads: evidence and schema live
+        # in subdirectories precisely so the applier does not read them, so the
+        # rule above has to be about what a file IS, not where it sits.
+        shaped = base / "records-with-evidence"
+        (shaped / "evidence").mkdir(parents=True)
+        (shaped / "schema").mkdir()
+        _write_record(shaped, _good_record(), "c01.json")
+        (shaped / "README.md").write_text("# ledger\n", encoding="utf-8")
+        (shaped / "validate_records.py").write_text("# not a record\n", encoding="utf-8")
+        (shaped / "evidence" / "C01-evidence.json").write_text(
+            json.dumps({"schema_version": "0.1.0", "id": "C01",
+                        "evidence": [{"claim": "x", "source": "y"}]}), encoding="utf-8")
+        (shaped / "schema" / "correction-record.schema.json").write_text(
+            json.dumps({"$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object"}), encoding="utf-8")
+        shaped_out = base / "shaped-out"
+        rc = _run([*batch_argv, "--source-tree", str(src), "--records", str(shaped),
+                   "--out", str(shaped_out),
+                   "--manifest", str(base / "shaped.manifest.json")])
+        check("evidence and schema beside the ledger are not mistaken for records",
+              rc == 0 and (shaped_out / "alpha-2007/index.html").read_text()
+              .count("<input name=p1c2s") == 14, f"rc={rc} {_LAST_STDERR}")
+
         # ------------------------------------------------------------------
         # 9. The applier refuses to write into forms/ or into the batch.
         # ------------------------------------------------------------------
         def path_refusal(name: str, out_path: pathlib.Path,
                          source: pathlib.Path = src) -> None:
             before = out_path.exists()
-            rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(source),
+            rc = _run([*batch_argv, "--source-tree", str(source),
                        "--records", str(empty_records), "--out", str(out_path),
                        "--manifest", str(base / "ignored.manifest.json")])
             check(name, rc != 0 and out_path.exists() == before, f"rc={rc}")
@@ -1353,27 +1890,27 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         path_refusal("refuses to write inside forms/", STAGE1_TREE / "corrected")
         path_refusal("refuses an output equal to the source tree", src)
         path_refusal("refuses an output inside the source tree", src / "corrected")
-        rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+        rc = _run([*batch_argv, "--source-tree", str(src),
                    "--records", str(empty_records), "--out", str(base / "x"),
                    "--manifest", str(STAGE1_TREE / "m.json")])
         check("refuses to write the manifest into forms/", rc != 0, f"rc={rc}")
         rc = _run(["--batch", "", "--source-tree", str(src),
                    "--records", str(empty_records), "--out", str(base / "y")])
         check("refuses an unnamed batch", rc != 0 and not (base / "y").exists(), f"rc={rc}")
-        rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(base / "no-batch-here"),
+        rc = _run([*batch_argv, "--source-tree", str(base / "no-batch-here"),
                    "--records", str(empty_records), "--out", str(base / "z")])
         check("refuses a source tree that does not exist", rc != 0, f"rc={rc}")
 
         # ------------------------------------------------------------------
         # 10. An existing output is not silently replaced.
         # ------------------------------------------------------------------
-        rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+        rc = _run([*batch_argv, "--source-tree", str(src),
                    "--records", str(empty_records), "--out", str(out),
                    "--manifest", str(manifest_path)])
         check("refuses to overwrite a non-empty output tree", rc != 0, f"rc={rc}")
         check("the refused overwrite left the existing tree intact",
               _dirs_identical(src, out)[0])
-        rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+        rc = _run([*batch_argv, "--source-tree", str(src),
                    "--records", str(records), "--out", str(out),
                    "--manifest", str(manifest_path), "--force"])
         check("--force replaces the tree wholesale", rc == 0, f"rc={rc}")
@@ -1384,7 +1921,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         # 11. --dry-run writes nothing at all.
         # ------------------------------------------------------------------
         dry = base / "dry"
-        rc = _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+        rc = _run([*batch_argv, "--source-tree", str(src),
                    "--records", str(records), "--out", str(dry),
                    "--manifest", str(base / "dry.manifest.json"), "--dry-run"])
         check("--dry-run succeeds without writing a tree",
@@ -1414,7 +1951,7 @@ def self_test() -> int:  # noqa: C901 - a contract with many clauses, listed fla
         outs = []
         for index, rdir in enumerate((order_a, order_b)):
             target = base / f"order-out-{index}"
-            _run(["--batch", "corpus/rTEST", "--source-tree", str(src),
+            _run([*batch_argv, "--source-tree", str(src),
                   "--records", str(rdir), "--out", str(target),
                   "--manifest", str(base / f"order-{index}.manifest.json")])
             outs.append(target)
@@ -1435,7 +1972,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch", default="",
                         help="the stage-1 batch this tree is built from, e.g. corpus/r23")
     parser.add_argument("--source-commit", default=None,
-                        help="optional commit or tag object id for the named batch")
+                        help="optional second name for the batch; it must resolve to the "
+                             "SAME commit as --batch or the run is refused")
+    parser.add_argument("--batch-repo", type=pathlib.Path, default=None,
+                        help="the repository the batch label is resolved in (default: this "
+                             "checkout). The source tree must live inside it")
     parser.add_argument("--source-tree", type=pathlib.Path, default=None,
                         help="the stage-1 tree to copy from (default: forms/)")
     parser.add_argument("--records", type=pathlib.Path, default=None,
