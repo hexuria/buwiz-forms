@@ -1206,20 +1206,39 @@ class FieldBox:
     the same distance again as clearance. It is the cell's own measurement
     rather than a constant, so a 1.44pt underline and a 0.24pt comb divider do
     not get the same margin.
+
+    `regions` is the box after the strokes the source prints INSIDE it have
+    been taken out: one inset per writing region, left to right, and `None`
+    when the cell is the single region it looks like. A plain field is one
+    region in 9,932 of this corpus's 9,971 cells and several in 39 of them,
+    which is why `inset_trbl` stays what it always was -- the first region's,
+    identical to the whole box wherever there is only one -- and every reader
+    that does not know about regions keeps working on the boxes that have one.
+    The metrics are shared across a cell's regions and that is geometry, not
+    convenience: the strokes that divide a box are vertical, so every region
+    has the same height and fits the same face at the same size.
     """
 
     __slots__ = ("kind", "inset_trbl", "size_pt", "line_height_pt",
-                 "letter_spacing_pt", "capacity")
+                 "letter_spacing_pt", "capacity", "regions")
 
     def __init__(self, kind: str, inset_trbl: tuple[float, float, float, float] | None,
                  size_pt: float, line_height_pt: float,
-                 letter_spacing_pt: float | None, capacity: int | None) -> None:
+                 letter_spacing_pt: float | None, capacity: int | None,
+                 regions: tuple[tuple[float, float, float, float], ...] | None
+                 = None) -> None:
         self.kind = kind
         self.inset_trbl = inset_trbl
         self.size_pt = size_pt
         self.line_height_pt = line_height_pt
         self.letter_spacing_pt = letter_spacing_pt
         self.capacity = capacity
+        self.regions = regions
+
+    @property
+    def region_insets(self) -> tuple[tuple[float, float, float, float] | None, ...]:
+        """One inset per writing region; a single-region box yields its own."""
+        return self.regions if self.regions is not None else (self.inset_trbl,)
 
     @property
     def metrics_key(self) -> tuple[float, float, float | None]:
@@ -1267,9 +1286,174 @@ def comb_writing_rect(cell: dict[str, Any],
             float(comb.get("height_pt", float(cell["y1"]) - float(cell["y0"]))))
 
 
-def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
-    """Fit the body face into one field's writing box. None if it cannot fit."""
+# How many times the trim below may re-measure one box. Trimming one side can
+# put a glyph that was inside the box outside it, which is a fact about the
+# glyph and not an iteration artefact, so the loop re-measures rather than
+# guessing. It is bounded because a bug must stop rather than hang: the corpus
+# needs at most 2 passes on any of the 66 boxes that meet printed ink at all,
+# and a box that has not settled in 8 is left as measured so far, never
+# silently trusted.
+INK_TRIM_MAX_PASSES = 8
+
+
+def writing_box_clear_of_printed_ink(
+        box: tuple[float, float, float, float],
+        ink: "PrePrintedInk | None",
+        ) -> tuple[float, float, float, float]:
+    """One writing box, moved off the printed ink the sheet lays into it.
+
+    The box a taxpayer types in is the paper the source left BLANK inside the
+    cell, not the cell inset by its own rules. Those differ wherever the sheet
+    sets a caption tight against the box it labels -- 1604CF prints "8
+    Telephone No." so that the descender of its `p` crosses the box's top rule
+    and hangs 0.67pt inside it, and 2551M prints the item code `14E` so that
+    its first digit overhangs the box to its left by 0.72pt. Inset by rules
+    alone, the emitted input covers that ink and a typed character lands on
+    top of it.
+
+    **The trim is on the side the ink comes FROM.** A glyph whose own centre
+    lies above the box top is a line printed above this blank, so the blank
+    starts under it; the same statement mirrored gives left and right. A glyph
+    whose centre lies INSIDE the box implies no side at all -- the sheet has
+    printed into the middle of the blank, which is a different defect
+    (`field_verdict`'s pre-printed rule owns it) and one no trim can answer --
+    so this returns the box unchanged rather than guessing which half to keep.
+
+    **Three sides, not four, and the missing one is the whole reason this
+    trims against a run's line box at all.** What the IR states about a printed
+    run is its baseline, its face's ascent and its face's descent; per GLYPH it
+    states only the advance box. Those bound the run's ink to very different
+    accuracies, and a trim is only worth making against a tight bound:
+
+      * *Downward* the line box is tight. Every character either carries a
+        descender, which reaches the line box's own floor, or stops within a
+        small overshoot of the baseline -- a fraction of a point at these
+        sizes. So ink arriving from ABOVE is trimmed to that floor.
+      * *Horizontally* the advance box is tight enough to act on. Side
+        bearings are not derivable from the IR, and measured across the eleven
+        faces this corpus sets they are hundredths of an em -- the 0.50 to
+        0.72pt overhangs this trims are the artwork, not the bearing.
+      * *Upward* the line box is NOT tight, and this is the one place it is
+        loose by an order of magnitude. Its ceiling is the ASCENT line: where
+        the face could put ink, not where this run does. A `.` stops about
+        0.1em above the baseline and the ascent line is 0.9em above it. On
+        2550M the leader of "Debit Memo................" runs between two rows
+        of boxes and its ascent line reaches 2.61pt into the row above, with
+        3.77pt of blank paper between that line and the dots themselves --
+        confirmed against the source raster, where the dots sit wholly in the
+        gutter. Trimming to it would take 2.61pt off a 10.32pt writing box and
+        drop its fitted face from 8.25pt to 6.96pt for a collision that is not
+        on the paper. Shrinking real output to satisfy a bound we know to be
+        loose is the same error as widening a tolerance, pointed the other
+        way, so ink arriving from BELOW is not trimmed. `audit.py` reads the
+        same ascent line and reports those boxes; that report is the honest
+        residue of a bound neither file can tighten, and the answer to it is
+        to say so, not to move the box.
+
+    The box is trimmed to the ink's own edge and no further. The audit scores
+    an overlap at OVERLAP_EPS_PT = 0.05, so an input butted against the glyph
+    beside it is correct and needs no clearance invented for it.
+    """
+    x0, y0, x1, y1 = box
+    if ink is None:
+        return box
+    for _ in range(INK_TRIM_MAX_PASSES):
+        if x1 <= x0 or y1 <= y0:
+            break
+        top = left = right = None
+        for gx0, gy0, gx1, gy1 in ink.intrusions(x0, y0, x1, y1):
+            centre_y = (gy0 + gy1) / 2.0
+            centre_x = (gx0 + gx1) / 2.0
+            if centre_y <= y0:
+                top = gy1 if top is None else max(top, gy1)
+            elif centre_y >= y1:
+                continue    # the loose bound; see the docstring
+            elif centre_x <= x0:
+                left = gx1 if left is None else max(left, gx1)
+            elif centre_x >= x1:
+                right = gx0 if right is None else min(right, gx0)
+        moved = (x0, y0, x1, y1)
+        if top is not None:
+            y0 = max(y0, top)
+        if left is not None:
+            x0 = max(x0, left)
+        if right is not None:
+            x1 = min(x1, right)
+        if (x0, y0, x1, y1) == moved:
+            break
+    return (x0, y0, x1, y1)
+
+
+def writing_regions(box: tuple[float, float, float, float],
+                    partitions: Sequence[dict[str, Any]],
+                    ) -> list[tuple[float, float, float, float]]:
+    """One writing box, cut at the compartment dividers printed inside it.
+
+    A cell is one box to the grid; the paper can say otherwise. 1604CF page 2
+    rules "ADDRESS OF PAYEES" off "* STATUS" with a column border the whole
+    table long, 2551M page 2 does the same between "Period Covered" and "Name
+    of Withholding Agent", 2316 halves its "From (MM/DD)" boxes with a bottom
+    guide tick and 2550M does the same to its TIN groups and its date box.
+    Every one of those is one cell whose single wide input lies straight across
+    a rule the source prints -- 39 inputs on 5 forms, and the entire population
+    of `audit.check_inputs_span_no_printed_divider`.
+
+    Two tests, and the corpus separates on both rather than being tuned to
+    either. `lattice.printed_partitions` has already said which marks the
+    composited page still shows; these say which of them divide THIS box:
+
+      * **Wholly inside, horizontally.** A stroke whose ink crosses the box's
+        edge is the box's own wall. No tolerance and no constant: the wall of a
+        cell is drawn on the lattice line, so its ink straddles the edge, while
+        a divider's lies between the edges.
+      * **Deeper into the box than its own width.** A stroke that reaches in by
+        less than the ink drawing it has not entered the box -- it is the next
+        row's tick overshooting its baseline, which BIR's artwork does by 0.12
+        to 0.42pt in 54 places on 19 forms. This is the ink-versus-paper test
+        `band_ink` and `bottom_guide_tick_baseline` already use, asked of a
+        stroke and a box instead of two strokes. Measured over the whole
+        corpus, every grazing overshoot is at 0.25 to 0.87 of its own width and
+        every real divider at 3.83 and up; nothing lies between.
+
+    Regions are returned left to right, and a divider that would leave a region
+    of no width simply does not make one -- two dividers can be one composite
+    boundary, and a box with nothing between them is not a box.
+    """
+    x0, y0, x1, y1 = box
+    cuts: list[tuple[float, float]] = []
+    for span in partitions:
+        ix0, iy0 = float(span["x0"]), float(span["y0"])
+        ix1, iy1 = float(span["x1"]), float(span["y1"])
+        if ix0 < x0 or ix1 > x1:
+            continue
+        if min(y1, iy1) - max(y0, iy0) <= ix1 - ix0:
+            continue
+        cuts.append((ix0, ix1))
+    if not cuts:
+        return [box]
+    cuts.sort()
+    regions: list[tuple[float, float, float, float]] = []
+    left = x0
+    for cut_x0, cut_x1 in cuts:
+        if cut_x0 > left:
+            regions.append((left, y0, cut_x0, y1))
+        left = max(left, cut_x1)
+    if x1 > left:
+        regions.append((left, y0, x1, y1))
+    return regions or [box]
+
+
+def field_box(cell: dict[str, Any], face: FieldFace,
+              ink: "PrePrintedInk | None" = None) -> FieldBox | None:
+    """Fit the body face into one field's writing box. None if it cannot fit.
+
+    `ink` is the page's pre-printed glyphs. Passing None means that evidence
+    was not measured and the box is the cell inset by its own rules, which is
+    what every synthetic fixture wants and what no real emission may rely on --
+    `FieldPlan` already reports an unmeasured IR as a warning of its own.
+    """
     comb = cell.get("comb")
+    regions: tuple[tuple[float, float, float, float], ...] | None = None
     if comb:
         kind, capacity = "comb", int(comb["cells"])
         inset: tuple[float, float, float, float] | None = None
@@ -1289,8 +1473,38 @@ def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
             top = bottom = 0.0
         if left + right >= cell["x1"] - cell["x0"]:
             left = right = 0.0
+        # The rules give the box; the sheet's own ink takes back whatever it
+        # has already printed inside it. A comb is exempt and stays exempt: its
+        # slot rectangle is bound to `writing_y0`/`writing_y1` and to `slot_x`,
+        # which `comb_referee.writing_band_corroboration` re-derives from the
+        # source's own painted walls, so a comb compartment that meets printed
+        # ink is a fact to report and not a rectangle this may move.
+        cx0, cy0 = float(cell["x0"]) + left, float(cell["y0"]) + top
+        cx1, cy1 = float(cell["x1"]) - right, float(cell["y1"]) - bottom
+        tx0, ty0, tx1, ty1 = writing_box_clear_of_printed_ink(
+            (cx0, cy0, cx1, cy1), ink)
+        top += ty0 - cy0
+        bottom += cy1 - ty1
+        left += tx0 - cx0
+        right += cx1 - tx1
         inset = (top, right, bottom, left) if any((top, right, bottom, left)) else None
         height = (cell["y1"] - cell["y0"]) - top - bottom
+        # Width is checked only on this branch, and only because the trim above
+        # can take it away: a rule inset can never exceed the cell (the guard
+        # above sees to that) whereas ink printed across a whole blank can.
+        if (cell["x1"] - cell["x0"]) - left - right <= 0.0:
+            return None
+        # ... and last, the strokes the source rules ACROSS the box. Last
+        # because each earlier step moves the box, and a divider divides the
+        # box a taxpayer is actually given.
+        cut = writing_regions(
+            (float(cell["x0"]) + left, float(cell["y0"]) + top,
+             float(cell["x1"]) - right, float(cell["y1"]) - bottom),
+            cell.get("printed_partitions") or ())
+        if len(cut) > 1:
+            regions = tuple(
+                (top, float(cell["x1"]) - rx1, bottom, rx0 - float(cell["x0"]))
+                for rx0, _ry0, rx1, _ry1 in cut)
     if height <= 0.0 or face.line_span_em <= 0.0:
         return None
 
@@ -1319,7 +1533,8 @@ def field_box(cell: dict[str, Any], face: FieldFace) -> FieldBox | None:
         scaled = round(face.letter_spacing_pt * size / face.size_pt, 4)
         if abs(scaled) >= LETTER_SPACING_EPSILON_PT:
             spacing = scaled
-    return FieldBox(kind, inset, size, round(height, 4), spacing, capacity)
+    return FieldBox(kind, inset, size, round(height, 4), spacing, capacity,
+                    regions)
 
 
 # A cell whose own width is mostly pre-printed glyph ink is not a blank the
@@ -1367,6 +1582,38 @@ class PrePrintedInk:
             for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
                 self._buckets.setdefault(bucket, []).append(entry)
 
+    def _entries_over(self, y0: float, y1: float
+                      ) -> Iterator[tuple[float, float,
+                                          list[tuple[str, float, float]]]]:
+        """Every run whose own line box reaches into the band `y0..y1`.
+
+        No "printed in" test at all, which is what separates this from
+        `_spans_over`: the two occupancy questions ask which text BELONGS to a
+        box, and a caption belongs to the row above even when its descenders
+        hang into the row below. `intrusions` asks the opposite question --
+        where does the sheet put ink, whoever it belongs to -- and a rule that
+        first discarded the caption above could never see the ink it hangs
+        into the blank underneath it, which is the whole of the defect.
+
+        Sorted, so a caller that trims a box against these gets the same box
+        whatever order the buckets were filled in.
+        """
+        seen: set[int] = set()
+        out: list[tuple[float, float, list[tuple[str, float, float]]]] = []
+        for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
+            for entry in self._buckets.get(bucket, ()):
+                if id(entry) in seen:
+                    continue
+                seen.add(id(entry))
+                run_y0, run_y1, spans = entry
+                if run_y1 <= run_y0 or run_y1 <= y0 or run_y0 >= y1:
+                    continue
+                out.append(entry)
+        # Every entry carries at least one glyph -- `__init__` drops a run with
+        # none -- so the first glyph is always a usable tie-break.
+        out.sort(key=lambda entry: (entry[0], entry[1], entry[2][0]))
+        return iter(out)
+
     def _spans_over(self, y0: float, y1: float
                     ) -> Iterator[list[tuple[str, float, float]]]:
         """The glyphs of every run that is printed IN the band `y0..y1`.
@@ -1376,17 +1623,32 @@ class PrePrintedInk:
         this index, occupancy of a cell and what a comb slot carries, cannot
         drift apart on which runs they consider.
         """
-        seen: set[int] = set()
-        for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
-            for entry in self._buckets.get(bucket, ()):
-                if id(entry) in seen:
+        for run_y0, run_y1, spans in self._entries_over(y0, y1):
+            overlap = min(y1, run_y1) - max(y0, run_y0)
+            if overlap < 0.5 * (run_y1 - run_y0):
+                continue
+            yield spans
+
+    def intrusions(self, x0: float, y0: float, x1: float, y1: float
+                   ) -> list[tuple[float, float, float, float]]:
+        """Every printed glyph box that reaches into the rectangle x0..x1/y0..y1.
+
+        One box per non-space glyph: its own advance span horizontally (the
+        IR states each glyph's origin and width) and its run's line box
+        vertically. The line box, not an ink band, and the reason is that this
+        is a LAYOUT question -- a taxpayer's typing surface must not be laid
+        into the space another line of type occupies -- while the audit asks
+        the tighter ink question independently. Measured over the corpus, the
+        difference costs 5 boxes a trim of 0.49 to 1.15pt and nothing else: 66
+        of 44,603 emitted inputs meet a printed line box at all.
+        """
+        out: list[tuple[float, float, float, float]] = []
+        for run_y0, run_y1, spans in self._entries_over(y0, y1):
+            for _char, span_x0, span_x1 in spans:
+                if span_x1 <= x0 or span_x0 >= x1:
                     continue
-                seen.add(id(entry))
-                run_y0, run_y1, spans = entry
-                overlap = min(y1, run_y1) - max(y0, run_y0)
-                if run_y1 <= run_y0 or overlap < 0.5 * (run_y1 - run_y0):
-                    continue
-                yield spans
+                out.append((span_x0, run_y0, span_x1, run_y1))
+        return out
 
     def coverage(self, cell: dict[str, Any]) -> float:
         """Fraction of the cell's width covered by pre-printed glyph ink."""
@@ -1527,6 +1789,51 @@ class PrePrintedInk:
         if span_x0 < x0 or span_x1 > x1:
             return None
         return char
+
+    def slot_caption(self, x0: float, y0: float, x1: float, y1: float
+                     ) -> str | None:
+        """A whole printed run this compartment CONTAINS, or None.
+
+        `slot_constant` answers the compartment that is one character wide,
+        which is every compartment a comb is drawn to receive one digit in.
+        This answers the one that is not. On 2200-A, -C and -P the source
+        deletes the wall between the "Particulars" column and the first five
+        boxes of the money grid on the "27 Tax Debit Memo" row and greys that
+        space out, so the lattice reads the row as ONE 29-compartment comb
+        whose first compartment is 173.66pt wide -- twelve times each of the
+        other twenty-eight -- and carries the item's own printed caption. An
+        input there is a typing surface laid over "27 Tax Debit Memo".
+
+        The test is CONTAINMENT of the run, which is the principle
+        `slot_constant`'s second condition already uses one glyph at a time and
+        for the same reason: a caption that belongs to the box next door
+        reaches across the wall, and a value the source set INSIDE this box
+        does not. It carries no tolerance and no threshold, and the corpus
+        separates on it rather than being tuned to it -- of the 239
+        compartments that contain a whole run, 236 are already refused an input
+        and the 3 that are not are exactly those three item-27 captions. Ink
+        COVERAGE would not have settled it: those three measure 0.4295 of their
+        compartment's width against the 0.5 `field_verdict` needs for a cell,
+        and the next live compartment down is at 0.0533. A second, lower
+        threshold for compartments would be a constant chosen to fit three
+        cells.
+
+        What this deliberately does NOT catch is the glyph a neighbour clips
+        across the wall: 2551M's and 2553's `28C`/`29B`/`30C` item numbers and
+        0605's `( MM / YYYY )` date hint reach 0.24 to 1.98pt into the first
+        compartment of the comb beside them, and every one of those
+        compartments is a digit box a taxpayer must be able to use. None of
+        those runs is contained, and this returns None for all seven.
+        """
+        for spans in self._spans_over(y0, y1):
+            if not spans:
+                continue
+            if min(span[1] for span in spans) < x0:
+                continue
+            if max(span[2] for span in spans) > x1:
+                continue
+            return "".join(span[0] for span in spans)
+        return None
 
 
 def _glyph_spans(run: dict[str, Any]) -> list[tuple[str, float, float]]:
@@ -1959,7 +2266,15 @@ def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
         x0, x1 = slot_x[index], slot_x[index + 1]
         if x1 <= x0:
             continue
-        if ink is not None and ink.slot_constant(x0, y0, x1, y1) is not None:
+        # Two shapes of "the source already wrote in this box", asked in the
+        # order the corpus makes them: one glyph typeset at the comb's own
+        # pitch, and -- for a compartment the lattice cut far wider than a
+        # character because the sheet erased its wall -- a whole printed run
+        # set inside it. Both are containment tests and neither excuses a
+        # neighbour's caption clipping across the wall.
+        if ink is not None and (
+                ink.slot_constant(x0, y0, x1, y1) is not None
+                or ink.slot_caption(x0, y0, x1, y1) is not None):
             verdicts[index] = "pre-printed"
         elif shading is not None and shading.blocks(
                 {"x0": x0, "y0": y0, "x1": x1, "y1": y1}):
@@ -2034,7 +2349,7 @@ class FieldPlan:
                     if reason in ("pre-printed", "shading", "bureau"):
                         self.blocked[cell["id"]] = reason
                     continue
-                box = field_box(cell, face)
+                box = field_box(cell, face, ink)
                 if box is None:
                     warnings.append(f"cell {cell['id']}: the field's writing box has no "
                                     f"height, so it gets no typing surface")
@@ -2215,8 +2530,20 @@ class FieldPlan:
         return self.classes[box.metrics_key]
 
 
+def field_region_suffix(box: FieldBox, region_index: int) -> str:
+    """The id suffix for one plain field's writing region.
+
+    A field with one region keeps `-i`, which is every field this corpus had
+    before the source's own dividers were read and is what stage 3 will map. A
+    field the sheet rules into several regions numbers them, because they are
+    several places to write and one name cannot address two of them.
+    """
+    return "-i" if box.regions is None else f"-i{region_index}"
+
+
 def field_input_markup(cell_id: str, box: FieldBox, fields: FieldPlan,
-                       slot_index: int | None, live: bool) -> str:
+                       slot_index: int | None, live: bool,
+                       region_index: int = 0) -> str:
     """One <input>. Its geometry is its parent's unless it is a plain field.
 
     A template's inputs carry no `id` and no `name`: template content is the
@@ -2226,14 +2553,16 @@ def field_input_markup(cell_id: str, box: FieldBox, fields: FieldPlan,
     classes = ["fi", fields.class_of(box)]
     attrs: list[str] = []
     if slot_index is None:
-        if box.inset_trbl:
-            inset = " ".join(f"{fmt(v)}pt" for v in box.inset_trbl)
+        region = box.region_insets[region_index]
+        if region:
+            inset = " ".join(f"{fmt(v)}pt" for v in region)
             attrs.append(f'style="inset:{esc_attr(inset)}"')
     else:
         classes.append("fc")
     identity: list[str] = []
     if live:
-        suffix = "-i" if slot_index is None else f"-s{slot_index}"
+        suffix = (field_region_suffix(box, region_index) if slot_index is None
+                  else f"-s{slot_index}")
         identity = [f'id="{esc_attr(cell_id + suffix)}"', f'name="{esc_attr(cell_id)}"']
     if slot_index is not None:
         identity.append(f'data-slot-index="{slot_index}"')
@@ -2253,6 +2582,13 @@ def field_json(box: FieldBox, fields: FieldPlan) -> dict[str, Any]:
         "letter_spacing_pt": box.letter_spacing_pt,
         "capacity": box.capacity,
         "inset_trbl": ([round(v, 4) for v in box.inset_trbl] if box.inset_trbl else None),
+        # One entry per writing region, so a band row cloned at run time gets
+        # the same regions the pre-rendered rows have. Emitted only where the
+        # source divides the cell: a one-region field's JSON is unchanged, and
+        # `inset_trbl` remains the answer for every reader that has one.
+        **({"region_insets": [
+            None if inset is None else [round(v, 4) for v in inset]
+            for inset in box.region_insets]} if box.regions is not None else {}),
     }
 
 
@@ -2387,7 +2723,13 @@ def cell_markup(cell: dict[str, Any], fields: FieldPlan | None = None,
         attrs.append(f'data-comb-pitch="{fmt(comb["pitch_pt"])}"')
         body = comb_slots_markup(cell, comb, box, fields, live)
     elif box is not None:
-        body = field_input_markup(cell["id"], box, fields, None, live)
+        # One input per writing region. A cell the source rules across is
+        # several places to write, and one box laid over the rule is the defect
+        # `writing_regions` exists to answer; 9,932 of 9,971 cells have exactly
+        # one region and emit exactly the input they always did.
+        body = "".join(
+            field_input_markup(cell["id"], box, fields, None, live, index)
+            for index in range(len(box.region_insets)))
     return f'<div {" ".join(attrs)} style="{esc_attr(style)}">{body}</div>'
 
 
@@ -3911,7 +4253,14 @@ function rowCells(band,row){
    field layer is rebuilt with the row's own measurements rather than inherited
    from the template: a band row's comb sub-band is measured per row and the
    template's fitted size is not automatically this row's. */
-function fieldMetrics(el,field){
+function fieldRegions(field){
+  /* One inset per writing region. `region_insets` is present only where the
+     source rules the cell into several regions; everywhere else the single
+     `inset_trbl` is the whole answer and stays it. Mirrors
+     FieldBox.region_insets. */
+  return field.region_insets?field.region_insets:[field.inset_trbl];
+}
+function fieldMetrics(el,field,regionIndex){
   el.style.fontSize=field.size_pt+"pt";
   el.style.lineHeight=field.line_height_pt+"pt";
   if(field.letter_spacing_pt!==null&&field.letter_spacing_pt!==undefined){
@@ -3919,19 +4268,20 @@ function fieldMetrics(el,field){
   }else{
     el.style.letterSpacing="";
   }
-  if(field.inset_trbl){
-    el.style.inset=field.inset_trbl[0]+"pt "+field.inset_trbl[1]+"pt "+
-      field.inset_trbl[2]+"pt "+field.inset_trbl[3]+"pt";
+  var inset=fieldRegions(field)[regionIndex||0];
+  if(inset){
+    el.style.inset=inset[0]+"pt "+inset[1]+"pt "+inset[2]+"pt "+inset[3]+"pt";
   }
 }
-function fieldName(cell,slotIndex){
-  return cell.id+(slotIndex===null?"-i":"-s"+slotIndex);
+function fieldName(cell,slotIndex,regionIndex){
+  if(slotIndex!==null){return cell.id+"-s"+slotIndex;}
+  return cell.id+(cell.field.region_insets?"-i"+(regionIndex||0):"-i");
 }
-function fieldInput(cell,slotIndex){
+function fieldInput(cell,slotIndex,regionIndex){
   var el=document.createElement("input");
   el.type="text";
   el.className="fi "+cell.field["class"]+(slotIndex===null?"":" fc");
-  el.id=fieldName(cell,slotIndex);
+  el.id=fieldName(cell,slotIndex,regionIndex);
   el.name=cell.id;
   el.setAttribute("autocomplete","off");
   el.setAttribute("spellcheck","false");
@@ -3939,20 +4289,25 @@ function fieldInput(cell,slotIndex){
     el.setAttribute("data-slot-index",slotIndex);
     el.setAttribute("maxlength","1");
   }
-  fieldMetrics(el,cell.field);
+  fieldMetrics(el,cell.field,regionIndex);
   return el;
 }
 /* The clone carries the template's inputs, which are deliberately anonymous:
    an identity in a <template> would be a second element with the row's name. */
 function applyFields(el,cell){
   if(!cell.field){return;}
-  var inputs=el.querySelectorAll("input.fi"),i,slot;
+  var inputs=el.querySelectorAll("input.fi"),i,slot,region=0;
   for(i=0;i<inputs.length;i++){
     slot=inputs[i].getAttribute("data-slot-index");
-    inputs[i].id=fieldName(cell,slot===null?null:slot);
+    /* A plain field's inputs are its writing regions, in document order; a
+       comb's are its slots and carry their own index. Counting the plain ones
+       here is what keeps a cloned row's regions from all collapsing onto the
+       first region's inset and its id. */
+    inputs[i].id=fieldName(cell,slot===null?null:slot,region);
     inputs[i].name=cell.id;
     inputs[i].value="";
-    fieldMetrics(inputs[i],cell.field);
+    fieldMetrics(inputs[i],cell.field,region);
+    if(slot===null){region++;}
   }
 }
 function applyCell(el,cell){
@@ -4008,11 +4363,12 @@ function cellElement(cell){
       slot.style.cssText="left:"+cell.comb.slot_x[i]+"pt;top:"+cell.comb.y+
         "pt;width:"+(cell.comb.slot_x[i+1]-cell.comb.slot_x[i])+
         "pt;height:"+cell.comb.h+"pt";
-      if(cell.field){slot.appendChild(fieldInput(cell,i));}
+      if(cell.field){slot.appendChild(fieldInput(cell,i,0));}
       el.appendChild(slot);
     }
   }else if(cell.field){
-    el.appendChild(fieldInput(cell,null));
+    var regions=fieldRegions(cell.field),r;
+    for(r=0;r<regions.length;r++){el.appendChild(fieldInput(cell,null,r));}
   }
   return el;
 }
@@ -5782,13 +6138,39 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                "a rate the form prints spends both compartments it is set in",
                "'0 %' is a value the sheet states, not a box to type in", failures)
         # 5. A caption the lattice swallowed into the comb cell: 9+ glyphs in
-        #    ONE slot, at label scale rather than comb pitch. That is a
-        #    segmentation defect (G05/G12) and deleting the input would hide it.
+        #    ONE slot, at label scale rather than comb pitch. It is a
+        #    segmentation defect (G05/G12) AND the compartment carrying it is
+        #    not a typing surface, which are not alternatives -- refusing the
+        #    input does not hide the defect, because the comb still publishes a
+        #    compartment twelve times the width of its neighbours and
+        #    `audit.check_comb_slots_match_printed` still reports the cell.
+        #    Leaving it live is what put an editable box over "27 Tax Debit
+        #    Memo" on 2200-A, -C and -P. This is the position the corpus was
+        #    already taking, on different evidence for the same fact: the 9
+        #    swallowed-caption compartments the shading branch answers for
+        #    (1801 p1c13/c31/c33/c112, 1800 p1c26, 2200S p1c29, 2552 p1c28,
+        #    1604F p1c25/c36) are refused because the sheet greys them, and the
+        #    only ones left live were the three whose grey the source paints as
+        #    a run of abutting rectangles rather than one. Measured: 5
+        #    compartments corpus-wide contain a whole multi-glyph run, 2 of
+        #    them already refused for tone and unchanged in their emitted
+        #    bytes, and 3 of them these captions.
         _check(_verdicts([_printed(
             "7A ZIP Code", slot_x[0] + 0.5,
+            (slot_x[1] - slot_x[0] - 1.0) / 11.0)]) == {0: "pre-printed"},
+               "a label the sheet sets INSIDE one compartment spends it",
+               "'7A ZIP Code' is printed there; a taxpayer cannot type over it",
+               failures)
+        # ... and the mutation that proves the clause doing the work is
+        #    containment and not size: the identical caption moved so that it
+        #    starts before the compartment's wall belongs to the box next door
+        #    and leaves every compartment typeable.
+        _check(_verdicts([_printed(
+            "7A ZIP Code", slot_x[0] - 4.0,
             (slot_x[1] - slot_x[0] - 1.0) / 11.0)]) == {},
-               "a label typeset across one slot is a segmentation fault, not a value",
-               "'7A ZIP Code' leaves every compartment typeable", failures)
+               "the same label reaching in from outside spends nothing",
+               "a caption that crosses the wall belongs to the box beside it",
+               failures)
         # 6. A neighbour's item number clipping into the first box: 2551M's and
         #    2553's "28C"/"29B" overhang by 4.53pt and 0605 p1c3's date hint
         #    clips its bracket in by 1.98pt, while every occupied compartment
@@ -6102,7 +6484,14 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
         for cell in page["cells"]:
             box = fields.of(cell["id"])
             if box is not None:
-                expected[cell["id"]] = box.capacity or 1
+                # A comb is its compartments; a plain field is its writing
+                # REGIONS, which is one everywhere the sheet does not rule
+                # across the cell and several where it does. Still an exact
+                # count per cell, and still the emitter's own answer measured
+                # against the markup it wrote.
+                expected[cell["id"]] = (
+                    box.capacity if box.capacity is not None
+                    else len(box.region_insets))
 
     ink = {int(p["index"]): PrePrintedInk(p["text_runs"]) for p in ir["pages"]}
     shading = {int(p["index"]): DecorativeShading(p["area_fills"]) for p in ir["pages"]}
@@ -6166,6 +6555,7 @@ def field_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
 
     field_surface_assertions(layout, plan, failures)
     comb_writing_rectangle_assertions(plan, failures)
+    writing_box_assertions(plan, failures)
     field_debug_assertions(html, failures)
 
 
@@ -6199,6 +6589,174 @@ def _synthetic_cell(cell_id: str, y0: float, y1: float,
 
 _SELF_TEST_STYLE_RE = re.compile(
     r"top:(-?[\d.]+)pt;width:(-?[\d.]+)pt;height:(-?[\d.]+)pt")
+_SELF_TEST_INSET_RE = re.compile(
+    r'id="([^"]+)"[^>]*style="inset:([^"]*)"')
+
+
+def _synthetic_run(text: str, x0: float, baseline: float, size: float,
+                   ascender: float = 0.9, descender: float = -0.21
+                   ) -> dict[str, Any]:
+    """One printed run at a fixed pitch, with the per-glyph metrics the IR has."""
+    advance = size * 0.5
+    return {
+        "text": text, "font": "Arial", "family": "Arial", "size_pt": size,
+        "baseline_y": baseline, "origin_x": x0,
+        "x0": x0, "x1": x0 + advance * len(text),
+        "y0": baseline - ascender * size, "y1": baseline - descender * size,
+        "ascender": ascender, "descender": descender,
+        "char_origin_offsets_pt": [advance * i for i in range(len(text))],
+        "char_widths_pt": [advance] * len(text),
+        "char_advances_pt": [advance] * len(text),
+        "rotated": False,
+    }
+
+
+def writing_box_assertions(plan: dict[str, Any], failures: list[str]) -> None:
+    """The writing box is the paper the source left blank, and it can be several.
+
+    Two relations, each proved by mutating ONE thing about a fixture the
+    corpus' own artwork is drawn from:
+
+      * `writing_box_clear_of_printed_ink` -- the box begins where the sheet's
+        ink ends, on the side the ink comes from. 1604CF's "Telephone No."
+        hangs a descender 0.67pt into the box below it and 2551M prints `14E`
+        so its first digit overhangs the box to its left by 0.72pt. Five
+        mutations put the same glyph on each of the four sides and in the
+        middle. Three trim; the middle one implies no side; and the one BELOW
+        the box does not trim either, because the bound the line box gives on a
+        run's upward ink is the ascent line and that is loose by most of an em
+        -- see the function's own docstring for the measurement and for what
+        acting on it costs 2550M.
+      * `writing_regions` -- a cell the source rules across is several places
+        to write. Three mutations: a stroke that divides, the same stroke
+        reaching in by less than its own width (a neighbour's tick), and the
+        same stroke moved onto the box's edge (its own wall).
+
+    A comb is exempt from both, and that is asserted rather than assumed: its
+    slot rectangle is `comb_referee`'s contract with the source's painted
+    walls, so ink inside a compartment is a fact to report and never a
+    rectangle this file may move.
+    """
+    face = resolve_field_face(plan, [])
+    if face is None:
+        _check(False, "the font plan resolves a body face to fit fields to",
+               "no metric-compatible face", failures)
+        return
+
+    # A 20pt-tall cell spanning x 0..120, and one 8pt glyph run placed against
+    # each of its four sides in turn. `p` descends; the run's line box is what
+    # a layout must keep clear either way.
+    cell = _synthetic_cell("p0c0", 40.0, 60.0)
+    above = _synthetic_run("pp", 50.0, 40.6, 8.0)      # line box 33.4..42.28
+    below = _synthetic_run("pp", 50.0, 66.0, 8.0)      # line box 58.8..67.68
+    # One glyph each, straddling a side wall with its own centre outside it --
+    # 2551M's `14E` and 2553's `28C` overhang exactly this way.
+    at_left = _synthetic_run("p", -3.0, 50.0, 8.0)     # advance box -3..1
+    at_right = _synthetic_run("p", 119.0, 50.0, 8.0)   # advance box 119..123
+    middle = _synthetic_run("pp", 56.0, 50.0, 8.0)     # wholly inside
+
+    def inset_of(runs: Sequence[dict[str, Any]]
+                 ) -> tuple[float, float, float, float] | None:
+        box = field_box(cell, face, PrePrintedInk(runs))
+        return None if box is None else box.inset_trbl
+
+    plain = inset_of(())
+    _check(plain is None,
+           "a cell the source prints nothing into keeps the box its rules give it",
+           f"inset {plain}", failures)
+    for label, runs, expected in (
+            ("top", [above], (2.28, 0.0, 0.0, 0.0)),
+            ("left", [at_left], (0.0, 0.0, 0.0, 1.0)),
+            ("right", [at_right], (0.0, 1.0, 0.0, 0.0)),
+    ):
+        measured = inset_of(runs)
+        _check(measured is not None
+               and tuple(round(value, 4) for value in measured) == expected,
+               f"ink printed at the {label} moves the {label} of the writing box "
+               f"and no other side",
+               f"{measured} != {expected}", failures)
+    # The fourth side, and it does NOT move. `below`'s line box reaches 1.2pt
+    # into the bottom of the box, but that edge of a run's line box is its
+    # ASCENT line -- where the face could put ink, not where this run does. The
+    # identical run's DESCENT edge, which the trim above does act on, is tight
+    # to a fraction of a point. Acting on the loose one costs 2550M 2.61pt of a
+    # 10.32pt box and a fitted face, for 3.77pt of blank paper.
+    from_below = inset_of([below])
+    _check(from_below is None,
+           "ink printed BELOW the box does not move it: the line box bounds a "
+           "run's ink downward and not upward",
+           f"inset {from_below} for a line box 1.2pt inside the floor", failures)
+    enclosed = inset_of([middle])
+    _check(enclosed is None,
+           "ink the sheet prints in the MIDDLE of a blank implies no side, so "
+           "the box is left where the rules put it and reported elsewhere",
+           f"inset {enclosed}", failures)
+
+    # The comb exemption, stated against the identical ink.
+    comb = _synthetic_comb(4, 0.0, 30.0, 56.0, 4.0, (40.5, 19.0))
+    comb_cell = _synthetic_cell("p0c1", 40.0, 60.0, comb)
+    with_ink = field_box(comb_cell, face, PrePrintedInk([above, at_left]))
+    without = field_box(comb_cell, face, None)
+    _check(with_ink is not None and without is not None
+           and with_ink.inset_trbl == without.inset_trbl
+           and with_ink.line_height_pt == without.line_height_pt
+           and with_ink.regions is None,
+           "a comb's rectangle is its referee contract and printed ink does "
+           "not move it",
+           f"{with_ink.inset_trbl if with_ink else None} vs "
+           f"{without.inset_trbl if without else None}", failures)
+
+    # `writing_regions`: one 0.5pt stroke down the middle of the box 0..120 /
+    # 40..60, mutated one property at a time.
+    box = (0.0, 40.0, 120.0, 60.0)
+    divides = {"x0": 59.75, "y0": 58.0, "x1": 60.25, "y1": 64.0}
+    grazes = {**divides, "y0": 59.6}
+    wall = {"x0": 119.75, "y0": 40.0, "x1": 120.25, "y1": 60.0}
+    _check(writing_regions(box, [divides])
+           == [(0.0, 40.0, 59.75, 60.0), (60.25, 40.0, 120.0, 60.0)],
+           "a stroke printed across the box divides it, at its own ink",
+           f"{writing_regions(box, [divides])}", failures)
+    _check(writing_regions(box, [grazes]) == [box],
+           "the same stroke reaching in by less than its own width is the next "
+           "row's tick and divides nothing",
+           f"{writing_regions(box, [grazes])} for a 0.5pt stroke 0.4pt in",
+           failures)
+    _check(writing_regions(box, [wall]) == [box],
+           "the same stroke drawn on the box's edge is the box's own wall",
+           f"{writing_regions(box, [wall])}", failures)
+
+    # ... and what the emitter does with them: one input per region, each with
+    # its own inset and its own name, and the band template's JSON carrying the
+    # same list so a row cloned at run time is not laid out on region 0.
+    divided_cell = {**_synthetic_cell("p0c2", 40.0, 60.0),
+                    "printed_partitions": [divides]}
+    divided_plan = FieldPlan(
+        {"pages": [{"index": 0, "cells": [divided_cell]}]}, face, [])
+    divided_box = divided_plan.of("p0c2")
+    markup = cell_markup(divided_cell, divided_plan)
+    named = _SELF_TEST_INSET_RE.findall(markup)
+    _check(divided_box is not None and divided_box.regions is not None
+           and len(divided_box.regions) == 2
+           and [name for name, _inset in named] == ["p0c2-i0", "p0c2-i1"]
+           and [inset for _name, inset in named]
+           == ["0pt 60.25pt 0pt 0pt", "0pt 0pt 0pt 60.25pt"],
+           "a divided cell emits one named input per region, on the region",
+           f"{named}", failures)
+    _check(field_json(divided_box, divided_plan)["region_insets"]
+           == [[0.0, 60.25, 0.0, 0.0], [0.0, 0.0, 0.0, 60.25]],
+           "the band template carries every region, so a cloned row has them all",
+           f"{field_json(divided_box, divided_plan).get('region_insets')}",
+           failures)
+    single_plan = FieldPlan(
+        {"pages": [{"index": 0, "cells": [_synthetic_cell("p0c3", 40.0, 60.0)]}]},
+        face, [])
+    single_box = single_plan.of("p0c3")
+    _check(single_box is not None and single_box.regions is None
+           and "region_insets" not in field_json(single_box, single_plan)
+           and 'id="p0c3-i"' in cell_markup(
+               _synthetic_cell("p0c3", 40.0, 60.0), single_plan),
+           "an undivided cell keeps the one input and the one name it had",
+           f"regions {single_box.regions if single_box else 'none'}", failures)
 
 
 def comb_writing_rectangle_assertions(plan: dict[str, Any],

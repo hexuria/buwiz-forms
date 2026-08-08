@@ -4014,6 +4014,107 @@ def comb_has_cell_owner(cell: dict[str, Any],
     return comb_owner_failure_reason(cell, comb) is None
 
 
+def partition_ink(page: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every structural mark on one page, as a candidate compartment divider.
+
+    Rules and area fills together and neither axis filtered out, because the
+    geometry decides and no classification here can: the reader
+    (`printed_partitions`) keeps a mark only when it overlaps the box it would
+    divide by more than its own WIDTH, and a horizontal rail's overlap can
+    never exceed its own height, which is the smaller number.  Filing a mark by
+    axis first would be a second opinion about the same fact, and the two would
+    have to be kept in step forever.
+
+    `extract.py`'s 1.5pt cut between a rule and an area fill is likewise not
+    consulted, for the reason `comb_boundary_candidates` gives one screen up:
+    that cut is about how BIR DRAWS a line, and this asks whether the line
+    divides a box.  Measured over the corpus the two views agree here anyway --
+    no candidate this admits is wider than 1.6pt.
+    """
+    out: list[dict[str, Any]] = []
+    for rule in page["rules"]:
+        if rule.get("role") == "structural":
+            out.append(rule)
+    for index, fill in enumerate(page["area_fills"]):
+        if fill.get("role") != "structural":
+            continue
+        out.append({
+            "axis": "v",
+            "x0": fill["x0"], "y0": fill["y0"],
+            "x1": fill["x1"], "y1": fill["y1"],
+            "thickness_pt": q(float(fill["x1"]) - float(fill["x0"])),
+            "gray": fill.get("gray"),
+            "role": fill["role"],
+            "id": f"fill{index}",
+            "paint_seq": fill.get("paint_seq", -1),
+            "paint_seq_max": fill.get("paint_seq_max",
+                                      fill.get("paint_seq", -1)),
+        })
+    out.sort(key=lambda ink: (float(ink["x0"]), float(ink["y0"]),
+                              float(ink["x1"]), float(ink["y1"]),
+                              str(ink.get("id"))))
+    return out
+
+
+def printed_partitions(cell: dict[str, Any],
+                       candidates: Sequence[dict[str, Any]],
+                       final_paint: FinalPaint) -> list[dict[str, float]]:
+    """The strokes the source prints INSIDE one cell, as ink rectangles.
+
+    A cell is one box to the grid and can still be several writing regions on
+    the paper: 1604CF page 2 rules "ADDRESS OF PAYEES" off "* STATUS" with a
+    column border the whole table long, 2551M page 2 does the same between
+    "Period Covered" and "Name of Withholding Agent", and 2316 and 2550M print
+    a bottom guide tick in the middle of a date box.  Each of those is one
+    lattice cell carrying one wide input laid straight across a printed rule --
+    the defect `audit.check_inputs_span_no_printed_divider` names.
+
+    What is published is the INK, not a verdict: this cannot know where the
+    writing box inside the cell will be, because the box is inset by the cell's
+    own rules and then moved off whatever pre-printed glyph ink the sheet lays
+    into it (`emit.field_box`).  The reader applies the two geometric tests to
+    the box it is actually laying out.  What only this side can answer is what
+    the composited page still SHOWS, which needs `FinalPaint`: 2550M draws a
+    comb tick and paints a white rectangle over it, and dividing a box at a
+    mark the sheet erased would invent a compartment.
+
+    A comb cell is excluded and says so: its compartments ARE its partition,
+    stated by `comb["slot_x"]`, and its slot rectangles are bound to the
+    source's own rails by `comb_referee`. Two partitions of one cell would be
+    two answers to one question.
+
+    Published only when non-empty, so the layout of a cell the source draws
+    nothing inside is byte-identical to before: 39 of the corpus's 9,971 cells
+    carry one.
+    """
+    if cell.get("comb"):
+        return []
+    x0, y0 = float(cell["x0"]), float(cell["y0"])
+    x1, y1 = float(cell["x1"]), float(cell["y1"])
+    out: list[dict[str, float]] = []
+    for ink in candidates:
+        ix0, iy0 = float(ink["x0"]), float(ink["y0"])
+        ix1, iy1 = float(ink["x1"]), float(ink["y1"])
+        if ix0 < x0 or ix1 > x1 or iy1 <= y0 or iy0 >= y1:
+            continue
+        # The composited page's verdict, and only in the direction it can
+        # prove: a mark one later opaque layer completely covers is not on the
+        # paper. Anything weaker -- an uncertain overpaint, a partial knockout
+        # like 1800's, which leaves 0.36 of a 0.48pt stroke showing -- is still
+        # a printed divider, and the failure direction matters here: refusing
+        # to divide lays a taxpayer's box over a rule the sheet prints, while
+        # dividing at a mark that is really there costs nothing.
+        if final_paint.definitely_erased(ink):
+            continue
+        out.append({"x0": q(ix0), "y0": q(iy0), "x1": q(ix1), "y1": q(iy1)})
+    out.sort(key=lambda span: (span["x0"], span["y0"], span["x1"], span["y1"]))
+    deduplicated: list[dict[str, float]] = []
+    for span in out:
+        if not deduplicated or span != deduplicated[-1]:
+            deduplicated.append(span)
+    return deduplicated
+
+
 def comb_rail_span(comb: dict[str, Any]) -> Interval:
     """The outer rails one comb contract claims."""
     slot_x = comb.get("slot_x") or ()
@@ -6068,6 +6169,12 @@ def build_page(page: dict[str, Any],
             area_fills=page["area_fills"])
         growables = detect_growables(index, xl, yl, v_at, h_at, cells, page["text_runs"])
         regions = detect_regions(index, xl, yl, v_at, cells, growables)
+        partition_candidates = partition_ink(page)
+        for cell in cells:
+            partitions = printed_partitions(
+                cell, partition_candidates, final_paint)
+            if partitions:
+                cell["printed_partitions"] = partitions
 
     comb_cells = [c for c in cells if "comb" in c]
     return {
@@ -9039,6 +9146,51 @@ def self_test(ir_path: pathlib.Path) -> int:
                  if c["id"] in set(band["template_cell_ids"]) and "comb" in c]
         check(sorted(combs) == [2, 2, 2, 5, 12, 12],
               f"Schedule 1 template comb shapes {sorted(combs)} != [2, 2, 2, 5, 12, 12]")
+
+    # `printed_partitions`: the strokes the source rules ACROSS a cell, which
+    # emit.py cuts a writing box at. Four mutations of one fixture, each
+    # tripping exactly one clause -- the whole cell is 0..100 x 0..20, the
+    # divider is a 0.5pt stroke down the middle, and every variant below
+    # changes ONE thing about it.
+    partition_cell = {"id": "p0c0", "kind": "field",
+                      "x0": 0.0, "y0": 0.0, "x1": 100.0, "y1": 20.0}
+    inside = synthetic_vertical(50.0, 12.0, 20.0, 0.5, 1)
+    on_the_edge = synthetic_vertical(100.0, 12.0, 20.0, 0.5, 2)
+    outside = synthetic_vertical(50.0, 30.0, 40.0, 0.5, 3)
+    over_it = {
+        **inside,
+        "x0": q(inside["x0"] - 2.0), "x1": q(inside["x1"] + 2.0),
+        "y0": q(inside["y0"] - 2.0), "y1": q(inside["y1"] + 2.0),
+        "role": "knockout", "gray": 1.0,
+        "paint_seq": 9, "paint_seq_max": 9,
+    }
+    partition_paint = FinalPaint(
+        [inside, on_the_edge, outside, over_it])
+    intact_paint = FinalPaint([inside, on_the_edge, outside])
+    intact = printed_partitions(
+        partition_cell, [inside, on_the_edge, outside], intact_paint)
+    check(intact == [{"x0": q(49.75), "y0": 12.0, "x1": q(50.25), "y1": 20.0}],
+          f"a stroke inside the cell is the cell's partition, and nothing "
+          f"else is: {intact}")
+    erased = printed_partitions(
+        partition_cell, [inside, on_the_edge, outside], partition_paint)
+    check(erased == [],
+          f"a stroke one later opaque layer covers whole is off the paper "
+          f"and partitions nothing: {erased}")
+    walled = printed_partitions(partition_cell, [on_the_edge], intact_paint)
+    shifted_in = synthetic_vertical(99.5, 12.0, 20.0, 0.5, 2)
+    walled_inside = printed_partitions(
+        partition_cell, [shifted_in], intact_paint)
+    check(walled == [] and len(walled_inside) == 1,
+          f"a stroke whose ink crosses the cell edge is the cell's own wall, "
+          f"not a partition -- the same stroke 0.25pt further in is one: "
+          f"{walled} against {walled_inside}")
+    combed = printed_partitions(
+        {**partition_cell, "comb": {"cells": 2, "slot_x": [0.0, 50.0, 100.0]}},
+        [inside], intact_paint)
+    check(combed == [],
+          f"a comb states its compartments in slot_x and gets no second "
+          f"answer here: {combed}")
 
     # Determinism: the same IR must serialise byte-identically.
     again = json.dumps(build_layout(ir), sort_keys=False, ensure_ascii=False)

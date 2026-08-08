@@ -128,7 +128,14 @@ function rowCells(band,row){
    field layer is rebuilt with the row's own measurements rather than inherited
    from the template: a band row's comb sub-band is measured per row and the
    template's fitted size is not automatically this row's. */
-function fieldMetrics(el,field){
+function fieldRegions(field){
+  /* One inset per writing region. `region_insets` is present only where the
+     source rules the cell into several regions; everywhere else the single
+     `inset_trbl` is the whole answer and stays it. Mirrors
+     FieldBox.region_insets. */
+  return field.region_insets?field.region_insets:[field.inset_trbl];
+}
+function fieldMetrics(el,field,regionIndex){
   el.style.fontSize=field.size_pt+"pt";
   el.style.lineHeight=field.line_height_pt+"pt";
   if(field.letter_spacing_pt!==null&&field.letter_spacing_pt!==undefined){
@@ -136,19 +143,20 @@ function fieldMetrics(el,field){
   }else{
     el.style.letterSpacing="";
   }
-  if(field.inset_trbl){
-    el.style.inset=field.inset_trbl[0]+"pt "+field.inset_trbl[1]+"pt "+
-      field.inset_trbl[2]+"pt "+field.inset_trbl[3]+"pt";
+  var inset=fieldRegions(field)[regionIndex||0];
+  if(inset){
+    el.style.inset=inset[0]+"pt "+inset[1]+"pt "+inset[2]+"pt "+inset[3]+"pt";
   }
 }
-function fieldName(cell,slotIndex){
-  return cell.id+(slotIndex===null?"-i":"-s"+slotIndex);
+function fieldName(cell,slotIndex,regionIndex){
+  if(slotIndex!==null){return cell.id+"-s"+slotIndex;}
+  return cell.id+(cell.field.region_insets?"-i"+(regionIndex||0):"-i");
 }
-function fieldInput(cell,slotIndex){
+function fieldInput(cell,slotIndex,regionIndex){
   var el=document.createElement("input");
   el.type="text";
   el.className="fi "+cell.field["class"]+(slotIndex===null?"":" fc");
-  el.id=fieldName(cell,slotIndex);
+  el.id=fieldName(cell,slotIndex,regionIndex);
   el.name=cell.id;
   el.setAttribute("autocomplete","off");
   el.setAttribute("spellcheck","false");
@@ -156,20 +164,25 @@ function fieldInput(cell,slotIndex){
     el.setAttribute("data-slot-index",slotIndex);
     el.setAttribute("maxlength","1");
   }
-  fieldMetrics(el,cell.field);
+  fieldMetrics(el,cell.field,regionIndex);
   return el;
 }
 /* The clone carries the template's inputs, which are deliberately anonymous:
    an identity in a <template> would be a second element with the row's name. */
 function applyFields(el,cell){
   if(!cell.field){return;}
-  var inputs=el.querySelectorAll("input.fi"),i,slot;
+  var inputs=el.querySelectorAll("input.fi"),i,slot,region=0;
   for(i=0;i<inputs.length;i++){
     slot=inputs[i].getAttribute("data-slot-index");
-    inputs[i].id=fieldName(cell,slot===null?null:slot);
+    /* A plain field's inputs are its writing regions, in document order; a
+       comb's are its slots and carry their own index. Counting the plain ones
+       here is what keeps a cloned row's regions from all collapsing onto the
+       first region's inset and its id. */
+    inputs[i].id=fieldName(cell,slot===null?null:slot,region);
     inputs[i].name=cell.id;
     inputs[i].value="";
-    fieldMetrics(inputs[i],cell.field);
+    fieldMetrics(inputs[i],cell.field,region);
+    if(slot===null){region++;}
   }
 }
 function applyCell(el,cell){
@@ -225,11 +238,12 @@ function cellElement(cell){
       slot.style.cssText="left:"+cell.comb.slot_x[i]+"pt;top:"+cell.comb.y+
         "pt;width:"+(cell.comb.slot_x[i+1]-cell.comb.slot_x[i])+
         "pt;height:"+cell.comb.h+"pt";
-      if(cell.field){slot.appendChild(fieldInput(cell,i));}
+      if(cell.field){slot.appendChild(fieldInput(cell,i,0));}
       el.appendChild(slot);
     }
   }else if(cell.field){
-    el.appendChild(fieldInput(cell,null));
+    var regions=fieldRegions(cell.field),r;
+    for(r=0;r<regions.length;r++){el.appendChild(fieldInput(cell,null,r));}
   }
   return el;
 }

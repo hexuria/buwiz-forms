@@ -86,7 +86,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 628950,
+  "html_bytes": 629822,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

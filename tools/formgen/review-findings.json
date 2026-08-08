@@ -2568,6 +2568,45 @@
       "cause": null,
       "audit_blind": false,
       "resolution": null
+    },
+    {
+      "id": "F197",
+      "form": "1600wp-2010, 1604cf-2008, 2551m-2002, 2316-2021, 2550m-2007, 1800-2018",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "42 cells that the source rules across are now emitted as several WRITING REGIONS of one field (-i0, -i1, ...) rather than as combs. For the cells whose dividers are bottom guide ticks -- one character per compartment -- a comb is very likely the correct model: a comb enforces one character per box (maxlength=1 per slot) where a region accepts free text. The region model was chosen partly because EXPECTED_COMBS / EXPECTED_COMB_SUBJECTS must not move without review, i.e. a census pin constrained the model rather than following it.",
+      "where": "1600wp-2010 p1c62-p1c72 (9 cells, +16 inputs); 1604cf-2008 p2 x17 (1->2); 2551m-2002 p2 x6 (1->2) and p1c103 (1->4); 2316-2021 p1c3-p1c6 (1->2); 2550m-2007 p1c3 (1->2), p1c116 (1->3), p1c118 (1->3), p1c21 (1->4); 1800-2018 p1c64 (1->2). Corpus inputs 44,603 -> 44,655.",
+      "evidence": "I read build/layout/1600wp-2010.layout.json myself: p1c64 publishes three printed_partitions at x 89.88-90.13, 100.93-101.18, 110.89-111.14, each 0.25pt wide and 1.80pt tall at the cell's foot. Real ink, and one input across four printed compartments was wrong -- so the split is an improvement either way. But 1600WP was reported by NO assertion (the judge's DIVIDER_MIN_HEIGHT_PT is 2.0 and these ticks are 1.80pt), so this change was made outside the judged scope and its field model has had no independent check. Matters for stage 3: -i0/-i1 region ids are a different field identity from a comb's slot indexes.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F198",
+      "form": "1701a-2018",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "Two cells carry an input too small to type in. The grey sliver strips under item 19's note are 5.45pt tall and the note's '[' and descenders reach 3.36pt into them, so trimming the writing box away from genuine ink leaves 2.09pt of paper holding a 0.61pt input. The trim is correct; the field is not usable. The real defect is upstream -- a note strip was segmented as a field cell.",
+      "where": "p1c227 (font 4.87 -> 0.61) and p2c206 (5.36 -> 1.06).",
+      "evidence": "Measured during r33. They keep an input rather than losing one: no field is deleted and, not being enclosed, money_boxes_have_inputs does not demand one. A minimum-writing-surface rule at the emitter would answer it but was measured to risk other cells and was deliberately not added.",
+      "cause": null,
+      "audit_blind": false,
+      "resolution": null
+    },
+    {
+      "id": "F199",
+      "form": "2550m-2007, 0605-1999, 2551m-2002, 2553-1999, 1604cf-2008, 2316-2021",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "inputs_over_printed_text cannot reach 0 and the remaining 15 offenders must not be 'fixed'. Twelve are over-reach that audit.py documents in its own source: the ascent-line band (audit.py:538-539 names 2550M p1c81-p1c85 explicitly, the leader dots of 'Debit Memo' being 3.77pt above the ink) and the horizontal side bearing, which audit.py:541-548 records as deliberately NOT removed because MuPDF's per-character box is the ADVANCE box and no view in the corpus records a bearing. The other three are genuine ink inside a comb rectangle that comb_referee pins, so the rectangle cannot move and the only other lever deletes boxes the taxpayer needs.",
+      "where": "Documented over-reach: 2550M p1c81/82/83/84/85; 0605 p1c3; 2551M p1c74/79/86; 2553 p1c79/84/91. Genuine ink, frozen geometry: 1604CF p1c16 ('p' of 'Telephone No.' 0.67pt inside), 2316 p1c38 and p1c39 ('(' / ')' / '/' 0.19pt inside) -- clearing them would delete 4 of 7 telephone boxes and 4 of 6 date boxes.",
+      "evidence": "Acting on the ascent-line band was tried and reverted in r33: it cost 2550M p1c81/p1c82 2.61pt off a 10.32pt box, dropping the fitted face 8.25pt -> 6.96pt, to satisfy an assertion that still failed. The line box's floor and its advance box are tight; its ceiling is the ascent line -- where the face COULD put ink, not where the run does -- and is loose by an order of magnitude. emit.writing_box_clear_of_printed_ink therefore trims on three sides, not four.",
+      "cause": null,
+      "audit_blind": false,
+      "resolution": null
     }
   ]
 }
