@@ -1415,49 +1415,102 @@ class PrePrintedInk:
         return covered / width
 
     def slot_constant(self, x0: float, y0: float, x1: float, y1: float) -> str | None:
-        """The pre-printed CONSTANT this comb slot carries, or None.
+        """The pre-printed glyph this comb slot is ALREADY OCCUPIED BY, or None.
 
         `coverage` cannot answer this. A comb slot is one character wide, so a
-        single printed glyph covers most of it whatever that glyph is, and the
-        money `.` decoration would score exactly as high as a statutory ATC
-        code. The question here is not how much ink is in the slot but WHOSE
-        ink it is: something the form states, or something drawn inside the
-        taxpayer's own field.
+        single printed glyph covers most of it whatever that glyph is; how much
+        ink is in the slot cannot tell a compartment the source filled in from
+        a blank compartment beside one it filled in.
 
-        Three conditions, and each one is a population the corpus separates on
-        (build/layout + build/ir, 53 bundles, 4,523 comb cells, 2026-08-07 --
-        406 slots carry ink at all):
+        The name is kept because three resolved findings quote it verbatim, but
+        the question it asks is occupancy, not authorship -- see the third
+        paragraph. Two conditions, each a population the corpus separates on
+        (build/layout + build/ir, 53 bundles, 4,561 comb cells, 39,444
+        compartments, 2026-08-08 -- 407 compartments carry ink at all, 373 of
+        those carry exactly one glyph, and 366 of THOSE are contained and
+        admitted here):
 
-          * **Exactly one glyph.** A constant is typeset AT the comb's pitch,
-            one character per compartment, because it is printed to look like
-            a filled-in box: `I I 0 1 1`, `X C 0 1 0`, `2 0`, `0 0 0 0 0`. A
-            caption the lattice swallowed into the same cell is typeset at
-            label scale and lands 9 to 300 glyphs in ONE slot -- `7A ZIP Code`,
-            `12 Contact Number`, 2200A's whole signature line. All 34 such
-            slots are that; all 271 single-glyph slots are not. Nothing in the
-            corpus is in between, and the two populations answer to different
-            defects: a swallowed caption is a segmentation fault (G05/G12) and
-            deleting its slot's input would hide it, not fix it.
-          * **Alphanumeric.** `.` `,` `-` `%` `)` and the money bullet `●` are
-            drawn INSIDE a field to shape what is typed into it, not to state
-            a value: 101 slots, every one of them a separator or a decimal
-            point. Removing those inputs is exactly the C4 regression -- it is
-            what left 2000-DST's page-1 money grid, 2200A/2200P Part III,
-            1801 item 24 and 2316 items 23-24 with no way to type an amount.
+          * **Exactly one glyph.** A value is typeset AT the comb's pitch, one
+            character per compartment, because it is printed to look like a
+            filled-in box: `I I 0 1 1`, `X C 0 1 0`, `2 0`, `0 0 0 0 0`, and
+            the money bullet in its own compartment. A caption the lattice
+            swallowed into the same cell is typeset at label scale and lands 9
+            to 654 glyphs in ONE slot -- `7A ZIP Code`, `12 Contact Number`,
+            2200A's whole signature line. All 34 such slots are that, every one
+            of them 9 glyphs or more; all 373 single-glyph slots are not.
+            Nothing in the corpus is in between, and the two populations answer
+            to different defects: a swallowed caption is a segmentation fault
+            (G05/G12) and deleting its slot's input would hide it, not fix it.
           * **Wholly inside the slot.** A neighbour's caption can clip one
             glyph into the first compartment: 2551M's and 2553's `28C`/`29B`
-            item numbers overhang by 4.53pt. The margin (glyph to slot wall)
-            is -4.53pt for all six of those and >= +1.31pt for all 265
-            constants; nothing lands between, so the test is containment
-            itself and carries no tolerance.
+            item numbers overhang by 4.53pt, and 0605 p1c3's date hint clips
+            its closing bracket in by 1.98pt. The margin (glyph to slot wall)
+            is negative for exactly those 7 and >= +0.24pt for all 366 admitted
+            compartments; the corpus separates by 2.22pt with nothing in
+            between, so the test is containment itself and carries no
+            tolerance.
 
-        Where it stops, stated rather than papered over: a format hint typeset
-        at comb pitch and centred in the writing band -- a literal `M M / Y Y`
-        inside the boxes -- would be read as a constant. The corpus has no such
-        hint. Its only date hints (`( MM / YYYY )` on 0605 p1c3, `( MM / DD /
-        YYYY )`) are printed OUTSIDE the comb and merely clip a bracket into
-        the first slot, which condition three already rejects. Adding a size or
-        colour test against a population that does not exist would be machinery
+        There was a third condition -- the glyph must be ALPHANUMERIC -- on the
+        reasoning that `.` `-` `%` and the money bullet `●` are drawn INSIDE a
+        field to shape what is typed into it rather than to state a value, and
+        that refusing their compartments would re-create C4 (a money comb with
+        no way to type an amount at all). Measured at compartment resolution
+        over the whole corpus, that reasoning is wrong on both halves:
+
+          * **Character class is not the question.** The compartment is one
+            character wide and the source has already put a character in it.
+            Whatever that character means, the compartment is SPENT: an input
+            there is a typing surface no taxpayer can use, laid directly over
+            printed ink. Those 92 money bullets are `inputs_over_printed_text`'s
+            largest offender population -- 89 of its 147 -- and no vertical
+            inset can clear them, because the bullet sits inside the divider
+            band. The digits of an amount go into the compartments either side
+            of the point, which is precisely why refusing the point's own
+            compartment leaves the comb usable.
+          * **The C4 evidence does not say what it was read as saying.** C4 is
+            a comb with ZERO inputs; this verdict is per compartment, and what
+            protects C4 is that only an OCCUPIED compartment is refused.
+            Dropping the condition refuses 94 compartments that were live: 92
+            money bullets, each ONE compartment of a 14-, 29- or
+            33-compartment comb, every one of them the third from the right
+            with the two centavos compartments to its right (2000-DST 16,
+            2200A 20, 2200C 20, 2200P 20, 2200S 16); and the 2 that complete
+            the printed rate `0 %` on 1800 p1c68 and 2550-DS p1c79, 2-
+            compartment combs the source fills entirely and which are not money
+            boxes. Re-measured against the C4 list itself: 2000-DST's page-1
+            money grid keeps 13 of 14 compartments on every money row, 2200A
+            and 2200P Part III likewise, and 1801 item 24, 2316 items 23-24 and
+            1702EX item 18 carry no bullet compartment at all and do not move.
+            Not one digit compartment anywhere in the corpus loses its input,
+            and no comb that had a typeable compartment is left without one
+            except the two printed rates.
+          * The other 7 non-alphanumeric compartments were **already refused**
+            before this change, by `comb_slot_verdicts`' shading branch: the
+            grey group separators printing `-` (1800 p1c15, 1801 p1c14, p1c15,
+            p1c31 twice, p1c32) or `.` (1801 p1c57). All that moves for them is
+            which evidence the report names -- their emitted bytes are
+            identical, because a slot div deliberately carries no
+            `data-preprinted` attribute. What is left to the shading branch is
+            then exactly the 9 swallowed-caption compartments, which is the
+            population that branch was reasoned about.
+
+        Where it stops, stated rather than papered over. A caption printed
+        beside the comb whose LAST glyph lands wholly inside the first
+        compartment, alone, would be read as that compartment's own ink and
+        cost the taxpayer a box. Neither condition above rejects that shape and
+        the alphanumeric one never did either: it caught only the half of it
+        that ends in punctuation, and a caption ending in a letter passed it
+        unchanged. The corpus has neither half -- all 366 admitted compartments
+        take their glyph from a run lying wholly within its own comb's
+        compartment span -- and the two overhang shapes that DO occur are what
+        the two conditions above are for. A format hint typeset at comb pitch
+        and centred in the writing band -- a literal `M M / Y Y` inside the
+        boxes -- would likewise read as occupancy; the corpus has no such hint,
+        its only date hints (`( MM / YYYY )` on 0605 p1c3, `( MM / DD / YYYY )`)
+        being printed OUTSIDE the comb and merely clipping a bracket 1.98pt
+        into the first slot, which containment rejects and which is now the
+        tightest rejection in the corpus. Adding a size, colour or run-extent
+        test against a population that does not exist would be machinery
         earning nothing.
         """
         found: tuple[str, float, float] | None = None
@@ -1471,7 +1524,7 @@ class PrePrintedInk:
         if found is None:
             return None
         char, span_x0, span_x1 = found
-        if not char.isalnum() or span_x0 < x0 or span_x1 > x1:
+        if span_x0 < x0 or span_x1 > x1:
             return None
         return char
 
@@ -1852,20 +1905,23 @@ def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
     the slot's own rectangle rather than the cell's (the third, a Bureau
     caption printed in the slot, is documented at its branch below):
 
-      * **Glyph ink that is a constant of the form** -- `slot_constant`, which
-        is where the decoration-versus-constant discrimination lives.
+      * **Glyph ink the source put in the compartment** -- `slot_constant`,
+        which is where the occupied-versus-free discrimination lives. 366
+        compartments corpus-wide.
       * **Decorative shading under the slot** -- the identical
-        `DecorativeShading.blocks` test at slot resolution. It resolves 16
-        slots the ink rule deliberately declines: the grey group-separator
-        compartments of a TIN comb, which print `-` (1801 p1c14/c15/c31/c32,
-        1800 p1c15) or `.` (1801 p1c55) and are exactly the "narrow grey
-        slivers between TIN digit groups" the cell-level rule catches when the
-        lattice happens to cut them as their own cells, plus the caption
-        compartment of a cell whose lattice segmentation swallowed a label
-        (1801 p1c13/c33/c110, 1800 p1c26, 2200S p1c29, 2552 p1c28, 1604F
-        p1c25/c36). Not one of the 16 is a digit box: the separators are 14pt
-        compartments carrying printed punctuation, the caption ones are 56 to
-        366pt wide.
+        `DecorativeShading.blocks` test at slot resolution. It resolves the 9
+        compartments the ink rule declines because they hold a whole swallowed
+        label rather than one glyph: the caption compartment of a cell whose
+        lattice segmentation ate a label (1801 p1c13/c31/c33/c112, 1800 p1c26,
+        2200S p1c29, 2552 p1c28, 1604F p1c25/c36). Not one is a digit box --
+        they are 56 to 366pt wide. The 7 grey group-separator compartments of a
+        TIN comb, which print `-` (1800 p1c15, 1801 p1c14/c15/c31 twice/c32) or
+        `.` (1801 p1c57) and are exactly the "narrow grey slivers between TIN
+        digit groups" the cell-level rule catches when the lattice happens to
+        cut them as their own cells, used to be resolved here too; the ink rule
+        now answers for them first, since the source has printed a glyph into
+        each. The verdict for those 7 changes from `shading` to `pre-printed`
+        and their emitted bytes do not change at all.
 
     Per slot and never per group, which is a decision the corpus forces. "Any
     constant in this comb blocks the comb" would delete 1600-PT's year entry
@@ -5621,9 +5677,10 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
     # G11, the one place in the corpus where a producer bug puts a live text box
     # on a statutory constant: 180 of 180 `mixed` cells were emitted with a full
     # set of editable slots because `field_verdict`'s first rule returns before
-    # any ink is consulted. The assertions below are the three populations that
-    # decide the rule -- a constant, a decoration, and a whole printed group --
-    # plus the two false positives that would have cost real typing surface.
+    # any ink is consulted. The assertions below are the four populations that
+    # decide the rule -- a constant, a whole printed group, a money comb's
+    # decimal bullet, and a rate the sheet prints across a whole comb -- plus
+    # the two false positives that would have cost real typing surface.
     slot_victim = next(
         (cell for page in layout["pages"] for cell in page["cells"]
          if cell.get("comb") and len(cell["comb"]["slot_x"]) >= 6
@@ -5695,15 +5752,36 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                {i: "pre-printed" for i in range(5)},
                "every slot of a printed branch code is refused",
                "5 of 5, from 5 independent per-slot verdicts", failures)
-        # 3. Decoration inside the taxpayer's own field: the money bullet and
-        #    the "." and "%" that C4 deliberately made fillable. Re-refusing
-        #    these is what left 2000-DST's page-1 money grid, 2200A Part III/IV,
-        #    2200P Part III, 1801 item 24, 2316 items 23-24 and 1702EX item 18
-        #    with no way to type an amount.
-        _check(all(_verdicts([_centred(char, 2)]) == {} for char in "●.,-%/"),
-               "a separator or a money point never takes a slot away",
-               "the decimal point stays inside a fillable money comb", failures)
-        # 4. A caption the lattice swallowed into the comb cell: 9+ glyphs in
+        # 3. The money decimal bullet in its OWN compartment: 2000-DST,
+        #    2200A/C/P/S print it into the third compartment from the right of
+        #    a 14-, 29- or 33-compartment money comb, with the two centavos
+        #    boxes to its right. 92 compartments corpus-wide, and 89 of
+        #    `inputs_over_printed_text`'s 147 offenders. It takes its own
+        #    compartment and nothing else, which is what keeps C4 fixed: the
+        #    digits of the amount go either side of the point, so 2000-DST's
+        #    page-1 money grid, 2200A/2200P Part III, 1801 item 24, 2316 items
+        #    23-24 and 1702EX item 18 all stay typeable.
+        n_slots = len(slot_x) - 1
+        point = n_slots - 3
+        bullet = _verdicts([_centred("●", point)])
+        _check(bullet == {point: "pre-printed"}
+               and point - 1 not in bullet
+               and point + 1 not in bullet and point + 2 not in bullet,
+               "the money bullet is refused in its own compartment and no other",
+               f"1 of {n_slots} compartments refused; the two centavos boxes to "
+               f"its right and every digit box to its left stay typeable",
+               failures)
+        # 4. A statutory rate set across a whole comb: 1800 p1c68 and 2550-DS
+        #    p1c79 print "0 %" into a 2-compartment comb. Both compartments are
+        #    spent, so that comb ends with no input at all -- correct, and not
+        #    C4: C4 is a money box a taxpayer must fill, and a printed rate is
+        #    not one. These are the only two combs in the corpus the source
+        #    fills entirely.
+        _check(_verdicts([_centred("0", 0), _centred("%", 1)])
+               == {0: "pre-printed", 1: "pre-printed"},
+               "a rate the form prints spends both compartments it is set in",
+               "'0 %' is a value the sheet states, not a box to type in", failures)
+        # 5. A caption the lattice swallowed into the comb cell: 9+ glyphs in
         #    ONE slot, at label scale rather than comb pitch. That is a
         #    segmentation defect (G05/G12) and deleting the input would hide it.
         _check(_verdicts([_printed(
@@ -5711,18 +5789,23 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
             (slot_x[1] - slot_x[0] - 1.0) / 11.0)]) == {},
                "a label typeset across one slot is a segmentation fault, not a value",
                "'7A ZIP Code' leaves every compartment typeable", failures)
-        # 5. A neighbour's item number clipping into the first box: 2551M's and
-        #    2553's "28C"/"29B" overhang by 4.53pt, and every real constant in
-        #    the corpus clears its walls by at least 1.31pt.
+        # 6. A neighbour's item number clipping into the first box: 2551M's and
+        #    2553's "28C"/"29B" overhang by 4.53pt and 0605 p1c3's date hint
+        #    clips its bracket in by 1.98pt, while every occupied compartment
+        #    in the corpus clears its walls by at least 0.24pt.
         overhang = (slot_x[1] - slot_x[0]) * 0.45
         _check(_verdicts([_printed("8", slot_x[0] - overhang / 2.0, overhang)]) == {}
                and _verdicts([_centred("8", 0)]) == {0: "pre-printed"},
                "a glyph must clear the slot's own walls to be that slot's value",
-               "containment carries no tolerance; the corpus separates by 5.84pt",
+               "containment carries no tolerance; the corpus separates by 2.22pt",
                failures)
-        # 6. Tone at slot resolution: the grey gaps between TIN digit groups
-        #    (1801 p1c14/c15/c31/c32, 1800 p1c15) and the caption end of a cell
-        #    cut too wide. Same test as the cell-level rule, same threshold.
+        # 7. Tone at slot resolution: the caption end of a cell the lattice cut
+        #    too wide (1801 p1c13/c31/c33/c112, 1800 p1c26, 2200S p1c29, 2552
+        #    p1c28, 1604F p1c25/c36). Same test as the cell-level rule, same
+        #    threshold. The grey TIN group separators this branch used to answer
+        #    for are now taken by the ink rule, which sees the `-` printed in
+        #    them; tone still has to work on its own, so it is asserted on a
+        #    compartment carrying no ink at all.
         def _slot_fill(index: int, gray: float, role: str, seq: int) -> dict[str, Any]:
             return {"x0": slot_x[index], "y0": band_y0,
                     "x1": slot_x[index + 1], "y1": band_y1,
@@ -5735,7 +5818,7 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                "a shaded compartment is refused and a knockout over it is not",
                "the topmost fill decides, exactly as it does for a cell", failures)
 
-        # 7. End to end: the slot div is still emitted, and it is the absent
+        # 8. End to end: the slot div is still emitted, and it is the absent
         #    <input> that says so -- no new attribute, because audit.SLOT_RE and
         #    the comb referee both pin this element's exact attribute set.
         slot_ir = json.loads(json.dumps(ir))
@@ -5756,7 +5839,7 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                "the exclusion is published, per cell and per slot index",
                next((w for w in slot_warnings if "constant the form prints" in w),
                     "no such warning")[:90], failures)
-        # 8. The navigation the gap breaks. `data-slot-index` is the compartment's
+        # 9. The navigation the gap breaks. `data-slot-index` is the compartment's
         #    number and stays that; the NodeList is the sequence a taxpayer moves
         #    through, and indexing one with the other stops advancing at the first
         #    printed box.

@@ -184,8 +184,35 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # `paper_coverage_pt`, and a competitor with any paper coverage still forces
 # `competing-endpoint-topologies` exactly as before. No tolerance constant
 # moved and no threshold moved.
+#
+# Re-pinned 2026-08-08 (r27) for G05/G12: `printed_caption_refutes_comb`. A
+# comb compartment is a CHARACTER cell, and `classify_cell` reached its "mixed"
+# verdict from `has_comb` alone -- so a single stray vertical inside a printed
+# caption block made the whole caption a typing surface (1606 page 2's entire
+# statutory rate table, 566 x 106pt of Exempt / 1.5% / 3.0% / 5.0% / 6.0%, and
+# one masthead on each of four excise forms). The cell's own printed text is
+# now asked what it put IN the compartments: decoration in a character cell is
+# at most one glyph per cell, because the cell is one character wide. The
+# corpus separates the two populations with a gap and no tuned constant -- of
+# 4,561 comb cells, 4,524 have at least one empty compartment, 26 carry exactly
+# one glyph in every compartment (`I I 0 1 1`, `X C 0 1 0`, `0 %` -- the
+# decoration the "mixed" verdict is FOR), and 11 carry 29 or more; nothing lies
+# between 1 and 29. The test is EVERY compartment and never SOME, which is what
+# keeps 2200A `p1c111`'s 29-box money comb (one swallowed caption in the first
+# compartment, 28 empty ones after it) with its money boxes.
+#
+# What this referee adjudicates moves in the direction it is BUILT for, not
+# around it: a refuted subject does not leave the ledger. It loses its comb,
+# `cell_id` goes None, `emission` goes `suppressed`, `blocks_gate` stays True,
+# `requires_independent_evidence` stays True, and `retired_proven_false` is
+# among its permitted transitions for whoever reviews it. Nothing in lattice.py
+# retires it -- a producer does not certify its own promotion -- so
+# EXPECTED_COMBS and EXPECTED_COMBS_BY_SLUG, which count active + retained, do
+# not move; a refuted band that no subject published raises rather than
+# shipping; and a refuted subject that is not an identity mapping onto its own
+# rectangle raises too. No tolerance constant moved and no threshold moved.
 LATTICE_PRODUCER_SHA256 = (
-    "a85b2151a00d7535a94a4583198c35ffd5fe3f3356425c76d278dcb72fadf460"
+    "703a3d9d5f03fe7491dd236c018ccbc311b32e31fc068e1104821288e3825ba4"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -210,8 +237,40 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # `boxes_bureau_reserved`, so it can never be silent. `ASSERTION_KEYS` is
 # unchanged at 10, no comb constant moved, and `comb_slots_match_printed`'s
 # code path -- the only derivation this referee adjudicates -- is untouched.
+#
+# Re-pinned 2026-08-08 (r27), two changes, neither of them in a derivation this
+# referee adjudicates:
+#
+# (1) `glyph_boxes` scores an emitted input against the glyph's INK band rather
+# than the font's LINE box. extract.py records a run's y-extent as MuPDF's span
+# bbox, which is `baseline - ascender*size` to `baseline - descender*size`
+# (verified on all 19,333 runs of this corpus), so every glyph in a run was
+# charged with the full descender depth of its face whether or not the
+# character has a descender -- and an input under a caption set in capitals was
+# reported as sitting on printed text with blank paper between them. The lower
+# edge alone moves, per GLYPH and never per run, and only for characters whose
+# depth was MEASURED: `BASELINE_SEATED_INK` is an evidence list, an unmeasured
+# character keeps the full line box, and so do symbol-encoded faces, rotated
+# runs, and a run missing the metrics. `GLYPH_BASELINE_OVERSHOOT_EM` (0.0308,
+# the deepest baseline-seated character over eleven measured faces) ENLARGES
+# the band, so an error in it errs towards reporting a collision. Six mutations
+# that weaken the band are each caught by a named fixture in the self-test.
+# This feeds `inputs_over_printed_text` only. `comb_slots_match_printed` -- the
+# one derivation this referee adjudicates -- takes its printed count from
+# `printed_compartments`, i.e. from the source's own paints and text operators
+# via `drawn_glyph_boxes`, and never from `glyph_boxes`; it is untouched.
+#
+# (2) The retained comb-subject registry admits a THIRD reason tuple,
+# `emission-suppressed-caption-block-not-character-cells`, through exactly the
+# identity branch the no-band tuple goes through. It is added because the shape
+# now EXISTS (see LATTICE_PRODUCER_SHA256 above) and because an unrecognised
+# retained record fails the whole form's registry rather than its own. Nothing
+# is weakened: the record must still be suppressed, blocking, comb-less and an
+# identity mapping onto its own still-present cell, and both directions are
+# asserted in the self-test. `ASSERTION_KEYS` is unchanged at 10 and no comb
+# constant moved.
 AUDIT_PRODUCER_SHA256 = (
-    "cf7ed2bd49f06de91f884c1871bbef04fbdadad811a9ada35410ec4711f02be1"
+    "bb2d56b565b65bd0482a9d2106f19c7b0dd2d823b5ddf9e97fdaed5b5c7d12f7"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -927,6 +986,43 @@ HTML_ALLOWED_TAGS = frozenset({
 #   HTML_RUNTIME_SCRIPT_SHA256 was re-derived and did NOT move: all three
 #   pinned runtime scripts are byte-identical, which is the standing evidence
 #   that a layout change did not reach the page runtime.
+#
+# Refreshed 2026-08-08 (r27): TEN of the 53, from build/html/<slug>.html. The
+# other 43 documents are byte-identical and their pins were not touched --
+# which is itself the first review finding, because two producer changes that
+# could each have moved every document moved ten.
+#
+#   Tag inventory across the ten moves in ONE direction: -110 <input>, -22
+#   <div>, nothing of any kind added, and visible text is token-for-token
+#   identical in every one of the ten (312/313/238/399/330/234/366/279/446/173
+#   text runs, unchanged and in the same order). Every embedded <script> body
+#   is byte-identical, so HTML_RUNTIME_SCRIPT_SHA256 does not move.
+#
+#   The 22 divs are 11 refuted caption blocks x 2 compartments, and the 110
+#   inputs are three named populations, checked against the sheets rather than
+#   counted:
+#
+#   * 92 money decimal-bullet compartments (2000-DST 16, 2200A 20, 2200C 20,
+#     2200P 20, 2200S 16), each ONE compartment of a 14-, 29- or
+#     33-compartment money comb, each the third from the right with the two
+#     centavos boxes to its right. The source prints the bullet INTO that
+#     compartment, so it was a typing surface laid on printed ink.
+#   * 16 on the 8 refuted caption blocks that had inputs -- 1606 p2's whole
+#     Schedule 4 rate table, and the mastheads of 2200A/2200AN/2200C/2200P/
+#     2200S/2200T(x2).
+#   * 2 completing the printed rate `0 %` on 1800 p1c68 and 2550-DS p1c79,
+#     2-compartment combs the sheet fills entirely.
+#
+#   NOT A SHRUNK WRITING SURFACE, which is the regression this pin exists to
+#   catch (r22 lowered the same assertion by cutting every comb to a 3.12pt
+#   stub). All 7,405 slot rectangles that survive in the ten documents were
+#   compared attribute-string to attribute-string against their r26 selves and
+#   ZERO moved; the only rectangles that disappear are the 22 belonging to the
+#   11 refuted blocks. Per-document minimum slot height is unchanged in all
+#   ten (16.32 / 14.88 / 14.52 / 12.96 / 12.96 / 14.52 / 12.96 / 12.96 / 12.84
+#   / 15.09pt); only the MAXIMUM falls, from 103.83pt (1606's rate table) and
+#   47-55pt (the mastheads) to a normal compartment. 2550M and 2316, the two
+#   forms the writing-box check is watched on, are byte-identical documents.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "87d7be818a0541e6a4645e6df1697421e608d228bb2bc7916305d7b6788ef9f3",
     "0619e-2018": "55931f50a9ca2cd6e7652724630b71247a2b9afb557dc4e3345cf5bae46628aa",
@@ -944,7 +1040,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1604cf-2008": "a155557d19361591f571ccbc3e24e1d834728a9d6cd9be370e03013855d05833",
     "1604e-2018": "8960362c0cba23e6edce5751a78f8a1ce2e416b8e453d3ac88faabf33cce61f2",
     "1604f-2018": "aa6a8869cc7893886cc1548f07a8d9db5cffbd6e066bc2013acd39b1fbd04e98",
-    "1606-2018": "14ea5824bcfccd2ecf39ca0c66ded941f16bc5745ac8294c1219fa0083d507d3",
+    "1606-2018": "c4b996c0cdb74f9cbf2fe447588ba241259093b6e4ac88a28275982128d4362a",
     "1621-2019": "a5efb8ad61225676537865d22458a55cbed83ce87716fb6cbc04a77bc6bdb9a4",
     "1700-2018": "7ab3f172dbad486ade7525a796ce3cf03fa62125cb13e1f7be488d7c090945aa",
     "1701-2018": "10b5f732116eaa45295bcf2c809d55d059a29ba6196931cb67bb5654dcf6a816",
@@ -962,19 +1058,19 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1707-2021": "6d8ecd027d880b875fe8b8e7a37279914b815edff2b4ec6efcc1bbac9bd9e656",
     "1707a-2021": "8268bde7581c4261fcb040b03ff7b2e4eecd979f80471159b0788d48ea91e134",
     "1709-2020": "206b9b87a260e18ae7cc1ebdf062d6626a4facbdc52bf01097034f411e635ae3",
-    "1800-2018": "733f9a14da504cc7120b227d6a2e8d78b7e94293377fcaf71f3a0ce5cd9b0ef2",
+    "1800-2018": "89f4cd729c073e357cf81b5b4cb688b0e31b945938abc6e5755f50a3c80e54a1",
     "1801-2018": "f9c29eb63fbdb516f07caedd237c39bb375ca9b6644a2e6bb8d93bc33de88534",
-    "2000-dst-2018": "0833c3f222a8da9e8c6bfad5de47d049659a0d6a53ef2d96d6da4984a1e8a021",
+    "2000-dst-2018": "f15d4e5439ef285c53e085f3ed356c8518a59187338d024c4986247c5275f2f6",
     "2000-ot-2018": "7da7f3a3ed0a29c6df2b3c9bccfe9c5b58113bc472f7070a24428da245922b5c",
-    "2200a-2020": "3363b59c43ebe7844de90895eb0375f454503ba6e98014eea510792590bf8f08",
-    "2200an-2018": "7512a870934e52ee4790836a3fffd7859d6be05e52b010db7360fd0148cfe967",
-    "2200c-2018": "e71fe4c0a0bcedae007a315aa7e9cc2fa33629d5b64948610f5ad06f19192828",
+    "2200a-2020": "10cfb1f0fbb6e7c0aa0877f3344754d10cdec1007ed56dbf7790792163a1cfe8",
+    "2200an-2018": "f337c5fb13b37cdc337a10eb4fe4dc39e2f14c944a3d0b579290c7698ffca40e",
+    "2200c-2018": "08bd5c9dc0525cbf72df1af51804ac302a29d840e8363c8029284d27f20df143",
     "2200m-2018": "894bebac15201977bc6397078389629fdecdf2ca974b4e6fdc0d3f127df14d5c",
-    "2200p-2020": "f37a870288b3ac8389f8c149d0ae475a68a7093b4c0305440578f7225635f6b7",
-    "2200s-2018": "09196e37cf9198afe8cd19c742f0c459d2449fe99570fb08046e0547f8590174",
-    "2200t-2022": "6fcaa0aef49b1661d90a26c55cefca27fa69e1fed1283107c40f4cbceeccb465",
+    "2200p-2020": "f25b46dfc01f40afe7aefccb7dd41090061c6b6c1778ba77bec8c79ca2555886",
+    "2200s-2018": "1a6bf5bf3005765e1c81e30c9ac32b6e292c8e44687e469aa81db5eea9cda5e6",
+    "2200t-2022": "c0da01d8e1c0ecbe82749ecfef145732f12e34dcaf0dcd362fa3f9b9035c99f2",
     "2316-2021": "a46e91b08880d49086c7f0ca2caf23ea0f3966540f0c3e3e5aa3908dd5eff21a",
-    "2550-ds-2025": "51e30ae7b2156a707862d59b134695ad2c9da972cd42a82d57b0a84cd6997333",
+    "2550-ds-2025": "87491a372f3ac0cdc4d434c37d466cb5f5bb961e3b63c00505ca64870403681b",
     "2550m-2007": "546f0ba03f3587479daedf9cbdad18de401064bb1cfc18e5893f34c0f70a2f76",
     "2550q-2024": "23313a0c58587d524bc0af0ebf9e01bbe36a0cad8519fc1282d55823ed7fe661",
     "2551m-2002": "91c0263acfd04c4ac615e4a79ec50a4810eb935235c2d9bc95f010924d40887e",

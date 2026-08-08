@@ -2679,6 +2679,13 @@ def cell_paper_gap(cell: dict[str, Any], xl: Lattice, yl: Lattice,
 SHADED_PAPER_MAX_GRAY = 0.87
 SHADED_PAPER_MIN_COVERAGE = 0.70
 
+# Published on the retained subject a refuted caption block leaves behind, and
+# named for what was measured rather than for what was done about it. Declared
+# here because it crosses a file boundary: `audit.validate_comb_owner_registry`
+# admits a retained subject only on a reason-code tuple it knows.
+REFUTED_CAPTION_BLOCK_REASON_CODE = (
+    "emission-suppressed-caption-block-not-character-cells")
+
 
 def covering_shading_band(cell: dict[str, Any],
                           area_fills: Sequence[dict[str, Any]],
@@ -2844,6 +2851,105 @@ def on_shaded_paper(cell: dict[str, Any],
     return covering_shading_band(cell, area_fills, needed) >= needed
 
 
+def printed_glyph_boxes(run: dict[str, Any]) -> list[Interval]:
+    """One x box per non-blank character of the run: the glyph's own extent.
+
+    `char_widths_pt` is the character's own bounding box, not its advance, so
+    this is where the ink is rather than where the next glyph starts.
+    `glyph_ink_spans` answers a different question -- "where does this whole run
+    mark the paper" -- and unions its intervals, which is the wrong shape for a
+    caller that COUNTS glyphs: a union of 176 characters is one interval.
+
+    Where the per-character arrays are missing the whole run collapses to a
+    single box, which is the conservative direction for every caller here --
+    they refuse on MANY glyphs, so under-counting can only leave a comb alone.
+    """
+    origin = float(run.get("origin_x", run["x0"]))
+    offsets = run.get("char_origin_offsets_pt") or ()
+    widths = run.get("char_widths_pt") or ()
+    text = run.get("text") or ""
+    if len(offsets) != len(text) or len(widths) != len(text):
+        return [(float(run["x0"]), float(run["x1"]))] if text.strip() else []
+    return [(origin + float(o), origin + float(o) + float(w))
+            for ch, o, w in zip(text, offsets, widths) if ch.strip()]
+
+
+def comb_compartment_glyph_counts(
+        comb: dict[str, Any],
+        runs: Sequence[dict[str, Any]]) -> list[int]:
+    """How many printed glyphs the cell's own text puts in each compartment.
+
+    Each glyph is counted once, for the compartment its own box is centred in,
+    so the counts partition the cell's printed characters rather than
+    double-counting the one glyph that straddles a divider.  Measured over the
+    53-form corpus this choice is inert: midpoint, any-overlap and
+    overlap-beyond-0.01pt give character-for-character the same counts on every
+    one of the 4,561 comb cells.
+    """
+    slot_x = [float(value) for value in comb["slot_x"]]
+    counts = [0] * max(len(slot_x) - 1, 0)
+    for run in runs:
+        for x0, x1 in printed_glyph_boxes(run):
+            midpoint = (x0 + x1) / 2.0
+            for index in range(len(counts)):
+                if slot_x[index] <= midpoint < slot_x[index + 1]:
+                    counts[index] += 1
+                    break
+    return counts
+
+
+def printed_caption_refutes_comb(comb: dict[str, Any],
+                                 runs: Sequence[dict[str, Any]]) -> bool:
+    """Whether the cell's own printed text says these are not character cells.
+
+    A comb compartment IS a character cell: one box, one typed character. That
+    is what makes `classify_cell`'s "mixed" verdict sound -- the ink the source
+    puts inside a comb is per-character decoration, "the % glyph, the money
+    decimal point, the TIN group dashes", and a taxpayer still types in the
+    boxes around it.  The verdict was reached from `has_comb` alone, so it was
+    also given to every cell where a single stray vertical inside a printed
+    caption block was read as a 2-compartment comb, and there the whole caption
+    became a typing surface.  Shipping at the time of writing: a 566 x 106pt
+    input pair over 1606 page 2's entire statutory rate table (Exempt / 1.5% /
+    3.0% / 5.0% / 6.0%), and one over each of four excise mastheads.
+
+    So ask the source what it printed IN the compartments.  Decoration in a
+    character cell is at most one glyph per cell, because the cell is one
+    character wide; running prose in every compartment is a caption, and the
+    vertical that made those compartments is a column border the segmentation
+    should have cut on, not a character tick.
+
+    The corpus separates the two populations with nothing in between.  Over all
+    4,561 comb cells (53 forms, `build/ir` + regenerated layouts, 2026-08-08),
+    the minimum per-compartment glyph count of the cell's OWN assigned text is:
+
+        0 glyphs   4,524 cells   (nothing printed in at least one compartment)
+        1 glyph       26 cells   `I I 0 1 1`, `X C 0 1 0`, `W I 1 6 5`,
+                                 `0 0 0 0 0`, `0 %` -- exactly the decoration
+                                 the "mixed" comment names
+        29+           11 cells   the whole selected population
+
+    There is no cell between 1 and 29, so the test is "more than one" and
+    carries no tuned constant.  It is deliberately EVERY compartment and never
+    SOME: 2200A `p1c111` (and its 2200C/2200P twins) is a real 29-compartment
+    money comb whose first compartment has swallowed the caption "27 Tax Debit
+    Memo"; its other 28 compartments are empty, so the minimum is 0 and the
+    comb keeps its money boxes.  That cell's first compartment is a separate,
+    unfixed segmentation defect and is reported as one rather than folded in
+    here.
+
+    The 6 real combs that a WRITING-SURFACE overlap test would catch -- 2316
+    `p1c37`/`p1c38` and 2550M `p1c83`/`p1c84`/`p1c89`/`p1c90`, whose 11.89 to
+    13.44pt compartments merely sit under a neighbouring caption's descender
+    pad -- are not at risk here and never were: the runs are assigned to the
+    caption's own cell, so all six are `is_empty` and `classify_cell` calls
+    them `field`.  Asking the cell's assigned text, which is the same evidence
+    `is_empty` is computed from, is what keeps them out of the population.
+    """
+    counts = comb_compartment_glyph_counts(comb, runs)
+    return bool(counts) and min(counts) > 1
+
+
 def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
                   is_sliver_text_strip: bool = False,
                   is_shaded_paper: bool = False) -> str:
@@ -2865,7 +2971,11 @@ def classify_cell(is_empty: bool, border_count: int, has_comb: bool,
     if is_empty:
         return "blank"
     # Pre-printed text sitting in a comb -- the "%" glyph, the money decimal
-    # point, the TIN group dashes -- is decoration on a fillable field.
+    # point, the TIN group dashes -- is decoration on a fillable field.  That
+    # holds because a compartment is one character wide, and it is checked
+    # rather than assumed: `printed_caption_refutes_comb` has already taken the
+    # comb off any cell whose every compartment carries running prose, so
+    # `has_comb` here means a comb the source's own printing agrees with.
     return "mixed" if has_comb else "label"
 
 
@@ -4900,6 +5010,93 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
         cell["text_run_ids"] = [f"p{page_index}t{i}" for i in sorted(members)]
     unassigned = [f"p{page_index}t{i}" for i in sorted(unplaced)]
 
+    # The last word on whether a claimed comb is a comb, taken once, after
+    # every band has been selected, owned and restated, and on the same
+    # evidence `is_empty` is about to be computed from.  It has to be last:
+    # the legacy reconciliation above re-attaches a band to a cell that has
+    # none, so a refusal made earlier would simply come back.
+    #
+    # `emit.field_verdict` gives an input to any cell carrying `comb`,
+    # whatever kind the lattice assigned -- deliberately, because a comb IS
+    # the field.  A refutation therefore has to take the comb off the cell;
+    # returning a different kind beside a comb the emitter still honours would
+    # leave the layout and the markup contradicting each other, which is worse
+    # than either verdict alone.
+    #
+    # The subject does NOT leave the ledger.  That is the ledger's whole
+    # purpose -- "a comb that stops being a writing surface does not leave the
+    # ledger" -- so the reviewed subject denominator is untouched and the
+    # subject moves to the retained half, published, emitting nothing, blocking
+    # the gate, and carrying `retired_proven_false` among its permitted
+    # transitions for whoever reviews it.  Nothing here retires it: a producer
+    # does not certify its own promotion, and this is the fail-closed side of
+    # that rule, not an exception to it.
+    refuted: dict[str, dict[str, Any]] = {}
+    for cell in cells:
+        comb = cell.get("comb")
+        if comb is None:
+            continue
+        runs = [text_runs[int(run_id.split("t")[1])]
+                for run_id in cell["text_run_ids"]]
+        if not printed_caption_refutes_comb(comb, runs):
+            continue
+        cell.pop("comb", None)
+        cell.pop("combs", None)
+        refuted[str(cell["subject_key"])] = {
+            "cell": cell,
+            "comb": comb,
+            "compartment_glyph_counts": comb_compartment_glyph_counts(
+                comb, runs),
+        }
+    for index, subject in enumerate(subject_ledger):
+        evidence = refuted.pop(str(subject["subject_key"]), None)
+        if evidence is None:
+            continue
+        cell = evidence["cell"]
+        # The retained shape is an IDENTITY mapping: one legacy subject, one
+        # layout rectangle, same bbox.  A refuted caption block is always that
+        # -- the band was selected on this rectangle's own anchors -- and if it
+        # ever is not, the ledger would be claiming a partition it cannot
+        # support, so fail closed rather than publish it.
+        if (subject.get("cell_id") != cell["id"]
+                or subject.get("legacy_cell_id") != cell["id"]
+                or [q(float(value)) for value in subject["legacy_bbox"]]
+                != [q(float(cell[name])) for name in ("x0", "y0", "x1", "y1")]):
+            raise ValueError(
+                f"{cell['id']}: refuted comb subject is not an identity "
+                f"mapping onto its own rectangle")
+        subject_ledger[index] = {
+            "subject_key": subject["subject_key"],
+            "legacy_cell_id": subject["legacy_cell_id"],
+            "legacy_bbox": subject["legacy_bbox"],
+            "cell_id": None,
+            "mapped_partition_cell_ids": [subject["legacy_cell_id"]],
+            "mapped_partition_subject_keys": [subject["subject_key"]],
+            "state": "retained_unresolved",
+            "emission": "suppressed",
+            "reason_codes": [REFUTED_CAPTION_BLOCK_REASON_CODE],
+            "legacy_comb": evidence["comb"],
+            "requires_independent_evidence": True,
+            "permitted_transitions": [
+                "active_composite",
+                "retired_proven_false",
+            ],
+            "blocks_gate": True,
+        }
+        cell["comb_refutation"] = {
+            "reason_codes": [REFUTED_CAPTION_BLOCK_REASON_CODE],
+            "compartment_glyph_counts": evidence["compartment_glyph_counts"],
+            "refused_slot_x": [q(float(value))
+                               for value in evidence["comb"]["slot_x"]],
+        }
+    if refuted:
+        # A refuted band that no subject published would be a comb this module
+        # emitted with no ledger entry at all -- exactly the unreviewed
+        # inference the suppression path below exists to prevent.
+        raise ValueError(
+            "refuted comb has no ledger subject: "
+            + ", ".join(sorted(refuted)))
+
     page_area_fills = () if area_fills is None else area_fills
     for cell in cells:
         cell["is_empty"] = not cell["text_run_ids"]
@@ -6145,6 +6342,123 @@ def self_test(ir_path: pathlib.Path) -> int:
             {**chromatic, "paint_seq": 0, "paint_seq_max": 0}, sheet_band]),
         "a chromatic box painted UNDER the band suppressed the band above it",
     )
+
+    # A comb compartment is a character cell, and a caption block is not.  Both
+    # sides are the corpus's own numbers: the refused one is 2200S `p1c0`, the
+    # masthead whose single 0.48pt vertical at x = 115.70 gave a taxpayer two
+    # live inputs over "BIR Form No. / 2200-S" and "EXCISE TAX RETURN"; the
+    # spared one is 1800 `p1c68`, a 2-compartment comb the source fills with the
+    # printed rate `0 %`, one glyph per compartment, which is exactly the
+    # decoration `classify_cell`'s "mixed" verdict is FOR.  The pair differ only
+    # in how many glyphs each compartment carries, so a rule that passed both by
+    # luck would have to be measuring something neither of them varies.
+    def printed_run(text: str, x0: float, advance: float) -> dict[str, Any]:
+        return {
+            "text": text, "origin_x": q(x0),
+            "x0": q(x0), "x1": q(x0 + advance * len(text)),
+            "char_origin_offsets_pt": [q(advance * i)
+                                       for i in range(len(text))],
+            "char_widths_pt": [q(advance)] * len(text),
+        }
+
+    masthead_comb = {"cells": 2, "slot_x": [23.16, 115.70, 430.51]}
+    masthead_runs = [
+        printed_run("BIR Form No.", 44.88, 4.26),
+        printed_run("2200-S", 37.08, 11.67),
+        printed_run("EXCISE TAX RETURN", 189.98, 10.04),
+    ]
+    check(
+        comb_compartment_glyph_counts(masthead_comb, masthead_runs)
+        == [16, 15],
+        "the masthead's own glyphs were not counted into its two compartments",
+    )
+    check(
+        printed_caption_refutes_comb(masthead_comb, masthead_runs),
+        "2200S p1c0's masthead caption still read as a 2-box comb, so a "
+        "taxpayer keeps two inputs over the form's own title",
+    )
+    printed_rate_comb = {"cells": 2, "slot_x": [520.44, 534.06, 547.68]}
+    printed_rate_runs = [printed_run("0", 524.0, 6.6),
+                         printed_run("%", 537.5, 6.6)]
+    check(
+        comb_compartment_glyph_counts(printed_rate_comb, printed_rate_runs)
+        == [1, 1],
+        "the printed rate `0 %` was not one glyph per compartment",
+    )
+    check(
+        not printed_caption_refutes_comb(printed_rate_comb, printed_rate_runs),
+        "1800 p1c68's printed rate comb was refused as a caption block",
+    )
+    # The money comb the refusal must NOT take: 2200A `p1c111`'s first
+    # compartment has swallowed the caption "27 Tax Debit Memo" and its other
+    # 28 are empty, so SOME compartment is multi-glyph and EVERY one is not.
+    # The rule is stated over every compartment precisely so this keeps its
+    # money boxes; the swallowed first compartment is a separate segmentation
+    # defect and is not fixed here.
+    debit_memo_comb = {
+        "cells": 29,
+        "slot_x": [16.32, 189.98] + [q(189.98 + 14.52 * i)
+                                     for i in range(1, 29)],
+    }
+    debit_memo_runs = [printed_run("27 Tax Debit Memo", 18.36, 5.03)]
+    counts = comb_compartment_glyph_counts(debit_memo_comb, debit_memo_runs)
+    check(
+        counts[0] > 1 and min(counts) == 0,
+        "2200A p1c111's swallowed caption did not land in its first "
+        "compartment alone",
+    )
+    check(
+        not printed_caption_refutes_comb(debit_memo_comb, debit_memo_runs),
+        "a 29-box money comb lost every box to one swallowed caption",
+    )
+    check(
+        not printed_caption_refutes_comb(masthead_comb, []),
+        "a comb with no printed text of its own was refused",
+    )
+    # The two ends of the refusal, asserted over whichever form was given
+    # rather than over the one it happens to be: no published comb may fail
+    # the test, and a refused one must have left the cell AND stayed in the
+    # ledger as a suppressed, blocking, reviewable subject.  On 2551Q both
+    # halves are vacuous by construction -- it prints no caption block of this
+    # shape, so nothing here can move the pinned counts above -- and on a form
+    # that does they are the whole contract.
+    ir_pages = {int(page["index"]): page for page in ir["pages"]}
+    for page in layout["pages"]:
+        runs_by_id = {f"p{page['index']}t{index}": run
+                      for index, run in enumerate(
+                          ir_pages[int(page["index"])]["text_runs"])}
+        retained_by_key = {
+            str(subject["subject_key"]): subject
+            for subject in page["comb_subjects"]
+            if subject["state"] == "retained_unresolved"
+        }
+        for cell in page["cells"]:
+            comb = cell.get("comb")
+            check(
+                comb is None or not printed_caption_refutes_comb(
+                    comb, [runs_by_id[run_id]
+                           for run_id in cell["text_run_ids"]]),
+                f"{cell['id']}: a published comb fails the caption-block test",
+            )
+            refutation = cell.get("comb_refutation")
+            if refutation is None:
+                continue
+            subject = retained_by_key.get(str(cell["subject_key"]))
+            check(
+                comb is None and cell["kind"] != "mixed",
+                f"{cell['id']}: a refuted caption block kept its comb or its "
+                f"fillable kind",
+            )
+            check(
+                subject is not None
+                and subject["reason_codes"]
+                == [REFUTED_CAPTION_BLOCK_REASON_CODE]
+                and subject["cell_id"] is None
+                and subject["emission"] == "suppressed"
+                and subject["blocks_gate"] is True,
+                f"{cell['id']}: a refuted comb left the ledger instead of "
+                f"being retained as suppressed, blocking evidence",
+            )
 
     malformed_span_contracts: list[tuple[str, dict[str, Any]]] = [
         ("empty", {**exact_repainted_seed, "paint_spans": []}),

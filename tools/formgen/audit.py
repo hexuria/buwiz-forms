@@ -298,6 +298,32 @@ RETAINED_PARTITION_REASON_CODES = (
 RETAINED_NO_BAND_REASON_CODES = (
     "emission-suppressed-no-final-visible-band",
 )
+# The third retained shape, and it is the SAME shape as the one above: one
+# legacy subject, its own rectangle, an identity mapping onto itself, comb
+# removed, emission suppressed, gate blocked. It is published by lattice.py
+# when a cell's own printed text refutes the claim that its compartments are
+# character cells (`lattice.REFUTED_CAPTION_BLOCK_REASON_CODE`, kept spelled
+# out here rather than imported, because this file must not take a producer's
+# word for the vocabulary it adjudicates).
+#
+# This tuple is added because the shape it names EXISTS -- 1606 p2's statutory
+# rate table and the excise mastheads -- and because a retained subject the
+# registry does not recognise fails the WHOLE form's registry
+# (`comb-owner-registry-invalid`), not just its own record. Nothing here
+# weakens the record: it is validated through exactly the identity branch
+# RETAINED_NO_BAND_REASON_CODES goes through, so a refuted subject that is not
+# an identity mapping onto its own still-present layout cell is rejected the
+# same way, and `retained_unresolved subject still owns an active comb` above
+# still fails it if the comb was left on the cell.
+RETAINED_REFUTED_CAPTION_REASON_CODES = (
+    "emission-suppressed-caption-block-not-character-cells",
+)
+# The retained reason tuples that map a subject onto its own layout cell,
+# one-to-one, rather than onto a partition of other cells.
+RETAINED_IDENTITY_REASON_CODES = frozenset({
+    RETAINED_NO_BAND_REASON_CODES,
+    RETAINED_REFUTED_CAPTION_REASON_CODES,
+})
 # emit.py serialises point geometry to four decimals. Two rounded endpoints can
 # differ by at most two ten-thousandths of a point.
 EMITTED_GEOMETRY_EPS_PT = 0.0002
@@ -479,6 +505,130 @@ class InkIndex:
         return None
 
 
+# --------------------------------------------------------------------------
+# The ink band of a glyph -- and why the box extract.py records is not it.
+#
+# extract.py stores a run's y-extent as MuPDF's span bbox, and that bbox is the
+# font's LINE box rather than its ink. Measured over all 19,333 runs of this
+# corpus: `y0 == baseline_y - ascender * size_pt` and
+# `y1 == baseline_y - descender * size_pt` (19,105 runs exact on the lower
+# edge, every other run inside 0.01pt bar 123 runs of one face whose reported
+# descender rounds 0.22pt short). Scoring an emitted input against that box
+# charges EVERY glyph in a run with the full descender depth of its face,
+# whether or not the character has a descender -- so an input placed just
+# under a caption set entirely in capitals is reported as sitting on printed
+# text when the paper between them is blank. 15 of the 147 offenders this
+# assertion published were exactly that, and every one of them clears by a
+# margin re-measured against the real face outlines: worst case -0.39pt, most
+# of them -0.7pt to -1.5pt of blank paper between the ink and the input.
+#
+# What is removed here is therefore blank paper, not a collision. Note what is
+# NOT removed: a caption whose word carries a descender still collides, because
+# the descender really does hang into the box. Eleven cells that a per-run
+# reading of this same defect had written off as false positives keep failing
+# for exactly that reason (1604CF p1c16/20/31/32 'p','g'; 2316 p1c62/83 'y';
+# 1600WP p1c63/64 and 2316 p1c38/39 '(' and ')'; 1701MS p1c287 'g'), with real
+# ink overlaps of +0.20pt to +0.90pt. The rule is per GLYPH, never per run.
+#
+# The upper edge is left where extract.py put it (the ascent line): no
+# character reaches above it, so keeping it can only over-report. It cannot be
+# tightened the way the lower edge can, and for the same reason the horizontal
+# edges cannot: cap height, x-height and side bearings are per-character and
+# per-face quantities, while the descent this removes is a single figure the
+# whole face shares. 2550M p1c81-p1c85 still report the leader dots of "Debit
+# Memo" through that ascent-side blank band, 3.77pt above the ink.
+#
+# The same over-reach exists HORIZONTALLY and is deliberately NOT removed.
+# `char_widths_pt[i]` is `bbox[2] - bbox[0]` of MuPDF's per-character box, and
+# that box is the ADVANCE box, side bearings included: over the 437,615
+# characters of this corpus it equals `char_advances_pt[i]` to within the IR's
+# own 0.005pt quantisation, and `page.get_texttrace()` -- the file's own
+# operator stream, read independently by `drawn_glyph_boxes` -- reports the
+# same x-extent to the millipoint. Neither view records a side bearing, so a
+# glyph's horizontal ink extent is not derivable here, and it cannot be bounded
+# by a constant either: measured across the eleven real faces these PDFs name,
+# the smallest left bearing of a character this corpus sets is -0.0015em
+# (Arial 'A'), so the only sound uniform bound is zero and removes nothing.
+# The vertical case yields to one constant precisely because it IS uniform:
+# every character without a descender stops at the baseline plus a small,
+# bounded overshoot, and every character with one goes far past it.
+#
+# GLYPH_BASELINE_OVERSHOOT_EM is that overshoot, measured rather than chosen.
+# Over Arial, Arial Bold, Arial Italic, Arial Bold Italic, Arial Narrow, Arial
+# Narrow Bold, Times New Roman, Times New Roman Bold, Times New Roman Italic,
+# Tahoma and Tahoma Bold, the deepest any character in BASELINE_SEATED_INK
+# reaches below its baseline is 0.0308em ('%', Arial Bold Italic); the round
+# letters that motivate the allowance at all sit at 0.0117-0.0171em. It
+# ENLARGES the ink band, so an error in it errs towards reporting a collision.
+# Every character in DESCENDING_INK measures 0.1582em ('/', Tahoma) or deeper
+# -- a fivefold gap on either side of the split, which is why no per-face table
+# is needed and why widening the constant several times over would not move a
+# single character across.
+GLYPH_BASELINE_OVERSHOOT_EM = 0.0308
+
+# Characters whose ink descends. `J` and `Q` are in it although the eleven
+# faces measured keep `J` on the baseline: both descend in faces this corpus
+# does set but that were not measurable here (Calibri, Berlin Sans FB Demi),
+# and the failure direction of a wrong guess is what decides the membership --
+# calling a descender baseline-seated hides ink, the reverse only keeps a
+# report nobody needed.
+DESCENDING_INK = frozenset("(),/;@JQ[]_gjpqy")
+# `f` is the one character in this corpus whose descender is a property of the
+# face rather than the character: it measures 0.2158em in Times New Roman
+# Italic and exactly 0.0000em in Arial, Arial Bold, Arial Italic, Arial Narrow,
+# Times New Roman and Tahoma. Splitting it out is what lets 2316 p1c37 stop
+# reporting the `f` of "Date of Birth" -- set in upright Arial, 0.38pt of blank
+# paper -- while an italic face keeps the full line box, which is wider than
+# the italic descender actually needs and so cannot hide one.
+ITALIC_ONLY_DESCENDING_INK = frozenset("f")
+# Characters measured to stop at the baseline (within the overshoot above).
+# This is an evidence list, not a character class: it holds exactly the
+# characters this corpus prints whose depth was measured, so any character a
+# new form introduces falls through to the full line box until it is measured
+# too. U+F0A7 and U+FFFD are absent on purpose -- one is a Wingdings private
+# use code and the other is a glyph whose encoding failed, and neither names a
+# shape whose ink can be looked up.
+BASELINE_SEATED_INK = frozenset(
+    "0123456789"
+    "ABCDEFGHIKLMNOPRSTUVWXYZ"
+    "abcdefhiklmnorstuvwxz"
+    "\"%&'*+-.:=?"
+    "½–’“”•…●"
+)
+# A symbol-encoded face draws something other than the character its code
+# names, so a character-indexed ink table cannot be applied to it. Named
+# independently of fonts.py: this file must not take a producer's word for
+# which faces those are.
+SYMBOL_ENCODED_INK_FAMILIES = frozenset({
+    "Symbol", "Wingdings", "Wingdings 2", "Wingdings 3", "Webdings",
+    "ZapfDingbats", "Marlett",
+})
+
+
+def glyph_ink_bottom(run: dict, char: str) -> float | None:
+    """Lowest y this character's ink can reach, or None when that is unknown.
+
+    None is the fail-closed answer and every caller must fall back to the run's
+    own recorded line box on it. It is returned whenever the reasoning above
+    does not apply: a run without the metrics the derivation needs, a rotated
+    run whose baseline is not horizontal, a symbol-encoded face, a character
+    that has not been measured, or a character that descends.
+    """
+    if char in DESCENDING_INK or char not in BASELINE_SEATED_INK:
+        return None
+    if char in ITALIC_ONLY_DESCENDING_INK and run.get("italic"):
+        return None
+    if run.get("rotated"):
+        return None
+    if run.get("family") in SYMBOL_ENCODED_INK_FAMILIES:
+        return None
+    baseline = run.get("baseline_y")
+    size = run.get("size_pt")
+    if baseline is None or not size:
+        return None
+    return float(baseline) + GLYPH_BASELINE_OVERSHOOT_EM * float(size)
+
+
 def glyph_boxes(run: dict) -> list[Rect]:
     """One box per *inked* glyph in a text run.
 
@@ -486,7 +636,8 @@ def glyph_boxes(run: dict) -> list[Rect]:
     A label like `'Yes            No'` is one run whose bbox spans the checkbox
     drawn in the gap between the two words; scored by bbox it reports a collision
     that is not there, and 269 of the 362 bbox collisions in this corpus are that
-    artefact. A glyph's own advance box is where the ink is.
+    artefact. A glyph's own advance box is where the ink is horizontally, and
+    `glyph_ink_bottom` is where it stops vertically.
     """
     out: list[Rect] = []
     offsets = run.get("char_origin_offsets_pt") or ()
@@ -496,11 +647,19 @@ def glyph_boxes(run: dict) -> list[Rect]:
         # returning it, so the assertion errs towards reporting a collision.
         return [(run["x0"], run["y0"], run["x1"], run["y1"])]
     origin = run.get("origin_x", run["x0"])
+    top = run["y0"]
+    line_bottom = run["y1"]
     for char, offset, width in zip(run["text"], offsets, widths):
         if not char.strip():
             continue
         x = origin + offset
-        out.append((x, run["y0"], x + width, run["y1"]))
+        ink_bottom = glyph_ink_bottom(run, char)
+        # A band that does not reach below the ascent line is not a measurement
+        # of anything; fall back rather than publish a degenerate box, which
+        # `overlaps` would silently read as "no collision".
+        bottom = (line_bottom if ink_bottom is None or ink_bottom <= top
+                  else min(line_bottom, ink_bottom))
+        out.append((x, top, x + width, bottom))
     return out
 
 
@@ -2022,7 +2181,7 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                 if (not isinstance(reason_codes_value, list)
                         or tuple(reason_codes_value) not in {
                             RETAINED_PARTITION_REASON_CODES,
-                            RETAINED_NO_BAND_REASON_CODES,
+                            *RETAINED_IDENTITY_REASON_CODES,
                         }):
                     return fail(
                         "retained_unresolved suppression reason evidence is "
@@ -2079,7 +2238,8 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                         and retained_cell.get("comb") is not None):
                     return fail(
                         "retained_unresolved subject still owns an active comb")
-                if tuple(reason_codes_value) == RETAINED_NO_BAND_REASON_CODES:
+                if (tuple(reason_codes_value)
+                        in RETAINED_IDENTITY_REASON_CODES):
                     if (mapped_ids != [legacy_cell_id]
                             or mapped_keys != [subject_key]
                             or retained_cell is None
@@ -2088,8 +2248,7 @@ def reviewed_comb_owner_registry(bundle: Any) -> CombOwnerRegistry:
                                 [retained_cell.get(name) for name in (
                                     "x0", "y0", "x1", "y1")])):
                         return fail(
-                            "retained_unresolved no-band identity mapping is "
-                            "stale")
+                            "retained_unresolved identity mapping is stale")
                 elif retained_cell is not None:
                     return fail(
                         "retained_unresolved partition subject still has a "
@@ -9680,6 +9839,120 @@ def self_test() -> int:
     check("an input over its own cell's printed run still fails",
           check_inputs_over_printed_text(owned)["holds"] is False)
 
+    # The ink band, end to end. One caption set 10pt on a baseline at y=60 in
+    # a face whose ascender is 0.9 and descender -0.2, so its LINE box runs
+    # 51..62 while its capitals stop inking at 60. An input whose top edge is
+    # at 61 sits in the 1pt of blank paper between the two, which is the shape
+    # of 15 of the 147 offenders this assertion used to publish.
+    def ink_band_bundle(text: str, input_top: float,
+                        **run_over: Any) -> Bundle:
+        run = {
+            "text": text, "font": "Arial", "family": "Arial", "size_pt": 10.0,
+            "color": 0, "x0": 10.0, "y0": 51.0,
+            "x1": 10.0 + 3.0 * len(text), "y1": 62.0,
+            "origin_x": 10.0, "baseline_y": 60.0,
+            "ascender": 0.9, "descender": -0.2, "rotated": False,
+            "bold": False, "italic": False,
+            "char_origin_offsets_pt": [3.0 * i for i in range(len(text))],
+            "char_widths_pt": [3.0] * len(text),
+        }
+        run.update(run_over)
+        ink_ir = {
+            "form": {"code": "INK", "revision": "0000"},
+            "source": {"file": "external:none.pdf", "sha256": "0" * 64},
+            "paper": {"width_pt": 100.0, "height_pt": 100.0},
+            "pages": [{
+                "index": 1, "width_pt": 100.0, "height_pt": 100.0,
+                "rotation": 0, "rules": [], "area_fills": [], "images": [],
+                "text_runs": [run], "stats": {},
+            }],
+        }
+        ink_html = (
+            '<div class="page page-1" id="page-1" '
+            'style="width:100pt;height:100pt">'
+            '<div class="layer-text"><div class="t" id="p1t0" '
+            'style="left:10pt;top:51pt;color:#000000">'
+            + text.replace("&", "&amp;").replace("<", "&lt;") +
+            '</div></div>'
+            '<div id="p1c0" class="c f" data-cell-kind="field" '
+            'data-field-kind="text" '
+            f'style="left:8pt;top:{input_top}pt;width:30pt;height:8pt">'
+            '<input type="text" class="fi" id="p1c0-i" name="p1c0" '
+            'style="inset:0pt 0pt 0pt 0pt"></div></div>')
+        return Bundle(slug="ink", ir=ink_ir, layout=None, plan=None,
+                      form_html=ink_html, guide_html=None, pdf=None)
+
+    def ink_holds(text: str, input_top: float, **run_over: Any) -> bool:
+        return check_inputs_over_printed_text(
+            ink_band_bundle(text, input_top, **run_over))["holds"]
+
+    check("an input in the blank band below capitals is not a collision",
+          ink_holds("DN", 61.0) is True)
+    check("an input on the cap ink of the same caption is a collision",
+          ink_holds("DN", 55.0) is False)
+    check("a descender in the caption reaches the same blank band",
+          ink_holds("Dg", 61.0) is False)
+    check("a descender is caught through its own glyph, not its neighbours'",
+          ink_holds("g", 61.0) is False and ink_holds("D", 61.0) is True)
+    check("an unmeasured character is never assumed to clear an input",
+          ink_holds("\uf0a7", 61.0) is False)
+    check("a symbol-encoded face is never read through the character table",
+          ink_holds("DN", 61.0, family="Wingdings") is False)
+    check("a rotated run is never seated on a horizontal baseline",
+          ink_holds("DN", 61.0, rotated=True) is False)
+    check("an italic f still reaches below the baseline",
+          ink_holds("f", 61.0) is True
+          and ink_holds("f", 61.0, italic=True) is False)
+    # The overshoot allowance is load-bearing: round letters ink below the
+    # baseline, and an input butted straight onto it is still a collision.
+    check("a round letter's baseline overshoot is still ink",
+          ink_holds("o", 60.1) is False)
+
+    # Mutation test. Each entry weakens the ink band in one way; the fixture
+    # named beside it must stop failing, which is what proves the fixture --
+    # and therefore the rule -- is doing the work. A mutation that changes
+    # nothing means the check above is decoration.
+    _measured_ink_bottom = glyph_ink_bottom
+
+    def _ink_bottom_without_rotation_guard(
+            run: dict, char: str) -> float | None:
+        return _measured_ink_bottom({**run, "rotated": False}, char)
+
+    ink_mutations = (
+        ("descenders read as baseline-seated",
+         {"DESCENDING_INK": frozenset(),
+          "BASELINE_SEATED_INK": BASELINE_SEATED_INK | DESCENDING_INK},
+         lambda: ink_holds("Dg", 61.0)),
+        ("unmeasured characters read as baseline-seated",
+         {"BASELINE_SEATED_INK": BASELINE_SEATED_INK | {"\uf0a7"}},
+         lambda: ink_holds("\uf0a7", 61.0)),
+        ("symbol-encoded faces read through the character table",
+         {"SYMBOL_ENCODED_INK_FAMILIES": frozenset()},
+         lambda: ink_holds("DN", 61.0, family="Wingdings")),
+        ("rotated runs seated on a horizontal baseline",
+         {"glyph_ink_bottom": _ink_bottom_without_rotation_guard},
+         lambda: ink_holds("DN", 61.0, rotated=True)),
+        ("baseline overshoot removed",
+         {"GLYPH_BASELINE_OVERSHOOT_EM": 0.0},
+         lambda: ink_holds("o", 60.1)),
+        ("italic f read as upright",
+         {"ITALIC_ONLY_DESCENDING_INK": frozenset()},
+         lambda: ink_holds("f", 61.0, italic=True)),
+    )
+    module = globals()
+    for label, patches, probe in ink_mutations:
+        restore = {name: module[name] for name in patches}
+        module.update(patches)
+        try:
+            weakened = probe()
+        finally:
+            module.update(restore)
+        check(f"weakening the ink band ({label}) is caught by the suite",
+              weakened is True)
+    check("the ink band is restored after the mutation sweep",
+          ink_holds("Dg", 61.0) is False
+          and ink_holds("DN", 61.0) is True)
+
     # The live page's last cell is immediately followed by inert band template
     # markup. An input inside that template must not be attributed to the cell.
     template_html = (
@@ -11148,6 +11421,52 @@ def self_test() -> int:
                            "origin_x": 0.0,
                            "char_origin_offsets_pt": [0.0, 3.0, 6.0],
                            "char_widths_pt": [3.0, 3.0, 3.0]})) == 2)
+
+    # The ink band. A run of "Dg" set 10pt on a baseline at y=100 in a face
+    # whose ascender is 0.9 and descender -0.2: the line box is 91..102, the
+    # 'D' stops on the baseline plus the measured overshoot, and the 'g'
+    # keeps the whole line box because its ink really does go there.
+    def ink_run(text: str, **over: Any) -> dict:
+        offsets = [3.0 * i for i in range(len(text))]
+        run = {
+            "text": text, "family": "Arial", "size_pt": 10.0,
+            "x0": 0.0, "y0": 91.0, "x1": 3.0 * len(text), "y1": 102.0,
+            "origin_x": 0.0, "baseline_y": 100.0,
+            "ascender": 0.9, "descender": -0.2, "rotated": False,
+            "bold": False, "italic": False,
+            "char_origin_offsets_pt": offsets,
+            "char_widths_pt": [3.0] * len(text),
+        }
+        run.update(over)
+        return run
+
+    seated = 100.0 + GLYPH_BASELINE_OVERSHOOT_EM * 10.0
+    mixed = glyph_boxes(ink_run("Dg"))
+    check("a baseline-seated glyph's ink stops at the baseline, not the descent",
+          len(mixed) == 2 and abs(mixed[0][3] - seated) < 1e-9)
+    check("a descending glyph in the same run keeps the whole line box",
+          len(mixed) == 2 and mixed[1][3] == 102.0)
+    check("the ink band never rises above the run's own ascent line",
+          all(box[1] == 91.0 for box in mixed))
+    check("a character with no measured ink depth keeps the line box",
+          glyph_boxes(ink_run("\uf0a7"))[0][3] == 102.0
+          and glyph_boxes(ink_run("\ufffd"))[0][3] == 102.0)
+    check("a symbol-encoded face cannot be read through a character table",
+          glyph_boxes(ink_run("D", family="Wingdings"))[0][3] == 102.0)
+    check("a rotated run has no horizontal baseline to seat ink on",
+          glyph_boxes(ink_run("D", rotated=True))[0][3] == 102.0)
+    check("a run without a baseline or size falls back to the line box",
+          glyph_boxes(ink_run("D", baseline_y=None))[0][3] == 102.0
+          and glyph_boxes(ink_run("D", size_pt=0.0))[0][3] == 102.0)
+    check("f descends in an italic face and not in an upright one",
+          glyph_boxes(ink_run("f"))[0][3] == seated
+          and glyph_boxes(ink_run("f", italic=True))[0][3] == 102.0)
+    check("a baseline overshoot is carried, not rounded away",
+          GLYPH_BASELINE_OVERSHOOT_EM * 10.0 > OVERLAP_EPS_PT)
+    check("every character measured as baseline-seated is measured only once",
+          not (DESCENDING_INK & BASELINE_SEATED_INK)
+          and ITALIC_ONLY_DESCENDING_INK <= BASELINE_SEATED_INK
+          and not (ITALIC_ONLY_DESCENDING_INK & DESCENDING_INK))
     check("an upright placement needs no SVG transform",
           transform_signature((10.0, 0.0, 0.0, 10.0, 0.0, 0.0)) == svg_signature(None))
     check("a y-flipped placement needs a negative y scale",
@@ -11531,6 +11850,74 @@ def self_test() -> int:
             and fixture[3] is not None
             and phrase in fixture[3],
         )
+
+    # The third retained shape: a comb the cell's own printed text refutes.
+    # It is admitted through the SAME identity branch as the no-band shape, so
+    # both directions are asserted here -- an unrecognised reason code fails
+    # the whole form's registry rather than its own record, which is why the
+    # tuple has to be named, and an identity mapping is what it has to be.
+    refuted_registry = owner_registry_fixture(
+        layout_mutator=corrupt_retained(
+            "reason_codes",
+            ["emission-suppressed-caption-block-not-character-cells"]))
+    check(
+        "a refuted caption block is a retained shape the registry knows",
+        refuted_registry[2] is not None
+        and refuted_registry[0].binding_error is None,
+    )
+
+    def corrupt_refuted(field: str, value: Any) -> Any:
+        def mutate(layout_fixture: dict[str, Any]) -> None:
+            append_valid_retained(layout_fixture)
+            subject = layout_fixture["pages"][0]["comb_subjects"][-1]
+            subject["reason_codes"] = [
+                "emission-suppressed-caption-block-not-character-cells"]
+            subject[field] = value
+        return mutate
+
+    def refuted_mapped_elsewhere(layout_fixture: dict[str, Any]) -> None:
+        """A refuted subject mapped onto a cell that is not its own.
+
+        Both halves of the mapping move together, onto the fixture's other
+        cell, so the pair stays internally consistent and the record reaches
+        the identity branch instead of failing the reverse-mapping check
+        first. That is what makes this a test OF the identity branch.
+        """
+        append_valid_retained(layout_fixture)
+        page = layout_fixture["pages"][0]
+        other = page["cells"][0]
+        subject = page["comb_subjects"][-1]
+        subject["reason_codes"] = [
+            "emission-suppressed-caption-block-not-character-cells"]
+        subject["mapped_partition_cell_ids"] = [other["id"]]
+        subject["mapped_partition_subject_keys"] = [other["subject_key"]]
+
+    refuted_corruptions = (
+        (
+            "identity mapping",
+            owner_registry_fixture(layout_mutator=refuted_mapped_elsewhere),
+            "identity mapping is stale",
+        ),
+        (
+            "suppression evidence",
+            owner_registry_fixture(layout_mutator=corrupt_refuted(
+                "emission", "emitted")),
+            "suppression/blocking/transition",
+        ),
+    )
+    for label, fixture, phrase in refuted_corruptions:
+        check(
+            f"a refuted caption block with a broken {label} is rejected",
+            fixture[2] is None
+            and fixture[3] is not None
+            and phrase in fixture[3],
+        )
+    check(
+        "an unnamed retained reason code fails the registry, never passes it",
+        owner_registry_fixture(layout_mutator=corrupt_retained(
+            "reason_codes", ["emission-suppressed-invented"]))[3]
+        is not None,
+    )
 
     def append_noncontiguous_page(layout_fixture: dict[str, Any]) -> None:
         append_valid_retained(layout_fixture)
