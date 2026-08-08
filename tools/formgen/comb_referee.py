@@ -625,6 +625,14 @@ REVIEWED_2551Q_EXPLICIT_COMPARTMENTS = {
 # independently tunable answer rather than an adjudicator.
 POSITION_TOL_PT = 0.25
 
+# lattice.py publishes every layout coordinate through `lattice.q`, which rounds
+# to `lattice.QUANT` = 2 decimal places.  A source measurement is compared with a
+# published one at exactly that precision: anything finer would only measure
+# Poppler's own coordinate quantum, and anything coarser would let two distinct
+# printed weights read as one -- this corpus draws walls at 0.44pt AND 0.45pt,
+# and at 0.75pt AND 0.76pt, so even POSITION_TOL_PT would conflate them.
+LAYOUT_QUANT_PLACES = 2
+
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
 _TRANSFORM_RE = re.compile(r"([A-Za-z]+)\s*\(([^)]*)\)")
 _PATH_TOKEN_RE = re.compile(rf"[A-Za-z]|{_NUMBER}")
@@ -3570,9 +3578,23 @@ def relocated_cells(data: dict[str, Any]) -> set[str]:
 
 
 def emitted_geometry_contract(
-        layout: dict[str, Any], guide: dict[str, Any]
-        ) -> dict[str, dict[str, Any]]:
-    """Build exact main-form comb geometry, including guide cut straddlers."""
+        layout: dict[str, Any], guide: dict[str, Any],
+        pages: dict[int, SvgPage],
+        ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Build exact main-form comb geometry, including guide cut straddlers.
+
+    The VERTICAL extent of a slot is the comb's WRITING SURFACE
+    (`writing_y0`/`writing_y1`), never its `y0`/`y1`.  Those two keys are the
+    band the source's divider TICKS span -- typically a ~2.9pt stub at the foot
+    of a ~17pt cell -- and `lattice.comb_on_writing_surface` says so at its own
+    declaration.  Expecting the tick band made `layout_binding_valid` false on
+    every emitting comb in the corpus, which forced all 4,550 of them to
+    `stale-generation` and published 4,583 "mismatches" that did not exist.
+
+    Alongside the contract this returns, per cell, the source's own verdict on
+    that writing band: the vertical number is otherwise one the lattice asserts
+    freely, whereas the horizontal one is bound to Poppler's `source_divider_x`.
+    """
     relocated = relocated_cells(guide)
     clipped_form_boxes: dict[str, dict[str, Any]] = {}
     for region in guide.get("inline") or ():
@@ -3590,6 +3612,7 @@ def emitted_geometry_contract(
             clipped_form_boxes[cell_id] = form_box
 
     result: dict[str, dict[str, Any]] = {}
+    corroborations: dict[str, dict[str, Any]] = {}
     for page in layout.get("pages") or ():
         page_index = int(page["index"])
         for cell in page.get("cells") or ():
@@ -3623,8 +3646,10 @@ def emitted_geometry_contract(
                     for name in ("x0", "y0", "x1", "y1")
                 }
                 slot_x = [float(value) for value in comb["slot_x"]]
-                comb_y0 = float(comb["y0"])
-                comb_y1 = float(comb["y1"])
+                writing_y0 = finite_number(
+                    comb["writing_y0"], f"{cell_id} comb writing_y0")
+                writing_y1 = finite_number(
+                    comb["writing_y1"], f"{cell_id} comb writing_y1")
                 count = int(comb["cells"])
             except (KeyError, TypeError, ValueError):
                 raise RefereeError(
@@ -3634,9 +3659,17 @@ def emitted_geometry_contract(
                            for left, right in zip(slot_x, slot_x[1:]))
                     or box_values["x1"] <= box_values["x0"]
                     or box_values["y1"] <= box_values["y0"]
-                    or comb_y1 <= comb_y0):
+                    or writing_y1 <= writing_y0
+                    or writing_y0 < full_box["y0"] - HTML_GEOMETRY_EPSILON_PT
+                    or writing_y1 > full_box["y1"] + HTML_GEOMETRY_EPSILON_PT):
                 raise RefereeError(
                     f"layout comb geometry is invalid: {cell_id}")
+            source_page = pages.get(page_index)
+            if source_page is None:
+                raise RefereeError(
+                    f"no source page raster to corroborate: {cell_id}")
+            corroborations[cell_id] = writing_band_corroboration(
+                full_box, cell.get("border"), comb, source_page)
             result[cell_id] = {
                 "page_index": page_index,
                 "left": box_values["x0"],
@@ -3647,15 +3680,15 @@ def emitted_geometry_contract(
                     {
                         "index": index,
                         "left": left - box_values["x0"],
-                        "top": comb_y0 - box_values["y0"],
+                        "top": writing_y0 - box_values["y0"],
                         "width": right - left,
-                        "height": comb_y1 - comb_y0,
+                        "height": writing_y1 - writing_y0,
                     }
                     for index, (left, right)
                     in enumerate(zip(slot_x, slot_x[1:]))
                 ],
             }
-    return result
+    return result, corroborations
 
 
 def exact_nonnegative_int(value: Any, label: str) -> int:
@@ -4656,6 +4689,209 @@ def near(value: float, target: float) -> bool:
     return abs(value - target) <= POSITION_TOL_PT
 
 
+def layout_quantized(value: float) -> float:
+    """Round to the precision every published layout coordinate carries."""
+    return round(float(value) + 0.0, LAYOUT_QUANT_PLACES)
+
+
+def final_paint_owner(paints: Sequence[Paint], x: float, y: float
+                      ) -> Paint | None:
+    """The paint that finally owns one point, by SVG document order."""
+    active = [paint for paint in paints if paint.covers(x, y)]
+    return max(
+        active,
+        key=lambda paint: (paint.order, paint.element, paint.kind),
+        default=None,
+    )
+
+
+def visible_vertical_runs(
+        paints: Sequence[Paint], x: float, y0: float, y1: float,
+        ) -> list[tuple[float, float, Paint]]:
+    """Each paint's FINALLY VISIBLE vertical extent on the ray at ``x``.
+
+    This is the vertical twin of `composited_segments`: partition at every
+    paint edge, take the last owner of each slab, and merge only slabs the
+    SAME paint owns.  Merging by tone instead would join two stacked rules --
+    1701's row boundaries really are two abutting 0.48pt fills, one per row --
+    into a single 0.96pt wall and mis-measure both cells that share it.
+    """
+    local = [
+        paint for paint in paints
+        if paint.x0 <= x <= paint.x1 and paint.y1 > y0 and paint.y0 < y1
+    ]
+    edges = {y0, y1}
+    for paint in local:
+        for value in (paint.y0, paint.y1):
+            if y0 < value < y1:
+                edges.add(value)
+    runs: list[tuple[float, float, Paint]] = []
+    ordered = sorted(edges)
+    for top, bottom in zip(ordered, ordered[1:]):
+        if bottom - top <= 1e-9:
+            continue
+        owner = final_paint_owner(local, x, (top + bottom) / 2)
+        if owner is None:
+            continue
+        if (runs and runs[-1][2] is owner
+                and abs(runs[-1][1] - top) <= 1e-9):
+            runs[-1] = (runs[-1][0], bottom, owner)
+        else:
+            runs.append((top, bottom, owner))
+    return runs
+
+
+def source_wall_thickness(
+        paints: Sequence[Paint], box: dict[str, float], tone: float,
+        edge: str, probes: Sequence[float],
+        ) -> tuple[float | None, str | None]:
+    """Measure, from Poppler alone, the wall the source paints at one cell edge.
+
+    The measurement is taken on a vertical ray through the middle of EVERY
+    compartment, because that is the paper the writing surface claims: a wall
+    that is present over some compartments and absent or lighter over others
+    does not establish one inset, and this returns no measurement rather than
+    an average.  Rays, not a full-width span test, because Poppler splits a
+    single printed rule into one fill per crossing vertical and leaves
+    one-quantum seams between them (1701 p1c37's top rule is 44 fills with
+    0.0039pt gaps); a span test reads those seams as paper.
+    """
+    y0, y1 = box["y0"], box["y1"]
+    height = y1 - y0
+    window_y0, window_y1 = y0 - height, y1 + height
+    anchor = y0 if edge == "top" else y1
+    centre = (y0 + y1) / 2
+
+    def separation(run: tuple[float, float]) -> float:
+        if run[0] <= anchor <= run[1]:
+            return 0.0
+        return min(abs(run[0] - anchor), abs(run[1] - anchor))
+
+    thicknesses: set[float] = set()
+    for x in probes:
+        candidates: list[tuple[float, float]] = []
+        for top, bottom, owner in visible_vertical_runs(
+                paints, x, window_y0, window_y1):
+            if owner.clipped or abs(owner.tone - tone) > 1e-8:
+                continue
+            if not (bottom > y0 - POSITION_TOL_PT
+                    and top < y1 + POSITION_TOL_PT):
+                continue
+            midpoint = (top + bottom) / 2
+            if edge == "top":
+                if midpoint >= centre:
+                    continue
+            elif midpoint <= centre:
+                continue
+            candidates.append((top, bottom))
+        if not candidates:
+            return None, (
+                f"the source paints no {edge} wall of the declared tone over "
+                "every compartment")
+        nearest = min(candidates, key=separation)
+        thickness = layout_quantized(nearest[1] - nearest[0])
+        if any(
+            abs(separation(run) - separation(nearest)) <= 1e-9
+            and layout_quantized(run[1] - run[0]) != thickness
+            for run in candidates
+        ):
+            return None, (
+                f"two source {edge} walls of different weight are equally "
+                "near the cell edge")
+        if (nearest[0] <= window_y0 + 1e-9
+                or nearest[1] >= window_y1 - 1e-9):
+            return None, (
+                f"the source {edge} wall is not bounded inside the cell's own "
+                "neighbourhood")
+        thicknesses.add(thickness)
+    if len(thicknesses) != 1:
+        return None, (
+            f"the source {edge} wall is not one weight across the "
+            "compartments: "
+            + ", ".join(f"{value:g}pt" for value in sorted(thicknesses)))
+    return thicknesses.pop(), None
+
+
+def writing_band_corroboration(
+        box: dict[str, float], border: Any, comb: dict[str, Any],
+        page: SvgPage,
+        ) -> dict[str, Any]:
+    """Re-derive the comb's writing surface from the source, then compare.
+
+    `slot_x` is corroborated horizontally against Poppler's own
+    `source_divider_x`; without this the VERTICAL extent of every emitted slot
+    would be a number the lattice asserts and nobody checks.  The relation the
+    lattice publishes is `emit.field_box`'s: the writing surface is the cell's
+    printed rectangle inset by its own horizontal wall weights.  So the referee
+    measures those two weights itself, from the pinned PDF's vector output,
+    insets the same rectangle, and demands the published band back to the
+    precision the layout is written at.
+
+    The declared border TONE selects which ink to measure; every number that
+    reaches the verdict is Poppler's.  Selecting by tone is not a courtesy to
+    the producer: many official "rules" are near-invisible grey decoration, and
+    an ink-agnostic search would measure a grey band where the contract claims
+    a black wall (2550M's rows sit inside a 0.7529 band) and silently confirm
+    an inset derived from something else.
+    """
+    slot_x = [float(value) for value in comb["slot_x"]]
+    probes = [
+        (left + right) / 2 for left, right in zip(slot_x, slot_x[1:])
+    ]
+    walls: dict[str, float] = {}
+    for edge in ("top", "bottom"):
+        record = border.get(edge) if isinstance(border, dict) else None
+        tone = record.get("gray") if isinstance(record, dict) else None
+        if (isinstance(tone, bool) or not isinstance(tone, (int, float))
+                or not math.isfinite(float(tone))):
+            return {
+                "status": "uncorroborated",
+                "reason": (
+                    f"the layout declares no {edge} border tone for the "
+                    "source measurement to select"),
+            }
+        thickness, reason = source_wall_thickness(
+            page.paints, box, float(tone), edge, probes)
+        if thickness is None:
+            assert reason is not None
+            return {"status": "uncorroborated", "reason": reason}
+        walls[edge] = thickness
+    source_y0 = layout_quantized(box["y0"] + walls["top"])
+    source_y1 = layout_quantized(box["y1"] - walls["bottom"])
+    evidence = {
+        "source_top_wall_pt": walls["top"],
+        "source_bottom_wall_pt": walls["bottom"],
+        "source_writing_y0": source_y0,
+        "source_writing_y1": source_y1,
+        "layout_writing_y0": float(comb["writing_y0"]),
+        "layout_writing_y1": float(comb["writing_y1"]),
+    }
+    if source_y1 - source_y0 <= 0:
+        return {
+            "status": "uncorroborated",
+            "reason": "the source walls leave the cell no writing surface",
+            **evidence,
+        }
+    if (abs(source_y0 - evidence["layout_writing_y0"]) > 1e-9
+            or abs(source_y1 - evidence["layout_writing_y1"]) > 1e-9):
+        return {
+            "status": "uncorroborated",
+            "reason": (
+                "the source walls inset this cell to "
+                f"{source_y0:g}..{source_y1:g}, not the published writing "
+                f"band {evidence['layout_writing_y0']:g}.."
+                f"{evidence['layout_writing_y1']:g}"),
+            **evidence,
+        }
+    return {
+        "status": "corroborated",
+        "reason": (
+            "the source insets the cell by its own painted walls to the "
+            "published writing band"),
+        **evidence,
+    }
+
+
 def classify_band(
         cell: dict[str, Any],
         page: SvgPage,
@@ -4784,15 +5020,7 @@ def classify_band(
     # This distinguishes a genuinely irregular enclosed comb from two comb runs
     # that lattice.py accidentally joined across a label or gutter.
     def final_owner(x: float, y: float) -> Paint | None:
-        active = [
-            paint for paint in page.paints
-            if paint.x0 <= x <= paint.x1 and paint.y0 <= y <= paint.y1
-        ]
-        return max(
-            active,
-            key=lambda paint: (paint.order, paint.element, paint.kind),
-            default=None,
-        )
+        return final_paint_owner(page.paints, x, y)
 
     def final_target_spans_horizontal(y: float) -> bool:
         endpoints = {x0, x1}
@@ -8467,7 +8695,36 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         raise RefereeError(
             f"{slug}: source PDF provenance contract is incomplete")
 
-    emission_contract = emitted_geometry_contract(layout, guide)
+    # Every page is rasterised once, up front, because the emission contract
+    # now has to be corroborated against the same source the subjects are
+    # measured on.  Rendering twice would double the corpus cost and could
+    # answer two questions from two different rasters.
+    page_meta: list[dict[str, Any]] = []
+    svg_pages: dict[int, SvgPage] = {}
+    with tempfile.TemporaryDirectory(prefix=f"comb-referee-{slug}-") as temp:
+        directory = pathlib.Path(temp)
+        pdf_snapshot = directory / "source.pdf"
+        pdf_snapshot.write_bytes(pdf_bytes)
+        for page in sorted(layout["pages"], key=lambda item: int(item["index"])):
+            page_index = int(page["index"])
+            svg_path = render_svg_page(
+                poppler["binary_path"], pdf_snapshot, page_index, directory)
+            svg = parse_svg(svg_path)
+            if (abs(svg.width - float(page["width_pt"])) > POSITION_TOL_PT
+                    or abs(svg.height - float(page["height_pt"]))
+                    > POSITION_TOL_PT):
+                raise RefereeError(
+                    f"{slug} page {page_index}: SVG/page dimensions disagree")
+            page_meta.append({
+                "page": page_index,
+                "svg_sha256": svg.sha256,
+                "vector_paints": len(svg.paints),
+                "unsupported_regions": len(svg.unsupported),
+            })
+            svg_pages[page_index] = svg
+
+    emission_contract, band_corroborations = emitted_geometry_contract(
+        layout, guide, svg_pages)
     if set(emission_contract) != set(ledger["active_cell_ids"]):
         raise RefereeError(
             f"{slug}: guide/layout emission contract does not exactly bind "
@@ -8532,7 +8789,6 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     audit["reason"] = (
         "complete" if audit["complete"] else "; ".join(audit_reasons))
     cells: list[dict[str, Any]] = []
-    page_meta: list[dict[str, Any]] = []
     # Every retained suppression the ledger admitted on a re-derivable reason
     # is discharged here, against Poppler, and the two inventories are compared
     # afterwards.  A corroboration that did not run cannot be mistaken for one
@@ -8542,64 +8798,63 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
     for subject in ledger["subjects"]:
         subjects_by_page.setdefault(int(subject["page"]), []).append(subject)
 
-    with tempfile.TemporaryDirectory(prefix=f"comb-referee-{slug}-") as temp:
-        directory = pathlib.Path(temp)
-        pdf_snapshot = directory / "source.pdf"
-        pdf_snapshot.write_bytes(pdf_bytes)
-        for page in sorted(layout["pages"], key=lambda item: int(item["index"])):
-            page_index = int(page["index"])
-            svg_path = render_svg_page(
-                poppler["binary_path"], pdf_snapshot, page_index, directory)
-            svg = parse_svg(svg_path)
-            if (abs(svg.width - float(page["width_pt"])) > POSITION_TOL_PT
-                    or abs(svg.height - float(page["height_pt"])) > POSITION_TOL_PT):
-                raise RefereeError(
-                    f"{slug} page {page_index}: SVG/page dimensions disagree")
-            page_meta.append({
+    for page in sorted(layout["pages"], key=lambda item: int(item["index"])):
+        page_index = int(page["index"])
+        svg = svg_pages[page_index]
+        for subject in subjects_by_page.get(page_index, ()):
+            source_cell = subject["source_cell"]
+            result = classify_band(
+                source_cell, svg, ledger_state=subject["state"])
+            if subject["source_suppression_criterion"] is not None:
+                corroboration = retained_suppression_corroboration(
+                    subject, result, svg,
+                    f"{slug} page {page_index} "
+                    f"{subject['legacy_cell_id']}")
+                suppression_corroborations[subject["legacy_cell_id"]] = (
+                    corroboration["criterion"])
+            report_cell_id = (
+                subject["cell_id"] or subject["legacy_cell_id"])
+            # An emitted subject whose writing band the source refuses to
+            # confirm cannot be adjudicated from that source: the vertical
+            # geometry every one of its slots is bound to is unproven.  That
+            # is published as the referee's own UNEVALUABLE verdict -- counted
+            # in `combs_source_unevaluable` and in the unevaluable comparison
+            # bucket -- and never silently dropped.
+            band = band_corroborations.get(report_cell_id)
+            if band is not None and band["status"] != "corroborated":
+                result = {
+                    "status": "unevaluable",
+                    "reason": (
+                        "the source does not corroborate the comb writing "
+                        f"band: {band['reason']}"),
+                    "writing_band_corroboration": band,
+                }
+            emitted = slots.get(report_cell_id)
+            audit_offender = audit["offenders"].get(
+                subject["legacy_cell_id"])
+            audit_printed, audit_relation = audit_relation_for_subject(
+                subject, bool(audit["complete"]), audit_offender)
+            cells.append({
+                "cell": report_cell_id,
+                "subject_key": subject["subject_key"],
+                "legacy_cell_id": subject["legacy_cell_id"],
+                "cell_id": subject["cell_id"],
+                "ledger_state": subject["state"],
+                "ledger_blocks_gate": subject["blocks_gate"],
+                "ledger_reason_codes": subject["reason_codes"],
+                "ledger_topology_sha256": subject["topology"]["sha256"],
+                "ledger_evidence": subject["ledger"],
                 "page": page_index,
-                "svg_sha256": svg.sha256,
-                "vector_paints": len(svg.paints),
-                "unsupported_regions": len(svg.unsupported),
+                "bbox": list(subject["legacy_bbox"]),
+                "latticed": int(subject["topology"]["cells"]),
+                "lattice_divider_x": subject["topology"]["divider_x"],
+                "emitted": emitted["count"] if emitted else None,
+                "emitted_indexes_valid": bool(emitted and emitted["valid"]),
+                "emitted_evidence": emitted,
+                "audit_printed": audit_printed,
+                "audit_relation": audit_relation,
+                "referee": result,
             })
-            for subject in subjects_by_page.get(page_index, ()):
-                source_cell = subject["source_cell"]
-                result = classify_band(
-                    source_cell, svg, ledger_state=subject["state"])
-                if subject["source_suppression_criterion"] is not None:
-                    corroboration = retained_suppression_corroboration(
-                        subject, result, svg,
-                        f"{slug} page {page_index} "
-                        f"{subject['legacy_cell_id']}")
-                    suppression_corroborations[subject["legacy_cell_id"]] = (
-                        corroboration["criterion"])
-                report_cell_id = (
-                    subject["cell_id"] or subject["legacy_cell_id"])
-                emitted = slots.get(report_cell_id)
-                audit_offender = audit["offenders"].get(
-                    subject["legacy_cell_id"])
-                audit_printed, audit_relation = audit_relation_for_subject(
-                    subject, bool(audit["complete"]), audit_offender)
-                cells.append({
-                    "cell": report_cell_id,
-                    "subject_key": subject["subject_key"],
-                    "legacy_cell_id": subject["legacy_cell_id"],
-                    "cell_id": subject["cell_id"],
-                    "ledger_state": subject["state"],
-                    "ledger_blocks_gate": subject["blocks_gate"],
-                    "ledger_reason_codes": subject["reason_codes"],
-                    "ledger_topology_sha256": subject["topology"]["sha256"],
-                    "ledger_evidence": subject["ledger"],
-                    "page": page_index,
-                    "bbox": list(subject["legacy_bbox"]),
-                    "latticed": int(subject["topology"]["cells"]),
-                    "lattice_divider_x": subject["topology"]["divider_x"],
-                    "emitted": emitted["count"] if emitted else None,
-                    "emitted_indexes_valid": bool(emitted and emitted["valid"]),
-                    "emitted_evidence": emitted,
-                    "audit_printed": audit_printed,
-                    "audit_relation": audit_relation,
-                    "referee": result,
-                })
 
     cell_ids = {cell["cell"] for cell in cells}
     if len(cell_ids) != len(cells) or len(cells) != expected_combs:
@@ -10131,6 +10386,156 @@ def self_test() -> int:
 
     no_anchor = {**cell, "comb": {**cell["comb"], "cells": 1, "divider_x": []}}
     assert classify_band(no_anchor, page)["status"] == "unevaluable"
+
+    # ---- emitted_geometry_contract binds the WRITING band, and the source
+    # ---- has to confirm it.  Every fixture below is layout-SHAPED and reaches
+    # ---- the contract through the layout's own field names: the defect this
+    # ---- covers survived for the whole corpus precisely because the older
+    # ---- coverage hand-authored the expectation dict and so never named
+    # ---- `comb["writing_y0"]` at all.
+    def band_wall(y0: float, y1: float, order: int, element: str,
+                  x0: float = 0.0, x1: float = 40.0,
+                  tone: float = 0.0, clipped: bool = False) -> Paint:
+        return Paint(x0, y0, x1, y1, tone, order, "fill", element, clipped)
+
+    def band_cell(**comb_overrides: Any) -> dict[str, Any]:
+        comb = {
+            "cells": 2, "slot_x": [0.0, 20.0, 40.0], "divider_x": [20.0],
+            "pitch_pt": 20.0, "divider_gray": 0.0,
+            # The tick band: a short stub at the FOOT of the cell, which is
+            # what the stale contract used and what a typed character must
+            # never be placed in.
+            "y0": 8.0, "y1": 10.0,
+            "writing_y0": 1.0, "writing_y1": 9.0,
+        }
+        comb.update(comb_overrides)
+        for key in [name for name, value in comb.items() if value is None]:
+            del comb[key]
+        return {
+            "id": "p1c1", "x0": 0.0, "y0": 0.0, "x1": 40.0, "y1": 10.0,
+            "border": {
+                "top": {"thickness_pt": 1.0, "gray": 0.0},
+                "bottom": {"thickness_pt": 1.0, "gray": 0.0},
+            },
+            "comb": comb,
+        }
+
+    def band_layout(cell_record: dict[str, Any]) -> dict[str, Any]:
+        return {"pages": [{"index": 1, "cells": [cell_record]}]}
+
+    band_top_wall = band_wall(0.0, 1.0, 0, "top-wall")
+    band_bottom_wall = band_wall(9.0, 10.0, 1, "bottom-wall")
+
+    def band_page(*paints: Paint) -> SvgPage:
+        return SvgPage(100, 100, list(paints), [], "band")
+
+    band_source = band_page(band_top_wall, band_bottom_wall)
+    band_contract, band_corroboration = emitted_geometry_contract(
+        band_layout(band_cell()), {}, {1: band_source})
+    assert band_contract["p1c1"]["slots"] == [
+        {"index": 0, "left": 0.0, "top": 1.0, "width": 20.0, "height": 8.0},
+        {"index": 1, "left": 20.0, "top": 1.0, "width": 20.0, "height": 8.0},
+    ], band_contract
+    assert band_corroboration["p1c1"]["status"] == "corroborated"
+    assert band_corroboration["p1c1"]["source_top_wall_pt"] == 1.0
+    assert band_corroboration["p1c1"]["source_bottom_wall_pt"] == 1.0
+
+    def band_verdict(cell_record: dict[str, Any],
+                     source: SvgPage = band_source) -> dict[str, Any]:
+        _contract, corroborations = emitted_geometry_contract(
+            band_layout(cell_record), {}, {1: source})
+        return corroborations["p1c1"]
+
+    def band_refuses(cell_record: dict[str, Any], fragment: str,
+                     source: SvgPage = band_source) -> None:
+        verdict = band_verdict(cell_record, source)
+        assert verdict["status"] == "uncorroborated", verdict
+        assert fragment in verdict["reason"], verdict["reason"]
+
+    def band_raises(cell_record: dict[str, Any], fragment: str) -> None:
+        try:
+            emitted_geometry_contract(
+                band_layout(cell_record), {}, {1: band_source})
+        except RefereeError as error:
+            assert fragment in str(error), str(error)
+        else:
+            raise AssertionError(f"contract accepted a layout it must reject: "
+                                 f"{fragment}")
+
+    # Mutation: the tick band substituted for the writing band.  The contract
+    # follows what the layout publishes, so only the source can catch this.
+    band_refuses(
+        band_cell(writing_y0=8.0, writing_y1=10.0),
+        "the source walls inset this cell to 1..9")
+    # Mutation: the writing band is missing.  A missing field is an ERROR.
+    band_raises(band_cell(writing_y0=None), "layout comb geometry is incomplete")
+    band_raises(band_cell(writing_y1=None), "layout comb geometry is incomplete")
+    band_raises(band_cell(writing_y0=float("nan")), "is not finite")
+    band_raises(band_cell(writing_y0="1.0"), "is not numeric")
+    # Mutation: the writing band leaves the cell box.
+    band_raises(band_cell(writing_y1=10.5), "layout comb geometry is invalid")
+    band_raises(band_cell(writing_y0=-0.5), "layout comb geometry is invalid")
+    # Mutation: the writing band is degenerate.
+    band_raises(band_cell(writing_y0=5.0, writing_y1=5.0),
+                "layout comb geometry is invalid")
+    band_raises(band_cell(writing_y0=9.0, writing_y1=1.0),
+                "layout comb geometry is invalid")
+    # Mutation: the inset matches no painted rule -- the wall is absent, is a
+    # different weight, or is painted in a tone the contract does not claim.
+    band_refuses(band_cell(), "paints no top wall", band_page(band_bottom_wall))
+    band_refuses(
+        band_cell(), "paints no bottom wall", band_page(band_top_wall))
+    band_refuses(
+        band_cell(), "the source walls inset this cell to 2..9",
+        band_page(band_wall(0.0, 2.0, 0, "heavy-top"), band_bottom_wall))
+    band_refuses(
+        band_cell(), "paints no top wall",
+        band_page(band_wall(0.0, 1.0, 0, "grey-top", tone=0.85099792),
+                  band_bottom_wall))
+    band_refuses(
+        band_cell(), "paints no top wall",
+        band_page(band_wall(0.0, 1.0, 0, "clipped-top", clipped=True),
+                  band_bottom_wall))
+    # Mutation: the wall is not one weight over every compartment.  An average
+    # is not a measurement.
+    band_refuses(
+        band_cell(), "not one weight across the compartments",
+        band_page(band_wall(0.0, 1.0, 0, "left-top", x1=20.0),
+                  band_wall(0.0, 0.5, 1, "right-top", x0=20.0),
+                  band_bottom_wall))
+    # Mutation: a later opaque paint eats half the wall.  The visible extent is
+    # the measurement, so the shortened wall must not confirm the band.
+    band_refuses(
+        band_cell(), "the source walls inset this cell to 0.5..9",
+        band_page(band_top_wall, band_bottom_wall,
+                  band_wall(0.0, 0.5, 2, "knockout", tone=1.0)))
+    # Mutation: two walls of different weight sit equally near the cell edge.
+    band_refuses(
+        band_cell(), "equally near the cell edge",
+        band_page(band_wall(-1.5, 0.0, 0, "outer-top"), band_top_wall,
+                  band_bottom_wall))
+    # Mutation: the wall runs past the neighbourhood the cell can vouch for.
+    band_refuses(
+        band_cell(), "not bounded inside the cell's own neighbourhood",
+        band_page(band_wall(-12.0, 1.0, 0, "unbounded-top"),
+                  band_bottom_wall))
+    # Mutation: the walls swallow the writing surface entirely.
+    band_refuses(
+        band_cell(writing_y0=5.0, writing_y1=5.01),
+        "leave the cell no writing surface",
+        band_page(band_wall(0.0, 5.0, 0, "fat-top"),
+                  band_wall(5.0, 10.0, 1, "fat-bottom")))
+    # Mutation: the border tone the measurement selects by is missing.
+    toneless = band_cell()
+    toneless["border"]["top"] = {"thickness_pt": 1.0}
+    band_refuses(toneless, "declares no top border tone")
+    # A source page that was never rastered is an error, not an empty pass.
+    try:
+        emitted_geometry_contract(band_layout(band_cell()), {}, {})
+    except RefereeError as error:
+        assert "no source page raster to corroborate" in str(error)
+    else:
+        raise AssertionError("the contract corroborated against no source")
 
     minimal_style = (
         "<style>"

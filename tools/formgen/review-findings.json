@@ -2516,6 +2516,45 @@
       "cause": null,
       "audit_blind": true,
       "resolution": null
+    },
+    {
+      "id": "F193",
+      "form": "*",
+      "page": 0,
+      "severity": "blocker",
+      "status": "fixed",
+      "what": "The comb referee and the gate BOTH derived a comb's expected emission band from the layout's comb.y0/comb.y1 -- the short guide tick the source paints at the cell's foot, typically 2.88pt tall -- while emit renders comb.writing_y0/writing_y1, the writing surface a typed character actually occupies. Every emitted comb therefore failed layout_binding_valid, so emitted_indexes_valid was False on all 4550 emitting subjects, every comparison was forced to stale-generation, and the gate reported '4583 independently derived source/layout/emission mismatch(es)' -- a count identical to the total subject census, with zero real mismatches behind it. The referee's emission binding had been structurally dead since lattice grew the writing-surface split.",
+      "where": "comb_referee.py emitted_geometry_contract (slot top/height); gate.py _emission_geometry_from_layout (band_top/band_bottom). 0605-1999 p1c3 is the reference case: cell box y 149.51..168.47, tick band 165.60..168.48 (2.88pt), writing band 150.26..167.72 (17.46pt); emission renders top 0.75 height 17.46, exactly the writing band.",
+      "evidence": "Measured on build/comb-referee.json before the fix: layout_binding_valid False on 4550/4550 emitting cells and the ONLY failing conjunct of slot_records' valid expression -- horizontal left/width matched layout slot_x to the digit on every cell. Recomputing the expectation from writing_y0/writing_y1 gave 4550 matches and 0 mismatches, with the fields present on 100% of comb records. Neither self-test named the field: comb_referee's hand-authored parser_expected never called emitted_geometry_contract, and gate.py had no test for _emission_geometry_from_layout at all, so the two producers agreed with each other while both were wrong.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": "Both producers repointed to writing_y0/writing_y1, read by subscript so a layout missing the band raises rather than passing. The referee additionally corroborates the band against Poppler instead of trusting it: on a vertical ray through every compartment it reconstructs each paint's finally-visible extent, takes the declared-tone run nearest the cell edge as the inset, requires all compartments to agree, and requires the quantised result to equal the published band exactly; every failure mode (no wall, ambiguous walls, non-uniform weight, unbounded run, no writing surface left, no declared tone, no rastered page) is a distinct counted state, never a pass. comb_referee gained 21 mutations, 21 caught; gate.py gained 4 assertions binding the field choice, verified by reverting the two lines in a scratch copy and observing all 4 fail. Verified on a full corpus run: 53/53 forms measured, forms_error 0, 4583/4583 combs, emitted_indexes_valid True on 4550, stale-generation 4550 -> 0, referee_layout_mismatches 0. Residual emission_layout_mismatches is 33 and cannot reach 0: those are exactly the retained_unresolved subjects, which publish emitted:null by design. Corroboration failures are recorded separately as F194 and F195."
+    },
+    {
+      "id": "F194",
+      "form": "1701ms-2024, 2316-2021, 1800-2018, 1604cf-2008, 1706-2018, 0605-1999",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "On 22 comb cells the source's own painted walls inset the cell to a band that differs from lattice's published writing_y0/writing_y1 by 0.01pt to 0.39pt, so the referee declines to corroborate the writing band and reports the subject source-unevaluable rather than measured. Sub-pixel at the 144 DPI reference (0.39pt = 0.78 device px), so nothing is visibly wrong; the defect is that lattice selects a different bounding rule than the one the source painted at that edge.",
+      "where": "1701ms-2024 p1c117/120/123/126/129/132/135 (7, delta 0.300 -- lattice declares 0.5pt row walls where Poppler paints 0.199pt); 2316-2021 p1c21/40/74/76/78/80 (6, delta 0.010 and 0.390); 1800-2018 p1c144/147/152/155/165 (5, delta 0.240); 1604cf-2008 p1c16/21 (2, delta 0.240 -- the cell box bottom sits 0.8pt below the painted rect, so lattice picks the next row's 0.96pt rule while the source paints the cell's own 0.72pt stroke); 1706-2018 p1c122 (1, delta 0.240); 0605-1999 p1c36 (1, delta 0.010 -- lattice says bottom.thickness_pt 0.76, Poppler paints exactly 0.75 at 299.625..300.375).",
+      "evidence": "Measured on the post-fix referee report over all 53 forms: combs_source_unevaluable 22 -> 48, the +26 being these 22 plus the 4 of F195. Max delta 0.39pt. Revealed, not caused, by F193 -- the corroboration that finds them did not exist while the emission binding was dead.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F195",
+      "form": "1702mx-2018c-attachment",
+      "page": 1,
+      "severity": "minor",
+      "status": "open",
+      "what": "The source paints the shared row rule bounding these combs at two different weights across the compartments of one cell -- 0.4805pt over some, 0.2422pt over others -- so no single inset exists and no writing band can be derived from the walls at all. The referee reports no measurement rather than averaging the two, because an average would be an invention rather than a reading of the source.",
+      "where": "p1c72 and p1c74 share one boundary (reported as c72's bottom wall and c74's top wall); p1c76 and p1c78 share another. 4 cells, 2 physical rules.",
+      "evidence": "Measured on the post-fix referee report: reason 'the source <edge> wall is not one weight across the compartments: 0.24pt, 0.48pt'. Distinct from F194 -- there the referee derives a band and disagrees with lattice; here it can derive none. Needs a per-compartment writing band, or a reviewed rule for which weight bounds the cell; the schema currently carries one band per cell.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": null
     }
   ]
 }

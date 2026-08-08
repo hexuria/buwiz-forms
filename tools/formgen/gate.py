@@ -5524,8 +5524,13 @@ def _emission_geometry_from_layout(
     top = float(box["y0"])
     right = float(box["x1"])
     bottom = float(box["y1"])
-    band_top = float(comb["y0"])
-    band_bottom = float(comb["y1"])
+    # The writing surface, not the guide-tick band.  comb["y0"]/["y1"] is the
+    # short tick the source paints at the cell's foot (~2.88pt tall); a typed
+    # character goes on comb["writing_y0"]/["writing_y1"], which is what emit
+    # renders.  Subscript, not .get(): a layout missing the writing band is an
+    # error here, never a silently tolerated pass.
+    band_top = float(comb["writing_y0"])
+    band_bottom = float(comb["writing_y1"])
     return {
         "page_index": page_index,
         "left": left,
@@ -13094,6 +13099,45 @@ def self_test() -> int:
     sanitized = _sanitized_referee_environment(snapshot, environment_probe)
     if "PYTHONPATH" in sanitized or "PYTHONHOME" in sanitized:
         failures.append("comb referee environment must remove Python path/home")
+
+    # A comb's expected emission band is the WRITING surface, never the guide
+    # tick.  Both this gate and comb_referee.py re-derive that band from the
+    # same layout independently, and for a time both read comb["y0"]/["y1"] --
+    # the ~2.88pt tick the source paints at the cell's foot -- while emit
+    # rendered comb["writing_y0"]/["writing_y1"].  Nothing caught it: the two
+    # producers agreed with each other, and neither self-test named the field.
+    # The geometry below is 0605-1999 p1c3 verbatim, where the two bands are
+    # 15.34pt apart, so reading the wrong one cannot round to the right one.
+    band_cell = {
+        "comb": {
+            "slot_x": [82.31, 95.64, 109.08],
+            "y0": 165.6, "y1": 168.48,
+            "writing_y0": 150.26, "writing_y1": 167.72,
+        },
+    }
+    band_box = {"x0": 82.31, "y0": 149.51, "x1": 109.08, "y1": 168.47}
+    band_slots = _emission_geometry_from_layout(1, band_cell, band_box)["slots"]
+    if (len(band_slots) != 2
+            or any(abs(slot["top"] - 0.75) > 1e-9
+                   or abs(slot["height"] - 17.46) > 1e-9
+                   for slot in band_slots)):
+        failures.append(
+            "expected comb emission geometry must follow the writing band")
+    if any(abs(slot["top"] - 16.09) <= 1e-6
+           or abs(slot["height"] - 2.88) <= 1e-6 for slot in band_slots):
+        failures.append(
+            "expected comb emission geometry must not follow the guide tick")
+    for absent in ("writing_y0", "writing_y1"):
+        starved = {"comb": {
+            name: value for name, value in band_cell["comb"].items()
+            if name != absent}}
+        try:
+            _emission_geometry_from_layout(1, starved, band_box)
+        except KeyError:
+            pass
+        else:
+            failures.append(
+                f"a layout comb missing {absent} must fail closed")
 
     with tempfile.TemporaryDirectory(prefix="formgen-gate-self-test-") as tmp:
         root = pathlib.Path(tmp)
