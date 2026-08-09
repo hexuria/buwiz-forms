@@ -471,7 +471,311 @@ Condensed to what changes behaviour.
 
 ---
 
+## Implementation packages — r37+ (diagnosed 2026-08-10 at `5cd4017`, main agent)
+
+Written so an implementing agent can execute each package mechanically. Every
+fact below was **measured on this tree**, not assumed. Baseline: gate r36
+**10/13**; `inputs_over_printed_text` 6 forms/15; `comb_slots_match_printed`
+12 forms/25; `inputs_span_no_printed_divider` HOLDS 0; findings 18/133 open
+blocker+major; comb-referee 33 (the retained floor); determinism
+`56248287ed77`; 45,485 inputs; `EXPECTED_COMB_SUBJECTS` 4583.
+
+Execute **P1 → P3 → P2 → P4** (P3 before P2 is deliberate: P3 removes the
+underscore cells from P2's population). One package per round. Division of
+labour: the implementing agent does implementation + self-tests + scratch-copy
+mutations + regeneration + measurement + pins; the operator (main agent) does
+the ledger closures, the full gate, commit and push.
+
+Standing rules, restated because they outrank finishing: never widen a
+tolerance or weaken an assertion; never special-case on form code or slug; a
+check that cannot be evaluated is a FAILURE; `audit.py` is the judge for
+P1/P2 and is **locked** there; every census pin moves in the same commit with
+the cause named; `batch.py` does NOT refresh `build/audit.json` — run
+`audit.py --assertions-only` separately and measure on the tree actually
+written; report real numbers including the ones that got worse.
+
+### P1 — knockout-bitten walls (closes F097, blocker) — READY
+
+**Defect.** 2200C p1 item 1 "Date (MM/DD/YYYY)": only DD is typeable. The
+frame's rails carry a 1.56pt white bite mid-height; the cell walk leaks
+through the hole; MM and YYYY dissolve into blank slivers instead of comb
+cells (p1c122 leaks out to x=219.72).
+
+**Measured mechanism** (`build/ir/2200c-2018.ir.json` p1):
+
+- Solid full-height walls (th .48, y 115.22–132.14) at x0 = 59.52, 73.94,
+  102.98, 117.38. DD (p1c5) sits between two of them → comb 2, works.
+- The rails at x0 = 30.60 and 175.34 are each THREE collinear fragments:
+  black 115.22–124.94, **white (gray=1.0) 124.94–126.50**, black
+  126.50–132.14. Both black pieces still reach the frame's top and bottom
+  rules — the bite is strictly interior to one drawn stroke.
+- Short bottom ticks (th .24, y 125.42–132.14) at x0 = 45.12 (MM), 88.58
+  (DD), 132.02 / 146.54 / 160.94 (YYYY).
+
+**Corpus census of the signature** — a collinear same-axis knockout STRICTLY
+covering a sub-writable gap between two black fragments of one cluster —
+is exactly **8 bites in 2 forms**, nothing else in the corpus:
+
+- `2200c-2018` p1, axis v, gap y 124.94–126.50 (1.56pt) at line positions
+  x ≈ 30.84, 175.58, 189.98, 334.75, 450.55, 508.54, 537.46 (the row-wide
+  white band bites every rail it crosses on the top row).
+- `2000-dst-2018` p1, axis v, x ≈ 192.38, gap y 120.62–122.18 (1.56pt);
+  same three-fragment signature (v-rule x 192.14–192.62).
+
+**Three negative cases that MUST stay negative** (all measured; encode each
+as a fixture):
+
+1. **A perpendicular witness is a junction statement — never bridge.**
+   2200A p1 x0=580.66: black y 136.94–146.30 and 146.78–153.02, gap 0.48pt;
+   the only white is the PERPENDICULAR h-rule y0=146.30 (x 537.70–594.60).
+   The sheet severed the column from the rule above to make it a comb
+   divider (p1c24, divider_x [551.86, 566.38, 580.90]); bridging would split
+   the 4-slot comb. The same-axis + collinear condition excludes it.
+2. **A witness that abuts the gap does not cover it — never bridge.**
+   1800-2018 p1, line y≈805.46: black h-segments end exactly where
+   full-height columns cross (gaps 0.01–0.24pt at x 194.92, 290.33, 317.69,
+   345.07) and the white segments (y 805.54–805.78) also SKIP those ranges,
+   ENDING at the gap edge. With ±CLUSTER_TOL_PT slack a 0.24pt gap is
+   swallowed by a witness that merely touches it, so coverage must be
+   STRICT: `k[al0] <= a1 + 1e-6 and k[al1] >= b0 - 1e-6`. Same for
+   1604e-2018 p1 y≈383.6 (a 0.01pt thick/thin butt-joint notch).
+3. **A doorway is a real passage — never bridge.** Bound the gap by the
+   form's own `min_fillable_line_metrics(ir)["glyph_height_pt"]` (2.930pt on
+   the smallest form; both real bites are 1.56pt). Metrics absent → bound
+   0.0 → never bridge.
+
+**Change** (`tools/formgen/lattice.py` only):
+
+New pure helper near `build_lattice` (:1881):
+
+    def bridge_knockout_bites(lattice: Lattice,
+                              knockouts: Sequence[dict[str, Any]],
+                              axis: str, max_gap_pt: float) -> int
+
+- Returns the bridge count (tests and the probe use it); mutates
+  `lattice.spans` in place. `if max_gap_pt <= 0.0 or not knockouts: return 0`.
+- Along keys `("y0","y1") if axis == "v" else ("x0","x1")`.
+- Per line i: `local = [k for k in knockouts if abs(centre(k) -
+  lattice.positions[i]) <= CLUSTER_TOL_PT]`; need ≥2 spans and a local
+  witness.
+- Consecutive spans (…,a1),(b0,…), `gap = b0 - a1`: bridge iff
+  `0 < gap < max_gap_pt` and a local witness covers it STRICTLY (epsilon
+  1e-6 — see negative case 2). Merge intervals, count.
+- Do NOT compare witness thickness: `line_thickness_gray` reports the
+  page-wide cluster max (2000-DST's line reports 0.96 while its local
+  fragments are 0.48), so a thickness test would misfire.
+- Docstring carries the bite / junction / doorway trichotomy with the three
+  measured cases above, and why strictness and same-axis are load-bearing.
+
+Caller — `build_page`, immediately after the two `build_lattice` calls
+(:6220–6223), before `merge_grid` (:6234):
+
+    knockout_v = [r for r in page["rules"] if r.get("axis") == "v"
+                  and tone_role(r.get("gray")) == "knockout"]
+    knockout_h = [r for r in page["rules"] if r.get("axis") == "h"
+                  and tone_role(r.get("gray")) == "knockout"]
+    bite_bound = (0.0 if fillable_metrics is None
+                  else float(fillable_metrics["glyph_height_pt"]))
+    bridge_knockout_bites(xl, knockout_v, "v", bite_bound)
+    bridge_knockout_bites(yl, knockout_h, "h", bite_bound)
+
+Do NOT touch the raw/legacy lattices (:6044–6046): the legacy view keeps the
+old reading; the new comb subjects must register as NEW ACTIVE subjects
+through the existing ledger flow.
+
+**Fixtures + mutations** (in `self_test`, same style as the shading-seam
+block ~:6790): positive bridge (two collinear black v-fragments, 1.5pt gap,
+exact white fragment, bound 3.0 → count 1 and `covers()` true across the
+joint band); bare-paper gap → 0; the 2200A shape (perpendicular white only)
+→ 0; the 1800 shape (white abutting the gap edge) → 0; doorway (gap 5.0,
+bound 3.0) → 0; bound 0.0 → 0. Scratch-copy mutations, each tripping exactly
+its own check: strict→±CLUSTER_TOL_PT (abut check fires), drop the
+same-axis/collinear filter (perpendicular check fires), drop the size bound
+(doorway fires), bridge without witness (bare-paper fires).
+
+**Verify in this order — expected numbers are acceptance, deviations are
+STOP-and-report:**
+
+1. `python3 tools/formgen/lattice.py --self-test --ir
+   build/ir/2551q-2018.ir.json` → PASS.
+2. Probe (scratchpad script): monkey-wrap `bridge_knockout_bites` to record
+   counts, run the module's own page build over all 53 IRs → **v-bridges 8
+   (7 on 2200c-2018 p1, 1 on 2000-dst-2018 p1), h-bridges 0, all other
+   forms 0.**
+3. `python3 tools/formgen/batch.py --report build/batch-report.json`;
+   `git status` — shipped bytes may change ONLY for the two forms (plus
+   their provenance and forms/index.html). Any other bundle → STOP.
+4. Layout deltas, enumerated per cell in the report: 2200C p1 gains a
+   2-slot comb at x≈30.84–59.76 (divider ≈45.24) and a 4-slot comb at
+   x≈117.62–175.58 (dividers ≈132.14/146.66/161.06); the whole top row
+   re-forms and the page's cell ids renumber. 2000-DST p1: the wall at
+   x≈192.38 restores; the cell spanning it splits.
+5. Fresh judge: `audit.py --assertions-only` →
+   `comb_slots_match_printed` holds or improves from 12/25 and the two new
+   combs land in agreement (printed 2/4 = latticed = emitted); any NEW
+   offender is diagnosed in the report before commit.
+   `inputs_over_printed_text` ≤ 6/15; the two zero families stay 0.
+6. Census + pins, one commit: gate `EXPECTED_COMB_SUBJECTS` 4583→4585;
+   referee `EXPECTED_COMBS` 4583→4585, `EXPECTED_COMBS_BY_SLUG["2200c-2018"]`
+   +2; `EXPECTED_HTML_STRUCTURE_SHA256` recomputed for exactly the two
+   slugs; `LATTICE_PRODUCER_SHA256` re-pinned with a dated cause. If the
+   re-formed row creates combs beyond +2, list each with its ticks and move
+   the census by the true, named delta.
+7. Referee corpus run (CLI per gate `_comb_referee_command`): forms_error 0;
+   combs_found = new census; both new subjects `measured` (a
+   source-unevaluable landing is reported with its reason before shipping);
+   emission mismatches stay 33; `subjects_retained_unresolved` stays 33;
+   pending_transitions 0. A retained subject changing state → STOP.
+8. `guides.py --self-test` — if the per-page tables for 2200C p1 /
+   2000-DST p1 move, update those pins with the per-cell cause (precedent:
+   commit 9f76779).
+9. Input delta vs HEAD, counted the same way on both sides: expect +6 on
+   2200C (2+4), small ± on 2000-DST; report exact.
+10. Hand back to the operator: F097 closure text (mechanism, bridge
+    conditions, shipped slot counts, census moves, the three negative cases
+    proven by fixture), full gate (expect 10/13, findings 18→17), commit,
+    push.
+
+### P3 — ruled blanks, fixed upstream (closes F148, F149, F200) — before P2
+
+The reverted attempt (commit `5cd4017`, finding F200) proved the emit-side
+fix collides with `inputs_over_printed_text` while underscores are TEXT: an
+input on the ruled blank necessarily overlaps the run that draws it. Fix it
+upstream: `extract.py` reclassifies an underscore group as the RULE it
+typographically is. The blank becomes paper under a drawn rule; the lattice's
+new h-line at the blank's baseline splits the caption cell from the blank
+strip; the strip becomes an ordinary field cell and receives its input
+through the NORMAL flow. No assertion needs an exception anywhere.
+
+Prerequisites, in order, each answered in the report before any code:
+
+1. Confirm the assertion reads IR text_runs, not `page.get_texttrace()`:
+   `grep -n "inputs_over_printed_text" tools/formgen/audit.py`, read the
+   offender construction. If it is texttrace-based the upstream fix cannot
+   clear it — STOP; the only honest route is then a reviewed weakening of
+   the assertion, which is the user's decision.
+2. GROUP-based population census — this is exactly where the reverted
+   attempt went wrong: its validation counted whole-run underscores (34
+   cells) while its implementation matched groups inside mixed runs (+61
+   inputs). The census and the implementation MUST share one definition: a
+   group = ≥3 consecutive `_` glyphs within one run, split at any other
+   glyph. Publish groups / cells / forms / expected input delta. Known
+   members beyond the 34 whole-run cells: 1600WP p1c214 `Page ____ of ____`
+   (2 groups), 1700 p2c40, 1707 p1c214, 1801 p2c69, 2200A p3 `XA ____` ×3,
+   2200AN p2 `XG___`, 1706 p2c125/p2c127.
+3. Find where rule dicts are schema-locked (`grep` rules validation in
+   gate.py / validate_tree.py / comb_referee.py) BEFORE adding any
+   provenance key; if key-locked, either carry provenance an allowed way or
+   justify the schema move explicitly in the report.
+
+Change (`tools/formgen/extract.py`): split text runs at underscore-group
+boundaries; publish each group as an h rule at the GLYPH'S OWN INK BAND,
+measured from the extraction API's per-glyph boxes (rawdict/texttrace) — if
+the band is not derivable for a group, LEAVE IT AS TEXT and count it (fail
+closed, never guess); tone from the run's fill; the group's glyphs leave the
+run's text. Add extract mutations: a 2-underscore group stays text; an
+underivable ink band stays text; a mixed run splits into text+rule+text at
+the measured extents.
+
+Verify: text parity stays clean 53/53 (both sides re-extract with the same
+extractor — symmetric by construction); rules parity stays clean (emit draws
+IR rules; the round trip re-extracts the drawn stroke); the caption cells
+split and ids renumber on ~13 forms; every blank strip's classification is
+reported — a strip the sliver rule refuses (height < glyph height) gets no
+input and is RECORDED, not forced; `inputs_over_printed_text` improves;
+comb censuses unchanged; structure pins recomputed for every touched form;
+extract self-test probe counts stay pinned. Close F148/F149 on shipped-bytes
+evidence, mark F200 fixed ("upstream reclassification — option 2 of the
+recorded pair"), and re-verify the full census population end-to-end.
+
+### P2 — part-constant description rows (F151, blocker) — measure first, abort honestly
+
+AFTER P3, so the underscore cells are already out of this population.
+
+Target: 1701-2018-conso p2 Schedule D p2c132/136/140/144 (x 26.16,
+w 452.71) and Schedule C p2c97/103/109 (x 54.24, w 283.61) — each kind
+`label` holding ONLY a row number (`1 `, `2 `…), ≥97% blank, bordered, with
+fillable siblings. The measured trap: 1,875 label cells carry a blank run
+≥100pt, most being section headers and caption rows that must NEVER gain an
+input; bordered item-number boxes are labels whose ink fills them.
+
+Measurement script first, on the post-P3 tree, for every label cell:
+border_count; shading coverage AT THE CELL (`on_shaded_paper` with the
+form's glyph height — label cells were never asked); printed-ink x-extent as
+a fraction of width; whether the ink is a single leading cluster; the blank
+remainder's width × height against the form's own line metrics. Anchors =
+the 7 target cells; counter-anchors = full-width unshaded caption rows and
+item-number boxes. Encode a rule ONLY if the corpus separates bimodally with
+a constant-free bound (precedent: the 4.4× separation behind
+printed_partitions, log r33). If the populations overlap → ABORT: publish
+the distributions, leave F151 open with the measurement attached.
+
+If separation holds: extend the classification (lattice `classify_cell` or
+emit `field_verdict` — pick the layer that keeps audit.py independent; it
+stays locked) so a bordered, unshaded cell whose printed ink is a leading
+constant with a viable blank remainder is a FIELD; emit already trims the
+writing box past leading ink. Every cell that gains an input corpus-wide is
+listed in the report; `inputs_over_printed_text` must not regress.
+
+### P4 — placement/artwork family (diagnosis recipes)
+
+- **F027/F030** (stray black bar outside the frame, 1700/1701 p1, every
+  page): locate the bar in the IR, then in the SOURCE content stream; check
+  the clip state (extract models clips since r20's CLIP_PROBE work). If the
+  source draws it clipped away and we paint it → extract/emit clip bug; fix
+  and add the shape to the clip fixtures. If the source paints it unclipped
+  → faithful rendering, close not-a-defect with the operator evidence.
+- **F064/F065** (1707 items 8A/9: drawn comb band / white specify line, no
+  input): NOT the P1 mechanism (1707 has zero bites in the census). Probe
+  the cells (x ~275–594, y ~336–347 and item 9's line): kind, comb,
+  field_verdict reason, ledger state — then choose the fix.
+- **F070/F102** (runs set 4–5pt too high: 1707A `Calendar`, 2200P
+  ` Total Tax– `): diff IR run y against emitted CSS top for the named runs;
+  the delta should implicate one emit placement path; add the run shape to
+  emit's self-test with the fix.
+- **F060/F120** (guide reflow: superscript reordered out of `(4th)`;
+  orphaned ATC codes): both live in `emit.reflow_page` → `_column_bands` →
+  `_table_markup` (~emit.py:3305). Reproduce on those two guides; fix
+  ordering/row-fill; verify no other guide's bytes move.
+- **F134** (2553 input over `DD` header): re-verify by GEOMETRY on the
+  current tree (ids renumber). If it is the documented side-bearing
+  over-reach (audit.py:541–548), close not-a-defect citing F199; if real
+  ink inside a comb rectangle, it joins F199's frozen-geometry list —
+  report, do not force.
+- **F073** (1800 centavos): the region split landed in r33; the residual
+  claim is font size/overflow. Compare the region inputs' fitted face
+  against sibling money rows; fix face selection or close with
+  measurements.
+- **F166** (2550Q address/ZIP): locate by geometry — an earlier probe found
+  p1c6 at 4 slots / 4 inputs, so it may already be fixed; verify against
+  the official raster crop before closing.
+
+### P5 — needs the user (do not implement)
+
+- **F154** sworn-declaration strip: zero area_fills under it, so no tone
+  rule can see it; a note strip segmented as a field (same class as F198).
+  Any fix costs shipped inputs elsewhere — user review.
+- **F156** `WE` swap claim: needs the official sheet, not the content
+  stream.
+- The three structural blockers stay deliberately deferred and are listed
+  in F199/F196 and GOAL.md: audit runtime attestation (comb-referee can
+  never PASS without it), glyph ink extents (12 of the 15
+  `inputs_over_printed_text` survivors are documented over-reach; a
+  font-outline route via bundled Arimo/Tinos exists), and build_lattice
+  fused positions (F196's 6 cells).
+
+---
+
 ## Log
+
+- **2026-08-10** — Implementation packages P1–P5 appended above the log,
+  written for mechanical execution by implementing agents. P1
+  (knockout-bitten walls, F097) fully diagnosed: 8-bite corpus census, the
+  strict-coverage and same-axis discriminators, and three measured negative
+  cases (2200A junction, 1800 abutting witness, doorway). P3 re-scoped
+  upstream after the reverted emit-side attempt (F200). P2 gated on a
+  bimodality measurement with an explicit abort. Diagnosed at `5cd4017`,
+  gate r36 10/13.
 
 - **2026-08-08** Batch-versioned immutability reconciled with the user and recorded (ARCHITECTURE.md): stage-1 batches freeze per scored gate, stage 2 applies records to a named batch, uncorrected forms byte-copy, gate runs on both trees. One true stage-2 record known: 2550M TIN 3->5.
 Newest first. One line each.
