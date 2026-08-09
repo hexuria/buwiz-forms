@@ -876,8 +876,8 @@
       "evidence": "Layout cell p1c20 (x 262.49-594.48, y 158.42-177.26) is kind='field'. Filled screenshot shows '8888888888888888888888' running across the grey band from the RDO box's right edge; the official has only decorative comb ticks there.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r35. 1707-2021 p1c20 (the item 5 grey filler band right of the RDO box) is now kind `shaded` and emits no input; verified in the shipped bytes. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F067",
@@ -1071,8 +1071,8 @@
       "evidence": "Side-by-side crop: the official shows four plain grey rows; the filled HTML shows four rows of '888888888888888888888888' painted across that grey. Inputs p1c116-i and p1c134-i confirmed by DOM query.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r35. The 1801-2018 rows 23A-23D grey filler band no longer carries inputs. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F082",
@@ -1227,8 +1227,8 @@
       "evidence": "4.5x crop: the official's Tax Rate / Export-Exempt / Taxable / Basic-Excise cells for that band are solid grey; the filled HTML has all four full of 8s. A scan of input centres against grey area_fills in the IR flags 56 inputs on this form (21 on 1801, 10 on 1707, 8 on 2200p, 4 on 1800).",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r35. 2200A's grey 'not applicable' schedule cells no longer emit inputs, so a filer can no longer type into cells the BIR blanked out. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F094",
@@ -1253,8 +1253,8 @@
       "evidence": "Filled screenshot page 3 shows the row rendering as '88888888884.) Others (specify)' with 8s also filling the Tax Bracket / Tax Rate / Export-Exempt / Taxable / Basic Excise cells that are solid grey in the official.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r35. The grey cells of the '4.) Others (specify)' row no longer emit inputs, and the label-overprint half is separately clear: 2200A is not among the 6 forms failing inputs_over_printed_text. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F096",
@@ -2021,7 +2021,7 @@
       "evidence": "Measured against the official raster with only the input rectangle taken from our DOM: input interior inset 1pt, at least 95% of pixels in the grey band tone 150-240 and zero black pixels. Corpus total 169 such inputs across 22 forms, 46 of 53 forms measured (7 have no saved official raster). Evidence /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018/EVIDENCE-p1-item32-and-item33-inputs-on-grey.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018/EVIDENCE-p3-grey-spacer-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "PARTIALLY FIXED in r35, deliberately left open. The item 33 grey band is fixed: that cell is now p1c251, kind `shaded`, no input. The sworn-declaration block is NOT fixed and is a different mechanism -- the cell (now p1c125, 14.88,705.34, 449.02x34.20pt) has ZERO overlapping area_fills in the IR, so its greyness is not decorative area shading and no tone rule can see it. It is an empty bordered cell that became a field: the declaration's own text is assigned elsewhere, leaving a 449pt free-text input over the perjury declaration. Same class as F198 (a note strip segmented as a field cell)."
     },
     {
       "id": "F155",
@@ -2047,85 +2047,85 @@
       "evidence": "Batch-1 measurement: input interior inset 1pt, at least 95% of official-raster pixels in the grey band 150-240 and zero black. /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0619e-2018/EVIDENCE-item1-grey-pads-fillable.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0619e-2018/EVIDENCE-item6-taxtype-grey-pad-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "PARTIALLY FIXED in r35, deliberately left open. All four grey-pad inputs are gone -- 0619E p1c9, p1c12, p1c19 and the item 8 RDO pad are kind `shaded` with no input. The finding's second claim, that item 6's white compartment and the fillable one are SWAPPED, is unverified and I did not act on it. Item 6 now reads: p1c19 shaded/no-input (left pad), p1c20 LABEL/no-input (the white box, which carries the pre-printed tax type code 'WE'), p1c21 shaded/no-input (right pad). If 'WE' is pre-printed then no input on item 6 is correct and the swap claim is false; settling it needs the official sheet, not the content stream."
     },
     {
       "id": "F157",
       "form": "0619f-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Seven editable inputs on the grey decorative pads flanking the header combs, including both grey flanks either side of the single white Tax Type Code compartment in item 5.",
       "where": "p1c8-i and p1c11-i (item 1 pads), p1c12-i and p1c16-i (item 2 pads), p1c19-i and p1c21-i (item 5 Tax Type Code grey flanks), p1c37-i (item 7 RDO trailing pad).",
       "evidence": "Batch-1 grey-band measurement against the official raster: /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0619f-2018/EVIDENCE-item1-item2-grey-pads-fillable.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0619f-2018/EVIDENCE-item5-taxtype-grey-flanks-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r35. All seven cells named -- 0619F p1c8, p1c11, p1c12, p1c16, p1c19, p1c21, p1c37 -- are now kind `shaded` with no input, verified individually in the shipped bytes. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F158",
       "form": "0620-2019",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Four editable inputs on the grey decorative pads flanking the header combs, including the pad left of the pre-printed tax type code 'WB'.",
       "where": "p1c9-i, p1c12-i (item 1 pads, y=136.6), p1c19-i (item 6 pad left of 'WB'), p1c36-i (item 8 RDO trailing pad, y=171.8).",
       "evidence": "Batch-1 grey-band measurement against the official raster: /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0620-2019/EVIDENCE-item3-Yes-checkbox-missing-and-item6-grey-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r35. 0620-2019's four grey pads no longer emit inputs. The item 8 RDO trailing pad is now p1c37 (the finding's p1c36 predates a renumbering); located by its geometry, it is kind `shaded` with no input. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F159",
       "form": "2552-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "A 142.97 x 6.50 pt free-text input with no maxlength sits on the grey band under item 2 'Amended Return?', where the official sheet has no entry space. A second input overlaps the pre-printed '7A ZIP Code' caption cell.",
       "where": "p1c175, kind 'field', (322.61, 130.56) 142.97 x 6.50 pt, 1 input, no maxlength. Both of this form's grey-decoration inputs were confirmed against the official raster.",
       "evidence": "DOM cell dump plus the official-raster grey measurement, plus /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2552-2018/EVIDENCE-grey-band-input-under-amended-return.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2552-2018/EVIDENCE-input-over-7A-ZIP-Code-caption.png. Note: an earlier reading of the first image as 'the Amended-Return Yes checkbox has no input' was WRONG - p1c10 (x=334.92) and p1c11 (x=406.92) both carry inputs. The old ?debug=fields overlay does not outline every input, and that is what made the Yes box look dead.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r35. 2552-2018 p1c175, the grey band under item 2 'Amended Return?', is now kind `shaded` with no input. The second claim is separately clear: 2552 is not among the 6 forms failing inputs_over_printed_text, so no input overlaps the '7A ZIP Code' caption. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F160",
       "form": "2551q-2018",
       "page": 2,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Editable inputs are placed on the grey non-entry strip that runs down the right side of every Schedule 1 row, and a further input covers the whole grey band behind the 1st/2nd/3rd/4th quarter checkbox row on page 1.",
       "where": "Six inputs on this form sit wholly on official grey decoration, measured with a 1pt inset.",
       "evidence": "Official-raster grey measurement (at least 95% of interior pixels tone 150-240, zero black) with only the input rectangle taken from our DOM. /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2551q-2018/EVIDENCE-sched1-grey-strip-fillable.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2551q-2018/EVIDENCE-quarter-row-phantom-and-grey-band-input.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r35. The grey non-entry strip down the right of every 2551Q Schedule 1 row, and the band behind the quarter-checkbox row, no longer carry inputs. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F161",
       "form": "1701ms-2024",
       "page": 2,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Editable inputs sit on the wide grey decorative bands of the item 8 and item 16 rate rows, and on the item 30 grey band on page 1.",
       "where": "Seven inputs on this form sit wholly on official grey decoration (1pt inset, >=95% tone 150-240, zero black).",
       "evidence": "Official-raster grey measurement against DOM input rectangles. /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701ms-2024/EVIDENCE-p2-item16-grey-fillable.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701ms-2024/EVIDENCE-p1-item30-grey-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r35. 1701MS's item 8 and item 16 rate-row grey bands and the item 30 band no longer carry inputs. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F162",
       "form": "1701-2018-attachment",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Editable inputs sit on the wide grey decorative band inside the item 4 tax-rate row, beside the pre-printed '%' cells.",
       "where": "Five inputs on this bundle sit wholly on official grey decoration; the item 4 row instance is the widest.",
       "evidence": "Official-raster grey measurement against DOM input rectangles: /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018-attachment/EVIDENCE-p1-item4-taxrate-grey-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r35. The 1701-2018-attachment item 4 tax-rate grey band no longer carries inputs. Measured by me on the regenerated tree: inputs sitting on >=95% final-visible decorative fill fell corpus-wide from 181 cells across 36 forms to 5, and this form has none left. The five survivors are 1604CF p1c8/c10/c12 (0.8902) and 2200AN p2c247/c255 (0.9489) -- above SHADED_PAPER_MAX_GRAY, and named in lattice's own self-test as the real fields the tone cut exists to spare. money_boxes_have_inputs and printed_box_peers_all_fillable both still report 0 offenders, so no cell lost an input it needed; 218 inputs removed, 0 added."
     },
     {
       "id": "F163",

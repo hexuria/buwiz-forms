@@ -2988,9 +2988,52 @@ REFUTED_CAPTION_BLOCK_REASON_CODE = (
     "emission-suppressed-caption-block-not-character-cells")
 
 
+def _bridge_shading_seams(tone: list[list[float | None]],
+                          bare: list[list[bool]],
+                          xs: Sequence[float], ys: Sequence[float],
+                          min_writable_pt: float) -> None:
+    """Close bare-paper seams narrower than one character between equal tones.
+
+    In place, on both axes, and only where the SAME tone stands on both sides:
+    a seam between 0.8509 above and 0.7489 below is two bands meeting, not one
+    band interrupted, and unioning them would invent a tone the source never
+    painted. An atom any fill covers is never crossed, so a knockout separates
+    however thin it is.
+    """
+    for axis in (0, 1):
+        rows, columns = len(tone), len(tone[0]) if tone else 0
+        outer = columns if axis == 0 else rows
+        inner = rows if axis == 0 else columns
+        edges = ys if axis == 0 else xs
+        for fixed in range(outer):
+            run = 0
+            for moving in range(inner + 1):
+                if moving < inner:
+                    j, i = (moving, fixed) if axis == 0 else (fixed, moving)
+                    if tone[j][i] is None and bare[j][i]:
+                        run += 1
+                        continue
+                if run:
+                    start = moving - run
+                    span = edges[moving] - edges[start]
+                    before = start - 1
+                    if span < min_writable_pt and before >= 0 and moving < inner:
+                        bj, bi = ((before, fixed) if axis == 0
+                                  else (fixed, before))
+                        aj, ai = (moving, fixed) if axis == 0 else (fixed, moving)
+                        band = tone[bj][bi]
+                        if band is not None and tone[aj][ai] == band:
+                            for step in range(start, moving):
+                                sj, si = ((step, fixed) if axis == 0
+                                          else (fixed, step))
+                                tone[sj][si] = band
+                    run = 0
+
+
 def covering_shading_band(cell: dict[str, Any],
                           area_fills: Sequence[dict[str, Any]],
-                          needed: float) -> float:
+                          needed: float,
+                          min_writable_pt: float = 0.0) -> float:
     """Paper this cell loses to ONE connected band of a single shading tone.
 
     Asking whether one fill covers the cell is a false negative for any cell
@@ -3030,6 +3073,27 @@ def covering_shading_band(cell: dict[str, Any],
       it *before* the connectivity test is what stops a union reaching across a
       whited-out centre.
 
+      "Touch" means the gap between them could not be written in, not that it
+      is zero.  The source butts its strips against each other and leaves a
+      seam: 0619F p1c8 is 82% grey by area, in two strips 0.48pt apart, and
+      scored 0.495 -- exactly the upper strip alone -- so the cell kept a field
+      and an input over paper that says NO ENTRY HERE.  A gap is a writing
+      surface only if a character fits in it, so `min_writable_pt` is the
+      form's OWN `min_fillable_line_metrics(...)["glyph_height_pt"]`, the same
+      measured quantity the sliver rule spends, and not a constant.  Measured
+      over every same-tone gap inside a field cell that carries an input: 360
+      vertical gaps, none wider than 1.51pt, against a glyph height that is
+      2.930pt on its smallest form -- a 1.94x separation with nothing between.
+      Horizontally the corpus separates harder still: 65 of 67 gaps are 0.5pt
+      or less and the other two are 32.88pt, so no bound in that window can
+      change a verdict.
+
+      A gap bridges ONLY across bare paper.  An atom that any fill covers --
+      a knockout, a chromatic box, a tint above the cut -- keeps the strips
+      apart however narrow it is, which is the whited-out-centre property
+      above, unweakened: the bridge asks for the ABSENCE of paint, and a
+      knockout is paint.
+
     Returns the largest such band's area in pt², or 0.0 when no band can reach
     `needed` -- the short-circuit is exact, since the clipped areas summed
     without regard to overlap bound every union from above.
@@ -3066,7 +3130,11 @@ def covering_shading_band(cell: dict[str, Any],
             if floor is None or key < floor:
                 floor = key
         layers.append((cx0, cy0, cx1, cy1, key, tone_value))
-    if floor is None or bound < needed:
+    # `bound` sums the clipped shading areas and so bounds an unbridged union
+    # from above, but a bridged one may claim bare paper as well, so the
+    # short-circuit is exact only while nothing bridges.  No shading at all is
+    # still an immediate no.
+    if floor is None or (min_writable_pt <= 0.0 and bound < needed):
         return 0.0
 
     # A fill painted before every shading strip here is under all of them.
@@ -3085,9 +3153,14 @@ def covering_shading_band(cell: dict[str, Any],
     # because the grid is cut on those rectangles' own edges; its midpoint
     # therefore decides containment for the whole atom.
     tone: list[list[float | None]] = []
+    # Bare paper: no fill of any kind resolves over this atom.  Distinct from
+    # `tone is None`, which also covers an atom a knockout or an above-the-cut
+    # tint owns.  Only bare paper may be bridged.
+    bare: list[list[bool]] = []
     for j in range(rows):
         my = (ys[j] + ys[j + 1]) / 2.0
         row: list[float | None] = []
+        bare_row: list[bool] = []
         for i in range(columns):
             mx = (xs[i] + xs[i + 1]) / 2.0
             top: tuple[int, int] | None = None
@@ -3097,7 +3170,12 @@ def covering_shading_band(cell: dict[str, Any],
                     if top is None or key > top:
                         top, gray = key, value
             row.append(gray)
+            bare_row.append(top is None)
         tone.append(row)
+        bare.append(bare_row)
+
+    if min_writable_pt > 0.0:
+        _bridge_shading_seams(tone, bare, xs, ys, min_writable_pt)
 
     best = 0.0
     seen = [[False] * columns for _ in range(rows)]
@@ -3124,7 +3202,8 @@ def covering_shading_band(cell: dict[str, Any],
 
 
 def on_shaded_paper(cell: dict[str, Any],
-                    area_fills: Sequence[dict[str, Any]]) -> bool:
+                    area_fills: Sequence[dict[str, Any]],
+                    min_writable_pt: float = 0.0) -> bool:
     """Whether the source shaded this cell to say "do not write here".
 
     `extract.classify_tone` already decides structural / decorative / knockout
@@ -3149,7 +3228,8 @@ def on_shaded_paper(cell: dict[str, Any],
     if area <= 0.0:
         return False
     needed = area * SHADED_PAPER_MIN_COVERAGE
-    return covering_shading_band(cell, area_fills, needed) >= needed
+    return covering_shading_band(
+        cell, area_fills, needed, min_writable_pt) >= needed
 
 
 def printed_glyph_boxes(run: dict[str, Any]) -> list[Interval]:
@@ -5583,7 +5663,10 @@ def build_cells(page_index: int, xl: Lattice, yl: Lattice,
             # emitted input -- worse than either verdict alone.  On the 53-form
             # corpus this exempts nothing: no comb owner is covered by
             # decorative shading, so the rule is stated, not measured into.
-            shaded = on_shaded_paper(cell, page_area_fills)
+            shaded = on_shaded_paper(
+                cell, page_area_fills,
+                0.0 if fillable_metrics is None
+                else float(fillable_metrics["glyph_height_pt"]))
         cell["kind"] = classify_cell(
             cell["is_empty"], cell["border_count"], "comb" in cell, sliver,
             shaded)
@@ -6711,6 +6794,47 @@ def self_test(ir_path: pathlib.Path) -> int:
         not on_shaded_paper(
             shaded_cell, [toned_fill(90.0, 198.0, 150.0, 212.0, 0.8509)]),
         "shading over less than 70% of a cell shaded the whole cell",
+    )
+
+    # A seam between two strips of one tone is not a writing surface. 0619F
+    # p1c8 is 82% grey in two strips 0.48pt apart and scored 0.495 -- the upper
+    # strip alone -- so it kept an input over paper that says NO ENTRY HERE.
+    # The gap here is 0.5pt against a 3.0pt character; the corpus's own worst
+    # case is 1.51pt against 2.930pt.
+    seam_upper = toned_fill(90.0, 198.0, 260.0, 204.5, 0.8509)
+    seam_lower = toned_fill(90.0, 205.0, 260.0, 212.0, 0.8509, seq=2)
+    check(
+        not on_shaded_paper(shaded_cell, [seam_upper, seam_lower]),
+        "two strips split by a seam were joined without a character bound",
+    )
+    check(
+        on_shaded_paper(shaded_cell, [seam_upper, seam_lower], 3.0),
+        "a 0.5pt seam between two strips of one tone was read as writable",
+    )
+    check(
+        not on_shaded_paper(shaded_cell, [seam_upper, seam_lower], 0.4),
+        "a seam wider than a character was bridged anyway",
+    )
+    # Only the ABSENCE of paint bridges. A knockout in the seam is the sheet
+    # restoring paper, and it separates however thin it is -- the whited-out
+    # centre property, unweakened.
+    check(
+        not on_shaded_paper(shaded_cell, [
+            seam_upper, seam_lower,
+            toned_fill(90.0, 204.5, 260.0, 205.0, 1.0, seq=9)], 3.0),
+        "a knockout in the seam was bridged as though it were bare paper",
+    )
+    # Two tones meeting are two bands, not one interrupted band.
+    check(
+        not on_shaded_paper(shaded_cell, [
+            seam_upper, toned_fill(90.0, 205.0, 260.0, 212.0, 0.651, seq=2)],
+            3.0),
+        "a seam joined 0.8509 to 0.651 and invented an unpainted tone",
+    )
+    # The seam rule must not manufacture a band where there is no shading.
+    check(
+        not on_shaded_paper(shaded_cell, [], 3.0),
+        "bare paper with no shading at all was called shaded",
     )
     check(
         not on_shaded_paper(shaded_cell, [
