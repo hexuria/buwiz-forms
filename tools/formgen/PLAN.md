@@ -662,26 +662,41 @@ new h-line at the blank's baseline splits the caption cell from the blank
 strip; the strip becomes an ordinary field cell and receives its input
 through the NORMAL flow. No assertion needs an exception anywhere.
 
-Prerequisites, in order, each answered in the report before any code:
+**All three prerequisites were answered by the operator on 2026-08-10 at
+`871d880`, on the r37 tree. They are measured facts, not assumptions — do not
+re-derive them, but DO re-measure the census after your change.**
 
-1. Confirm the assertion reads IR text_runs, not `page.get_texttrace()`:
-   `grep -n "inputs_over_printed_text" tools/formgen/audit.py`, read the
-   offender construction. If it is texttrace-based the upstream fix cannot
-   clear it — STOP; the only honest route is then a reviewed weakening of
-   the assertion, which is the user's decision.
-2. GROUP-based population census — this is exactly where the reverted
-   attempt went wrong: its validation counted whole-run underscores (34
-   cells) while its implementation matched groups inside mixed runs (+61
-   inputs). The census and the implementation MUST share one definition: a
-   group = ≥3 consecutive `_` glyphs within one run, split at any other
-   glyph. Publish groups / cells / forms / expected input delta. Known
-   members beyond the 34 whole-run cells: 1600WP p1c214 `Page ____ of ____`
-   (2 groups), 1700 p2c40, 1707 p1c214, 1801 p2c69, 2200A p3 `XA ____` ×3,
-   2200AN p2 `XG___`, 1706 p2c125/p2c127.
-3. Find where rule dicts are schema-locked (`grep` rules validation in
-   gate.py / validate_tree.py / comb_referee.py) BEFORE adding any
-   provenance key; if key-locked, either carry provenance an allowed way or
-   justify the schema move explicitly in the report.
+1. **The upstream route works — this was the STOP condition and it is
+   clear.** `Bundle.ink` (audit.py:6731-6741) builds the index from
+   `self.pages[page]["text_runs"]`, filtered to the runs the document emits,
+   through `glyph_boxes(run)`. It does NOT use `drawn_glyph_boxes` /
+   `page.get_texttrace()` — that is `SourceSlotOracle`'s separate oracle. So
+   a group reclassified out of `text_runs` leaves `emitted_runs`, leaves the
+   ink index, and `inputs_over_printed_text` cannot see it. No exception is
+   needed in any assertion.
+2. **GROUP census, measured — this is the number your implementation must
+   reproduce.** A group = ≥3 consecutive `_` glyphs inside one run, split at
+   any other glyph. Corpus: **114 runs carry ≥1 group, 119 groups, 50 cells,
+   23 forms, and all 50 cells are `kind == "label"`.** By form (groups):
+   1600-pt-2018 20, 1600-vt-2018 20, 1702mx-2018c 14, 1706-2018 14,
+   1606-2018 9, 2550q-2024 5, 1700-2018 4, 1801-2018 4, 2200m-2018 4,
+   1701q-2018 3, 2200a-2020 3, 2200t-2022 3, 1600wp-2010 2, 1601c-2018 2,
+   1701ms-2024 2, 2200an-2018 2, 2200p-2020 2, and 1 each on 1603q-2018,
+   1701-2018, 1701a-2018, 1707-2021, 2550-ds-2025, 2551q-2018.
+   Contrast the WHOLE-RUN census (52 runs / 34 cells / 13 forms) that the
+   reverted attempt validated against while shipping group matches: 1600-PT
+   and 1600-VT alone carry 20 groups each and appear in neither earlier
+   list. Reconciling these two numbers is the whole point of this step.
+3. **No schema lock on rule dicts.** No key allowlist over IR rules exists in
+   gate.py / validate_tree.py / comb_referee.py; `_BATCH_MOVED_COUNTS` is a
+   batch-report count set, not a rule schema. A rule already carries 14 keys
+   (`axis, gray, id, length_pt, paint_seq, paint_seq_max, paint_spans, rgb,
+   role, thickness_pt, x0, x1, y0, y1`), so adding provenance is open. The
+   real constraint is the `rules_missing` / `rules_extra` parity the `rules`
+   check scores: it moves SYMMETRICALLY here — the source IR gains the
+   strokes, emit draws them, the round trip re-extracts them — which is why
+   this route is expected to keep `rules` clean on 53/53. Verify that; do not
+   assume it.
 
 Change (`tools/formgen/extract.py`): split text runs at underscore-group
 boundaries; publish each group as an h rule at the GLYPH'S OWN INK BAND,
