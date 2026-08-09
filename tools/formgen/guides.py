@@ -1430,7 +1430,13 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         ("1701ms-2024", 2): (838.43, 5, 22, 10, BAND_PATTERN),
         ("1701q-2018", 2): (769.46, 9, 22, 18, BAND_PATTERN),
         ("1701a-2018", 2): (854.84, 9, 22, 9, BAND_PATTERN),
-        ("2000-dst-2018", 2): (538.03, 2, 137, 43, BAND_PATTERN),
+        # 2 -> 0 on 2026-08-09 (r35): p2c230 and p2c232 (both y 751.5-769.7,
+        # below this page's 538.03 cut) are shaded paper the seam rule now
+        # reaches -- the source paints their band in two strips with a seam too
+        # narrow to write in, so they were fields carrying an input over "do
+        # not write here". They are the only two fields this page had below the
+        # cut. Nothing about the cut itself moved.
+        ("2000-dst-2018", 2): (538.03, 0, 137, 43, BAND_PATTERN),
         ("2552-2018", 2): (801.52, 2, 23, 14, BAND_PATTERN),
         # 1601-EQ p2 held the "no cut at all" line until lattice.py started
         # reading paper tone, and it was holding it for a defect. The page is a
@@ -1446,7 +1452,10 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
         # stops where it should -- at the TIN comb, y 110.06 -- so the band cut
         # lands at 129.62, the lattice line under the comb row. Both combs stay
         # on the form, and the corpus-wide comb assertion below is the proof.
-        ("1601eq-2019", 2): (129.62, 26, 339, 86, BAND_PATTERN),
+        # 26 -> 25 on 2026-08-09 (r35): p2c49 (y 242.5-259.6, below this page's
+        # 129.62 cut) is shaded paper the seam rule now reaches. Same cause as
+        # 2000-DST p2 above; one cell, and the cut is unchanged.
+        ("1601eq-2019", 2): (129.62, 25, 339, 86, BAND_PATTERN),
         # Whole pages: 2550M p3 is nothing but its ATC table, so the marker cut at
         # 72.52 that left the running head behind is superseded by cutting at 0.
         #
