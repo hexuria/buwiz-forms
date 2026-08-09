@@ -1913,6 +1913,104 @@ def build_lattice(defining: Sequence[dict[str, Any]], all_ink: Sequence[dict[str
     return Lattice(positions, ink_lo, ink_hi, spans, members)
 
 
+# A knockout in a lattice line's own ink is one of three shapes, and only the
+# first is ours to close:
+#
+#   BITE     A knockout strictly interior to ONE collinear rail: black ink
+#            reaches the frame on both sides of it, and the white fragment is
+#            drawn on the SAME axis as the rail it interrupts (2200C p1 rail
+#            x0=30.60: black 115.22-124.94, white 124.94-126.50, black
+#            126.50-132.14 -- the white fragment IS the gap, edge for edge).
+#            Bridge it: the rail is one writing wall with a printing defect
+#            in the middle, not two rails and a doorway.
+#
+#   JUNCTION A knockout on the PERPENDICULAR axis meeting the rail's own gap
+#            (2200A p1 x0=580.66: black 136.94-146.30 and 146.78-153.02, a
+#            0.48pt gap; the only white there is horizontal rule h26,
+#            y0=146.30-146.78, x-axis, marking where the sheet severed this
+#            column into a comb divider). The sheet drew a doorway on
+#            purpose. Same-axis is what tells a bite from a junction, so it
+#            is never relaxed to "any nearby knockout".
+#
+#   DOORWAY  A knockout wide enough to be a real passage rather than a
+#            printing defect -- bounded by the form's own smallest fillable
+#            glyph height, because anything a glyph could not fit through is
+#            not writable paper either way.
+#
+# A fourth failure mode looks like a bite but is not one: a witness that only
+# ABUTS the gap, never covering it (1800-2018 p1 y=805.3: black h-fragments
+# end at x=194.92/290.33/317.69/345.07 where full-height columns cross, and
+# the "knockout" fragments beside them (h178-h181) mirror the SAME x-ranges
+# as the black fragments below them rather than the gap between -- the paper
+# there was never bitten, it is a column crossing a double rule). With
+# +/-CLUSTER_TOL_PT slack a witness that merely touches a gap edge would be
+# scored as covering it (0.3pt of tolerance swallows a 0.24pt gap outright);
+# coverage here is therefore checked at the strictness epsilon (1e-6), which
+# only a witness that IS the gap -- edge coincides with edge -- can satisfy.
+# 1604e-2018 p1 y=383.6 carries the identical abutting shape and must stay
+# unbridged for the same reason.
+def bridge_knockout_bites(lattice: Lattice,
+                          knockouts: Sequence[dict[str, Any]],
+                          axis: str, max_gap_pt: float) -> int:
+    """Rejoin a lattice line's spans across a same-axis knockout bite.
+
+    `lattice.spans[i]` already unions every collinear fragment's along-line
+    extent (`build_lattice`), so a rail bitten by a later white knockout
+    survives as two disjoint spans either side of the bite. Left alone, the
+    cell walk reads the bite as a real doorway and the wall dissolves into a
+    blank sliver instead of a comb boundary (2200C p1 item 1: only DD was
+    typeable, MM and YYYY were not).
+
+    A gap is bridged only when ALL of these hold, each one refuting a
+    measured negative case above:
+
+    * the line has 2+ disjoint spans (nothing to bridge otherwise);
+    * a knockout on THIS SAME axis is collinear with the line, within
+      `CLUSTER_TOL_PT` of its clustered centre (excludes JUNCTION);
+    * the gap is `0 < gap < max_gap_pt`, `max_gap_pt` coming from the form's
+      own `min_fillable_line_metrics(ir)["glyph_height_pt"]` -- a gap no
+      glyph could occupy is not a writable doorway either way, so caller
+      passes `0.0` when metrics are unavailable and this function then
+      bridges nothing (excludes DOORWAY);
+    * some local witness's own along-axis extent covers the gap edge to
+      edge, at the strictness epsilon `1e-6`, never `CLUSTER_TOL_PT`
+      (excludes the abutting-witness case above).
+
+    Witness THICKNESS is never compared: `line_thickness_gray` reports the
+    page-wide cluster maximum, not the local fragment's own weight (2000-DST
+    reports 0.96 for a rail whose local fragments are 0.48), so a thickness
+    test would misfire on real bites.
+
+    Mutates `lattice.spans` in place and returns the number of gaps bridged.
+    """
+    if max_gap_pt <= 0.0 or not knockouts:
+        return 0
+    al0, al1 = ("y0", "y1") if axis == "v" else ("x0", "x1")
+    bridged = 0
+    for i, spans in enumerate(lattice.spans):
+        if len(spans) < 2:
+            continue
+        local = [k for k in knockouts
+                 if k.get("axis") == axis
+                 and abs(centre(k) - lattice.positions[i]) <= CLUSTER_TOL_PT]
+        if not local:
+            continue
+        merged: list[list[float]] = [list(spans[0])]
+        for a0, a1 in spans[1:]:
+            prior_end = merged[-1][1]
+            gap = a0 - prior_end
+            witnessed = 0 < gap < max_gap_pt and any(
+                k[al0] <= prior_end + 1e-6 and k[al1] >= a0 - 1e-6
+                for k in local)
+            if witnessed:
+                merged[-1][1] = a1
+                bridged += 1
+            else:
+                merged.append([a0, a1])
+        lattice.spans[i] = [(lo, hi) for lo, hi in merged]
+    return bridged
+
+
 def line_thickness_gray(lattice: Lattice, index: int, all_ink: Sequence[dict[str, Any]],
                         lo: float, hi: float, axis: str) -> tuple[float, float, list[float]]:
     """Weight and tone of the ink on lattice line `index` over span lo..hi.
@@ -6222,6 +6320,19 @@ def build_page(page: dict[str, Any],
     yl = build_lattice(
         geometry_horizontals, geometry_horizontals, "h")
 
+    # A knockout strictly interior to one rail (F097) leaks a comb wall into
+    # a blank sliver; rejoin those spans before the cell walk sees the gap.
+    # Bounded by this form's own smallest fillable glyph height so a real
+    # doorway is never bridged (see bridge_knockout_bites's docstring).
+    knockout_v = [r for r in page["rules"] if r.get("axis") == "v"
+                  and tone_role(r.get("gray")) == "knockout"]
+    knockout_h = [r for r in page["rules"] if r.get("axis") == "h"
+                  and tone_role(r.get("gray")) == "knockout"]
+    bite_bound = (0.0 if fillable_metrics is None
+                  else float(fillable_metrics["glyph_height_pt"]))
+    bridge_knockout_bites(xl, knockout_v, "v", bite_bound)
+    bridge_knockout_bites(yl, knockout_h, "h", bite_bound)
+
     if len(xl) < 2 or len(yl) < 2:
         cells: list[dict[str, Any]] = []
         unassigned = [f"p{index}t{i}" for i in range(len(page["text_runs"]))]
@@ -9315,6 +9426,61 @@ def self_test(ir_path: pathlib.Path) -> int:
     check(combed == [],
           f"a comb states its compartments in slot_x and gets no second "
           f"answer here: {combed}")
+
+    # bridge_knockout_bites: F097's knockout-bitten walls (2200C p1 item 1
+    # "Date (MM/DD/YYYY)", 2000-DST p1). Each fixture is one of the three
+    # shapes bridge_knockout_bites's docstring names, at the corpus's own
+    # measured geometry, plus the size bound.
+    def bite_lattice(spans: list[Interval]) -> Lattice:
+        return Lattice([50.0], [0.0], [20.0], [list(spans)], [[]])
+
+    bite_witness = synthetic_vertical(50.0, 10.0, 11.5, 0.48, 90,
+                                      role="knockout")
+    positive = bite_lattice([(0.0, 10.0), (11.5, 20.0)])
+    positive_count = bridge_knockout_bites(positive, [bite_witness], "v", 3.0)
+    check(positive_count == 1,
+          f"a same-axis knockout exactly filling a 1.5pt gap (2200C p1's "
+          f"own gap) was not bridged: count {positive_count}")
+    check(covers(positive.spans[0], 0.0, 20.0),
+          f"a bridged rail did not cover its own joint band: "
+          f"{positive.spans[0]}")
+
+    bare_paper = bite_lattice([(0.0, 10.0), (11.5, 20.0)])
+    check(bridge_knockout_bites(bare_paper, [], "v", 3.0) == 0,
+          "a gap with no knockout evidence at all was bridged")
+
+    # 2200A p1 x0=580.66: the only white at the gap is the PERPENDICULAR
+    # horizontal rule h26, which severs the column into a comb divider on
+    # purpose. Same-axis is what tells this from a bite.
+    junction_gap = bite_lattice([(0.0, 10.0), (10.48, 20.0)])
+    junction_witness = synthetic_horizontal(10.24, 40.0, 60.0, 0.48, 91,
+                                            role="knockout")
+    check(bridge_knockout_bites(junction_gap, [junction_witness], "v", 3.0)
+          == 0,
+          "a perpendicular-axis knockout bridged a same-line gap")
+
+    # 1800-2018 p1 y=805.3 / 1604e-2018 p1 y=383.6: the knockout beside the
+    # gap mirrors the black fragment's OWN range and ends at the gap's edge
+    # instead of covering it -- an abutting witness, not a filling one.
+    abutting_gap = bite_lattice([(0.0, 10.0), (10.24, 20.0)])
+    abutting_witness = synthetic_vertical(50.0, 10.24, 20.0, 0.24, 92,
+                                          role="knockout")
+    check(bridge_knockout_bites(abutting_gap, [abutting_witness], "v", 3.0)
+          == 0,
+          "a knockout that only abuts a gap edge was scored as covering it")
+
+    # A 5.0pt gap under a 3.0pt glyph-height bound is a doorway, not a bite,
+    # even with an exact covering witness.
+    doorway_gap = bite_lattice([(0.0, 10.0), (15.0, 20.0)])
+    doorway_witness = synthetic_vertical(50.0, 10.0, 15.0, 0.48, 93,
+                                         role="knockout")
+    check(bridge_knockout_bites(doorway_gap, [doorway_witness], "v", 3.0)
+          == 0,
+          "a 5.0pt doorway was bridged under a 3.0pt glyph-height bound")
+
+    zero_bound = bite_lattice([(0.0, 10.0), (11.5, 20.0)])
+    check(bridge_knockout_bites(zero_bound, [bite_witness], "v", 0.0) == 0,
+          "a zero glyph-height bound (metrics unavailable) still bridged")
 
     # Determinism: the same IR must serialise byte-identically.
     again = json.dumps(build_layout(ir), sort_keys=False, ensure_ascii=False)

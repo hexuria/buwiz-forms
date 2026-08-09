@@ -1279,8 +1279,8 @@
       "evidence": "Enumerated every input on the page (419 total). The first three rows are x220.43/y118.79, x277.07/y120.11 (the Amended-Return marks) then exactly two at y=125.40. Nothing else exists below y=125.4 until item 5 TIN at y=158.40, which correctly has 12+ cells. The fill-with-letters screenshot confirms it visually: 'A' and 'B' appear in the DD cells while the MM group and all four YYYY cells stay empty; the official prints tick dividers for all eight cells. Note also the inputs are h=6.71 pt inside a ~15 pt tall comb cell, so they sit in the bottom half.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r37 by lattice.bridge_knockout_bites: the date frame's rails at x0=30.60 and 175.34 are each drawn black 115.22-124.94 / WHITE 124.94-126.50 / black 126.50-132.14 -- a 1.56pt painted bite strictly interior to one stroke -- and the cell walk leaked through the hole, dissolving MM and YYYY into blank slivers. A lattice line's span now bridges a gap between two of its black fragments ONLY when a same-axis knockout rule, collinear within CLUSTER_TOL_PT, covers the gap STRICTLY (epsilon 1e-6) and the gap is narrower than the form's own glyph_height_pt. Corpus census of that signature: exactly 8 bites in 2 forms (7 on 2200C p1, 1 on 2000-DST p1); the three shapes that must never bridge are fixture-locked with their measured geometry -- 2200A p1's erased junction (perpendicular witness; bridging would split the 4-slot comb at divider_x 580.90), 1800 p1's abutting witness (0.24pt gaps at y~805.46 that a +-0.3 tolerance would swallow), and the doorway bound. Verified in the shipped bytes by the operator: 2200C p1c111 carries 2 inputs (MM), p1c112 carries 4 (YYYY), and p1c117 gained 2 more the finding never asked for; all 8 printed compartments of item 1 are now fillable. inputs_over_printed_text held at 6 forms/15, comb_slots_match_printed at 12/25, the zero families at 0. CAVEAT recorded as F201: the healed boxes emit writing REGIONS, not combs -- DD remains a comb while MM/YYYY are region fields on the same row."
     },
     {
       "id": "F098",
@@ -2620,6 +2620,19 @@
       "cause": null,
       "audit_blind": false,
       "resolution": "NOT resolved, and deliberately not resolved by me. The obvious move -- exempting underscore runs inside audit.py -- would be changing the judge immediately after changing the producer it judges, which is the failure mode this project has now found five times and which the 'without cheating' constraint forbids outright. Two candidate resolutions, both needing a decision rather than a tweak: (1) Treat the assertion's claim as over-broad relative to its PURPOSE. It exists so a taxpayer is not given a typing surface over text they cannot change; a ruled blank is not such text, it is the blank itself. That is defensible but it is a reviewed weakening of a gating check and must be argued as one, not slipped in. (2) Fix it upstream instead, where it arguably belongs: have extract.py classify a run of underscores as a RULE rather than as a text run. The blank then becomes ordinary paper, the lattice segments it as its own field cell, no input ever overlaps printed text, and the assertion needs no exception at all. Larger, and it moves what the text-parity check compares on both sides at once, so it needs its own round. Placing the input above the line's ink is NOT a third option: the assertion compares against the run's line box, whose top edge is the ascent line, and audit.py already documents that bound as loose by most of an em."
+    },
+    {
+      "id": "F201",
+      "form": "2200c-2018, 2000-dst-2018",
+      "page": 1,
+      "severity": "major",
+      "status": "open",
+      "what": "The bridge-healed boxes emit writing REGIONS where the sheet prints character compartments, because comb subjects arise only through the legacy-lattice discovery flow and P1 deliberately did not bridge the LEGACY view -- so the newly-formed cells cannot register comb subjects at all. Worse than the F197 class on one form: 2000-DST p1's previously CORRECT 6-slot single-character comb (which agreed with the printed topology) became 2+4 free-text region inputs when the restored wall at x=192.38 split its cell, and its ledger subject can no longer name one rectangle.",
+      "where": "2200c-2018 p1c111 (MM, 2 regions), p1c112 (YYYY, 4 regions) vs sibling p1c5 (DD, a real 2-slot comb on the SAME row); p1c117 (2 regions). 2000-dst-2018: subject p1@164.30,109.94,248.69,131.06 now retained_unresolved, reasons [emission-suppressed-no-rectangular-owner, painted-edge-partition], blocks_gate true; the split pair p1c111/p1c112 carries 2+4 region inputs, same total writing surface, maxlength-1 model lost.",
+      "evidence": "Measured on the r37 tree and confirmed by the operator's own referee run: 53/53 forms, forms_error 0, referee_layout_mismatches 0, subjects_retained_unresolved 33 -> 34 (exactly this subject), combs_found 4583 unchanged, combs_source_unevaluable 49 unchanged. EXPECTED_RETAINED_SUBJECTS_BY_SLUG gained 2000-dst-2018: 1 -- a census move that ACCEPTS the suppression pending review, made openly rather than hidden.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": null
     }
   ]
 }

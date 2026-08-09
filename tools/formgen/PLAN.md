@@ -636,6 +636,21 @@ STOP-and-report:**
     proven by fixture), full gate (expect 10/13, findings 18→17), commit,
     push.
 
+**P1 landed (2026-08-10, gate r37 pending).** Five measured deviations, none
+tuned away: the healed boxes became region FIELDS, not combs (+0 comb census
+-- comb subjects arise only through the legacy-lattice discovery flow, which
+P1 deliberately did not bridge); 2200C gained a third writable box (p1c117,
++2 inputs, total +8); 2000-DST's formerly-agreeing 6-slot comb split into 2+4
+regions and its subject went retained_unresolved (blocks_gate), moving the
+retained census 33 -> 34 openly; pending_transitions was never 0 at HEAD
+(118) so that target was wrong in this plan. All recorded as **F201**.
+**P1b (design question, do not implement without the operator):** whether
+`bridge_knockout_bites` belongs in the LEGACY lattice too, so bridge-healed
+boxes can register comb subjects -- it changes what "the old reading" means
+for a wall the source always drew, and it is the only route to comb-model
+inputs for these cells and to retiring 2000-DST's suppressed subject through
+a reviewed transition.
+
 ### P3 — ruled blanks, fixed upstream (closes F148, F149, F200) — before P2
 
 The reverted attempt (commit `5cd4017`, finding F200) proved the emit-side

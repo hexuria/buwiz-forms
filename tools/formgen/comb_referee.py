@@ -266,8 +266,35 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # the sheet shades to say NO ENTRY HERE were classified `field` and carried an
 # input. A knockout still separates however thin it is: the bridge asks for
 # the ABSENCE of paint, and a knockout is paint.
+# Re-pinned 2026-08-10 (r37, P1) for F097: `bridge_knockout_bites` rejoins a
+# lattice line's spans across a same-axis knockout strictly interior to one
+# collinear rail -- 2200C p1's Date item had a 1.56pt white bite mid-height on
+# both side rails, so the cell walk read the bite as a real doorway and MM/
+# YYYY dissolved into blank slivers with no input at all (only DD was
+# typeable). Bridged 8 gaps corpus-wide, all v-axis: 7 on 2200C p1, 1 on
+# 2000-DST p1; 0 h-axis; every other form 0. Bounded by the form's own
+# `min_fillable_line_metrics(ir)["glyph_height_pt"]`, same-axis and collinear
+# only, and STRICT edge-to-edge coverage at epsilon 1e-6 (never
+# CLUSTER_TOL_PT) -- three measured negative cases stay unbridged by
+# construction: 2200A p1 x0=580.66 (a PERPENDICULAR knockout marking a
+# deliberate comb-divider doorway), 1800-2018 p1 y=805.3 and 1604E-2018 p1
+# y=383.6 (a knockout that only ABUTS a gap edge rather than covering it).
+# EXPECTED_COMBS and EXPECTED_COMBS_BY_SLUG do NOT move: the two forms'
+# subject totals are unchanged (2200C 40, 2000-DST 131), because the restored
+# walls surface their divider ticks as ordinary `printed_partitions` on plain
+# `field` cells, not as new registered comb ledger subjects -- 2200C p1c111/
+# p1c112 land 2 and 4 `<input>`s (printed 2/4 = latticed = emitted) with no
+# comb subject at all. One EXISTING subject's resolution moves: 2000-DST's
+# p1c4 (`p1@164.30,109.94,248.69,131.06`, a legacy 6-slot single-character
+# comb whose divider positions -- including x=192.38 -- were already read off
+# the bottom guide ticks independently of this wall) had its cell split by
+# the now-continuous rail, so its old bbox no longer names one rectangular
+# cell; it moves `active_resolved` -> `retained_unresolved`,
+# `emission-suppressed-no-rectangular-owner` / `painted-edge-partition`,
+# `blocks_gate: true`, `requires_independent_evidence: true`. See
+# EXPECTED_RETAINED_SUBJECTS_BY_SLUG below, which is the pin this moves.
 LATTICE_PRODUCER_SHA256 = (
-    "1e3c236056b65e7412b9ffc660429c284439b405c8d6cc32024bb3fcfe496a3f"
+    "0a476afece4bb86275f3d4d93104f4de8c353ed078083213d3c847f69cbf5b43"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -631,6 +658,17 @@ if (len(EXPECTED_COMBS_BY_SLUG) != EXPECTED_FORMS
 # 2200C's entry goes 1 -> 3 and keeps its original subject: one
 # `emission-suppressed-no-rectangular-owner` / `painted-edge-partition` from
 # r20, plus the two new ones.
+# Re-measured 2026-08-10 (r37, P1) for F097: 2000-DST enters this table for
+# the first time, 0 (absent) -> 1. `bridge_knockout_bites` restores the
+# vertical rail at x=192.38, so the legacy 6-slot comb subject
+# `p1@164.30,109.94,248.69,131.06` (`p1c4`) can no longer be given one
+# rectangular cell -- its cell splits into `p1c111`/`p1c112` -- and it moves
+# `active_resolved` -> `retained_unresolved`,
+# `emission-suppressed-no-rectangular-owner` / `painted-edge-partition`,
+# exactly the reason codes 2200C's own r20 retained subject already carries.
+# EXPECTED_RETAINED_SUBJECTS (derived below) moves 33 -> 34 with it.
+# EXPECTED_COMBS_BY_SLUG["2000-dst-2018"] does NOT move (131, unchanged): the
+# subject stays in the ledger, only its resolution state does.
 EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "0605-1999": 1,
     "1600wp-2010": 2,
@@ -640,6 +678,7 @@ EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "1707-2021": 1,
     "1707a-2021": 2,
     "1800-2018": 1,
+    "2000-dst-2018": 1,
     "2000-ot-2018": 2,
     "2200a-2020": 2,
     "2200an-2018": 1,
@@ -1231,6 +1270,12 @@ HTML_ALLOWED_TAGS = frozenset({
 #   stream: of the 33 combs it named as defects before, 27 are gone and the six
 #   named at LATTICE_PRODUCER_SHA256 remain, and it agrees on all 4,531
 #   compartment counts it can evaluate.
+# Re-pinned 2026-08-10 (r37, P1) for F097, two slugs only: `2200c-2018`
+# (MM gains a 2-`<input>` field p1c111, YYYY a 4-`<input>` field p1c112,
+# `comb_slots_match_printed` unchanged at 12/25 -- both offenders on these two
+# slugs are pre-existing, byte-identical cells at unrelated y-bands) and
+# `2000-dst-2018` (p1c4's 6-slot comb splits into p1c111/p1c112, still 2+4
+# `<input>`s). No other slug's emitted HTML moved.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "cf4e8ceb12d7124c50327452c8b4fa358c9ea34562de27aaa09abd7e7a84b5b0",
     "0619e-2018": "841c92f9b7392b86e68ccbe954aebca0b7f07980b860280a69168a2ec4ad65af",
@@ -1268,11 +1313,11 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1709-2020": "4f9dd3d145e9cab3ca9244d485e19798f6fae252ebdb2e1e47f676c0f9bf933d",
     "1800-2018": "6062f496b56559ecde65c3e9a6c569c752f3283e91ede0a6630f4ade60edbb66",
     "1801-2018": "472ea15fca13993c6a8dd8603eb81e0d916c4c3569bfc13c8e7b4ec8df62204c",
-    "2000-dst-2018": "ad03c4da13ad819f05de73a4f94f13368f9141c29d6d6644f13270a84dd7236c",
+    "2000-dst-2018": "f3ed0331d49ef188745a25cb6ae77f370e3c98a66ac7869d6c411888e2e7f4fe",
     "2000-ot-2018": "3db7c02da51dabab569206e55c30d4a19184f70e39d9af04fe9bef6f29b0bea5",
     "2200a-2020": "c306d132ddd3a1a624fadde543a9aae531ea89cb56bd530e5321b3118791771e",
     "2200an-2018": "a1de68479dceefa99721735be2ef28a4f7c51e963b642cac39085bd5350102a9",
-    "2200c-2018": "28cabb31c9ac72873ab318ac4c136c98cbf104384a0d394b13b09ddab77255e7",
+    "2200c-2018": "b70b224816f6ebfee23aa261463e43c2f33cbb1091bcb4479a0ada36839d952f",
     "2200m-2018": "6e38e4b67a6c15ecfac49473827c0963a649d2f04885c01a055cfdd01e1a2b50",
     "2200p-2020": "6fd06e1a2d1b664a7bc0f91eca1674c217bacecac327bcf385a32a95261f1178",
     "2200s-2018": "9cbd65cb3dff5f09f919b12b9cb080bb464c7eb721f3f64530ba28cfaaf58e8c",

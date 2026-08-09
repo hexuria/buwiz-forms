@@ -24,8 +24,8 @@
   "rules": 1209,
   "text_runs": 375,
   "images": 3,
-  "cells": 376,
-  "comb_cells": 131,
+  "cells": 377,
+  "comb_cells": 130,
   "growables": [
     {
       "page": 2,
@@ -111,7 +111,7 @@
       "2000 Guide Jan 2018.pdf"
     ]
   },
-  "html_bytes": 748480,
+  "html_bytes": 748108,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
