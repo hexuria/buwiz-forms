@@ -2607,6 +2607,19 @@
       "cause": null,
       "audit_blind": false,
       "resolution": null
+    },
+    {
+      "id": "F200",
+      "form": "*",
+      "page": 0,
+      "severity": "minor",
+      "status": "open",
+      "what": "F148/F149's fix is BLOCKED by a genuine conflict between two rules that are each correct on their own, and I reverted a working implementation rather than resolve it by editing the judge. A run of underscores is the sheet drawing a writing line -- it is the one ink signal in the corpus that INVITES typing, where every other one forbids it. But an input placed on that line necessarily overlaps a pre-printed text run's bbox, which is exactly what the assertion inputs_over_printed_text forbids.",
+      "where": "Population measured on the r36 tree: 52 underscore runs of >=3 glyphs in 34 cells across 13 forms, EVERY one of them kind 'label' with zero inputs, and 30 of the 34 captions reading '(specify)' / 'please specify' / '(Specify)'. A wider population exists if underscore GROUPS inside a mixed run count too -- '(please specify) ______', 'XA ____', 'XG___', '__________ % X =' -- which is what my implementation actually matched, giving +61 inputs rather than the +34 whole-run measurement predicted.",
+      "evidence": "Implemented and self-tested on 2026-08-10: PrePrintedInk.ruled_blanks + a field_verdict branch confined to non-field kinds (so it can never overrule the pre-printed, shading or bureau blocks) + a field_box branch placing the input on the line's own x-extent, untrimmed against its own underscores and not re-cut by printed partitions. Six new checks passed, including that a caption alone does not turn a label into a field and that a lone underscore is not a blank; the box landed at inset left 70.0 for a rule starting at x=70. It regenerated cleanly, +61 inputs, and money_boxes_have_inputs and inputs_span_no_printed_divider both stayed at 0 offenders. THEN inputs_over_printed_text went 6 forms/15 offenders to 26 forms/70: 34 offenders are pure-underscore runs, 20 are mixed runs, 16 are the pre-existing population. Reverted to 9f76779; the tree is unchanged and the gate stays at 10/13.",
+      "cause": null,
+      "audit_blind": false,
+      "resolution": "NOT resolved, and deliberately not resolved by me. The obvious move -- exempting underscore runs inside audit.py -- would be changing the judge immediately after changing the producer it judges, which is the failure mode this project has now found five times and which the 'without cheating' constraint forbids outright. Two candidate resolutions, both needing a decision rather than a tweak: (1) Treat the assertion's claim as over-broad relative to its PURPOSE. It exists so a taxpayer is not given a typing surface over text they cannot change; a ruled blank is not such text, it is the blank itself. That is defensible but it is a reviewed weakening of a gating check and must be argued as one, not slipped in. (2) Fix it upstream instead, where it arguably belongs: have extract.py classify a run of underscores as a RULE rather than as a text run. The blank then becomes ordinary paper, the lattice segments it as its own field cell, no input ever overlaps printed text, and the assertion needs no exception at all. Larger, and it moves what the text-parity check compares on both sides at once, so it needs its own round. Placing the input above the line's ink is NOT a third option: the assertion compares against the run's line box, whose top edge is the ascent line, and audit.py already documents that bound as loose by most of an em."
     }
   ]
 }
