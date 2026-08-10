@@ -766,6 +766,34 @@ constant with a viable blank remainder is a FIELD; emit already trims the
 writing box past leading ink. Every cell that gains an input corpus-wide is
 listed in the report; `inputs_over_printed_text` must not regress.
 
+**P2 MEASURED AND HALF-ABORTED (2026-08-10, operator, on the r38 tree).** The
+measurement ran first as the package demands, and F151's seven cells proved to
+be two populations:
+
+- **Row-number cells — SEPARATES, not implemented.** Label cells sharing a row
+  with >=1 field cell and holding only a short numeral: 296 corpus-wide.
+  Bounding the trailing blank by the form's own `line_width_pt` (the sliver
+  rule's existing metric, no new constant) and requiring the cell to be tall
+  enough to write in gives **296 -> 56 cells across 23 forms**, catching all
+  four Schedule D rows (452.7pt, blank >=2x) and excluding all 188 narrow
+  item-number boxes (14.8pt holding "12"). Distribution: 188 <0.5x, 52 >=0.5x,
+  11 >=1.0x, 45 >=2.0x.
+- **Zero-ink cells — DOES NOT SEPARATE, aborted.** 419 label cells contain no
+  text at all; their assigned run lies outside their box. All 419 pass the
+  blank/height test by construction, so 419 -> 419. F151's three Schedule C
+  rows are in here. Recorded as **F203** (major) in its own right.
+
+**Decision surfaced, not taken:** landing the row-number rule alone gives
+inputs to 56 cells across 23 forms that no finding has reviewed against the
+official sheets, and F151 would STILL not close because its Schedule C half is
+in the unseparable population. That trade is the user's. Do not implement it
+speculatively.
+
+Note the row-number rule would ALSO be the natural home for P3's residual
+(making the space above a published ruled-blank rule writable), since the
+ruled-blank case has a source-published rule marking where the writing surface
+begins -- evidence the F151 case lacks entirely.
+
 ### P4 — placement/artwork family (diagnosis recipes)
 
 - **F027/F030** (stray black bar outside the frame, 1700/1701 p1, every
