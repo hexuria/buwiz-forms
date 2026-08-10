@@ -425,8 +425,18 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # for ruled blanks. Also fixes a latent defect in that reader: a face loaded from
 # a buffer answers EVERY glyph query with its own font box (9,217 glyphs on 48 of
 # 53 forms), which published would claim ink across blank paper.
+# Re-pinned 2026-08-10 (r44) for F205: `_source_u_frame` now partitions a
+# printed frame at a WALL the sheet erased just above the band. Where ink
+# presence above the cut decides nothing -- an erased wall looks exactly like
+# 2200-A's knocked-out DIVIDER -- the sheets separate the two on HOW THE
+# STROKES ARE DRAWN, on two axes and never one: a wall is strictly thicker
+# than the thinnest stroke standing between the same two rails AND stands
+# strictly higher than every one of them. The comparison is refused outright
+# unless the dividers themselves stand above the band, because with every
+# divider flush to the band 'higher than every divider' collapses into 'above
+# the band at all', which is the reading 2200-A refutes.
 AUDIT_PRODUCER_SHA256 = (
-    "08552d9216c90cbf5803822161d24a0b69a69839d66596fb7cef50f7702f1ba4"
+    "4c19ad75bdedc5e713f3e45d414e7a25eba36ebb42422ce94aaac7888b4ebecc"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3

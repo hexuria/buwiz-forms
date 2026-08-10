@@ -4555,6 +4555,154 @@ def _carries_band_into_rule_above(
     return False
 
 
+def _stroke_column_break_is_erased(
+        page: VectorPage,
+        ink_x0: float, ink_x1: float,
+        gap_y0: float, gap_y1: float,
+        ) -> bool:
+    """Is this break in a stroke column an erasure OF THAT STROKE?
+
+    ``_erasure_ends_run`` asks whether a break was painted; this asks whose
+    break it is, and the sheet answers in the erasure's own width. 2000-DST
+    stops its middle wall 1.56pt above the comb band with a white rectangle at
+    x 192.14..192.62 -- exactly the 0.48pt stroke it covers and nothing else --
+    and 2200-C does the same at x 30.60..31.08 over its own 0.48pt stroke. An
+    erasure cut to one stroke's width is that stroke's own edit, so the ink
+    above it belongs to the same column. Paint that reaches beyond the stroke
+    is somebody else's: a grey band, a knocked-out row, a white field fill, all
+    of which cross this x on their way somewhere else and none of which say
+    anything about what stands above. Requiring full opacity keeps a
+    see-through overlay from bridging a column it cannot actually replace.
+
+    Bounding the bridge by the stroke's own width is also what keeps the reach
+    below finite without a magic window: to walk further up the page the sheet
+    has to have deliberately erased every point of the way at this exact width.
+    """
+    covered = _merge_intervals([
+        (max(gap_y0, paint.y0), min(gap_y1, paint.y1))
+        for paint in page.paints
+        if paint.opacity == 1.0
+        and paint.x0 >= ink_x0 - SOURCE_COORD_EPS_PT
+        and paint.x1 <= ink_x1 + SOURCE_COORD_EPS_PT
+        and paint.y1 > gap_y0
+        and paint.y0 < gap_y1
+    ], SOURCE_COORD_EPS_PT)
+    return any(
+        low <= gap_y0 + SOURCE_COORD_EPS_PT
+        and high >= gap_y1 - SOURCE_COORD_EPS_PT
+        for low, high in covered
+    )
+
+
+def _source_stroke_column_reach(
+        page: VectorPage,
+        tone: float,
+        rail: dict[str, Any] | None,
+        band_y0: float,
+        ) -> float:
+    """How far above the band this vertical's OWN source strokes stand.
+
+    The extent half of the wall relation, and the only place here that reads a
+    source stroke the final composite has covered. It is deliberately narrow:
+    a stroke belongs to this column only if it carries the same tone, is a
+    comb vertical rather than a rule chain's junction block, and is painted
+    within this stroke's own ink width -- 2000-DST's 0.48pt wall is three
+    operations all at x 192.14..192.62, while the 0.48pt-square block that
+    joins the rule above it to its neighbours is not a vertical at all. Breaks
+    are crossed only through ``_stroke_column_break_is_erased``.
+
+    Returned as the topmost y the column reaches, so smaller is higher; the
+    band top itself when nothing stands above it.
+    """
+    if rail is None:
+        return band_y0
+    ink_x0 = float(rail["ink_x0"])
+    ink_x1 = float(rail["ink_x1"])
+    wanted_tone = round(tone, 4)
+    column = _merge_intervals([
+        (paint.y0, paint.y1)
+        for paint in page.paints
+        if _is_comb_vertical(paint)
+        and round(paint.tone, 4) == wanted_tone
+        and paint.x0 >= ink_x0 - SOURCE_COORD_EPS_PT
+        and paint.x1 <= ink_x1 + SOURCE_COORD_EPS_PT
+    ], SOURCE_COORD_EPS_PT)
+    reach = band_y0
+    while True:
+        above = [
+            interval for interval in column
+            if interval[0] < reach - SOURCE_COORD_EPS_PT
+        ]
+        if not above:
+            return reach
+        low, high = max(above, key=lambda interval: (interval[1], interval[0]))
+        if (high < reach - SOURCE_COORD_EPS_PT
+                and not _stroke_column_break_is_erased(
+                    page, ink_x0, ink_x1, high, reach)):
+            return reach
+        reach = low
+
+
+def _stroke_stands_at_border_weight(
+        page: VectorPage,
+        tone: float,
+        rail: dict[str, Any] | None,
+        band_y0: float,
+        divider_weight: float,
+        divider_reach: float,
+        ) -> bool:
+    """Is this interior vertical drawn as a box side rather than a divider?
+
+    ``_carries_band_into_rule_above`` reads the wall's own connection to the
+    rule that closes the box, which is the strongest witness there is and stays
+    first. It cannot answer when the sheet erases that connection: 2000-DST and
+    2200-C both stop their walls a point and a half short of the comb band, so
+    the wall is final-visible for the whole band and cut off just above it,
+    exactly as 2200-A's knocked-out DIVIDER is. Ink presence above the cut
+    therefore decides nothing, and the sheets separate the two cases on how the
+    strokes are DRAWN instead -- both axes, never one:
+
+    | sheet, band                 | dividers stand      | the odd stroke      |
+    | --------------------------- | ------------------- | ------------------- |
+    | 2000-DST p1, y122.18-129.02 | 4 x 0.24pt, 1.08pt  | 0.48pt, 12.00pt     |
+    |                             | above the band      | above the band      |
+    | 2200-C p1, y126.50-132.14   | 1 x 0.24pt, 1.08pt  | 0.48pt, 10.80pt     |
+    |                             | above the band      | above the band      |
+    | 2200-A p1, erased divider   | 0.24pt              | 0.24pt (same)       |
+    | 2551-M p1, y800.28-803.88   | 0.72pt              | 0.72pt (same)       |
+    | 2200-C p1, y403.49-409.61   | 0.24pt, NOT above   | 0.48pt, 9.60pt      |
+    |   (a money row)             | the band at all     | above the band      |
+
+    Twice the weight and ten times the reach on the two sheets that partition;
+    no weight separation at all on the two whose odd stroke is a divider. So a
+    wall is a stroke strictly THICKER than the thinnest strokes of its own span
+    AND standing strictly HIGHER than every one of them. Either test alone is a
+    known misreading: weight alone promotes a money comb's thousands separator,
+    which is thicker than its digit dividers and hangs from the same baseline to
+    the same height, into a box wall; reach alone promotes 2200-A's divider,
+    which is cut off from the rule above by a knockout as thick as itself.
+
+    The last row is why the dividers, and not the band, must supply the scale.
+    2200-C's money rows carry real column walls -- 0.48pt, 9.6pt above the band,
+    bounding the sheet's grey N/A blocks -- beside digit dividers that stop dead
+    at the band's own top edge. With no divider standing above the band the
+    sheet has said nothing about how high a divider may stand, "higher than
+    every divider" collapses into "above the band at all", and that is the
+    reading 2200-A refutes. So the comparison is refused outright unless the
+    dividers themselves demonstrate the height a divider reaches. A span whose
+    verticals are all one weight, or whose dividers all stop at the band, yields
+    no wall here: the frame stays whole and an owner inside it stays
+    unevaluable, which is the fail-closed direction.
+    """
+    if rail is None or divider_reach >= band_y0 - SOURCE_COORD_EPS_PT:
+        return False
+    thickness = float(rail["ink_x1"]) - float(rail["ink_x0"])
+    if thickness <= divider_weight + SOURCE_COORD_EPS_PT:
+        return False
+    return (_source_stroke_column_reach(page, tone, rail, band_y0)
+            < divider_reach - SOURCE_COORD_EPS_PT)
+
+
 def _source_wall_partition(
         page: VectorPage,
         tone: float,
@@ -4571,10 +4719,13 @@ def _source_wall_partition(
     rectangle carrying three sub-boxes (MM, DD, YYYY) on full-height interior
     verticals, and 1707 draws the same shape as one row rule with the box
     walls standing on it. Each interior wall is source paint that reaches both
-    the baseline and the rule above (``_carries_band_into_rule_above``), so
-    the partition is read off the page, never off a claimed rectangle.
+    the baseline and the rule above (``_carries_band_into_rule_above``), or is
+    drawn to border weight and stands above every divider of the same span
+    (``_stroke_stands_at_border_weight``) where the sheet has erased that
+    reach. Either way the partition is read off the page, never off a claimed
+    rectangle.
     """
-    walls: list[float] = []
+    interior: list[tuple[float, dict[str, Any] | None]] = []
     for source_x in _stable_source_verticals(
             page,
             left - COMB_MAX_WIDTH_PT,
@@ -4590,9 +4741,36 @@ def _source_wall_partition(
         if not _vertical_has_connected_baseline_contact(
                 page, tone, geometry, band_y0, source_x, baseline):
             continue
-        if _carries_band_into_rule_above(page, tone, geometry, band_y0):
-            walls.append(source_x)
-    return [left, *sorted(walls), right]
+        interior.append((source_x, geometry))
+
+    # The divider population of THIS span, measured rather than assumed: the
+    # thinnest strokes standing between these two rails, and the highest any
+    # of them reaches. Both bounds come from the same source operators the
+    # candidate walls are measured against.
+    weights = [
+        float(geometry["ink_x1"]) - float(geometry["ink_x0"])
+        for _source_x, geometry in interior
+        if geometry is not None
+    ]
+    divider_weight = min(weights) if weights else 0.0
+    divider_reach = min(
+        (
+            _source_stroke_column_reach(page, tone, geometry, band_y0)
+            for _source_x, geometry in interior
+            if geometry is not None
+            and float(geometry["ink_x1"]) - float(geometry["ink_x0"])
+            <= divider_weight + SOURCE_COORD_EPS_PT
+        ),
+        default=band_y0,
+    )
+
+    walls = sorted(
+        source_x for source_x, geometry in interior
+        if _carries_band_into_rule_above(page, tone, geometry, band_y0)
+        or _stroke_stands_at_border_weight(
+            page, tone, geometry, band_y0, divider_weight, divider_reach)
+    )
+    return [left, *walls, right]
 
 
 def _local_baseline_spans(
@@ -14460,6 +14638,179 @@ def self_test() -> int:
         frame_resolves(erased_wall_page, six_slots, row_subject),
     )
 
+    # 2000-DST and 2200-C stop the wall BETWEEN two comb boxes the same way,
+    # with a white rectangle cut to the wall's own width a point and a half
+    # above the band. Ink above the cut therefore proves nothing either way and
+    # the sheets separate the two cases on how the strokes are drawn: the wall
+    # is twice the weight of the dividers beside it and stands ten times higher,
+    # while 2200-A's erased divider is the same weight as its neighbours. Both
+    # axes, always, and the dividers -- never the band -- fix the height a
+    # divider reaches: see `_stroke_stands_at_border_weight` for the measured
+    # separation on all five sheets.
+    #
+    # Every page below carries the sheets' own rule chain, one junction block
+    # per vertical, because a comb whose baseline is a single unbroken paint
+    # never asks this question: its rails are found directly and the frame
+    # never spans more than the owner claims.
+    BOX_TOP, BOX_BOTTOM = 1.0, 20.0      # the walled box's own rules
+    BAND_TOP, DIVIDER_TOP = 12.5, 11.4   # the comb band, and how high a
+    CUT_TOP = 11.0                       # divider stands; the wall's erasure
+
+    def rule_chain(left_end: float, right_end: float, *verticals: float,
+                   y0: float = BOX_BOTTOM) -> tuple[VectorPaint, ...]:
+        """One rule drawn as official sheets draw it: a junction block per
+        vertical with a run of rule between them."""
+        edges = [(left_end, left_end)]
+        edges.extend((x - 0.376, x + 0.376) for x in verticals)
+        edges.append((right_end, right_end))
+        pieces = list(edges[1:-1])
+        pieces.extend(
+            (run_start, run_end)
+            for (_left, run_start), (run_end, _right) in zip(edges, edges[1:])
+        )
+        return tuple(
+            VectorPaint(left, y0, right, y0 + 0.75, 0.0, 1.0, 70 + index,
+                        "rule-chain-piece")
+            for index, (left, right) in enumerate(sorted(pieces))
+        )
+
+    def walled_box(*interior: VectorPaint) -> VectorPage:
+        """One stroked rectangle 5..35 with border-weight sides."""
+        return source_page(
+            VectorPaint(5.0, 0.5, 35.0, BOX_TOP, 0.0, 1.0, 60, "box-top-rule"),
+            *rule_chain(5.0, 35.0, 10.0, 15.0, 20.0, 25.0, 30.0),
+            source_paint(5.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=1),
+            source_paint(35.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=2),
+            *interior,
+            framed=False,
+        )
+
+    def box_dividers(*xs: float, width: float = 0.24, order: int = 10,
+                     flush: bool = False) -> tuple[VectorPaint, ...]:
+        """Strokes hanging from the box's baseline, stopping inside the box.
+
+        They stand `DIVIDER_TOP` above the band as 2000-DST's and 2200-C's do,
+        unless `flush`, which is 2200-C's money row: dividers that stop dead at
+        the band's own top edge and so say nothing about a divider's height.
+        """
+        return tuple(
+            paint
+            for index, x in enumerate(xs)
+            for paint in (
+                (source_paint(x, a=DIVIDER_TOP, b=BAND_TOP, width=width,
+                              order=order + 2 * index),)
+                if not flush else ()
+            ) + (
+                source_paint(x, a=BAND_TOP, b=BOX_BOTTOM, width=width,
+                             order=order + 2 * index + 1),
+            )
+        )
+
+    def cut_stroke(x: float, width: float,
+                   order: int) -> tuple[VectorPaint, ...]:
+        """A stroke spanning the whole box, erased at its own width just above
+        the band."""
+        return (
+            source_paint(x, a=BOX_TOP, b=CUT_TOP, width=width, order=order),
+            VectorPaint(x - width / 2, CUT_TOP, x + width / 2, BAND_TOP,
+                        1.0, 1.0, order + 1, "stroke-knockout"),
+            source_paint(x, a=BAND_TOP, b=BOX_BOTTOM, width=width,
+                         order=order + 2),
+        )
+
+    left_cell = comb_subject(x0=5.0, x1=20.0, cell_y1=21.0)
+    right_cell = comb_subject(x0=20.0, x1=35.0, cell_y1=21.0)
+
+    knocked_out_wall_page = walled_box(
+        *box_dividers(10.0, 15.0, 25.0, 30.0), *cut_stroke(20.0, 0.48, 30))
+    check(
+        "a border-weight wall the sheet cut off still partitions its frame",
+        frame_resolves(knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            knocked_out_wall_page, (3, [25.0, 30.0]), right_cell),
+    )
+    check(
+        "an owner spanning a cut-off wall keeps its wider-frame verdict",
+        not frame_resolves(
+            knocked_out_wall_page, (5, [10.0, 15.0, 20.0, 25.0]),
+            comb_subject(x0=5.0, x1=30.0, cell_y1=21.0)),
+    )
+
+    # A money comb's thousands separator is thicker than its digit dividers and
+    # hangs from the same baseline to the same height. Weight alone would make
+    # it a box wall and cut the comb in two.
+    heavy_divider_page = walled_box(
+        *box_dividers(10.0, 25.0, 30.0),
+        *box_dividers(15.0, width=0.48, order=40),
+        *cut_stroke(20.0, 0.48, 30))
+    check(
+        "a heavier stroke standing no higher than its neighbours is a divider",
+        frame_resolves(heavy_divider_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # The same wall, its break covered by a page-wide knockout rather than an
+    # erasure cut to the stroke. Paint crossing this x on its way somewhere
+    # else says nothing about what stands above.
+    broad_overpaint_page = walled_box(
+        *box_dividers(10.0, 15.0, 25.0, 30.0),
+        source_paint(20.0, a=BOX_TOP, b=CUT_TOP, width=0.48, order=30),
+        VectorPaint(5.0, CUT_TOP, 35.0, BAND_TOP, 1.0, 1.0, 31,
+                    "broad-overpaint"),
+        source_paint(20.0, a=BAND_TOP, b=BOX_BOTTOM, width=0.48, order=32),
+    )
+    check(
+        "a break the sheet did not erase at this stroke leaves it unjoined",
+        not frame_resolves(
+            broad_overpaint_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # 2200-A's erased divider restated inside a walled box: divider weight, cut
+    # off from the rule above exactly as the wall beside it is.
+    cut_divider_page = walled_box(
+        *box_dividers(10.0, 25.0, 30.0),
+        source_paint(20.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=30),
+        *cut_stroke(15.0, 0.24, 40),
+    )
+    check(
+        "a divider-weight stroke standing above the band is not a wall",
+        frame_resolves(cut_divider_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # A divider under a grey band with an unrelated stroke of its own width
+    # above it. The band is not this stroke's erasure, so the two do not join
+    # and the divider does not drag the frame's wall detection down with it.
+    bridged_divider_page = walled_box(
+        *box_dividers(10.0, 15.0, 25.0, 30.0), *cut_stroke(20.0, 0.48, 30),
+        source_paint(25.0, a=BOX_TOP, b=CUT_TOP, order=50),
+        VectorPaint(5.0, CUT_TOP, 35.0, DIVIDER_TOP, 0.8509, 1.0, 51,
+                    "grey-band"),
+    )
+    check(
+        "a grey band does not join a divider to the stroke above it",
+        frame_resolves(bridged_divider_page, (3, [10.0, 15.0]), left_cell),
+    )
+
+    # 2200-C's money rows: real column walls bounding the sheet's grey N/A
+    # blocks, beside digit dividers that stop dead at the band's top edge. The
+    # comb is the whole row and must stay whole, so the wall relation has to
+    # refuse rather than guess when no divider stands above the band.
+    whole_row = comb_subject(x0=5.0, x1=35.0, cell_y1=21.0)
+    flush_divider_page = source_page(
+        VectorPaint(0.0, 0.5, 50.0, BOX_TOP, 0.0, 1.0, 60, "row-top-rule"),
+        *rule_chain(0.0, 50.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0),
+        source_paint(5.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=1),
+        source_paint(35.0, a=BOX_TOP, b=BOX_BOTTOM, width=0.48, order=2),
+        *box_dividers(10.0, 15.0, 25.0, 30.0, flush=True),
+        *cut_stroke(20.0, 0.48, 30),
+        framed=False,
+    )
+    check(
+        "dividers flush with the band leave a heavier stroke unproven",
+        frame_resolves(
+            flush_divider_page, (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
+            whole_row),
+    )
+
     # 2200-A's rails stop 3e-5pt short of the baseline they stand on. The
     # midpoint of that non-overlap is inside neither rectangle.
     touching_rail_page = source_page(
@@ -14534,6 +14885,48 @@ def self_test() -> int:
         ("a painted break in a stroke reads as unclaimed paper",
          {"_erasure_ends_run": lambda owners: False},
          lambda: frame_resolves(erased_wall_page, six_slots, row_subject)),
+        ("a wall the sheet cut off is never re-read from its own strokes",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach:
+          False},
+         lambda: frame_resolves(
+             knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)),
+        ("a stroke column stops at every break, erased or not",
+         {"_stroke_column_break_is_erased":
+          lambda page, ink_x0, ink_x1, gap_y0, gap_y1: False},
+         lambda: frame_resolves(
+             knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)),
+        ("any paint at all bridges a break in a stroke column",
+         {"_stroke_column_break_is_erased":
+          lambda page, ink_x0, ink_x1, gap_y0, gap_y1: True},
+         lambda: frame_resolves(
+             bridged_divider_page, (3, [10.0, 15.0]), left_cell)),
+        ("border weight alone makes a wall",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach: (
+              rail is not None
+              and float(rail["ink_x1"]) - float(rail["ink_x0"])
+              > divider_weight + SOURCE_COORD_EPS_PT)},
+         lambda: frame_resolves(
+             heavy_divider_page, (3, [10.0, 15.0]), left_cell)),
+        ("standing above the band alone makes a wall",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach: (
+              _source_stroke_column_reach(page, tone, rail, band_y0)
+              < band_y0 - SOURCE_COORD_EPS_PT)},
+         lambda: frame_resolves(
+             cut_divider_page, (3, [10.0, 15.0]), left_cell)),
+        ("the band supplies the scale the dividers did not",
+         {"_stroke_stands_at_border_weight":
+          lambda page, tone, rail, band_y0, divider_weight, divider_reach: (
+              rail is not None
+              and float(rail["ink_x1"]) - float(rail["ink_x0"])
+              > divider_weight + SOURCE_COORD_EPS_PT
+              and _source_stroke_column_reach(page, tone, rail, band_y0)
+              < min(divider_reach, band_y0) - SOURCE_COORD_EPS_PT)},
+         lambda: frame_resolves(
+             flush_divider_page, (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
+             whole_row)),
     )
     frame_module = globals()
     for label, patches, probe in frame_mutations:
@@ -14562,7 +14955,18 @@ def self_test() -> int:
         and frame_resolves(nested_cell_page, (2, [10.0]), nested_subject)
         and frame_resolves(split_wall_page, (2, [10.0]), nested_subject)
         and frame_resolves(row_rule_page, six_slots, row_subject)
-        and frame_resolves(erased_wall_page, six_slots, row_subject),
+        and frame_resolves(erased_wall_page, six_slots, row_subject)
+        and frame_resolves(
+            knocked_out_wall_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            knocked_out_wall_page, (3, [25.0, 30.0]), right_cell)
+        and frame_resolves(heavy_divider_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(cut_divider_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            bridged_divider_page, (3, [10.0, 15.0]), left_cell)
+        and frame_resolves(
+            flush_divider_page, (6, [10.0, 15.0, 20.0, 25.0, 30.0]),
+            whole_row),
     )
     _ = (_measured_rule_shaped, _measured_junction_sample)
 
