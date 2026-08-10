@@ -2028,13 +2028,13 @@
       "form": "1701-2018",
       "page": 3,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "The pre-printed row-letter column of item 17 (a, b, c - Janitorial and Messengerial Services, Professional Fees, Security Services) carries a 28.32 x 17.04 pt free-text input with no maxlength on top of each printed letter, so a taxpayer can overtype the deduction category letters.",
       "where": "p3c85 at (14.88, 525.19) 28.32 x 17.04 pt, 1 input, no maxlength; the printed run 'a  Janitorial and Messengerial Services' starts at x=33.60. Rows b and c are the same. 1701-conso carries the identical defect at p2c102 (28.08 x 13.44 pt), where the official-raster interior measures 4.4% black ink under the input.",
       "evidence": "DOM cell dump against the emitted text layer, plus the official-raster ink measurement for the 1701-conso instance, plus /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018/EVIDENCE-p3-item17abc-letter-column-fillable.png (fill test puts a character in the letter column of a, b and c while row d, the legitimate white specify line, fills correctly).",
       "cause": "C6",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED by r35's shading-seam rule (commit 7b97eb2), verified by the operator on the r39 tree at the exact geometry this finding names. p3c85 is x 14.88-43.20 by y 525.19-542.23 -- 28.32 x 17.04pt, the rect quoted here to the digit -- and it is now kind 'shaded' with ZERO inputs, as are p3c89 and p3c93. The 1701-conso instance is fixed identically: p2c96/p2c102/p2c108 (28.08 x 13.44pt) are all shaded with 0 inputs. The row-letter column is a grey non-entry band drawn in strips with a seam too narrow to write in, so it was scoring below the 70% coverage rule and kept a field; joining the strips across the seam classified it correctly. This finding's own evidence corroborates the mechanism -- it measured 4.4% black ink in the official raster interior, which is grey decoration, not a writing surface. No input was deleted that a taxpayer needs: the deduction amounts are entered in the money columns to the right, and money_boxes_have_inputs still reports 0 offenders corpus-wide."
     },
     {
       "id": "F156",

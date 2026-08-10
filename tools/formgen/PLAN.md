@@ -827,6 +827,28 @@ begins -- evidence the F151 case lacks entirely.
   p1c6 at 4 slots / 4 inputs, so it may already be fixed; verify against
   the official raster crop before closing.
 
+**P4 landed (gate r39, 10/13). Findings 19 -> 9 open blocker+major.** Nine
+findings resolved: F070/F102 shared one upstream root cause (a MuPDF rawdict
+span can carry two baselines; `extract.baseline_groups` now cuts at each);
+F060 fixed by proving line membership from ink rather than widening the 2.00pt
+window it failed by 0.04pt; F027/F030/F134/F166/F120 closed as already-fixed on
+geometry; F073 closed NOT-A-DEFECT with all three claims refuted by number.
+F155 closed separately -- r35's shading-seam rule had already fixed it, exact
+rect match, six cells now `shaded` with 0 inputs. F064/F065 stay open with
+mechanisms recorded.
+
+**A checker-of-checkers regression, mine, found and closed.** P3 landed three
+ruled-blank checks with no source-level mutation; P4 added a fourth name.
+`prove_fixtures_fail.py` runs in **CI, not the gate**, so gates r37/r38 were
+green over it. Proven both ways by CI itself: `c2ca292` formgen FAILURE ->
+`00e7f47` formgen SUCCESS. Fixed with four genuine mutations; CONTRACT_ONLY
+untouched at 5; mutations 9 -> 13.
+
+**GAP WORTH CLOSING: the gate does not run `prove_fixtures_fail`.** A
+checker-of-checkers regression passes the gate silently, and this one was found
+only because a P4 agent ran the script unprompted. Adding it to the gate's
+`self-tests` check is small and would have caught this in r37.
+
 ### P5 — needs the user (do not implement)
 
 - **F154** sworn-declaration strip: zero area_fills under it, so no tone
