@@ -3606,6 +3606,7 @@ AUDIT_EVIDENCE_KEYS = {
 MANIFEST_BINDING_KEYS = {
     "binding_valid", "manifest_inputs_complete", "attestation_complete",
     "enforceable", "complete", "reason", "errors", "blockers",
+    "host_scope_boundaries",
     "producer_sha256", "runtime_tree_sha256",
     "runtime_manifest_self_consistent",
     "base_runtime_closure_independently_attested",
@@ -3719,22 +3720,33 @@ RAW_REFEREE_INCOMPLETE_REASONS = [
 ]
 RAW_REFEREE_FUTURE_GATE = (
     "trusted clean-source and host/runtime closure binding")
-RAW_AUDIT_SCOPE_BLOCKERS = [
-    "audit producer/runtime attestation is incomplete",
-    "audit evidence is not yet enforceable",
-    "audit input manifest is intentionally non-gating",
-    "audit base runtime scope is incomplete",
-    (
-        "audit PyMuPDF/application runtime closure is manifest-self-consistent "
-        "only; the referee independently rehashes the Python executable but "
-        "not every named module or native dependency"
-    ),
-    "audit roundtrip native runtime scope is incomplete",
-    (
-        "audit Playwright/Chromium closure is manifest-schema checked but not "
-        "independently rehashed by the standalone referee"
-    ),
-]
+# Empty because the referee now closes what these blockers described, not
+# because the strings were deleted to make a check pass. Until 2026-08-10 this
+# list carried seven entries, and every audit binding carried all seven:
+#
+#   audit producer/runtime attestation is incomplete
+#   audit evidence is not yet enforceable
+#   audit input manifest is intentionally non-gating
+#   audit base runtime scope is incomplete
+#   audit PyMuPDF/application runtime closure is manifest-self-consistent
+#     only; the referee independently rehashes the Python executable but not
+#     every named module or native dependency
+#   audit roundtrip native runtime scope is incomplete
+#   audit Playwright/Chromium closure is manifest-schema checked but not
+#     independently rehashed by the standalone referee
+#
+# comb_referee.verify_published_closure and
+# comb_referee.verify_published_roundtrip_closure now resolve every named
+# module, every bundled native library and the whole Playwright/Chromium tree
+# from the installed package and rehash them, so the referee reaches a verdict
+# instead of refusing to. Each blocker string still exists in comb_referee.py
+# and reappears here the moment its own condition holds again -- a failed
+# rehash, a withheld round trip, an audit that declines to claim what was
+# verified. What the closure never covered (the Python standard library, the
+# interpreter's dynamic libraries and the operating system's own) is published
+# per binding under `host_scope_boundaries` and is the host TCB this gate
+# already declares in its audit application envelope.
+RAW_AUDIT_SCOPE_BLOCKERS: list[str] = []
 
 
 def _raw_referee_attestation_errors(value: Any) -> list[str]:
@@ -3894,8 +3906,14 @@ def _comparison_for_cell(
     referee = cell.get("referee")
     if emitted != lattice or cell.get("emitted_indexes_valid") is not True:
         return "stale-generation", "emitted physical slots disagree with lattice"
-    if not audit_complete or cell.get("audit_printed") is None:
+    if not audit_complete:
         return "unevaluable", "audit evidence is incomplete"
+    if cell.get("audit_printed") is None:
+        return (
+            "unevaluable",
+            "audit published this subject as an offender with no printed "
+            "topology",
+        )
     if not isinstance(referee, dict) or referee.get("status") != "measured":
         reason = referee.get("reason", "no reason") if isinstance(
             referee, dict) else "no reason"
@@ -6383,13 +6401,16 @@ def form_binding_errors(form: dict[str, Any],
     if (not isinstance(manifest_binding, dict)
             or manifest_binding.get("binding_valid") is not True
             or manifest_binding.get("manifest_inputs_complete") is not True
-            or manifest_binding.get("attestation_complete") is not False
-            or manifest_binding.get("enforceable") is not False
-            or manifest_binding.get("complete") is not False
+            or manifest_binding.get("attestation_complete") is not True
+            or manifest_binding.get("enforceable") is not True
+            or manifest_binding.get("complete") is not True
             or manifest_binding.get(
-                "base_runtime_closure_independently_attested") is not False
+                "base_runtime_closure_independently_attested") is not True
             or manifest_binding.get(
-                "roundtrip_runtime_closure_independently_attested") is not False
+                "roundtrip_runtime_closure_independently_attested") is not True
+            or not isinstance(
+                manifest_binding.get("host_scope_boundaries"), list)
+            or not manifest_binding.get("host_scope_boundaries")
             or manifest_binding.get("producer_sha256")
             != snapshot["producers"]["tools/formgen/audit.py"]["sha256"]):
         errors.append(f"form audit manifest binding is invalid: {slug}")
@@ -6409,11 +6430,12 @@ def form_binding_errors(form: dict[str, Any],
     if (audit_evidence.get("input_manifest_reason")
             != (manifest_binding or {}).get("reason")):
         errors.append(f"form audit manifest reason is not bound: {slug}")
-    if (audit_evidence.get("runtime_closure_independently_attested") is not False
-            or audit_evidence.get("integrity_valid") is not False
-            or audit_evidence.get("complete") is not False):
+    if (audit_evidence.get("runtime_closure_independently_attested")
+            is not True
+            or audit_evidence.get("integrity_valid") is not True
+            or audit_evidence.get("complete") is not True):
         errors.append(
-            f"raw form audit overclaims standalone runtime closure: {slug}")
+            f"raw form audit runtime closure is not attested: {slug}")
     form_poppler = form.get("poppler")
     snapshot_poppler = snapshot.get("runtime", {}).get("pdftocairo", {})
     if (not isinstance(form_poppler, dict)
@@ -6449,11 +6471,22 @@ def derive_application_scope_elevation(
         ) -> tuple[list[str], dict[str, Any] | None]:
     """Derive the sole allowed raw-exit-2 elevation from outer evidence.
 
-    The child intentionally refuses to attest its own host/runtime closure and
-    therefore treats otherwise exhaustive audit evidence as truncated.  The
-    gate may replace only that narrow uncertainty: its separately persisted
-    audit application envelope must be current, and every deterministic,
-    audit, ledger, emission, and source relation must independently be green.
+    The child refuses to attest ITS OWN host/runtime closure -- it is not
+    bound to a reviewed clean revision and does not rehash the standard
+    library, the dynamic libraries or the operating system it runs on -- so a
+    corpus where every subject agrees still exits unevaluable.  The gate may
+    replace only that narrow uncertainty: its separately persisted audit
+    application envelope must be current, and every deterministic, audit,
+    ledger, emission and source relation must independently be green.
+
+    Until 2026-08-10 this function also replaced a second uncertainty: the
+    referee could not rehash the audit's own runtime closure, so it published
+    every subject as `unevaluable`/"audit evidence is incomplete" and the gate
+    counted them as agreeing on the strength of the outer envelope.  It no
+    longer does.  The referee rehashes that closure itself and reaches a real
+    verdict, so the raw report now has to CARRY the agreement rather than be
+    credited with it, and the only reason left for the raw exit is the
+    referee's own host attestation.
     """
     errors: list[str] = []
     audit_snapshot = snapshot.get("audit")
@@ -6464,7 +6497,6 @@ def derive_application_scope_elevation(
         return ["outer audit application execution is not attested"], None
     if report.get("status") != "unevaluable" or report.get(
             "status_reasons") != [
-                "corpus coverage or one or more forms are unevaluable",
                 (
                     "standalone referee runtime/application attestation is "
                     "incomplete and non-enforceable"
@@ -6498,35 +6530,36 @@ def derive_application_scope_elevation(
             errors.append(f"layout owner registry is invalid: {slug}: {error}")
             layout_owner_ids = None
         if (not isinstance(audit_evidence, dict)
-                or audit_evidence.get("complete") is not False
-                or audit_evidence.get("integrity_valid") is not False
+                or audit_evidence.get("complete") is not True
+                or audit_evidence.get("integrity_valid") is not True
                 or audit_evidence.get(
-                    "runtime_closure_independently_attested") is not False
+                    "runtime_closure_independently_attested") is not True
                 or audit_evidence.get("assertion_valid") is not True
                 or audit_evidence.get("errors") != []
                 or audit_evidence.get("input_manifest_verified") is not True
                 or audit_evidence.get("evidence_published") is not True
                 or audit_evidence.get("byte_and_relation_binding_valid")
                 is not True):
-            errors.append(f"raw audit evidence has a non-scope failure: {slug}")
+            errors.append(f"raw audit evidence has a failure: {slug}")
         if (not isinstance(manifest, dict)
                 or manifest.get("binding_valid") is not True
                 or manifest.get("manifest_inputs_complete") is not True
                 or manifest.get("errors") != []
                 or manifest.get("blockers") != RAW_AUDIT_SCOPE_BLOCKERS
-                or manifest.get("reason") != "; ".join(
-                    f"blocked: {item}" for item in RAW_AUDIT_SCOPE_BLOCKERS)
-                or manifest.get("attestation_complete") is not False
-                or manifest.get("enforceable") is not False
-                or manifest.get("complete") is not False
+                or manifest.get("reason") != "complete"
+                or not isinstance(manifest.get("host_scope_boundaries"), list)
+                or not manifest.get("host_scope_boundaries")
+                or manifest.get("attestation_complete") is not True
+                or manifest.get("enforceable") is not True
+                or manifest.get("complete") is not True
                 or manifest.get("runtime_manifest_self_consistent") is not True
                 or manifest.get("base_runtime_closure_independently_attested")
-                is not False
+                is not True
                 or manifest.get(
                     "roundtrip_runtime_closure_independently_attested")
-                is not False
+                is not True
                 or manifest.get("roundtrip_present") is not True):
-            errors.append(f"raw audit manifest has a non-scope failure: {slug}")
+            errors.append(f"raw audit manifest has a failure: {slug}")
         if (not isinstance(ledger, dict)
                 or ledger.get("binding_valid") is not True
                 or ledger.get("reason") != "complete"
@@ -6609,7 +6642,7 @@ def derive_application_scope_elevation(
                     referee.get("compartments")
                     if isinstance(referee, dict) else None),
                 "lattice": cell.get("latticed"),
-                "audit": None,
+                "audit": cell.get("audit_printed"),
                 "emitted": cell.get("emitted"),
             }
             if (cell.get("ledger_state") != "active_resolved"
@@ -6620,15 +6653,15 @@ def derive_application_scope_elevation(
                     or referee.get("compartments") != cell.get("latticed")
                     or cell.get("emitted") != cell.get("latticed")
                     or cell.get("emitted_indexes_valid") is not True
-                    or cell.get("audit_printed") is not None
-                    or cell.get("audit_relation") != "unknown-truncated"
-                    or cell.get("comparison_status") != "unevaluable"
+                    or cell.get("audit_printed") != cell.get("latticed")
+                    or cell.get("audit_relation") != "complete-non-offender"
+                    or cell.get("comparison_status") != "agree"
                     or cell.get("comparison_reason")
-                    != "audit evidence is incomplete"
+                    != "referee, lattice, audit, and emitted agree"
                     or cell.get("transition_status") != "none"
                     or cell.get("four_way") != expected_raw_four_way):
                 errors.append(
-                    f"cell has a non-audit-scope blocker: "
+                    f"cell is not a four-way agreement: "
                     f"{slug}/{cell.get('cell')}")
         effective_subjects += len(cells)
 
@@ -6637,8 +6670,11 @@ def derive_application_scope_elevation(
     raw_totals = report.get("totals")
     if not isinstance(raw_totals, dict):
         return ["raw totals are missing"], None
-    effective_totals = dict(raw_totals)
-    effective_totals.update({
+    # The raw report has to CARRY these now; the elevation no longer supplies
+    # them. It used to overwrite `comparisons` with an all-agree distribution
+    # because the referee could not adjudicate at all, which meant the numbers
+    # the gate scored were the gate's own. They are the referee's again.
+    expected_totals = {
         "combs_unevaluable": 0,
         "forms_ok": len(forms),
         "forms_disagreement": 0,
@@ -6648,8 +6684,17 @@ def derive_application_scope_elevation(
             name: effective_subjects if name == "agree" else 0
             for name in COMPARISON_NAMES
         },
-    })
-    return [], effective_totals
+    }
+    mismatched = [
+        key for key, value in expected_totals.items()
+        if raw_totals.get(key) != value
+    ]
+    if mismatched:
+        return [
+            "raw totals do not carry the adjudicated relation: "
+            + ", ".join(mismatched)
+        ], None
+    return [], dict(raw_totals)
 
 
 def report_binding_errors(report: dict[str, Any],
@@ -7253,8 +7298,9 @@ BATCH_RECORD_KEYS = {
 AUDIT_ATTESTATION_KEYS = {
     "inputs_complete", "producer_execution_bound",
     "base_runtime_scope_complete", "roundtrip_runtime_scope_complete",
-    "validated_before_after", "complete", "enforceable",
-    "incomplete_reasons", "future_gate_required",
+    "application_closure_complete", "validated_before_after", "complete",
+    "enforceable", "incomplete_reasons", "declared_out_of_scope",
+    "future_gate_required",
 }
 AUDIT_INPUT_MANIFEST_KEYS = {
     "schema", "algorithm", "producer", "runtime", "inputs_complete",
@@ -7783,7 +7829,7 @@ AUDIT_PRODUCER_DEPENDENCY_KEYS = {
     "executed_from_snapshotted_source",
 }
 AUDIT_RUNTIME_KEYS = {
-    "python", "pymupdf", "loaded_application_files",
+    "python", "pymupdf", "loaded_application_files", "application_closure",
     "stdlib_and_system_shared_libraries_bound", "scope_complete",
     "incomplete_reason",
 }
@@ -7791,6 +7837,122 @@ AUDIT_RUNTIME_FILES_KEYS = {
     "algorithm", "files", "bytes", "tree_sha256", "members",
     "validated_before_after",
 }
+AUDIT_APPLICATION_CLOSURE_KEYS = {
+    "scope", "algorithm", "bytecode_caches_excluded", "exclusion_reason",
+    "packages", "modules", "native_libraries", "unbound_modules",
+    "validated_before_after", "complete",
+}
+AUDIT_APPLICATION_CLOSURE_SCOPE = (
+    "interpreter-binaries-and-application-package-trees-v1")
+AUDIT_TREE_CLOSURE_ALGORITHM = (
+    "sha256(canonical-json(path,type,bytes,digest))")
+AUDIT_APPLICATION_PACKAGE_KEYS = {
+    "logical_root", "algorithm", "files", "symlinks", "bytes", "tree_sha256",
+}
+
+
+def _audit_application_closure_errors(
+        closure: Any, members: Sequence[tuple[str, int, str]], slug: str,
+        ) -> list[str]:
+    """Shape and internal relations only; comb_referee.py does the rehash.
+
+    The gate deliberately does not re-derive these digests: the independent
+    rehash is the referee's job and binding the referee's report is this
+    gate's. What it does insist on is that the record cannot be internally
+    inconsistent -- an unaccounted module, a completeness flag that disagrees
+    with its own unbound list, or a module inventory that does not match the
+    loaded-file inventory it was derived from.
+    """
+    errors: list[str] = []
+    if not isinstance(closure, dict) or set(
+            closure) != AUDIT_APPLICATION_CLOSURE_KEYS:
+        return [f"audit application closure is malformed: {slug}"]
+    if (closure.get("scope") != AUDIT_APPLICATION_CLOSURE_SCOPE
+            or closure.get("algorithm") != AUDIT_TREE_CLOSURE_ALGORITHM
+            or closure.get("bytecode_caches_excluded") is not True
+            or not isinstance(closure.get("exclusion_reason"), str)
+            or not closure.get("exclusion_reason")
+            or closure.get("validated_before_after") is not True):
+        errors.append(f"audit application closure declaration is false: {slug}")
+    packages = closure.get("packages")
+    if (not isinstance(packages, list) or not packages
+            or not all(
+                isinstance(item, dict)
+                and set(item) == AUDIT_APPLICATION_PACKAGE_KEYS
+                and item.get("algorithm") == AUDIT_TREE_CLOSURE_ALGORITHM
+                and isinstance(item.get("logical_root"), str)
+                and item.get("logical_root")
+                and _is_count(item.get("files")) and item.get("files") > 0
+                and _is_count(item.get("symlinks"))
+                and _is_count(item.get("bytes")) and item.get("bytes") > 0
+                and _is_sha256(item.get("tree_sha256"))
+                for item in packages)):
+        errors.append(f"audit application package trees are malformed: {slug}")
+        packages = []
+    roots = [
+        item.get("logical_root") for item in packages
+        if isinstance(item, dict)
+    ]
+    if roots != sorted(set(roots)):
+        errors.append(f"audit application package roots are not exact: {slug}")
+    native = closure.get("native_libraries")
+    if (not isinstance(native, list) or not native
+            or not all(
+                isinstance(item, dict)
+                and set(item) == {"file", "bytes", "sha256"}
+                and isinstance(item.get("file"), str)
+                and item.get("file").split("/", 1)[0] in roots
+                and _is_count(item.get("bytes")) and item.get("bytes") > 0
+                and _is_sha256(item.get("sha256"))
+                for item in native)
+            or [item.get("file") for item in native]
+            != sorted(item.get("file") for item in native)):
+        errors.append(
+            f"audit bundled native library inventory is malformed: {slug}")
+    modules = closure.get("modules")
+    if (not isinstance(modules, list)
+            or not all(
+                isinstance(item, dict)
+                and set(item) == {"module", "file", "bytes", "sha256"}
+                and isinstance(item.get("module"), str)
+                and item.get("module")
+                and isinstance(item.get("file"), str)
+                and item.get("file").split("/", 1)[0] in roots
+                and _is_count(item.get("bytes"))
+                and _is_sha256(item.get("sha256"))
+                for item in modules)
+            or [item.get("file") for item in modules]
+            != sorted(item.get("file") for item in modules)):
+        errors.append(f"audit application module inventory is malformed: {slug}")
+        return errors
+    unbound = closure.get("unbound_modules")
+    if (not isinstance(unbound, list)
+            or unbound != sorted(unbound)
+            or not all(isinstance(item, str) and item for item in unbound)):
+        errors.append(f"audit unbound module inventory is malformed: {slug}")
+        return errors
+    if closure.get("complete") is not (not unbound):
+        errors.append(
+            f"audit application closure completeness relation is false: {slug}")
+    loaded_modules = {
+        logical[len("module/"):]: (size, digest)
+        for logical, size, digest in members
+        if logical.startswith("module/")
+    }
+    published = {item["module"]: (item["bytes"], item["sha256"])
+                 for item in modules}
+    accounted = set(published) | {
+        item[len("module/"):] for item in unbound
+        if item.startswith("module/")
+    }
+    if (len(published) != len(modules)
+            or accounted != set(loaded_modules)
+            or any(published[name] != loaded_modules[name]
+                   for name in published if name in loaded_modules)):
+        errors.append(
+            f"audit application closure does not account for the loaded "
+            f"application modules: {slug}")
+    return errors
 AUDIT_INPUT_ROLES = {"ir", "layout", "html", "guide", "guide_html", "source_pdf"}
 AUDIT_INPUT_FILE_KEYS = {"file", "required", "present", "bytes", "sha256"}
 AUDIT_SOURCE_INPUT_KEYS = {
@@ -7813,9 +7975,9 @@ def _audit_input_manifest_shape_errors(
     if (manifest.get("schema") != "formgen-audit-input-manifest-v1"
             or manifest.get("algorithm") != "sha256"
             or manifest.get("inputs_complete") is not True
-            or manifest.get("attestation_complete") is not False
-            or manifest.get("enforceable") is not False
-            or manifest.get("complete") is not False
+            or manifest.get("attestation_complete") is not True
+            or manifest.get("enforceable") is not True
+            or manifest.get("complete") is not True
             or manifest.get("missing_required") != []):
         errors.append(f"audit input manifest verdict is malformed: {slug}")
 
@@ -7921,6 +8083,8 @@ def _audit_input_manifest_shape_errors(
                     or member_tuples != sorted(
                         member_tuples, key=lambda item: item[0])):
                 errors.append(f"audit runtime member relation is false: {slug}")
+            errors.extend(_audit_application_closure_errors(
+                runtime.get("application_closure"), member_tuples, slug))
 
     inputs = manifest.get("inputs")
     if not isinstance(inputs, dict) or set(inputs) != AUDIT_INPUT_ROLES:
@@ -8212,6 +8376,12 @@ def full_audit_payload_errors(
                 or provenance.get("validated_after") is not True
                 or provenance.get("error") is not None):
             errors.append(f"audit provenance relation is malformed: {slug}")
+        # `complete` here is the audit's claim over its published application
+        # closure, and it must be exactly the conjunction it is derived from --
+        # a record that claims it while any of the three inputs is false is
+        # malformed, not merely optimistic. The scope boundaries it never
+        # covered stay published in `declared_out_of_scope`, which is why that
+        # list is still required to be non-empty on a fully green record.
         if (not isinstance(attestation, dict)
                 or set(attestation) != AUDIT_ATTESTATION_KEYS
                 or attestation.get("inputs_complete") is not True
@@ -8219,13 +8389,18 @@ def full_audit_payload_errors(
                 or attestation.get("base_runtime_scope_complete") is not False
                 or attestation.get(
                     "roundtrip_runtime_scope_complete") is not False
+                or attestation.get(
+                    "application_closure_complete") is not True
                 or attestation.get("validated_before_after") is not True
-                or attestation.get("complete") is not False
-                or attestation.get("enforceable") is not False
-                or not isinstance(attestation.get("incomplete_reasons"), list)
-                or not attestation.get("incomplete_reasons")
-                or not all(isinstance(item, str) and item
-                           for item in attestation.get("incomplete_reasons", []))
+                or attestation.get("complete") is not True
+                or attestation.get("enforceable") is not True
+                or attestation.get("incomplete_reasons") != []
+                or not isinstance(
+                    attestation.get("declared_out_of_scope"), list)
+                or not attestation.get("declared_out_of_scope")
+                or not all(
+                    isinstance(item, str) and item
+                    for item in attestation.get("declared_out_of_scope", []))
                 or not isinstance(attestation.get("future_gate_required"), str)
                 or not attestation.get("future_gate_required")):
             errors.append(f"audit attestation is malformed: {slug}")
@@ -10048,23 +10223,24 @@ def _synthetic_comb_fixture(
             "relations": [source_relation],
         },
     }
-    fixture_manifest_reason = "; ".join(
-        f"blocked: {blocker}" for blocker in RAW_AUDIT_SCOPE_BLOCKERS)
+    fixture_manifest_reason = "complete"
     fixture_manifest_binding = {
         "binding_valid": True,
         "manifest_inputs_complete": True,
-        "attestation_complete": False,
-        "enforceable": False,
-        "complete": False,
+        "attestation_complete": True,
+        "enforceable": True,
+        "complete": True,
         "reason": fixture_manifest_reason,
         "errors": [],
         "blockers": list(RAW_AUDIT_SCOPE_BLOCKERS),
+        "host_scope_boundaries": [
+            "fixture host trusted computing base is out of scope"],
         "producer_sha256": producer_records[
             "tools/formgen/audit.py"]["sha256"],
         "runtime_tree_sha256": sha256_bytes(b"audit-runtime-tree"),
         "runtime_manifest_self_consistent": True,
-        "base_runtime_closure_independently_attested": False,
-        "roundtrip_runtime_closure_independently_attested": False,
+        "base_runtime_closure_independently_attested": True,
+        "roundtrip_runtime_closure_independently_attested": True,
         "render_dependency_count": 1,
         "render_dependencies": [fixture_render_dependency],
         "roundtrip_present": True,
@@ -10078,7 +10254,7 @@ def _synthetic_comb_fixture(
         "legacy_alias_count": 1,
     }
     comparisons = {name: 0 for name in COMPARISON_NAMES}
-    comparisons["unevaluable"] = 1
+    comparisons["agree"] = 1
     cell = {
         "cell": "p1c1",
         "subject_key": "p1@0,0,10,10",
@@ -10096,10 +10272,10 @@ def _synthetic_comb_fixture(
         "emitted": 2,
         "emitted_indexes_valid": True,
         "emitted_evidence": fixture_emitted_evidence,
-        "audit_printed": None,
-        "audit_relation": "unknown-truncated",
-        "comparison_reason": "audit evidence is incomplete",
-        "comparison_status": "unevaluable",
+        "audit_printed": 2,
+        "audit_relation": "complete-non-offender",
+        "comparison_reason": "referee, lattice, audit, and emitted agree",
+        "comparison_status": "agree",
         "transition_status": "none",
         "transition_reason": "active ledger subject is already resolved",
         "referee": {
@@ -10143,7 +10319,7 @@ def _synthetic_comb_fixture(
             "topology_superset_relations": [],
         },
         "four_way": {
-            "referee": 2, "lattice": 2, "audit": None, "emitted": 2,
+            "referee": 2, "lattice": 2, "audit": 2, "emitted": 2,
         },
     }
     form_counts = {
@@ -10157,7 +10333,7 @@ def _synthetic_comb_fixture(
         "ledger_blocking": 0,
         "measured": 1,
         "source_unevaluable": 0,
-        "unevaluable": 1,
+        "unevaluable": 0,
         "referee_layout_mismatches": 0,
         "referee_layout_position_mismatches": 0,
         "emission_layout_mismatches": 0,
@@ -10173,10 +10349,8 @@ def _synthetic_comb_fixture(
     }
     form = {
         "slug": "fixture-1",
-        "status": "unevaluable",
-        "reason": (
-            f"audit evidence incomplete: {fixture_manifest_reason}, "
-            "1 combs unevaluable"),
+        "status": "ok",
+        "reason": "all combs measured",
         "source": {
             "file": "fixture.pdf",
             "sha256": source_digest,
@@ -10204,8 +10378,8 @@ def _synthetic_comb_fixture(
         }],
         "audit_evidence": {
             **assertion_relation,
-            "complete": False,
-            "reason": fixture_manifest_reason,
+            "complete": True,
+            "reason": "complete",
             "errors": [],
             "assertion_valid": True,
             "input_manifest_verified": True,
@@ -10214,8 +10388,8 @@ def _synthetic_comb_fixture(
             "byte_and_relation_binding_valid": True,
             "manifest_binding": fixture_manifest_binding,
             "ledger_binding": fixture_ledger_binding,
-            "runtime_closure_independently_attested": False,
-            "integrity_valid": False,
+            "runtime_closure_independently_attested": True,
+            "integrity_valid": True,
         },
         "emission_inventory": {
             "complete": True,
@@ -10284,7 +10458,6 @@ def _synthetic_comb_fixture(
         },
         "status": "unevaluable",
         "status_reasons": [
-            "corpus coverage or one or more forms are unevaluable",
             "standalone referee runtime/application attestation is incomplete "
             "and non-enforceable",
         ],
@@ -10303,7 +10476,7 @@ def _synthetic_comb_fixture(
             "combs_expected": 1,
             "combs_found": 1,
             "combs_measured": 1,
-            "combs_unevaluable": 1,
+            "combs_unevaluable": 0,
             "combs_source_unevaluable": 0,
             "subjects_active": 1,
             "subjects_active_resolved": 1,
@@ -10314,10 +10487,10 @@ def _synthetic_comb_fixture(
             "referee_layout_mismatches": 0,
             "referee_layout_position_mismatches": 0,
             "comparisons": comparisons,
-            "forms_ok": 0,
+            "forms_ok": 1,
             "forms_disagreement": 0,
-            "forms_unevaluable": 1,
-            "audit_evidence_complete_forms": 0,
+            "forms_unevaluable": 0,
+            "audit_evidence_complete_forms": 1,
             "referee_attestation_complete": False,
             "referee_enforceable": False,
         },
@@ -10574,6 +10747,42 @@ def _synthetic_audit_record(
         for member in runtime_members]
     runtime_payload = json.dumps(
         runtime_tuples, separators=(",", ":")).encode("ascii")
+    application_closure = {
+        "scope": AUDIT_APPLICATION_CLOSURE_SCOPE,
+        "algorithm": AUDIT_TREE_CLOSURE_ALGORITHM,
+        "bytecode_caches_excluded": True,
+        "exclusion_reason": "synthetic closure mirrors the published exclusion",
+        "packages": [
+            {
+                "logical_root": name,
+                "algorithm": AUDIT_TREE_CLOSURE_ALGORITHM,
+                "files": 2,
+                "symlinks": 0,
+                "bytes": 64,
+                "tree_sha256": sha256_bytes(
+                    f"synthetic-{name}-tree".encode("ascii")),
+            }
+            for name in ("fitz", "pymupdf")
+        ],
+        "modules": [
+            {
+                "module": member["file"][len("module/"):],
+                "file": f"{member['file'][len('module/'):]}/__init__.py",
+                "bytes": member["bytes"],
+                "sha256": member["sha256"],
+            }
+            for member in runtime_members
+            if member["file"].startswith("module/")
+        ],
+        "native_libraries": [{
+            "file": "pymupdf/libmupdf.dylib",
+            "bytes": 32,
+            "sha256": sha256_bytes(b"synthetic-libmupdf"),
+        }],
+        "unbound_modules": [],
+        "validated_before_after": True,
+        "complete": True,
+    }
     runtime = {
         "python": dict(python_identity),
         "pymupdf": {"package_version": "fixture", "version_bind": "fixture"},
@@ -10585,6 +10794,7 @@ def _synthetic_audit_record(
             "members": runtime_members,
             "validated_before_after": True,
         },
+        "application_closure": application_closure,
         "stdlib_and_system_shared_libraries_bound": False,
         "scope_complete": False,
         "incomplete_reason": "synthetic host runtime scope is incomplete",
@@ -10669,9 +10879,9 @@ def _synthetic_audit_record(
             "producer": producer,
             "runtime": runtime,
             "inputs_complete": True,
-            "attestation_complete": False,
-            "enforceable": False,
-            "complete": False,
+            "attestation_complete": True,
+            "enforceable": True,
+            "complete": True,
             "missing_required": [],
             "inputs": inputs,
             "render": render,
@@ -10688,10 +10898,12 @@ def _synthetic_audit_record(
             "producer_execution_bound": False,
             "base_runtime_scope_complete": False,
             "roundtrip_runtime_scope_complete": False,
+            "application_closure_complete": True,
             "validated_before_after": True,
-            "complete": False,
-            "enforceable": False,
-            "incomplete_reasons": ["synthetic host scope is incomplete"],
+            "complete": True,
+            "enforceable": True,
+            "incomplete_reasons": [],
+            "declared_out_of_scope": ["synthetic host scope is out of scope"],
             "future_gate_required": "outer application wrapper",
         },
         "roundtrip_runtime": roundtrip_runtime,
@@ -11807,12 +12019,16 @@ def self_test() -> int:
         "ledger_blocks_gate": True,
         "ledger_reason_codes": ["fixture-final-count-regression"],
         "emitted": 3,
+        "audit_printed": 3,
+        "audit_relation": "complete-non-offender",
+        "comparison_status": "stop",
+        "comparison_reason": "referee positions disagree with lattice anchors",
         "transition_status": "blocked",
         "transition_reason": (
             "active unresolved ledger subject remains blocking while "
-            "comparison status is unevaluable"),
+            "comparison status is stop"),
         "four_way": {
-            "referee": 2, "lattice": 3, "audit": None, "emitted": 3,
+            "referee": 2, "lattice": 3, "audit": 3, "emitted": 3,
         },
     })
     partial_form["cells"][0] = report_partial_cell
@@ -11822,16 +12038,25 @@ def self_test() -> int:
         "ledger_blocking": 1,
         "referee_layout_mismatches": 1,
         "referee_layout_position_mismatches": 1,
+        "comparisons": {
+            **{name: 0 for name in COMPARISON_NAMES}, "stop": 1},
     })
-    partial_form["reason"] = (
-        "1 lattice-ledger blockers, audit evidence incomplete: "
-        f"{partial_form['audit_evidence']['reason']}, 1 combs unevaluable")
+    partial_form["status"] = "unevaluable"
+    partial_form["reason"] = "1 lattice-ledger blockers"
+    partial_report["status_reasons"] = [
+        "corpus coverage or one or more forms are unevaluable",
+        *partial_report["status_reasons"],
+    ]
     partial_report["totals"].update({
         "subjects_active_resolved": 0,
         "subjects_active_unresolved": 1,
         "ledger_blocking": 1,
         "referee_layout_mismatches": 1,
         "referee_layout_position_mismatches": 1,
+        "forms_ok": 0,
+        "forms_unevaluable": 1,
+        "comparisons": {
+            **{name: 0 for name in COMPARISON_NAMES}, "stop": 1},
     })
     _resign_for_self_test(partial_report)
     partial_report_errors, partial_report_stats = validate_comb_referee_report(
@@ -12058,7 +12283,7 @@ def self_test() -> int:
         failures.append("a fabricated per-form status must be UNEVALUABLE")
     if not mutation_errors(
             lambda value: value["totals"].update(
-                {"audit_evidence_complete_forms": 1})):
+                {"audit_evidence_complete_forms": 0})):
         failures.append("a false audit-completeness aggregate must be UNEVALUABLE")
     if not mutation_errors(
             lambda value: value["totals"].update(
@@ -12309,9 +12534,25 @@ def self_test() -> int:
             "clipped": False,
         })
         cell["four_way"]["referee"] = 3
+        cell["comparison_status"] = "stop"
+        cell["comparison_reason"] = (
+            "lattice and audit agree against the independent referee")
         form = value["forms"][0]
         form["counts"]["referee_layout_mismatches"] = 1
+        form["counts"]["comparisons"]["agree"] = 0
+        form["counts"]["comparisons"]["stop"] = 1
+        form["status"] = "disagreement"
+        form["reason"] = "one or more four-way comparisons disagree"
         value["totals"]["referee_layout_mismatches"] = global_total
+        value["totals"]["comparisons"]["agree"] = 0
+        value["totals"]["comparisons"]["stop"] = 1
+        value["totals"]["forms_ok"] = 0
+        value["totals"]["forms_disagreement"] = 1
+        value["status_reasons"] = [
+            "one or more four-way form comparisons disagree",
+            "standalone referee runtime/application attestation is incomplete "
+            "and non-enforceable",
+        ]
 
     missing_global = clone(report)
     layout_disagreement(missing_global, global_total=0)
@@ -12378,19 +12619,17 @@ def self_test() -> int:
         form["counts"]["comparisons"]["stale-generation"] = 1
         form["counts"]["comparisons"]["unevaluable"] = 0
         form["counts"]["unevaluable"] = 0
-        form["status"] = "unevaluable"
-        form["reason"] = (
-            "audit evidence incomplete: "
-            + form["audit_evidence"]["reason"])
+        form["status"] = "disagreement"
+        form["reason"] = "one or more four-way comparisons disagree"
         value["totals"]["comparisons"]["agree"] = 0
         value["totals"]["comparisons"]["stale-generation"] = 1
         value["totals"]["comparisons"]["unevaluable"] = 0
         value["totals"]["combs_unevaluable"] = 0
         value["totals"]["forms_ok"] = 0
-        value["totals"]["forms_disagreement"] = 0
-        value["totals"]["forms_unevaluable"] = 1
+        value["totals"]["forms_disagreement"] = 1
+        value["totals"]["forms_unevaluable"] = 0
         value["status_reasons"] = [
-            "corpus coverage or one or more forms are unevaluable",
+            "one or more four-way form comparisons disagree",
             "standalone referee runtime/application attestation is incomplete "
             "and non-enforceable",
         ]
@@ -12488,14 +12727,24 @@ def self_test() -> int:
         "sha256"] = "a" * 64
     if not form_binding_errors(bound_form, mutated_outer_audit):
         failures.append("a mutated outer audit input must be UNEVALUABLE")
+    # A cell may publish only the topology the outer offender ledger supports:
+    # for a non-offender that is its own lattice count, so any other number is
+    # fabricated no matter how confidently the relation is labelled.
     fabricated_cell_audit = clone(bound_form)
-    fabricated_cell_audit["cells"][0]["audit_printed"] = 2
+    fabricated_cell_audit["cells"][0]["audit_printed"] = 5
     fabricated_cell_audit["cells"][0]["audit_relation"] = (
         "complete-non-offender")
-    fabricated_cell_audit["cells"][0]["four_way"]["audit"] = 2
+    fabricated_cell_audit["cells"][0]["four_way"]["audit"] = 5
     if not form_binding_errors(fabricated_cell_audit, snapshot):
         failures.append(
             "cell audit topology must bind to the outer offender ledger")
+    withheld_cell_audit = clone(bound_form)
+    withheld_cell_audit["cells"][0]["audit_printed"] = None
+    withheld_cell_audit["cells"][0]["audit_relation"] = "unknown-truncated"
+    withheld_cell_audit["cells"][0]["four_way"]["audit"] = None
+    if not form_binding_errors(withheld_cell_audit, snapshot):
+        failures.append(
+            "a withheld cell audit topology must be UNEVALUABLE")
     orphan_snapshot = clone(snapshot)
     orphan_relation = orphan_snapshot["audit"]["forms"]["fixture-1"][
         "assertion_relation"]

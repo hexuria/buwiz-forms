@@ -65,6 +65,7 @@ import argparse
 import dataclasses
 import hashlib
 import html.parser
+import importlib.machinery
 import json
 import math
 import mimetypes
@@ -77,6 +78,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -403,8 +405,18 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # `ASSERTION_KEYS` is unchanged at 10 and no tolerance moved -- POSITION_TOL_PT
 # is still 0.25. Unevaluable fell 182 -> 19 and decided-and-failing rose 3 ->
 # 33: the assertion now names producer defects it used to be unable to see.
+#
+# Re-pinned 2026-08-10 (F196/F199 blocker work): audit.py now publishes an
+# APPLICATION RUNTIME CLOSURE -- the fitz/pymupdf package trees, every loaded
+# application module bound to a file inside them, and the bundled native
+# libraries `libmupdf.dylib`/`libmupdfcpp.so` that PyMuPDF loads through the
+# dynamic linker and that no import-based inventory ever saw -- and derives
+# its manifest's `attestation_complete`/`enforceable`/`complete` from a
+# measured relation over that closure instead of from a constant False. This
+# referee rehashes every one of those members from the installed package
+# before accepting any of it; see `verify_published_closure`.
 AUDIT_PRODUCER_SHA256 = (
-    "2ea5b8a163e14eeb42e1e63147c4d5889fc8846ca9c6fd538f6ee64b150834f2"
+    "b2684b209160869b1528f6f4c0da7db95f117816cd9682d9d14b71fe262df787"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -8024,14 +8036,415 @@ def audit_render_dependencies(
     return entries, sorted(set(errors))
 
 
-def validate_audit_runtime(runtime: Any) -> list[str]:
+APPLICATION_PACKAGE_NAMES = ("fitz", "pymupdf")
+ROUNDTRIP_PACKAGE_NAME = "playwright"
+NATIVE_LIBRARY_SUFFIXES = (".dylib", ".so", ".dll", ".pyd")
+APPLICATION_CLOSURE_SCOPE = (
+    "interpreter-binaries-and-application-package-trees-v1")
+TREE_CLOSURE_ALGORITHM = "sha256(canonical-json(path,type,bytes,digest))"
+APPLICATION_CLOSURE_KEYS = {
+    "scope", "algorithm", "bytecode_caches_excluded", "exclusion_reason",
+    "packages", "modules", "native_libraries", "unbound_modules",
+    "validated_before_after", "complete",
+}
+TREE_MANIFEST_KEYS = {
+    "logical_root", "algorithm", "files", "symlinks", "bytes", "tree_sha256",
+}
+# What this referee still does not rehash, republished on every binding so a
+# green report never reads as a claim about the whole host.  The audit's own
+# `declared_out_of_scope` says the same thing from the producer's side; both
+# are printed, neither is derived from the other.
+REFEREE_HOST_SCOPE_BOUNDARIES = (
+    "the Python standard library and the interpreter's own dynamic libraries "
+    "are outside the application closure this referee rehashes",
+    "operating-system shared libraries, font services and other host "
+    "services loaded by Python, PyMuPDF and Chromium are host trusted "
+    "computing base and are rehashed by nobody",
+    "bytecode caches inside the application package trees are excluded from "
+    "the closure on both sides, matching the gate's approved-dependency "
+    "materialisation, which also runs the audit with bytecode writing "
+    "disabled and a redirected cache prefix",
+)
+
+
+def _is_bytecode_cache(logical: str) -> bool:
+    return (
+        "__pycache__" in pathlib.PurePosixPath(logical).parts
+        or logical.endswith(".pyc")
+    )
+
+
+def approved_package_roots() -> tuple[pathlib.Path, ...]:
+    """Package roots derived from this interpreter alone.
+
+    Deliberately independent of the audit: nothing here reads a path the
+    audit published, an environment variable, or `sys.path`.  The referee runs
+    under `-I -S`, so the installed package directories are not even importable
+    from it; they are computed from the interpreter's own configuration, which
+    is what makes the rehash below a second opinion instead of an echo.
+    """
+    candidates: list[str | None] = [
+        sysconfig.get_path("purelib"),
+        sysconfig.get_path("platlib"),
+    ]
+    schemes = set(sysconfig.get_scheme_names())
+    for scheme in ("osx_framework_user", "posix_user", "nt_user"):
+        if scheme not in schemes:
+            continue
+        candidates.extend((
+            sysconfig.get_path("purelib", scheme=scheme),
+            sysconfig.get_path("platlib", scheme=scheme),
+        ))
+    roots: list[pathlib.Path] = []
+    for value in candidates:
+        if not value:
+            continue
+        path = pathlib.Path(value).resolve()
+        if path.is_dir() and path not in roots:
+            roots.append(path)
+    return tuple(roots)
+
+
+def resolve_package_root(name: str) -> pathlib.Path:
+    spec = importlib.machinery.PathFinder.find_spec(
+        name, [str(root) for root in approved_package_roots()])
+    locations = list(getattr(spec, "submodule_search_locations", None) or ())
+    if spec is None or len(locations) != 1:
+        raise RefereeError(
+            f"runtime package has no single independently resolved root: "
+            f"{name}")
+    return pathlib.Path(locations[0]).resolve(strict=True)
+
+
+def snapshot_tree(root: pathlib.Path) -> list[list[Any]]:
+    """Every file and symlink under ``root``, hashed, canonically ordered."""
+    entries: list[list[Any]] = []
+    for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        logical = path.relative_to(root).as_posix()
+        if _is_bytecode_cache(logical):
+            continue
+        if path.is_symlink():
+            target = os.readlink(path)
+            try:
+                path.resolve(strict=True).relative_to(root)
+            except (FileNotFoundError, ValueError) as exc:
+                raise RefereeError(
+                    f"runtime closure symlink escapes root: {logical}"
+                ) from exc
+            entries.append([logical, "symlink", None, target])
+        elif path.is_file():
+            entries.append([
+                logical, "file", path.stat().st_size, sha256_file(path)])
+    return entries
+
+
+def tree_manifest(logical_root: str, entries: Sequence[Any]) -> dict[str, Any]:
+    canonical = json.dumps(
+        entries, separators=(",", ":"), ensure_ascii=True)
+    return {
+        "logical_root": logical_root,
+        "algorithm": TREE_CLOSURE_ALGORITHM,
+        "files": sum(1 for item in entries if item[1] == "file"),
+        "symlinks": sum(1 for item in entries if item[1] == "symlink"),
+        "bytes": sum(int(item[2] or 0) for item in entries if item[1] == "file"),
+        "tree_sha256": sha256_bytes(canonical.encode("ascii")),
+    }
+
+
+@dataclasses.dataclass(frozen=True)
+class IndependentClosure:
+    """This referee's own answer to "what is in the runtime closure"."""
+
+    manifests: tuple[dict[str, Any], ...]
+    files: dict[str, tuple[int, str]]
+    native_libraries: tuple[dict[str, Any], ...]
+    executable: tuple[int, str]
+    runtime_library: tuple[int, str] | None
+    roots: tuple[pathlib.Path, ...]
+    error: str | None = None
+
+
+def _derive_independent_closure(
+        names: Sequence[str]) -> IndependentClosure:
+    manifests: list[dict[str, Any]] = []
+    files: dict[str, tuple[int, str]] = {}
+    roots: list[pathlib.Path] = []
+    for name in names:
+        root = resolve_package_root(name)
+        entries = snapshot_tree(root)
+        manifests.append(tree_manifest(name, entries))
+        roots.append(root)
+        for logical, kind, size, digest in entries:
+            if kind == "file":
+                files[f"{name}/{logical}"] = (int(size), digest)
+    native = tuple(
+        {"file": logical, "bytes": size, "sha256": digest}
+        for logical, (size, digest) in sorted(files.items())
+        if logical.endswith(NATIVE_LIBRARY_SUFFIXES)
+    )
+    python_path = pathlib.Path(sys.executable).resolve()
+    library = sysconfig.get_config_var("LDLIBRARY")
+    library_dir = sysconfig.get_config_var("LIBDIR")
+    runtime_library: tuple[int, str] | None = None
+    if library and library_dir:
+        candidate = pathlib.Path(library_dir) / str(library)
+        if candidate.is_file():
+            resolved = candidate.resolve()
+            runtime_library = (
+                resolved.stat().st_size, sha256_file(resolved))
+    return IndependentClosure(
+        manifests=tuple(manifests),
+        files=files,
+        native_libraries=native,
+        executable=(python_path.stat().st_size, sha256_file(python_path)),
+        runtime_library=runtime_library,
+        roots=tuple(roots),
+    )
+
+
+def _failed_closure(error: str) -> IndependentClosure:
+    return IndependentClosure(
+        manifests=(), files={}, native_libraries=(),
+        executable=(0, ""), runtime_library=None, roots=(), error=error)
+
+
+_APPLICATION_CLOSURE: IndependentClosure | None = None
+_ROUNDTRIP_CLOSURE: IndependentClosure | None = None
+
+
+def independent_application_closure() -> IndependentClosure:
+    """Rehash the fitz/pymupdf trees once per run, from the installed package.
+
+    A failure to derive it is recorded and returned rather than raised: a
+    closure that cannot be checked must make every binding that depends on it
+    fail, not make one form explode while the rest look green.
+    """
+    global _APPLICATION_CLOSURE
+    if _APPLICATION_CLOSURE is None:
+        try:
+            _APPLICATION_CLOSURE = _derive_independent_closure(
+                APPLICATION_PACKAGE_NAMES)
+        except (OSError, RefereeError, ValueError) as error:
+            _APPLICATION_CLOSURE = _failed_closure(
+                f"{type(error).__name__}: {error}")
+    return _APPLICATION_CLOSURE
+
+
+def independent_roundtrip_closure() -> IndependentClosure:
+    global _ROUNDTRIP_CLOSURE
+    if _ROUNDTRIP_CLOSURE is None:
+        try:
+            _ROUNDTRIP_CLOSURE = _derive_independent_closure(
+                (ROUNDTRIP_PACKAGE_NAME,))
+        except (OSError, RefereeError, ValueError) as error:
+            _ROUNDTRIP_CLOSURE = _failed_closure(
+                f"{type(error).__name__}: {error}")
+    return _ROUNDTRIP_CLOSURE
+
+
+def revalidate_independent_closures() -> list[str]:
+    """Re-derive both closures and report any byte that moved during the run."""
+    errors: list[str] = []
+    for label, cached, names in (
+        ("application", _APPLICATION_CLOSURE, APPLICATION_PACKAGE_NAMES),
+        ("roundtrip", _ROUNDTRIP_CLOSURE, (ROUNDTRIP_PACKAGE_NAME,)),
+    ):
+        if cached is None:
+            continue
+        try:
+            fresh = _derive_independent_closure(names)
+        except (OSError, RefereeError, ValueError) as error:
+            errors.append(
+                f"{label} runtime closure could not be re-derived: "
+                f"{type(error).__name__}: {error}")
+            continue
+        if cached.error is not None:
+            errors.append(
+                f"{label} runtime closure was never derived: {cached.error}")
+            continue
+        if (fresh.manifests != cached.manifests
+                or fresh.files != cached.files
+                or fresh.executable != cached.executable
+                or fresh.runtime_library != cached.runtime_library):
+            errors.append(
+                f"{label} runtime closure changed during the referee run")
+    return errors
+
+
+def verify_published_closure(
+        published: Any,
+        members: Sequence[tuple[str, int, str]],
+        ) -> tuple[list[str], bool]:
+    """Rehash every named module and native dependency, not just Python.
+
+    `members` is the audit's loaded-application inventory, already parsed.
+    Everything the audit named is resolved AGAIN from the installed package
+    and compared byte for byte, and the package trees themselves are re-walked
+    so that a member the audit failed to name still has to be accounted for by
+    a tree digest.  Nothing here believes a path, a count or a digest the audit
+    published.
+    """
+    errors: list[str] = []
+    closure = independent_application_closure()
+    if closure.error is not None:
+        return (
+            [f"referee could not derive the application closure: "
+             f"{closure.error}"],
+            False,
+        )
+    if not isinstance(published, dict) or set(
+            published) != APPLICATION_CLOSURE_KEYS:
+        return ["audit application closure schema is unsupported"], False
+    if (published["scope"] != APPLICATION_CLOSURE_SCOPE
+            or published["algorithm"] != TREE_CLOSURE_ALGORITHM
+            or published["bytecode_caches_excluded"] is not True
+            or not isinstance(published["exclusion_reason"], str)
+            or not published["exclusion_reason"]
+            or published["validated_before_after"] is not True):
+        errors.append("audit application closure declaration is malformed")
+    if published["packages"] != [
+            dict(manifest) for manifest in closure.manifests]:
+        errors.append(
+            "audit application package trees disagree with the referee's "
+            "own rehash")
+    if published["native_libraries"] != [
+            dict(item) for item in closure.native_libraries]:
+        errors.append(
+            "audit native library inventory disagrees with the referee's "
+            "own rehash")
+    modules = published["modules"]
+    module_names: list[str] = []
+    if not isinstance(modules, list):
+        errors.append("audit application module inventory is not a list")
+    else:
+        for index, item in enumerate(modules):
+            if (not isinstance(item, dict)
+                    or set(item) != {"module", "file", "bytes", "sha256"}
+                    or not isinstance(item.get("module"), str)
+                    or not item["module"]
+                    or not isinstance(item.get("file"), str)):
+                errors.append(
+                    f"audit application module[{index}] is malformed")
+                continue
+            module_names.append(item["module"])
+            observed = closure.files.get(item["file"])
+            if observed is None:
+                errors.append(
+                    f"audit application module is not in the referee's "
+                    f"rehashed tree: {item['file']}")
+                continue
+            if (item["bytes"], item["sha256"]) != observed:
+                errors.append(
+                    f"audit application module bytes disagree with the "
+                    f"referee's rehash: {item['file']}")
+        published_files = [
+            item["file"] for item in modules
+            if isinstance(item, dict) and isinstance(item.get("file"), str)
+        ]
+        if published_files != sorted(published_files):
+            errors.append("audit application modules are not canonical ordered")
+    unbound = published["unbound_modules"]
+    if (not isinstance(unbound, list)
+            or not all(isinstance(item, str) and item for item in unbound)
+            or unbound != sorted(unbound)):
+        errors.append("audit unbound-module inventory is malformed")
+        unbound = []
+    # Every loaded application module must be accounted for exactly once,
+    # either inside a rehashed package tree or on the published unbound list.
+    # This is the relation that stops an inconvenient module being dropped.
+    member_modules = {
+        logical[len("module/"):]: (size, digest)
+        for logical, size, digest in members
+        if logical.startswith("module/")
+    }
+    accounted = set(module_names) | {
+        item[len("module/"):] for item in unbound
+        if item.startswith("module/")
+    }
+    if accounted != set(member_modules) or len(module_names) != len(
+            set(module_names)):
+        errors.append(
+            "audit application closure does not account for exactly the "
+            "loaded application modules")
+    if isinstance(modules, list):
+        for item in modules:
+            if not isinstance(item, dict) or not isinstance(
+                    item.get("module"), str):
+                continue
+            member = member_modules.get(item["module"])
+            if member is not None and member != (
+                    item.get("bytes"), item.get("sha256")):
+                errors.append(
+                    f"audit module inventory and loaded-file inventory "
+                    f"disagree: {item['module']}")
+    if published["complete"] is not (not unbound):
+        errors.append("audit application closure completeness relation is false")
+    # Interpreter binaries: named or absent, but never taken on trust.
+    executable = [item for item in members if item[0] == "python/executable"]
+    if len(executable) != 1 or executable[0][1:] != closure.executable:
+        errors.append("audit runtime Python executable bytes are stale")
+    library = [item for item in members if item[0] == "python/runtime-library"]
+    if closure.runtime_library is None:
+        if library:
+            errors.append(
+                "audit names a Python runtime library the referee cannot "
+                "resolve")
+    elif len(library) != 1 or library[0][1:] != closure.runtime_library:
+        errors.append("audit runtime Python library bytes are stale")
+    unknown = sorted(
+        item[0] for item in members
+        if item[0] not in {"python/executable", "python/runtime-library"}
+        and not item[0].startswith("module/")
+    )
+    if unknown:
+        errors.append(
+            "audit runtime names members outside the attested closure: "
+            + ", ".join(unknown[:8]))
+    attested = not errors and published["complete"] is True
+    return errors, attested
+
+
+def verify_published_roundtrip_closure(
+        dependency_closure: Any, chromium: Any) -> tuple[list[str], bool]:
+    """Rehash the Playwright package tree and the exact Chromium binary."""
+    errors: list[str] = []
+    closure = independent_roundtrip_closure()
+    if closure.error is not None:
+        return (
+            [f"referee could not derive the Playwright closure: "
+             f"{closure.error}"],
+            False,
+        )
+    expected = dict(closure.manifests[0]) if closure.manifests else {}
+    if dependency_closure != expected:
+        errors.append(
+            "audit Playwright dependency closure disagrees with the "
+            "referee's own rehash")
+    if not isinstance(chromium, dict) or not isinstance(
+            chromium.get("file"), str):
+        errors.append("audit Chromium identity cannot be rehashed")
+        return errors, False
+    observed = closure.files.get(chromium["file"])
+    if observed is None:
+        errors.append(
+            "audit Chromium executable is not inside the referee's rehashed "
+            "Playwright tree")
+    elif (chromium.get("bytes"), chromium.get("sha256")) != observed:
+        errors.append(
+            "audit Chromium executable bytes disagree with the referee's "
+            "rehash")
+    return errors, not errors
+
+
+def validate_audit_runtime(runtime: Any) -> tuple[list[str], list[str], bool]:
+    """Schema errors, independent-rehash errors, and the attestation verdict."""
     errors: list[str] = []
     if not isinstance(runtime, dict) or set(runtime) != {
-        "python", "pymupdf", "loaded_application_files",
+        "python", "pymupdf", "loaded_application_files", "application_closure",
         "stdlib_and_system_shared_libraries_bound",
         "scope_complete", "incomplete_reason",
     }:
-        return ["audit base runtime manifest schema is unsupported"]
+        return ["audit base runtime manifest schema is unsupported"], [], False
     python = runtime["python"]
     if not isinstance(python, dict) or set(python) != {
             "implementation", "version", "cache_tag"}:
@@ -8048,13 +8461,15 @@ def validate_audit_runtime(runtime: Any) -> list[str]:
             or pymupdf["package_version"] != pymupdf["version_bind"]):
         errors.append("audit PyMuPDF identity is malformed")
     loaded = runtime["loaded_application_files"]
+    parsed: list[tuple[str, int, str]] = []
+    inventory_valid = True
     if not isinstance(loaded, dict) or set(loaded) != {
             "algorithm", "files", "bytes", "tree_sha256", "members",
             "validated_before_after"}:
         errors.append("audit loaded-application manifest schema is malformed")
+        inventory_valid = False
     else:
         members = loaded["members"]
-        parsed: list[tuple[str, int, str]] = []
         if not isinstance(members, list):
             errors.append("audit loaded-application members are not a list")
         else:
@@ -8081,6 +8496,7 @@ def validate_audit_runtime(runtime: Any) -> list[str]:
                 parsed.append((member["file"], size, digest))
         if len({item[0] for item in parsed}) != len(parsed):
             errors.append("audit runtime members contain duplicate identities")
+            inventory_valid = False
         if parsed != sorted(parsed, key=lambda item: item[0]):
             errors.append("audit runtime members are not canonical ordered")
         canonical = json.dumps(parsed, separators=(",", ":"))
@@ -8096,12 +8512,6 @@ def validate_audit_runtime(runtime: Any) -> list[str]:
             errors.append("audit runtime tree digest is false")
         if loaded.get("validated_before_after") is not True:
             errors.append("audit runtime was not validated before and after")
-        executable = [
-            item for item in parsed if item[0] == "python/executable"]
-        python_path = pathlib.Path(sys.executable).resolve()
-        if len(executable) != 1 or executable[0][1:] != (
-                python_path.stat().st_size, sha256_file(python_path)):
-            errors.append("audit runtime Python executable bytes are stale")
     if runtime["stdlib_and_system_shared_libraries_bound"] is not False:
         errors.append("audit base runtime overclaims system-library binding")
     if runtime["scope_complete"] is not False:
@@ -8109,26 +8519,40 @@ def validate_audit_runtime(runtime: Any) -> list[str]:
     if (not isinstance(runtime["incomplete_reason"], str)
             or not runtime["incomplete_reason"]):
         errors.append("audit base runtime lacks its incomplete-scope reason")
-    return errors
+    # The independent rehash. Every named module and native dependency is
+    # resolved again from the installed package and hashed here; the Python
+    # executable is one member of that inventory rather than the only one it
+    # was.  A malformed inventory cannot be rehashed at all, and that is a
+    # failure to attest, never an attestation.
+    if not inventory_valid:
+        return (
+            errors,
+            ["audit runtime inventory could not be independently rehashed"],
+            False,
+        )
+    closure_errors, attested = verify_published_closure(
+        runtime["application_closure"], parsed)
+    return errors, closure_errors, bool(attested and not errors)
 
 
 def validate_audit_roundtrip(
         audit_record: dict[str, Any],
         entrypoint: str,
         dependency_paths: Sequence[str],
-        ) -> tuple[bool | None, list[str]]:
+        ) -> tuple[bool | None, list[str], bool]:
+    """Roundtrip scope, errors, and whether the referee rehashed its closure."""
     errors: list[str] = []
     if audit_record.get("roundtrip") == "skipped":
         if any(key in audit_record for key in (
                 "roundtrip_runtime", "render_requests", "candidate_pdf")):
             errors.append("skipped audit carries partial roundtrip evidence")
-        return None, errors
+        return None, errors, False
     runtime = audit_record.get("roundtrip_runtime")
     requests = audit_record.get("render_requests")
     candidate = audit_record.get("candidate_pdf")
     if not all(isinstance(value, dict)
                for value in (runtime, requests, candidate)):
-        return None, ["audit roundtrip evidence is missing or partial"]
+        return None, ["audit roundtrip evidence is missing or partial"], False
     required_runtime = {
         "mode", "playwright_package_version", "dependency_closure",
         "chromium", "same_resolution_session_used_for_render",
@@ -8339,7 +8763,13 @@ def validate_audit_roundtrip(
             or audit_record.get("status") != "ok"
             or "roundtrip_liveness" in audit_record):
         errors.append("audit roundtrip success state is malformed")
-    return False, errors
+    # The second half of the independent rehash: the Playwright package tree
+    # and the exact Chromium binary that printed the candidate, resolved from
+    # the installed package by this process and hashed again.
+    closure_errors, attested = verify_published_roundtrip_closure(
+        runtime.get("dependency_closure"), runtime.get("chromium"))
+    errors.extend(closure_errors)
+    return False, errors, bool(attested and not errors)
 
 
 def bind_audit_manifest(
@@ -8444,8 +8874,10 @@ def bind_audit_manifest(
                 or not producer["incomplete_reason"]):
             errors.append("audit producer lacks its incomplete-scope reason")
 
-    runtime_errors = validate_audit_runtime(manifest["runtime"])
+    runtime_errors, closure_errors, base_attested = validate_audit_runtime(
+        manifest["runtime"])
     errors.extend(runtime_errors)
+    errors.extend(closure_errors)
     inputs = manifest["inputs"]
     if not isinstance(inputs, dict) or set(inputs) != AUDIT_INPUT_ROLES:
         errors.append("audit input manifest roles disagree")
@@ -8539,15 +8971,27 @@ def bind_audit_manifest(
             "validated_after": True,
             "error": None}:
         errors.append("audit provenance was not validated before and after")
-    roundtrip_scope, roundtrip_errors = validate_audit_roundtrip(
-        audit_record, expected_entrypoint or "", dependency_paths)
+    roundtrip_scope, roundtrip_errors, roundtrip_attested = (
+        validate_audit_roundtrip(
+            audit_record, expected_entrypoint or "", dependency_paths))
     errors.extend(roundtrip_errors)
+    # What the referee itself proved, and therefore what the audit is allowed
+    # to claim. A claim the referee did not verify is an overclaim and stays
+    # an error; a claim the audit withholds while the referee did verify it is
+    # equally a disagreement, because the manifest must state the truth rather
+    # than a safe-looking approximation of it.
+    verified_closure = bool(base_attested)
+    verified_claim = bool(inputs_complete and verified_closure)
+    verified_attestation_complete = bool(
+        verified_claim
+        and (roundtrip_scope is None or roundtrip_attested))
     attestation = audit_record.get("attestation")
     if not isinstance(attestation, dict) or set(attestation) != {
             "inputs_complete", "producer_execution_bound",
             "base_runtime_scope_complete", "roundtrip_runtime_scope_complete",
-            "validated_before_after", "complete", "enforceable",
-            "incomplete_reasons", "future_gate_required"}:
+            "application_closure_complete", "validated_before_after",
+            "complete", "enforceable", "incomplete_reasons",
+            "declared_out_of_scope", "future_gate_required"}:
         errors.append("audit top-level attestation schema is unsupported")
         attestation = {}
     else:
@@ -8556,45 +9000,63 @@ def bind_audit_manifest(
             "producer_execution_bound": False,
             "base_runtime_scope_complete": False,
             "roundtrip_runtime_scope_complete": roundtrip_scope,
+            "application_closure_complete": verified_closure,
             "validated_before_after": True,
-            "complete": False,
-            "enforceable": False,
+            "complete": verified_attestation_complete,
+            "enforceable": verified_attestation_complete,
         }
         for key, expected_value in expected_attestation.items():
             if attestation.get(key) is not expected_value:
                 errors.append(f"audit attestation relation is false: {key}")
         if (not isinstance(attestation["incomplete_reasons"], list)
-                or not attestation["incomplete_reasons"]
                 or not all(isinstance(item, str) and item
                            for item in attestation["incomplete_reasons"])
+                or bool(attestation["incomplete_reasons"])
+                is bool(attestation.get("complete"))
+                or not isinstance(attestation["declared_out_of_scope"], list)
+                or not attestation["declared_out_of_scope"]
+                or not all(isinstance(item, str) and item
+                           for item in attestation["declared_out_of_scope"])
                 or not isinstance(attestation["future_gate_required"], str)
                 or not attestation["future_gate_required"]):
             errors.append("audit attestation blocker explanation is malformed")
-    if manifest["attestation_complete"] is not False:
-        errors.append("audit manifest overclaims producer attestation")
-    if manifest["enforceable"] is not False:
-        errors.append("audit manifest overclaims enforceability")
-    if manifest["complete"] is not False:
-        errors.append("audit manifest overclaims completeness")
+    if manifest["attestation_complete"] is not verified_claim:
+        errors.append(
+            "audit manifest overclaims producer attestation"
+            if manifest["attestation_complete"]
+            else "audit manifest attestation disagrees with the referee's "
+                 "independent verification")
+    if manifest["enforceable"] is not verified_claim:
+        errors.append(
+            "audit manifest overclaims enforceability"
+            if manifest["enforceable"]
+            else "audit manifest enforceability disagrees with the referee's "
+                 "independent verification")
+    if manifest["complete"] is not verified_claim:
+        errors.append(
+            "audit manifest overclaims completeness"
+            if manifest["complete"]
+            else "audit manifest completeness disagrees with the referee's "
+                 "independent verification")
     if manifest["attestation_complete"] is False:
         blockers.append("audit producer/runtime attestation is incomplete")
     if manifest["enforceable"] is False:
         blockers.append("audit evidence is not yet enforceable")
     if manifest["complete"] is False:
         blockers.append("audit input manifest is intentionally non-gating")
-    if attestation.get("base_runtime_scope_complete") is False:
-        blockers.append("audit base runtime scope is incomplete")
-    blockers.append(
-        "audit PyMuPDF/application runtime closure is manifest-"
-        "self-consistent only; the referee independently rehashes the "
-        "Python executable but not every named module or native dependency"
-    )
-    if roundtrip_scope is False:
-        blockers.append("audit roundtrip native runtime scope is incomplete")
+    if not base_attested:
         blockers.append(
-            "audit Playwright/Chromium closure is manifest-schema checked "
-            "but not independently rehashed by the standalone referee"
-        )
+            "audit PyMuPDF/application runtime closure is not independently "
+            "rehashed: the referee could not confirm every named module and "
+            "native dependency from the installed package")
+    if roundtrip_scope is None:
+        blockers.append(
+            "audit published no round trip, so its Playwright/Chromium "
+            "closure could not be independently rehashed")
+    elif not roundtrip_attested:
+        blockers.append(
+            "audit Playwright/Chromium closure is not independently rehashed "
+            "by the standalone referee")
     binding_valid = not errors
     complete = bool(
         binding_valid
@@ -8602,6 +9064,8 @@ def bind_audit_manifest(
         and manifest["enforceable"] is True
         and attestation.get("complete") is True
         and attestation.get("enforceable") is True
+        and base_attested
+        and roundtrip_attested
     )
     reason_parts = [
         *(f"invalid: {error}" for error in errors),
@@ -8619,6 +9083,10 @@ def bind_audit_manifest(
         "reason": "; ".join(reason_parts) if reason_parts else "complete",
         "errors": errors,
         "blockers": blockers,
+        "host_scope_boundaries": [
+            *REFEREE_HOST_SCOPE_BOUNDARIES,
+            *(attestation.get("declared_out_of_scope") or ()),
+        ],
         "producer_sha256": producer.get("sha256") if isinstance(
             producer, dict) else None,
         "runtime_tree_sha256": (
@@ -8626,8 +9094,8 @@ def bind_audit_manifest(
                 "loaded_application_files") or {}).get("tree_sha256")
         ),
         "runtime_manifest_self_consistent": not runtime_errors,
-        "base_runtime_closure_independently_attested": False,
-        "roundtrip_runtime_closure_independently_attested": False,
+        "base_runtime_closure_independently_attested": base_attested,
+        "roundtrip_runtime_closure_independently_attested": roundtrip_attested,
         "render_dependency_count": len(independent_dependencies),
         "render_dependencies": independent_dependencies,
         "roundtrip_present": roundtrip_scope is not None,
@@ -8913,8 +9381,19 @@ def comparison(cell: dict[str, Any], audit_complete: bool) -> tuple[str, str]:
     referee = cell["referee"]
     if emitted != lattice or not cell["emitted_indexes_valid"]:
         return "stale-generation", "emitted physical slots disagree with lattice"
-    if not audit_complete or cell["audit_printed"] is None:
+    if not audit_complete:
         return "unevaluable", "audit evidence is incomplete"
+    # Complete audit evidence can still leave ONE subject without a topology:
+    # the audit publishes it as an offender whose printed compartment count it
+    # could not measure. Calling that "audit evidence is incomplete" was
+    # harmless while the evidence was never complete, and is a false statement
+    # now that it is.
+    if cell["audit_printed"] is None:
+        return (
+            "unevaluable",
+            "audit published this subject as an offender with no printed "
+            "topology",
+        )
     if referee.get("status") != "measured":
         return "unevaluable", f"referee: {referee.get('reason', 'no reason')}"
     if not bool(referee.get("positions_match")):
@@ -9154,7 +9633,10 @@ def form_report(layout_path: pathlib.Path, args: argparse.Namespace,
         and manifest_binding["binding_valid"]
         and assertion_binding["binding_valid"]
     )
-    audit["runtime_closure_independently_attested"] = False
+    audit["runtime_closure_independently_attested"] = bool(
+        manifest_binding["base_runtime_closure_independently_attested"]
+        and manifest_binding[
+            "roundtrip_runtime_closure_independently_attested"])
     audit["integrity_valid"] = bool(
         audit["byte_and_relation_binding_valid"]
         and manifest_binding[
@@ -12746,6 +13228,16 @@ def self_test() -> int:
         unknown_audit, ledger_result, active_slots,
         active_inventory)["binding_valid"]
 
+    # As with the base runtime, the Playwright fixture is the referee's own
+    # rehash of the installed package: the happy path must be the truth, or
+    # every mutation below it would pass for the wrong reason.
+    roundtrip_closure = independent_roundtrip_closure()
+    assert roundtrip_closure.error is None, roundtrip_closure.error
+    roundtrip_chromium_file, roundtrip_chromium = next(
+        (logical, value)
+        for logical, value in sorted(roundtrip_closure.files.items())
+        if value[0] > 0
+    )
     roundtrip_fixture = {
         "status": "ok",
         "measured": True,
@@ -12754,19 +13246,11 @@ def self_test() -> int:
         "roundtrip_runtime": {
             "mode": "playwright-exact-executable",
             "playwright_package_version": "self-test",
-            "dependency_closure": {
-                "logical_root": "playwright",
-                "algorithm": (
-                    "sha256(canonical-json(path,type,bytes,digest))"),
-                "files": 1,
-                "symlinks": 0,
-                "bytes": 1,
-                "tree_sha256": "1" * 64,
-            },
+            "dependency_closure": dict(roundtrip_closure.manifests[0]),
             "chromium": {
-                "file": "playwright/chromium",
-                "bytes": 1,
-                "sha256": "2" * 64,
+                "file": roundtrip_chromium_file,
+                "bytes": roundtrip_chromium[0],
+                "sha256": roundtrip_chromium[1],
                 "version_output": "Chrome self-test",
             },
             "same_resolution_session_used_for_render": True,
@@ -12818,9 +13302,30 @@ def self_test() -> int:
             "candidate_ir_digest_scope": "source-and-generator-removed",
         },
     }
-    roundtrip_scope, roundtrip_errors = validate_audit_roundtrip(
-        roundtrip_fixture, "x.html", ["asset.png"])
-    assert roundtrip_scope is False and not roundtrip_errors
+    roundtrip_scope, roundtrip_errors, roundtrip_attested = (
+        validate_audit_roundtrip(roundtrip_fixture, "x.html", ["asset.png"]))
+    assert roundtrip_scope is False and not roundtrip_errors, roundtrip_errors
+    assert roundtrip_attested is True
+
+    tampered_playwright_tree = clone(roundtrip_fixture)
+    tampered_playwright_tree["roundtrip_runtime"]["dependency_closure"][
+        "tree_sha256"] = "9" * 64
+    tampered_tree_result = validate_audit_roundtrip(
+        tampered_playwright_tree, "x.html", ["asset.png"])
+    assert tampered_tree_result[1] and tampered_tree_result[2] is False
+
+    tampered_chromium = clone(roundtrip_fixture)
+    tampered_chromium["roundtrip_runtime"]["chromium"]["sha256"] = "8" * 64
+    tampered_chromium_result = validate_audit_roundtrip(
+        tampered_chromium, "x.html", ["asset.png"])
+    assert tampered_chromium_result[1] and tampered_chromium_result[2] is False
+
+    invented_chromium = clone(roundtrip_fixture)
+    invented_chromium["roundtrip_runtime"]["chromium"]["file"] = (
+        "playwright/not-in-the-installed-tree")
+    invented_chromium_result = validate_audit_roundtrip(
+        invented_chromium, "x.html", ["asset.png"])
+    assert invented_chromium_result[1] and invented_chromium_result[2] is False
 
     blocked_http_roundtrip = clone(roundtrip_fixture)
     blocked_http_roundtrip["render_requests"].update({
@@ -12940,14 +13445,50 @@ def self_test() -> int:
             AUDIT_PRODUCER_FILE: audit_producer_bytes,
             **dependency_sources,
         }
-        python_path = pathlib.Path(sys.executable).resolve()
-        runtime_members = [(
-            "python/executable",
-            python_path.stat().st_size,
-            sha256_file(python_path),
-        )]
+        # The runtime fixture is the referee's OWN independent derivation, not
+        # a hand-written stand-in: a fixture the referee did not derive could
+        # only ever prove that it accepts something, never that it accepts the
+        # truth and rejects everything else. Each mutation below moves exactly
+        # one member of it.
+        application_closure = independent_application_closure()
+        assert application_closure.error is None, application_closure.error
+        closure_modules = [
+            {
+                "module": name,
+                "file": f"{name}/__init__.py",
+                "bytes": application_closure.files[f"{name}/__init__.py"][0],
+                "sha256": application_closure.files[f"{name}/__init__.py"][1],
+            }
+            for name in APPLICATION_PACKAGE_NAMES
+        ]
+        runtime_members = [
+            (f"module/{item['module']}", item["bytes"], item["sha256"])
+            for item in closure_modules
+        ]
+        runtime_members.append(
+            ("python/executable", *application_closure.executable))
+        if application_closure.runtime_library is not None:
+            runtime_members.append(
+                ("python/runtime-library",
+                 *application_closure.runtime_library))
+        runtime_members.sort(key=lambda item: item[0])
         runtime_canonical = json.dumps(
             runtime_members, separators=(",", ":"))
+        published_application_closure = {
+            "scope": APPLICATION_CLOSURE_SCOPE,
+            "algorithm": TREE_CLOSURE_ALGORITHM,
+            "bytecode_caches_excluded": True,
+            "exclusion_reason": "self-test mirrors the published exclusion",
+            "packages": [
+                dict(item) for item in application_closure.manifests],
+            "modules": sorted(
+                closure_modules, key=lambda item: item["file"]),
+            "native_libraries": [
+                dict(item) for item in application_closure.native_libraries],
+            "unbound_modules": [],
+            "validated_before_after": True,
+            "complete": True,
+        }
         runtime = {
             "python": {
                 "implementation": platform.python_implementation(),
@@ -12961,17 +13502,17 @@ def self_test() -> int:
             "loaded_application_files": {
                 "algorithm": (
                     "sha256(canonical-json(logical-file,bytes,sha256))"),
-                "files": 1,
-                "bytes": runtime_members[0][1],
+                "files": len(runtime_members),
+                "bytes": sum(item[1] for item in runtime_members),
                 "tree_sha256": sha256_bytes(
                     runtime_canonical.encode("ascii")),
-                "members": [{
-                    "file": runtime_members[0][0],
-                    "bytes": runtime_members[0][1],
-                    "sha256": runtime_members[0][2],
-                }],
+                "members": [
+                    {"file": item[0], "bytes": item[1], "sha256": item[2]}
+                    for item in runtime_members
+                ],
                 "validated_before_after": True,
             },
+            "application_closure": published_application_closure,
             "stdlib_and_system_shared_libraries_bound": False,
             "scope_complete": False,
             "incomplete_reason": "self-test intentionally incomplete scope",
@@ -13031,10 +13572,12 @@ def self_test() -> int:
                 "producer_execution_bound": False,
                 "base_runtime_scope_complete": False,
                 "roundtrip_runtime_scope_complete": None,
+                "application_closure_complete": True,
                 "validated_before_after": True,
-                "complete": False,
-                "enforceable": False,
-                "incomplete_reasons": [
+                "complete": True,
+                "enforceable": True,
+                "incomplete_reasons": [],
+                "declared_out_of_scope": [
                     "self-test producer/runtime scope is intentionally open"],
                 "future_gate_required": "self-test trusted gate",
             },
@@ -13044,9 +13587,9 @@ def self_test() -> int:
                 "producer": producer,
                 "runtime": runtime,
                 "inputs_complete": True,
-                "attestation_complete": False,
-                "enforceable": False,
-                "complete": False,
+                "attestation_complete": True,
+                "enforceable": True,
+                "complete": True,
                 "missing_required": [],
                 "inputs": input_entries,
                 "render": {
@@ -13122,19 +13665,96 @@ def self_test() -> int:
             html_dir=html_dir,
             producer_sources=producer_sources,
         )["binding_valid"]
+        def rebind(record: dict[str, Any]) -> dict[str, Any]:
+            return bind_audit_manifest(
+                record,
+                expected,
+                source_path=source_path,
+                source_identity="external:test.pdf",
+                source_root=source_root,
+                source_payload=source_payload,
+                expected_source_sha256=sha256_bytes(source_payload),
+                html_dir=html_dir,
+                producer_sources=producer_sources,
+            )
+
+        # The independent rehash has to be able to reject every part of what
+        # it now attests, or attesting it would be theatre. One mutation per
+        # member of the closure, and the claim must collapse with it.
+        assert binding["base_runtime_closure_independently_attested"] is True
+        assert binding["roundtrip_runtime_closure_independently_attested"] \
+            is False
+        assert binding["host_scope_boundaries"]
+
+        tampered_tree = clone(audit_record)
+        tampered_tree["input_manifest"]["runtime"]["application_closure"][
+            "packages"][0]["tree_sha256"] = "b" * 64
+        tampered_tree_binding = rebind(tampered_tree)
+        assert not tampered_tree_binding["binding_valid"]
+        assert not tampered_tree_binding[
+            "base_runtime_closure_independently_attested"]
+
+        tampered_native = clone(audit_record)
+        assert tampered_native["input_manifest"]["runtime"][
+            "application_closure"]["native_libraries"]
+        tampered_native["input_manifest"]["runtime"]["application_closure"][
+            "native_libraries"][0]["sha256"] = "c" * 64
+        assert not rebind(tampered_native)["binding_valid"]
+
+        dropped_native = clone(audit_record)
+        dropped_native["input_manifest"]["runtime"]["application_closure"][
+            "native_libraries"].pop()
+        assert not rebind(dropped_native)["binding_valid"]
+
+        tampered_module = clone(audit_record)
+        tampered_module["input_manifest"]["runtime"]["application_closure"][
+            "modules"][0]["sha256"] = "d" * 64
+        assert not rebind(tampered_module)["binding_valid"]
+
+        invented_module = clone(audit_record)
+        invented_module["input_manifest"]["runtime"]["application_closure"][
+            "modules"][0]["file"] = "pymupdf/not-in-the-installed-tree.py"
+        assert not rebind(invented_module)["binding_valid"]
+
+        unaccounted_module = clone(audit_record)
+        unaccounted_module["input_manifest"]["runtime"][
+            "application_closure"]["modules"].pop()
+        assert not rebind(unaccounted_module)["binding_valid"]
+
+        false_completeness = clone(audit_record)
+        false_completeness["input_manifest"]["runtime"][
+            "application_closure"]["unbound_modules"] = ["module/elsewhere"]
+        assert not rebind(false_completeness)["binding_valid"]
+
+        stale_library = clone(audit_record)
+        stale_library["input_manifest"]["runtime"][
+            "loaded_application_files"]["members"].append({
+                "file": "python/runtime-library"
+                        if application_closure.runtime_library is None
+                        else "python/unexpected-member",
+                "bytes": 1,
+                "sha256": "e" * 64,
+            })
+        assert not rebind(stale_library)["binding_valid"]
+
+        # Claiming the attestation the referee did not verify, and withholding
+        # the one it did: both are disagreements with the independent answer.
         overclaimed = clone(audit_record)
-        overclaimed["input_manifest"]["complete"] = True
-        assert not bind_audit_manifest(
-            overclaimed,
-            expected,
-            source_path=source_path,
-            source_identity="external:test.pdf",
-            source_root=source_root,
-            source_payload=source_payload,
-            expected_source_sha256=sha256_bytes(source_payload),
-            html_dir=html_dir,
-            producer_sources=producer_sources,
-        )["binding_valid"]
+        overclaimed["input_manifest"]["runtime"]["application_closure"][
+            "packages"][0]["files"] += 1
+        overclaimed_binding = rebind(overclaimed)
+        assert not overclaimed_binding["binding_valid"]
+        assert any("overclaims producer attestation" in error
+                   for error in overclaimed_binding["errors"]), (
+            overclaimed_binding["errors"])
+
+        underclaimed = clone(audit_record)
+        underclaimed["input_manifest"]["complete"] = False
+        underclaimed_binding = rebind(underclaimed)
+        assert not underclaimed_binding["binding_valid"]
+        assert any("disagrees with the referee's independent verification"
+                   in error for error in underclaimed_binding["errors"]), (
+            underclaimed_binding["errors"])
 
     assert audit_relation_for_subject(
         ledger_result["subjects"][0], True, None
@@ -13168,6 +13788,7 @@ def self_test() -> int:
         ("stop", True, {"audit_printed": 3}, {"compartments": 5}),
         ("stale-generation", True, {"emitted": 2}, {}),
         ("unevaluable", False, {}, {}),
+        ("unevaluable", True, {"audit_printed": None}, {}),
     ]
     for expected_status, audit_complete, updates, referee_updates in (
             comparison_cases):
@@ -13527,6 +14148,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             errors.append({
                 "slug": "<corpus>",
                 "error": "RefereeError: Poppler binary changed during referee run",
+            })
+        for closure_error in revalidate_independent_closures():
+            errors.append({
+                "slug": "<corpus>",
+                "error": f"RefereeError: {closure_error}",
             })
         for form in forms:
             changed = changed_snapshot_inputs(form, args)
