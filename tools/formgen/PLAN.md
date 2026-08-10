@@ -946,10 +946,39 @@ the 22 band forms and report it as F209's evidence, not as flake**.
 
 ### T3+T4 — one overlay package, one re-pin (closes F213)
 
-**T4:** census `.rl` rect tones by role first; the wall/tint split goes inside
-the measured empty gap between the dark band (0.0–0.251, which INCLUDES
-F210's checkbox squares) and the tint band (0.7489+) — never between occupied
-values. Then tint rects stop being wall candidates in `visibleRects`/`boxAt`,
+**T4.** The tone census this package was told to do first **has been done**
+(2026-08-11, over all 53 `build/ir/*.ir.json`). Do not redo it; do not accept
+the premise it corrects.
+
+Rule tones are quantised to eight values, and **the interval this plan
+originally expected to be empty is not**:
+
+| gray | rules | box edge <20pt | 20–100pt | ≥100pt | forms | reading |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.0 | 49,962 | 40,288 | 2,940 | 6,734 | 53 | structural |
+| 0.251 | 76 | 64 | 12 | **0** | 3 | **wall** — F210's squares |
+| 0.502 | 164 | **164** | 0 | **0** | 11 | **wall** — 100% box edges |
+| 0.651 | 405 | 380 | 18 | 7 | 26 | **wall** — 94% box edges |
+| 0.7489 | 528 | 76 | 239 | 213 | 12 | **tint** |
+| 0.7529 | 1 | 1 | 0 | 0 | 1 | tint side |
+| 0.8509 | 2,256 | 741 | 559 | 956 | 39 | **tint** — the proven phantom source |
+| 1.0 | 1,751 | 705 | 548 | 498 | 42 | knockout |
+
+So 0.502 and 0.651 **are occupied and are walls**, not tint: they are the
+mid-grey checkbox outlines on 11 and 26 forms. Splitting at 0.251 (or anywhere
+below 0.651) would erase real checkbox boxes from the overlay and hide F210's
+whole family.
+
+**The split belongs in the unoccupied interval 0.651 → 0.7489** — genuinely
+empty, 0.0979 wide, so a split at e.g. 0.70 lands between no two occupied
+values. It is corroborated independently by ink morphology rather than resting
+on the gap alone: below it ink is overwhelmingly short box edges (0.502 is
+100% box edges, 0.651 is 94%, and neither 0.251 nor 0.502 has a single
+page-spanning run); above it ink is dominated by page-spanning band edges
+(0.7489 is 45% ≥100pt, 0.8509 is 42%). Two independent signals, same boundary.
+This also puts F210's 0.251 squares firmly on the wall side, which T5a needs.
+
+Then tint rects stop being wall candidates in `visibleRects`/`boxAt`,
 and `vacant` also excludes boxes whose interior probe resolves to tint. Keep
 the overlay's field-layer independence (`emit.py:7553-7556` asserts it reads
 only `.rl`; `parentNode` to the `layer-{role}` group is the sanctioned role
