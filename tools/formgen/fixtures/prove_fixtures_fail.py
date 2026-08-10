@@ -16,21 +16,25 @@ be the expected one -- a mutation that trips two means a check is standing in
 for another, and a mutation that trips none means the fixture never carried the
 property.
 
-Six cases reach past make_fixtures.py, and say so. Their subjects are not forms
-but four pages extract.py writes itself, one per question no PDF in either
+Eight cases reach past make_fixtures.py, and say so. Their subjects are not
+forms but five pages extract.py writes itself, one per question no PDF in either
 corpus states: ten painting ops with three of them drawn outside their own
 scissor; seven strokes stating every case of the `J` operator at once, because
 no fixture draws a round or projecting cap; a page of underscore runs, because
 the corpus carries no two-underscore punctuation beside a blank and no
-unresolvable face; and a page whose text operators put two baselines inside one
-rawdict span. Nothing in the corpus feeds those checks, so no fixture can break
-them -- and a fixture that carried a clip, a cap, a sub-floor blank or a
-doubled baseline would be ink no check reads, which is the decoration this file
-exists to catch. Those cases patch the probe pages' own source instead. Each is
-still a mutation of the PDF a check measures rather than of the evidence that
-PDF produced, which is the property the rest of this file rests on.
+unresolvable face; a page whose text operators put two baselines inside one
+rawdict span; and a page that sets one string five times -- including once from
+a font program it EMBEDS -- so that the face, the stated advances and the text
+matrix are the only things that can decide whether a glyph's outline is
+measurable. Nothing in the corpus feeds those checks, so no fixture can break
+them -- and a fixture that carried a clip, a cap, a sub-floor blank, a doubled
+baseline, an unresolvable face or an embedded program would be ink no check
+reads, which is the decoration this file exists to catch. Those cases patch the
+probe pages' own source instead. Each is still a mutation of the PDF a check
+measures rather than of the evidence that PDF produced, which is the property
+the rest of this file rests on.
 
-Five of extract.py's checks are deliberately NOT reachable this way; see
+Six of extract.py's checks are deliberately NOT reachable this way; see
 CONTRACT_ONLY. They are statements about the extractor's own output contract
 rather than about corpus content, and no PDF can violate them. Naming them here
 is what stops this file from looking like complete coverage: the case table and
@@ -71,6 +75,14 @@ CONTRACT_ONLY = {
     "paint-spans": "the contributor contract is emitted, not read from the PDF",
     "interval-provenance": "measured on a synthetic interval list, not a file",
     "paint-order-reconciliation": "probes a deliberately desynced argument",
+    "glyph-ink-fail-closed":
+        "the residue after the ink probe took the embedded-face case: every "
+        "face MuPDF loads from a buffer answers glyph_bbox with its own "
+        "Font.bbox, so two embedded faces CANNOT disagree about a glyph's "
+        "outline and two unembedded resources naming one BaseFont resolve to "
+        "the same base-14 face -- no PDF can state a disagreement or an empty "
+        "outline for a claimed character. Nor can make_fixtures.py or any PDF "
+        "make a run publish a box for a character it does not set",
 }
 
 
@@ -316,6 +328,69 @@ PROBE_UNRESOLVABLE_FACE_OP = b"/F2 10 Tf"
 PROBE_THICK_RESOLVED_FACE_OP = b"/F1 40 Tf"
 
 
+def mutate_glyph_ink() -> None:
+    """Set the unresolvable run in the resolvable face: `/F2 10 Tf` -> `/F1`.
+
+    The probe's second font is unembedded and is not base-14, so MuPDF draws
+    something and no face this module can name states those glyphs' outlines --
+    62,010 glyphs of the official corpus, and 1707's whole shape. In /F1 the
+    same four characters at the same size on the same baseline become
+    measurable, so the page publishes two outline tables where it stated one
+    and its refusal census loses the reason this half of the check pins.
+
+    It cannot be confused with the rotated or contradicted-advance operators:
+    both keep their own font operator, and neither is `/F2 10 Tf`. The
+    replacement is written as the operator the probe's own resolvable runs use,
+    so a probe page rewritten around a different face or size fails here loudly
+    rather than being patched onto a font it no longer declares.
+    """
+    stream = extract.GLYPH_INK_PROBE_STREAM
+    _one_operator(stream, PROBE_UNRESOLVABLE_INK_OP, "glyph-ink probe")
+    if stream.count(PROBE_RESOLVABLE_INK_OP) != PROBE_RESOLVABLE_INK_OPS:
+        raise SystemExit(
+            f"the glyph-ink probe states {stream.count(PROBE_RESOLVABLE_INK_OP)} "
+            f"resolvable font operator(s), expected {PROBE_RESOLVABLE_INK_OPS}")
+    extract.GLYPH_INK_PROBE_STREAM = stream.replace(
+        PROBE_UNRESOLVABLE_INK_OP, PROBE_RESOLVABLE_INK_OP)
+
+
+def mutate_glyph_ink_embedded() -> None:
+    """Set the embedded-program run in the unembedded face: `/F4` -> `/F1`.
+
+    /F4 is the only operator on either corpus's written-here pages that draws
+    from a font program the file EMBEDS, and every face MuPDF loads from a
+    buffer answers `glyph_bbox` with its own `Font.bbox` -- which is why 2551Q
+    page 1's captions, and 9,217 glyphs on 48 forms, have no derivable outline
+    at all. Drawn in /F1 the same four characters at the same size on the same
+    baseline become measurable, so the page publishes two outline tables where
+    it stated one and loses the refusal this half of the check pins.
+
+    The embedded font object, its descriptor and its 33KB program stay in the
+    file; only the operator that shows glyphs with it moves. That is what makes
+    this a statement about the DRAWN face rather than about the PDF's
+    furniture: a page carrying an embedded program nothing sets type in would
+    be exactly the decoration this file exists to catch.
+    """
+    stream = extract.GLYPH_INK_PROBE_STREAM
+    _one_operator(stream, PROBE_EMBEDDED_INK_OP, "glyph-ink probe")
+    if stream.count(PROBE_RESOLVABLE_INK_OP) != PROBE_RESOLVABLE_INK_OPS:
+        raise SystemExit(
+            f"the glyph-ink probe states {stream.count(PROBE_RESOLVABLE_INK_OP)} "
+            f"resolvable font operator(s), expected {PROBE_RESOLVABLE_INK_OPS}")
+    extract.GLYPH_INK_PROBE_STREAM = stream.replace(
+        PROBE_EMBEDDED_INK_OP, PROBE_RESOLVABLE_INK_OP)
+
+
+# The glyph-ink probe's unresolvable and embedded font operators, the resolvable
+# one both are replaced with, and how many times that resolvable one is already
+# stated (the measured run and the rotated one). Named for the same reason as
+# PROBE_UNRESOLVABLE_FACE_OP: a rewritten probe must fail loudly.
+PROBE_UNRESOLVABLE_INK_OP = b"/F2 10 Tf"
+PROBE_EMBEDDED_INK_OP = b"/F4 10 Tf"
+PROBE_RESOLVABLE_INK_OP = b"/F1 10 Tf"
+PROBE_RESOLVABLE_INK_OPS = 2
+
+
 def mutate_baseline_split() -> None:
     """Put each second text operator on its partner's own Td baseline.
 
@@ -365,6 +440,10 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
      "hyphens", mutate_ruled_blank_floor),
     ("ruled-blank-fail-closed", "the blank probe's unresolvable face is the "
      "resolvable one at 40pt", mutate_ruled_blank_fail_closed),
+    ("glyph-ink", "the ink probe's unresolvable face is the resolvable one",
+     mutate_glyph_ink),
+    ("glyph-ink", "the ink probe's embedded program is never set type in",
+     mutate_glyph_ink_embedded),
     ("baseline-split", "the baseline probe's every span is levelled onto one "
      "baseline", mutate_baseline_split),
 )
@@ -374,7 +453,7 @@ CASES: tuple[tuple[str, str, Callable[[], None]], ...] = (
 # global and forgetting to put it back would leak into the next case and
 # misattribute its result -- and three cases patch one stream, so a leak here
 # would read as a check standing in for another. The probe streams are on this
-# list for that reason and no other: they are the four subjects that do not live
+# list for that reason and no other: they are the five subjects that do not live
 # in the corpus.
 PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
              (fixtures, "GREY_LIGHT"), (fixtures, "GREY_MID"),
@@ -382,7 +461,8 @@ PATCHABLE = ((fixtures, "PAGE_HEIGHT_PT"), (fixtures, "LEAN_OFFSET_PT"),
              (fixtures, "flip_placement"), (fixtures, "insert_unmappable_glyph"),
              (extract, "CLIP_PROBE_STREAM"), (extract, "CAP_PROBE_STREAM"),
              (extract, "RULED_BLANK_PROBE_STREAM"),
-             (extract, "BASELINE_PROBE_STREAM"))
+             (extract, "BASELINE_PROBE_STREAM"),
+             (extract, "GLYPH_INK_PROBE_STREAM"))
 
 
 def profile_over(root: pathlib.Path) -> extract.SelfTestProfile:

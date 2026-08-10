@@ -508,6 +508,26 @@ class InkIndex:
 # --------------------------------------------------------------------------
 # The ink band of a glyph -- and why the box extract.py records is not it.
 #
+# THE MEASURED ANSWER, where the source states one.
+#
+# `glyph_ink_em` is the outline box of the face that drew the glyph, published
+# per run by extract.py's `run_glyph_ink` and resolved by the machinery
+# `ruled_blank_bars` already used: the glyph id `get_texttrace()` says was
+# drawn, the faces `pdf_clean_font_name` says the page could be drawing, the
+# advance the file itself states, and MuPDF's own bound on where that text op
+# inks. It is not a convention, a table written here, or a font installed on
+# this machine. Where it is present this file uses it for all four edges, and
+# both over-reaches below are then simply gone: the box is the ink.
+#
+# It is present for 78.4% of this corpus's glyphs -- 279,101 of 356,092. The
+# other 76,991 keep the advance box described below, which is what they always
+# had -- extract.py counts every one of them by reason in `glyph_ink_refusals`,
+# and the largest reason by far is a face MuPDF's own name cleaner does not
+# resolve (Arial Narrow, Ebrima, Nirmala UI: 62,010 glyphs on 50 of the 53
+# forms). A band that cannot be measured is never guessed.
+#
+# THE FALLBACK, for the 19%.
+#
 # extract.py stores a run's y-extent as MuPDF's span bbox, and that bbox is the
 # font's LINE box rather than its ink. Measured over all 19,333 runs of this
 # corpus: `y0 == baseline_y - ascender * size_pt` and
@@ -530,28 +550,35 @@ class InkIndex:
 # 1600WP p1c63/64 and 2316 p1c38/39 '(' and ')'; 1701MS p1c287 'g'), with real
 # ink overlaps of +0.20pt to +0.90pt. The rule is per GLYPH, never per run.
 #
-# The upper edge is left where extract.py put it (the ascent line): no
-# character reaches above it, so keeping it can only over-report. It cannot be
-# tightened the way the lower edge can, and for the same reason the horizontal
-# edges cannot: cap height, x-height and side bearings are per-character and
-# per-face quantities, while the descent this removes is a single figure the
-# whole face shares. 2550M p1c81-p1c85 still report the leader dots of "Debit
-# Memo" through that ascent-side blank band, 3.77pt above the ink.
+# Those overlaps are this path's numbers, and the measured path revises three of
+# them DOWNWARD and one class of them upward. A face's declared descender is not
+# a bound on its glyphs' ink: Helvetica's 'p' and 'y' reach 0.2172 em where the
+# span reports -0.210, and Arial-ItalicMT's 'g' likewise, so on 2316 p1c62/p1c83
+# and 1701MS p1c287 -- three inputs the emitter had placed flush against the
+# line box, at exactly 0.0000pt of overlap -- the outline is 0.0548pt and
+# 0.0660pt inside the box, and those cells fail on the measured path having held
+# on this one. Nothing about them changed; the line box was 0.05pt short of the
+# ink it was standing in for.
 #
-# The same over-reach exists HORIZONTALLY and is deliberately NOT removed.
-# `char_widths_pt[i]` is `bbox[2] - bbox[0]` of MuPDF's per-character box, and
-# that box is the ADVANCE box, side bearings included: over the 437,615
-# characters of this corpus it equals `char_advances_pt[i]` to within the IR's
-# own 0.005pt quantisation, and `page.get_texttrace()` -- the file's own
-# operator stream, read independently by `drawn_glyph_boxes` -- reports the
-# same x-extent to the millipoint. Neither view records a side bearing, so a
-# glyph's horizontal ink extent is not derivable here, and it cannot be bounded
-# by a constant either: measured across the eleven real faces these PDFs name,
-# the smallest left bearing of a character this corpus sets is -0.0015em
-# (Arial 'A'), so the only sound uniform bound is zero and removes nothing.
-# The vertical case yields to one constant precisely because it IS uniform:
-# every character without a descender stops at the baseline plus a small,
-# bounded overshoot, and every character with one goes far past it.
+# On this path the upper edge stays where extract.py put it (the ascent line):
+# no character reaches above it, so keeping it can only over-report. It cannot
+# be tightened by a constant the way the lower edge can, and for the same
+# reason the horizontal edges cannot: cap height, x-height and side bearings
+# are per-character and per-face quantities, while the descent this removes is
+# a single figure the whole face shares.
+#
+# The horizontal over-reach is the same shape. `char_widths_pt[i]` is
+# `bbox[2] - bbox[0]` of MuPDF's per-character box, and that box is the ADVANCE
+# box, side bearings included: over the 437,615 characters of this corpus it
+# equals `char_advances_pt[i]` to within the IR's own 0.005pt quantisation, and
+# `page.get_texttrace()` -- the file's own operator stream, read independently
+# by `drawn_glyph_boxes` -- reports the same x-extent to the millipoint.
+# Neither view records a side bearing, and it cannot be bounded by a constant
+# either: measured across the eleven real faces these PDFs name, the smallest
+# left bearing of a character this corpus sets is -0.0015em (Arial 'A'), so the
+# only sound uniform bound is zero and removes nothing. That is why the
+# horizontal edges could not be tightened FROM THE IR AS IT WAS, and why the
+# answer had to come from the face's own outline instead of from this file.
 #
 # GLYPH_BASELINE_OVERSHOOT_EM is that overshoot, measured rather than chosen.
 # Over Arial, Arial Bold, Arial Italic, Arial Bold Italic, Arial Narrow, Arial
@@ -605,14 +632,45 @@ SYMBOL_ENCODED_INK_FAMILIES = frozenset({
 })
 
 
+def published_glyph_ink(run: dict, char: str
+                        ) -> tuple[float, float, float, float] | None:
+    """The em outline box the IR states for this character, or None.
+
+    None is the fail-closed answer and the caller must fall back to the advance
+    box on it. The shape is validated rather than trusted: a producer that
+    published a degenerate or non-finite box would otherwise hand `overlaps` a
+    rectangle it silently reads as "no collision", which is the one direction a
+    checker must never fail in. A rotated run is refused here as well as in
+    extract.py -- the box is in font space, and the matrix that would place it
+    on the page is not in the IR.
+    """
+    table = run.get("glyph_ink_em")
+    if not isinstance(table, dict):
+        return None
+    box = table.get(char)
+    if not isinstance(box, (list, tuple)) or len(box) != 4:
+        return None
+    if any(isinstance(value, bool) or not isinstance(value, (int, float))
+           or not math.isfinite(value) for value in box):
+        return None
+    if box[2] <= box[0] or box[3] <= box[1]:
+        return None
+    if run.get("rotated") or not run.get("size_pt"):
+        return None
+    if run.get("baseline_y") is None:
+        return None
+    return (float(box[0]), float(box[1]), float(box[2]), float(box[3]))
+
+
 def glyph_ink_bottom(run: dict, char: str) -> float | None:
     """Lowest y this character's ink can reach, or None when that is unknown.
 
-    None is the fail-closed answer and every caller must fall back to the run's
-    own recorded line box on it. It is returned whenever the reasoning above
-    does not apply: a run without the metrics the derivation needs, a rotated
-    run whose baseline is not horizontal, a symbol-encoded face, a character
-    that has not been measured, or a character that descends.
+    The FALLBACK path's answer, for a glyph whose outline the source did not
+    state. None is the fail-closed answer and every caller must fall back to
+    the run's own recorded line box on it. It is returned whenever the
+    reasoning above does not apply: a run without the metrics the derivation
+    needs, a rotated run whose baseline is not horizontal, a symbol-encoded
+    face, a character that has not been measured, or a character that descends.
     """
     if char in DESCENDING_INK or char not in BASELINE_SEATED_INK:
         return None
@@ -636,8 +694,15 @@ def glyph_boxes(run: dict) -> list[Rect]:
     A label like `'Yes            No'` is one run whose bbox spans the checkbox
     drawn in the gap between the two words; scored by bbox it reports a collision
     that is not there, and 269 of the 362 bbox collisions in this corpus are that
-    artefact. A glyph's own advance box is where the ink is horizontally, and
-    `glyph_ink_bottom` is where it stops vertically.
+    artefact.
+
+    Where the source states the glyph's outline, that outline IS the box, on all
+    four edges: the em box hung off the baseline and origin the run states, at
+    the size it states. Where it does not, the glyph keeps the advance box --
+    its own advance horizontally, and `glyph_ink_bottom` vertically -- which is
+    wider than the ink on both axes and so can only over-report. The two are
+    never mixed within one glyph: a measured glyph is measured on every edge,
+    and a fallback glyph falls back on every edge.
     """
     out: list[Rect] = []
     offsets = run.get("char_origin_offsets_pt") or ()
@@ -653,6 +718,14 @@ def glyph_boxes(run: dict) -> list[Rect]:
         if not char.strip():
             continue
         x = origin + offset
+        ink = published_glyph_ink(run, char)
+        if ink is not None:
+            size = float(run["size_pt"])
+            baseline = float(run["baseline_y"])
+            # Font space counts y up from the baseline; the page counts it down.
+            out.append((x + size * ink[0], baseline - size * ink[3],
+                        x + size * ink[2], baseline - size * ink[1]))
+            continue
         ink_bottom = glyph_ink_bottom(run, char)
         # A band that does not reach below the ascent line is not a measurement
         # of anything; fall back rather than publish a degenerate box, which
@@ -12257,6 +12330,50 @@ def self_test() -> int:
           and glyph_boxes(ink_run("f", italic=True))[0][3] == 102.0)
     check("a baseline overshoot is carried, not rounded away",
           GLYPH_BASELINE_OVERSHOOT_EM * 10.0 > OVERLAP_EPS_PT)
+
+    # The measured path. The same run, now with the source's own outline for
+    # `D`: Helvetica states 0.077..0.723 em across and 0.0..0.729 em up, so at
+    # 10pt on a baseline of 100 the ink is x 0.77..7.23 and y 92.71..100.0 --
+    # inside the 0..3 advance box on neither edge, and 8.31pt short of the
+    # 102.0 the line box charged it with.
+    measured = glyph_boxes(ink_run("D", glyph_ink_em={
+        "D": [0.077, 0.0, 0.723, 0.729]}))
+    check("a stated outline is used on all four edges",
+          len(measured) == 1
+          and all(abs(got - want) < 1e-9 for got, want
+                  in zip(measured[0], (0.77, 92.71, 7.23, 100.0))))
+    check("a glyph the run states no outline for keeps the advance box",
+          glyph_boxes(ink_run("Dg", glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[1] == (3.0, 91.0, 6.0, 102.0))
+    check("an outline is never applied to a run whose placement is not published",
+          glyph_boxes(ink_run("D", rotated=True, glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[0] == (0.0, 91.0, 3.0, 102.0)
+          and glyph_boxes(ink_run("D", size_pt=0.0, glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[0] == (0.0, 91.0, 3.0, 102.0)
+          and glyph_boxes(ink_run("D", baseline_y=None, glyph_ink_em={
+              "D": [0.077, 0.0, 0.723, 0.729]}))[0] == (0.0, 91.0, 3.0, 102.0))
+    check("a malformed outline is refused rather than read as no collision",
+          all(glyph_boxes(ink_run("D", glyph_ink_em=table))[0]
+              == (0.0, 91.0, 3.0, seated)
+              for table in ({"D": [0.7, 0.0, 0.7, 0.729]},
+                            {"D": [0.077, 0.729, 0.723, 0.0]},
+                            {"D": [0.077, 0.0, 0.723]},
+                            {"D": [0.077, 0.0, 0.723, float("inf")]},
+                            {"D": [0.077, 0.0, 0.723, True]},
+                            {"D": "0.077 0 0.723 0.729"},
+                            {"D": None})))
+    check("an outline table that is not a table is not read",
+          glyph_boxes(ink_run("D", glyph_ink_em=[0.077, 0.0, 0.723, 0.729]))[0]
+          == (0.0, 91.0, 3.0, seated))
+    check("a stated outline overrules the character table, both ways",
+          # `g` descends, so the fallback would give it the line box; the
+          # source says its ink stops 0.218 em under the baseline instead.
+          abs(glyph_boxes(ink_run("g", glyph_ink_em={
+              "g": [0.035, -0.218, 0.481, 0.539]}))[0][3] - 102.18) < 1e-9
+          # and `D` is baseline-seated, so the fallback would stop it at the
+          # overshoot; the source says it reaches 0.06 em under.
+          and abs(glyph_boxes(ink_run("D", glyph_ink_em={
+              "D": [0.077, -0.06, 0.723, 0.729]}))[0][3] - 100.6) < 1e-9)
     check("every character measured as baseline-seated is measured only once",
           not (DESCENDING_INK & BASELINE_SEATED_INK)
           and ITALIC_ONLY_DESCENDING_INK <= BASELINE_SEATED_INK

@@ -415,8 +415,18 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # measured relation over that closure instead of from a constant False. This
 # referee rehashes every one of those members from the installed package
 # before accepting any of it; see `verify_published_closure`.
+# Re-pinned 2026-08-10 (r42): audit.glyph_boxes now scores against the GLYPH'S
+# OWN OUTLINE -- `glyph_ink_em`, published per run by extract.run_glyph_ink from
+# the face MuPDF actually drew with -- on all four edges where it is derivable,
+# keeping the advance box where it is not. 78.4% of the corpus's glyphs, with
+# every one of the 76,991 fallbacks counted by reason. audit.py's own comment
+# said a glyph's horizontal ink extent 'is not derivable here'; that was true of
+# audit, and stopped being true of the pipeline when P3 built the outline reader
+# for ruled blanks. Also fixes a latent defect in that reader: a face loaded from
+# a buffer answers EVERY glyph query with its own font box (9,217 glyphs on 48 of
+# 53 forms), which published would claim ink across blank paper.
 AUDIT_PRODUCER_SHA256 = (
-    "b2684b209160869b1528f6f4c0da7db95f117816cd9682d9d14b71fe262df787"
+    "08552d9216c90cbf5803822161d24a0b69a69839d66596fb7cef50f7702f1ba4"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -467,7 +477,7 @@ AUDIT_DEPENDENCY_SHA256 = {
     # and a mutation that re-reads that page with the split disabled, takes
     # extract.py from 17 checks to 18 and 17+24 probes to 18+24.
     "tools/formgen/extract.py": (
-        "315334021018e6714ca17119affd8302f929f97ae6d707b5adeffca234890946"
+        "31885ffea76d6253cb40a008b9778cf4a7ecf3e21bbd2b54735afb735b86c3e2"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
