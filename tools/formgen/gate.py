@@ -167,6 +167,20 @@ SELF_TEST_MODULES = (
 )
 SELF_SUPERVISING_SELF_TEST_MODULES = frozenset({"comb_referee", "gate"})
 
+# A checker-of-checkers, not a module self-test: it proves every `extract.py`
+# check is reachable from a SOURCE-LEVEL mutation -- a change to a fixture PDF's
+# own content stream that makes the check fail -- or carries a stated reason it
+# cannot be. It lives under `fixtures/` and takes no `--self-test` flag, so the
+# module loop above cannot reach it.
+#
+# Added 2026-08-10, and the reason is the point: three ruled-blank checks landed
+# unproven and survived gates r37 and r38 GREEN, because this script ran only in
+# CI. A gate that scores ten modules' self-tests while the thing that proves
+# those tests can fail runs somewhere else is a gate with a hole in it. It was
+# found by chance -- an agent ran the script unprompted -- which is not a
+# detection mechanism.
+PROVE_FIXTURES_SCRIPT = "fixtures/prove_fixtures_fail.py"
+
 # The assertions the gate demands. gate.py does not implement them: audit.py
 # owns them, and the gate's job is to demand them. Each maps to the key audit.py
 # must publish per form in its record.
@@ -9045,13 +9059,22 @@ def check_self_tests() -> Result:
         code, _ = runner(args, timeout=900)
         if code != 0:
             failures.append(module)
+    prover = HERE / PROVE_FIXTURES_SCRIPT
+    if not prover.is_file():
+        missing.append(PROVE_FIXTURES_SCRIPT)
+    else:
+        # It rebuilds and re-pins the fixture corpus once per mutation, so it is
+        # slower than any single module's self-test and gets its own budget.
+        code, _ = run([str(prover)], timeout=1800)
+        if code != 0:
+            failures.append("prove-fixtures-fail")
     if missing:
         return Result("self-tests", Verdict.UNEVALUABLE,
                       f"cannot run: {', '.join(missing)}")
     if failures:
         return Result("self-tests", Verdict.FAIL, f"failing: {', '.join(failures)}")
     return Result("self-tests", Verdict.PASS,
-                  f"{len(SELF_TEST_MODULES)} modules pass")
+                  f"{len(SELF_TEST_MODULES)} modules pass, mutations proven")
 
 
 def check_conversion() -> Result:
