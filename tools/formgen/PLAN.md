@@ -851,11 +851,10 @@ only because a P4 agent ran the script unprompted. Adding it to the gate's
 
 ### P5 — needs the user (do not implement)
 
-- **F154** sworn-declaration strip: zero area_fills under it, so no tone
-  rule can see it; a note strip segmented as a field (same class as F198).
-  Any fix costs shipped inputs elsewhere — user review.
-- **F156** `WE` swap claim: needs the official sheet, not the content
-  stream.
+- ~~**F154** sworn-declaration strip~~ and ~~**F156** `WE` swap claim~~ —
+  **RESOLVED 2026-08-11 by the user's own visual review**, which is exactly
+  the evidence P5 said they needed. Both closed `not-a-defect`; see the T
+  packages below for what the review opened instead.
 - The three structural blockers stay deliberately deferred and are listed
   in F199/F196 and GOAL.md: audit runtime attestation (comb-referee can
   never PASS without it), glyph ink extents (12 of the 15
@@ -865,8 +864,155 @@ only because a P4 agent ran the script unprompted. Adding it to the gate's
 
 ---
 
+## Implementation packages — T1–T5 (from the user's visual review, 2026-08-11, at `ae19137`)
+
+The user tab-walked 1701 (pages 1–4) and 0619E by hand with `?debug=fields`
+and reported what they found. Every symptom was then traced to a mechanism
+before anything was planned; the facts below are **measured on this tree**.
+Baseline: gate r46 **10/13**; `inputs_over_printed_text` 3 forms/6;
+`comb_slots_match_printed` 10 forms/19; comb subjects 4,587 / retained 33;
+**45,333 inputs**; findings 10 open blocker+major.
+
+Execute **T1 → T2 → T3+T4 → T5**, one package per gate round. T1 and T2 are
+disjoint (`emit.py` vs a new tool) and may run concurrently; nothing else may.
+Two of the user's reports were **refutations**, and they are recorded as such:
+the 1701 signature input they typed into is correct (F154 closed), and 0619E
+item 6 is correct (F156 closed).
+
+**What the review found, by mechanism:**
+
+| Symptom the user saw | Mechanism | Finding |
+| --- | --- | --- |
+| tab order skips fields, jumps back up | bands emitted after the whole cells layer (`emit.py:5677` / `:5680-5698`); layout order is already exact reading order; no `tabindex` exists anywhere, so focus order IS DOM order | F209 |
+| Schedule 1 Taxpayer/Spouse squares unfillable | squares drawn at gray 0.251 → `tone_role` decorative (`lattice.py:200`) → excluded from grid intake (`lattice.py:6295`) → area collapses to one `label` cell → refused at `emit.py:2326`. Their interiors carry white knockouts — the source saying "write here" | F210 |
+| 0619E signature boxes unfocusable | one caption run inside a 302×43pt bordered box sets `is_empty=False` → `label` → refused. **0620 `p1c87` is the control**: same box, no interior caption, ships an input today | F211 |
+| signature line wants bottom + centre | `.fh52` line-height = box height ⇒ vertically centred; no `text-align` emitted for plain fields | F212 |
+| red/blue overlay marks on correct inputs | the overlay has NO tone awareness: grey 0.8509 tint fragments become walls. Proven: 1701 p2 `p2c21-i` reports `over=4.57pt` against tint fragment `h27`. **Not all blue is phantom — F210's blues are real** | F213 |
+| p4 item 9 "(specify)" blank | caption cell is `label`; the strip below the rule is a 3.22pt sliver → `blank` (`lattice.py:3541`) | F148/F149 |
+
+### T1 — emit band rows at their reading-order position (closes F209)
+
+Split the cells layer around each band so the band lands at its own `(y0,x0)`:
+`layer-cells` → band → `layer-cells`. Cells stay a flat sibling run; **no
+`tabindex`** (the referee pins element attribute key sets exactly at
+`comb_referee.py:1168-1177`, `:3293-3304`, `:3433-3441`).
+
+Pre-flight, all three before writing code: (1) does `SlotParser`'s nesting
+contract (`comb_referee.py:3400-3468`) accept multiple `cells` containers per
+page — if not, extend it in the same commit; (2) does `audit.py`'s
+`CELL_BOUNDARY_RE` (`:752-753`) over-run on the last cell before a split —
+**`audit.py` is locked, so STOP and report rather than edit it**; (3) is
+`applyFields`' input counting (`emit.py:4531-4545`) scoped to the band subtree
+rather than the page.
+
+**Acceptance:** with `row_tops`-style clustering (`band_drive.py:114-132`),
+zero reading-order inversions on all 53 forms (non-zero before); inputs stay
+45,333; no cell id/class/attribute/style moves; all self-tests +
+`validate_tree` + `prove_fixtures_fail` pass; assertions unmoved at 3/6 and
+10/19; determinism byte-identical across two `batch.py` runs; all 53 structure
+hashes re-pinned with the cause named; `HTML_RUNTIME_SCRIPT_SHA256` must NOT
+move unless script text changed.
+
+### T2 — `tab_check.py`: the automated tab-walk with reviewable artifacts
+
+Nobody hand-verifies a form again. Reuse `band_drive.py:401-432` (sync
+Playwright, `file://`, pageerror listener), `:56-60` (`bundle_dir`), `:114-132`
+(`row_tops`); `fill_check.py:156-190` proves keyboard/focus works headless.
+Do **not** reuse `audit.py`'s Playwright runtime — it is a sealed
+provenance-attesting harness whose page handle never leaves its worker
+subprocess.
+
+Per form: `goto(…, wait_until="load")` (sufficient — bands are pre-rendered at
+capacity, no post-load mutation), inject ONE `focusin` recorder, Tab until
+`activeElement === body`, read the sequence back in one `evaluate`. A hard
+press cap being hit is a FAILURE, never a silent truncation.
+
+Verdicts: `green` (reached in order), `red-skipped` (never reached),
+`red-order` (reached out of order). **State the limitation plainly:** the walk
+can only judge inputs that EXIST — a missing input looks identical to correct
+paper. Missing-field detection belongs to T4's blue census and the ledger.
+
+**Artifacts** → `forms/review/<slug>/`: `tab.json` (sequence, verdicts,
+per-input page + pt geometry) and `page-<N>.png` with the verdicts burned in
+(legible on a phone), plus a generated `forms/review/index.html`. Untracked,
+**not** gitignored. `justfile`: `tab-check [slug]`, `review-clean`,
+`review-serve`. One CI step after the self-test loop in `formgen.yml`
+(Chromium already installed there; `PLAYWRIGHT_BROWSERS_PATH: '0'` matters).
+**Not** in `gate.SELF_TEST_MODULES` (user decision) — but ship a cheap
+`--self-test` so gating stays possible later.
+
+**Acceptance:** self-test passes; 53 forms produce artifacts; **expect red on
+the 22 band forms and report it as F209's evidence, not as flake**.
+
+### T3+T4 — one overlay package, one re-pin (closes F213)
+
+**T4:** census `.rl` rect tones by role first; the wall/tint split goes inside
+the measured empty gap between the dark band (0.0–0.251, which INCLUDES
+F210's checkbox squares) and the tint band (0.7489+) — never between occupied
+values. Then tint rects stop being wall candidates in `visibleRects`/`boxAt`,
+and `vacant` also excludes boxes whose interior probe resolves to tint. Keep
+the overlay's field-layer independence (`emit.py:7553-7556` asserts it reads
+only `.rl`; `parentNode` to the `layer-{role}` group is the sanctioned role
+source and is not banned). Extend the self-test literals and add a mutation
+that trips on tint-as-wall. Fix the legend's per-box vs per-input counting
+note; explain the orange TIN cluster (pre-printed constants + F208 outer
+insets — expected, not a defect).
+
+**T3:** a `?debug=tab` mode rendering `forms/review/<slug>/tab.json` — green,
+red and sequence numbers from the JSON's own geometry, no field-layer reads.
+Works served (`just review-serve`); on `file://` show a hint.
+
+**Acceptance:** 1701 p2 item-3 band shows zero red and no phantom blue, while
+**F210's Schedule-1 blues STAY blue** (they are real until T5a lands); 0619E
+items 3/4/12 reds gone; per-form blue counts published before and after.
+
+### T5 — the missing-input family (measurement-first; `audit.py` locked)
+
+- **T5c first — it is unblocked** (F148/F149). The r37 attempt was reverted
+  only because underscores were TEXT then (F200); P3 made them RULES, so the
+  conflict is gone. Stamp underscore-derived rules with provenance in
+  `extract.py` (`origin: "text-underscore"`; rule dicts have no key locks),
+  and let `field_verdict` give a `label` cell holding such a rule one input
+  over the rule's x-extent, one line tall, seated ON the line. Acceptance:
+  F148/F149 cells gain inputs; `inputs_over_printed_text` does **not**
+  regress; comb censuses unmoved.
+- **T5a** (F210). Two candidates, measurement decides: (i) a knockout
+  interior inside a decorative rule box, checkbox-sized ⇒ field (F206's
+  marker family); (ii) admit mid-tone rules into lattice intake at the split
+  T4 measured. Census before implementing; **abort honestly if neither
+  separates**. The four 1701 p2 squares are the anchor; survey the corpus for
+  the same pattern.
+- **T5b** (F211). Candidate rule: a bordered box (≥3 borders, ≥2 text lines
+  tall) whose printed ink is confined to a top-left caption strip ⇒ `field`,
+  writing box = the remainder below the caption
+  (`writing_box_clear_of_printed_ink` already trims top ink). Measure against
+  the known 1,875-label-blank trap. 0619E `p1c87/p1c88` and 0619F
+  `p1c100/p1c101` must flip; **0620 `p1c87` must not change**; enumerate
+  every other cell the rule would flip and review them. Abort if unseparable.
+- **T5d last** (F212). Bind a signature strip by printed-caption evidence
+  (the `BureauReservation` precedent): a caption below the box matching
+  "Signature over Printed Name…" binds the ruled box above. Seat the input in
+  a single-line strip at the cell bottom via `field_box` insets, and centre it
+  with inline `text-align` — the referee's inline-style scan
+  (`comb_referee.py:928-948`, `:3446-3465`) does not ban it, while the
+  stylesheet allowlist (`:3607-3648`) rejects a new CSS class. Verify with T2
+  screenshots.
+
+---
+
 ## Log
 
+- **2026-08-11** — User visual review of 1701 p1–p4 and 0619E. Packages
+  T1–T5 appended above the log. Two findings **refuted** by the review and
+  closed `not-a-defect` (F154, F156) — P5 asked for exactly this evidence.
+  Five filed: F209 (band tab order, 490pt backwards jump on 1600-PT p1, 22
+  forms), F210 (decorative-tone checkbox squares never segmented), F211
+  (caption-in-box kills a 302×43pt signature surface; 0620 is the control),
+  F212 (signature typography, minor), F213 (the overlay has no tone
+  awareness, so it invents walls out of tint). F207 fixed and landed at
+  `ae19137`: pre-printed ink is now measured from the ink band, not the run
+  box — the sixth defect this session of the shape "an outer bound taken from
+  a nominal edge instead of measured from the ink".
 - **2026-08-10** — Implementation packages P1–P5 appended above the log,
   written for mechanical execution by implementing agents. P1
   (knockout-bitten walls, F097) fully diagnosed: 8-bite corpus census, the
