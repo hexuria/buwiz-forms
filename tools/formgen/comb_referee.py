@@ -423,8 +423,31 @@ AUDIT_DEPENDENCY_SHA256 = {
     # No comb constant moves and no tolerance moves; three new self-test checks
     # (`ruled-blank-split`, `ruled-blank-floor`, `ruled-blank-fail-closed`)
     # take extract.py from 14 checks to 17 and 14+24 probes to 17+24.
+    #
+    # Re-pinned 2026-08-10 (r38, P4) for review findings F070 and F102: a
+    # rawdict span is now cut at every baseline change (`baseline_groups`),
+    # because a run in this IR states ONE baseline and MuPDF's line builder
+    # does not guarantee one -- it groups glyphs that are merely close enough,
+    # and the first glyph's baseline was then published for all of them.
+    # 24 of the corpus's 19,333 ink-bearing spans carry two baselines, across
+    # 11 forms. In 23 the odd baseline holds only a positioning space, which
+    # now leaves the IR exactly as a whitespace-only span already did; in one
+    # (1706 p2 `1 A`) both stretches ink and become two runs. Each published
+    # run then sits on its OWN baseline: 1707-A p1's `Calendar` moves 3.72pt
+    # down onto the `1 For` / `Fiscal` it is printed with, and 2200-P p2's
+    # ` Total Tax-` 4.80pt down and clear of the column rule at x=508.30 that
+    # used to bisect its `T`.
+    # 11 documents move and 42 are byte-identical -- exactly the 11 the census
+    # names, listed at EXPECTED_HTML_STRUCTURE_SHA256 below. The `<input>`
+    # count does NOT move (45,494), EXPECTED_COMBS / EXPECTED_COMBS_BY_SLUG /
+    # EXPECTED_RETAINED_SUBJECTS_BY_SLUG do NOT move (4,583 subjects, 34
+    # retained, every per-slug count), no tolerance and no assertion moves,
+    # and every assertion offender list is identical cell for cell. One new
+    # self-test check (`baseline-split`), with its own written-here probe page
+    # and a mutation that re-reads that page with the split disabled, takes
+    # extract.py from 17 checks to 18 and 17+24 probes to 18+24.
     "tools/formgen/extract.py": (
-        "299c172f9850b3930b6197a6a877c3d6b3119ea8b805f60126f49f8e3658afb2"
+        "315334021018e6714ca17119affd8302f929f97ae6d707b5adeffca234890946"
     ),
     "tools/formgen/verify.py": (
         "8dbeb222c9f04c8c71cf6ccf58acb519631e8e94966128fcdca9a56d097bad44"
@@ -1315,6 +1338,30 @@ HTML_ALLOWED_TAGS = frozenset({
 #     4 `label`, 3 `field`) and 71 bars sit where no cell wall reaches them.
 #   * EXPECTED_COMBS and EXPECTED_COMBS_BY_SLUG do NOT move (4583, and every
 #     per-slug count unchanged): no bar lands on a comb band.
+#
+# Re-pinned 2026-08-10 (r38, P4) for the baseline split described at
+# AUDIT_DEPENDENCY_SHA256. ELEVEN documents move and 42 are byte-identical, and
+# the 11 are exactly the forms carrying a two-baseline span: 1701-2018-
+# attachment, 1701a-2018, 1701q-2018, 1702ex-2018, 1706-2018, 1707a-2021,
+# 1800-2018, 2200p-2020, 2200t-2022, 2550-ds-2025, 2550q-2024. What moves in
+# them is the text, box and placement of 25 runs, and nothing else:
+#
+#   * 24 two-baseline spans yield 25 ink-bearing runs. Each loses the leading
+#     or trailing positioning space the file set on the other baseline, so its
+#     text, `x0`/`x1` and advance census move on all 25.
+#   * 21 of the 25 land on a different baseline -- the four that do not are the
+#     ones whose odd baseline held a TRAILING space, so their first glyph was
+#     already the ink. Eleven move by 2.00pt or more: 2200-P p2 ` Total Tax-`
+#     +4.80, 1707-A p1 ` Calendar ` +3.72, 2550-Q p1's `Calendar`/`Fiscal`/
+#     `2nd`/`3rd` and 2550-DS p1's `  2 ` +3.10, 2550-DS `Calendar`/`2nd`
+#     +3.09, 1800 p1 ` No ` +2.28, 2550-DS `3rd` +2.00. The other ten move
+#     0.24 to 1.20pt, two of them upward (1702-EX p2 ` % ` -1.20, 1706 p2 and
+#     1800 p2 -0.24).
+#   * 1 span becomes two runs (1706 p2 `1 A`, ink on two baselines 0.36pt
+#     apart), so that form's text-run census is +1 and its run ids renumber.
+#   * No `<input>` is added or removed on any of the 11 (45,494 corpus-wide,
+#     unchanged), no comb subject moves state, and no slot rectangle moves:
+#     the change is confined to the text layer.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "cf4e8ceb12d7124c50327452c8b4fa358c9ea34562de27aaa09abd7e7a84b5b0",
     "0619e-2018": "841c92f9b7392b86e68ccbe954aebca0b7f07980b860280a69168a2ec4ad65af",
@@ -1336,21 +1383,21 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1621-2019": "7ec49f83a6c2134f6ae7695c1438396ffddc27a35794d11215ecdab4da9fdf1a",
     "1700-2018": "4efa02b74d9c392c154eae4ad59e27724bb60b8c5fff01063675fd5c317bb242",
     "1701-2018": "d332c803690b6f76869c33a851d1e33fe7bd62c52c926898f2845d85da4eabd0",
-    "1701-2018-attachment": "1a3528b7e4092dbf99c481b19d8b17060bbee38f7b0dd8b3e715c2770517f267",
+    "1701-2018-attachment": "f8917dd5b3aa6bfcac1d093371931535032c47ee68ff258c23018dc52f34a53f",
     "1701-2018-conso": "d610dfe01a54851348bbefc1169a834d61c4bcfa17f08a03678ad964c13bc9f8",
-    "1701a-2018": "4546776d15b76297bb6ad5091b5f220e0402fdb8ec53b42e66505d55a3824889",
+    "1701a-2018": "12047ef277a2e70535169f359886b51e186da3d4a6d21ffd79d71c5006e69dc7",
     "1701ms-2024": "d0d4365fe622ad55d8391c74e1fd1e2b4dbdd1ac9e720fbb56952067de1fbfa0",
-    "1701q-2018": "620d2f31ca27ab490ce350604410ab1f4b57ce96424730c33905dd061501f8c3",
-    "1702ex-2018": "eeaa872b4e387e4fc7a61bd54b8929ee8dec404ad46fb794297af3cfc1d665ce",
+    "1701q-2018": "564347bdfafb922ce699c2412e9b9c756a37eb054674b47fb5a704bcd37cf3a4",
+    "1702ex-2018": "e84bce62ffe8bb5c19a935e542947670c2ebdd1462057cae3c59a7d31675bcce",
     "1702mx-2018c": "c00ad353757ced63cee14f8587882a44661fc99aeab19869ce76e3d696589118",
     "1702mx-2018c-attachment": "92db8460407901af8307b42c129b3e59483f7c34bc8c79e2aff9897420e7221f",
     "1702q-2018": "8b4a569b2bcf69fd477359cffdd73270980a9b7fc14568aec43a164f079a729f",
     "1702rt-2018c": "9865cc81581aba1c72df0149327e323d84091151270eba32407db9a242d9e460",
-    "1706-2018": "015e552ee9eae01cbb38e221c92088b296df75f6f0a44cacee4c004cce18e909",
+    "1706-2018": "b374a69bbfe81518737d4462dbf2697e3b5b3b995a1798af70b170f099a1b398",
     "1707-2021": "ba77616ce8844f1285cb6ea6862a3d36cbb6e5f07418a9564e72450249da2d7e",
-    "1707a-2021": "a4fa98e0f6b625f1ec79bcb029580767c8655e2c04d131dab2824ec930ddafc8",
+    "1707a-2021": "fdfcac76e1ac56f7e8d6ac7628cc4ea1049f3838b7377add657dd256b6c8ab9e",
     "1709-2020": "4f9dd3d145e9cab3ca9244d485e19798f6fae252ebdb2e1e47f676c0f9bf933d",
-    "1800-2018": "6062f496b56559ecde65c3e9a6c569c752f3283e91ede0a6630f4ade60edbb66",
+    "1800-2018": "91ca54590d0e0765fa59edfbdc807f7245247c7648f6d191d24f31c45caa0afa",
     "1801-2018": "2c4a3bd2dd760c49380efc9dd476b0a4c1e08d957dc3c7f6c27abc8ca5148fde",
     "2000-dst-2018": "f3ed0331d49ef188745a25cb6ae77f370e3c98a66ac7869d6c411888e2e7f4fe",
     "2000-ot-2018": "3db7c02da51dabab569206e55c30d4a19184f70e39d9af04fe9bef6f29b0bea5",
@@ -1358,13 +1405,13 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "2200an-2018": "61a9fbc36aef8ee71e94798fdfd3ab080df61ba5e4c82bf9e0f42083408cbd59",
     "2200c-2018": "b70b224816f6ebfee23aa261463e43c2f33cbb1091bcb4479a0ada36839d952f",
     "2200m-2018": "666543bedeb654f3264ac13505c28e821dacaa3138fbeb96444d50ecd9abedfa",
-    "2200p-2020": "034845b611cd2b88037cb47422e03605dd9c9f7c45f579b738294aca4b9fb780",
+    "2200p-2020": "31f0397fae53a85ab954b38b1fd10f4f4675f6dd44e2c97247051a887c90d56c",
     "2200s-2018": "9cbd65cb3dff5f09f919b12b9cb080bb464c7eb721f3f64530ba28cfaaf58e8c",
-    "2200t-2022": "7057ec6d5f57080cf1826ad8d700316c93a0d83a2836ffc59dbceef03c3dc338",
+    "2200t-2022": "6cb06bccb4378bed84d94988392e82d3e9bbca3334e559447791b436d8705465",
     "2316-2021": "cd02ddf4f89f58dfd00fc9acbe48228b4971a23ac7fdb8962acfec9ccfd0cf0e",
-    "2550-ds-2025": "7931a3952b3bc808df1428e7355f8358993b33509540d04b7aa35c28788fc459",
+    "2550-ds-2025": "cd06d1c425b89504245b291ea48d7ca7edd6ade8c1e9c6e013e0849d84781c06",
     "2550m-2007": "605aab9672815c6187e4481e495c217621abb3143f15a13ccb8485e18fad0508",
-    "2550q-2024": "2f92b74b5bfd8e8e664e24818929e9899c09bcac1c93f518e722faef0989e194",
+    "2550q-2024": "d1738d3d9ad67d149c37b01e0a2fed9ddc7cb430150ea8d7282bd5abe3ed286e",
     "2551m-2002": "2b8c6cc360fb61b731739554e670c4eb271dc356b2339e7a9b9b22507f3999ae",
     "2551q-2018": "914531c8b760541bcc7fa0fea34cd3169c9e27d1b3fbdf711e5ef72d46ec720c",
     "2552-2018": "e036276c284cb203b317cfc874e18dc3c0054a280abd730b3f43e30c5162ed22",

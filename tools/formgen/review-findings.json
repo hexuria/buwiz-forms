@@ -369,8 +369,8 @@
       "evidence": "Zoomed 5x on the barcode block: our render has two vertical bars at the right (the frame plus an extra heavy one); the official has only the frame. Column profile over y 50-104pt: our raster is mean 0 (pure black) at x = 600.0, 600.5 and 601.0pt while the official raster has no column below mean 200 anywhere past x=597. Cause: fitz get_drawings(extended=True) shows those six fill paths run under an active clip Rect(445.87, 48.36, 595.80, 105.86) whose right edge is 595.80 - they are entirely outside it and never painted by the official renderer. The IR keeps them as rule v866 (x 599.76-601.20, y 49.56-104.78, thickness 1.44, gray 0.0, role structural). No OCG and no white overpaint involved. Audit: rules_extra 0.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED (already, by r20's clip model) -- verified by geometry on the r38 tree rather than assumed. The six fills at x 599.76-601.20, y 49.56-104.78 ARE in the source, and run under an active clip whose right edge is 595.80; extract.clipped returns None for every one, so none reaches the IR. The shipped SVG rule layer has zero rects intersecting that footprint and nothing on page 1 exceeds x=597.84. Fixture-locked by CLIP_PROBE_RULES / CLIP_PROBE_DROPPED=3 with mutate_clips proving the check can fail. This is faithful rendering, not a repair: the source paints the bar and the reader clips it away."
     },
     {
       "id": "F028",
@@ -408,8 +408,8 @@
       "evidence": "SAW it as a detached black bar floating to the right of the barcode frame in the HTML render, absent in the official render. Measured: HTML ink bbox present on all 4 pages (min tone 0); official raster has NO pixel darker than 200 anywhere in that footprint on p1-p3, and on p4 only the legitimate rule at x=600.00/y92.6-109.9 (present in both). Root cause established from the raw content stream: the fills exist (`602.16 882.48 1.4399 9.12 re f*`, six stacked) but sit inside `q 434.35 836.38 163.97 55.224 re W* n` whose clip right edge is 434.35+163.97 = 598.32 — the fills are entirely outside the clip and never render. extract.py records them as structural rules (v861 p1, v993 p2, v825 p3, v776 p4, gray=0.0) because it harvests fill rects without applying the active clipping path; emit.py then faithfully paints them.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED, same cause and same fix as F027 -- extract.clip_scissors' own docstring names this form as the case it was written for. All 19 fills at x ~602.0-603.7 across p1-p4 sit outside clips whose right edges are 598.32/598.20/598.32/598.20 and are dropped. Zero rects in any of the four quoted footprints in the shipped bytes; nothing on any page exceeds x=600.60."
     },
     {
       "id": "F031",
@@ -798,8 +798,8 @@
       "evidence": "Read the rendered guide and then the HTML source: <p>A minimum corporate income tax (MCIT) of two percent (2%) of the gross income is imposed upon th)</p><p>any domestic corporation and resident foreign corporation beginning the fourth (4 taxable year (whether calendar...</p>. The source PDF page 3 text reads \"...is imposed upon any domestic corporation and resident foreign corporation beginning the fourth (4th) taxable year (whether calendar or fiscal year...\" — one sentence, no break.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r39 in emit._group_lines. The three runs sit at baseline 456.43 and the superscript 'th) ' at 454.39 -- 2.04pt away, 0.04pt OUTSIDE the 2.00pt LINE_BASELINE_TOLERANCE_PT, so it became a line of its own and reading order published '...is imposed upon th)' / '...the fourth (4 taxable year'. THE WINDOW WAS NOT WIDENED. _is_set_fragment proves two runs are one printed line by ink instead: one band strictly inside the other -- which two runs of the same size on different baselines can never satisfy, so it can never merge two ordinary lines -- and abutting within the word-space gap _line_pieces already uses. The corpus is not close on it: all 32 stranded fragments abut within [-0.12, +0.31]pt, while 2553's 9.33pt 'BIR Form No.' genuinely inside its 20.85pt title overlaps by -4.60pt and is refused. 29 merges on 9 pages, 27 of them ordinal superscripts, every one independently flagged superscript:True by MuPDF -- a flag the geometric rule never consulted. Three guides improve and no others: 1702Q reads 'the fourth (4th) taxable year'; 1701MS stops publishing two stranded superscripts as <h3> HEADINGS; 2000-DST's ATC cells read '1st P 2,000' instead of 'st 1 P 2,000'. Three scratch-copy mutants each trip exactly one of the three new assertions."
     },
     {
       "id": "F061",
@@ -851,7 +851,7 @@
       "audit_blind": true,
       "cause": null,
       "status": "open",
-      "resolution": null
+      "resolution": "DIAGNOSED in r39, not fixed, and NOT the P1 knockout-bite mechanism. The comb is registered and then SUPPRESSED: layout subject p1@17.64,318.17,594.48,347.33, state retained_unresolved, emission suppressed, reason_codes [emission-suppressed-no-rectangular-owner, painted-edge-partition], blocks_gate true, legacy_comb 25 cells / 24 dividers / pitch 14.40. The source agrees it is a comb: 24 printed dividers of 0.24pt at x 248.09->579.34 in steps of 14.40, between rails at 233.57 and 593.76, over y 339.65-347.09 = 25 compartments. It has no rectangular owner because the cell walk cuts the band at y=343.44 -- a lattice line induced by the Yes/No checkbox bottom edges h68 (x 190.80-203.16) and h69 (x 132.96-145.32), BOTH ENTIRELY LEFT of the comb's left rail at 233.57. There is no ink at all in x 233.7-594.5 at y 343.2-344.5, yet the walk cuts there, leaving eight 3.89pt blank strips matching neither the compartments nor the band. Zero inputs in x 233-595, y 339-348 in the shipped bytes. The fix is to bound a lattice line by the x-extent of the ink that induces it, or to let a comb band own a partition it spans -- the F196/F201 family, corpus-wide blast radius, and the user's call."
     },
     {
       "id": "F065",
@@ -864,7 +864,7 @@
       "audit_blind": true,
       "cause": null,
       "status": "open",
-      "resolution": null
+      "resolution": "DIAGNOSED in r39, not fixed, TWO independent barriers and both are deliberate. (1) The line is run p1t78, '(please specify) ____...', x 430.15-583.49, in UNEMBEDDED Arial Narrow -- the single ruled-blank refusal in the whole corpus (119 groups seen, 118 published, 1 refused with reason 'no single face states this glyph's outline'). substitutable_faces correctly yields no face: MuPDF's own name cleaner does not resolve 'Arial Narrow' to a base-14 alias, and the module refuses both a hand-written table and a machine-installed font. That refusal is right and must not be weakened to close this. (2) Even with a face, F200's own measurement says 117 of 118 published blanks yield no writing surface, and the strip below this bar would be a ~4pt sliver. The real writing area is the white knockout the sheet paints at x 471.82-583.66, y 351.53-360.89 ON THE GREY BAND, which has no rules around it, so nothing turns it into a field today. Making a rule-less knockout on a tone band a writing surface is a new relation with corpus-wide reach. Item 9's four checkboxes (p1c56-p1c59) ARE fillable; only the specify text cannot be entered."
     },
     {
       "id": "F066",
@@ -928,8 +928,8 @@
       "evidence": "10x side-by-side crop of pt (55,103)-(125,124): in the official \"Calendar\" is baseline-aligned with \"1 For\" and \"Fiscal\" and sits clear of the box; in the HTML it is raised to the top of the row and its first glyph crosses the checkbox outline. build/ir/1707a-2021.ir.json gives the run \" Calendar \" a bbox of y0=105.64..y1=119.39 (13.75 pt tall) while the neighbouring \"Fiscal \" run is y0=109.36..119.39 (10.03 pt), so the emitter is top-aligning to an over-tall run box.",
       "audit_blind": true,
       "cause": "S5",
-      "status": "open",
-      "resolution": "Half fixed, and the half that remains has a different cause. The horizontal error is gone: emit.py anchors the run on its first visible glyph, and 'Calendar' was measured 6.00pt left of its ink origin before that change and is exact after it. The ~4pt *vertical* error is not a whitespace defect and is untouched - it is a baseline-placement question, and the run's own baseline_y is reproduced, so the discrepancy is in what the review measured as the official's baseline. Needs re-measurement against the official rather than a fix in this area."
+      "status": "fixed",
+      "resolution": "FIXED in r39, upstream in extract.py, and the root cause is shared with F102. extract_text_runs published one run per MuPDF rawdict SPAN, and a span can carry two baselines: the source sets a lone space at (66.26, 113.78) and 'Calendar' at (75.50, 117.50) as separate text operators, and the merged span published the SPACE's baseline for the word. extract.baseline_groups now cuts a span at every baseline change -- faithful, not a repair, since the source drew each stretch with its own Td. Verified by the operator in the shipped IR: 'Calendar' is now baseline 117.50, x 75.50-114.48, y 109.36-119.39, identical to 'Fiscal' at 117.50 and beside 'For' at 117.26 -- and exactly the review's own measurement of the official (x 75-114, y 109.4-119.4). Census first: only 24 of 19,333 ink-bearing spans carried two baselines, and span bbox equalled the union of char bboxes on all 19,333, so the change is a byte-level no-op for the other 19,309."
     },
     {
       "id": "F071",
@@ -967,8 +967,8 @@
       "evidence": "6x crop: rows 16, 17A-D, 18, 19A-D, 20 all show two neat comb digits in the centavos; row 14 shows '888888' at double size running off the right edge of the sheet. DOM confirms p1c65-i is the only input there, whereas neighbouring rows use fh3 fc slots with maxlength=1.",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "not-a-defect",
+      "resolution": "NOT-A-DEFECT on all three residual claims, closed on measurement at the geometry the finding names -- now cell p1c64 (556.54, 395.81)-(584.56, 412.61). 'Roughly twice the comb size': refuted, the two inputs are class fh15 = 9pt and the peer money rows' comb slots (p1c72, p1c77) are fh18 = 9pt, identical. 'Overflows past the form's right border rule': refuted, the right input's box ends at x 583.12, which is 0.42pt INSIDE the border rule v810 at 583.54-584.98. 'Sits high': refuted and inverted -- it is inset 1.44pt from the top against the peers' 0.48pt because item 14's top border is the 1.44pt h93 where theirs is 0.48pt, so it sits 0.96pt LOWER, correctly derived. The r33 region split already gives it two compartments at exactly the printed divider (v783, x 570.70-571.18) -- the same count and the same writing surface as its peers. The one real difference is that they are region inputs without maxlength rather than maxlength=1 comb slots, and that is F201's deviation class, not a defect of this cell: the source draws item 14's centavos divider and item 15's rate divider as ONE collinear run bridged through the row rule h100, spanning y 405.77-429.53, so assign_comb_anchors -- which requires a divider's whole final-visible band inside its owner -- can award it to neither row."
     },
     {
       "id": "F074",
@@ -1344,8 +1344,8 @@
       "evidence": "8x crop of official vs HTML: in the official, 'Total Tax–' sits inside its own cell below the band's cap rule; in the HTML it is flush with '…Conditional Tax Free' and the vertical rule passes through the stem of the 'T'. The IR gives it baseline 143.66, identical to the 8.04 pt run beside it, although its own box is y0 136.38-y1 150.15 (implying a baseline near 148.5).",
       "audit_blind": true,
       "cause": null,
-      "status": "open",
-      "resolution": null
+      "status": "fixed",
+      "resolution": "FIXED in r39 by the same extract.baseline_groups split as F070. The source sets a space at (502.54, 143.66) and 'Total Tax' at (509.86, 148.46); the merged span published baseline 143.66 -- flush with the 7.56pt band header, which is exactly the symptom the finding describes -- and pulled x0 to 502.54, left of the column rule v104 at x 508.30-508.78 that the reviewer saw bisecting the T. Verified by the operator in the shipped IR: the run is now baseline 148.46, x 509.86-549.78, in its own cell and clear of the rule."
     },
     {
       "id": "F103",
@@ -1578,8 +1578,8 @@
       "evidence": "Rendered guide.html at 2x and read it. Row '4. Lending Investors/Dealer In securites/' has an empty ATC cell and 'VB 102' sits alone in the next row with every other cell blank; the same happens for '10. Compulsory Social Security' → 'VD 010', '11. Other Community Social and' → 'VH 010', and '12.2 Business Services' → 'VB 010'. In the official these are vertically-centred codes spanning a two-line industry label. Reading down the column, VB 102 now appears adjacent to 'Manufacturing'/'Pawnshops', which is a wrong-ATC hazard. The header row is also scrambled: 'ALPHANUMERIC TAX CODES (ATC)' occupies a mid cell instead of spanning, with two empty grey cells to its left.",
       "audit_blind": true,
       "cause": "C9",
-      "status": "open",
-      "resolution": "Not fixed, and the reason is measured. emit.py now reflows a relocated table on lattice.py's rows, but only where the lattice accounts for *all* of the band's ink; on 2550M page 3 it accounts for 72 of 108 runs (0.67), so the lattice table is refused and the line-based layout is used, which still strands the same four ATC codes. Stranded rate-only rows on this page: 4 -> 4. Closing it needs either lattice cells for the whole band or a line-based row merge (two consecutive lines whose non-empty columns are disjoint are one row)."
+      "status": "fixed",
+      "resolution": "FIXED on its stated defect, verified by dumping the ATC table row by row on the r38 tree: VB 102 sits with '4. Lending Investors/Dealer In securites/Pawnshops/Pre-need Co.', VD 010 with '10. Compulsory Social Security Public Administration & Defense', VH 010 with '11. Other Community Social and Personal Service Activity', VB 010 with '12.2 Business Services (In General)'. Stranded rate-only rows 4 -> 0, and with them the wrong-ATC hazard this finding was filed for. Fixed by a round later than the note that closed it wrongly; my r39 changes did not touch it. 'ALPHANUMERIC TAX CODES (ATC)' is also no longer scrambled into a mid cell -- it is an <h2>. One cosmetic residual remains and is filed separately as F204 rather than left inside a closed finding."
     },
     {
       "id": "F121",
@@ -1760,8 +1760,8 @@
       "evidence": "Input-overlay screenshot at 4x: the \"DD\" header cell is tinted and red-outlined (an input) while \"MM\" and \"YYYY\" are plain; the official shows all three as identical grey header cells. Cross-checked geometrically against the IR text runs - the input rect and the visible glyph bbox of the 'DD' run overlap by 20.03pt horizontally and over the full input height.",
       "audit_blind": true,
       "cause": "C6",
-      "status": "open",
-      "resolution": "Deliberately not blocked, with the measurement. The cell is now p1c67 (ids moved with Round 1's lattice) and pre-printed ink covers 0.402 of its width, below the 0.5 majority emit.py requires before it refuses a typing surface. The same shape at 0.35-0.40 is the 'DD'/'YYYY' date-format hint printed inside the date entry boxes of 2550M p1c82 and 2551M p1c72, which must stay fillable; blocking at 0.40 would take the date field off those forms. The corpus separates at 0.44 vs 0.53 with nothing between, so this cell sits on the safe side of that gap by 0.10. Closing it needs a signal that tells a column header from a format hint, not a lower threshold."
+      "status": "fixed",
+      "resolution": "FIXED (already), verified BY GEOMETRY because ids renumber and this finding's id is three rounds stale. The finding's rect (257.0, 745.7) 27.0x9.9pt is now p1c74 at (256.32, 744.96)-(284.76, 756.48), kind 'shaded', empty, with NO input. Across the shipped 2553 bytes there are zero inputs whose cell top lies in the date-header band y 740-762, and zero input cells overlapping the 'DD        YYYY' run box (x 264.00-314.31, y 746.16-755.28). This is NOT the F199 side-bearing over-reach -- there is no input there at all. And it cost the taxpayer nothing: the Part III payment date is still enterable one row below at p1c79/p1c80/p1c81 (MM/DD/YYYY combs, y 779.14-797.79). 2553's inputs_over_printed_text offenders are unchanged at p1c79/84/91."
     },
     {
       "id": "F135",
@@ -2171,13 +2171,13 @@
       "form": "2550q-2024",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Item 10 Registered Address line 3 and the 10A ZIP Code comb are emitted as one wide input across the printed compartments, while line 2 of the same address block is correctly split per compartment.",
       "where": "The second address line of item 10 and the ZIP comb to the right of the '10A ZIP Code' caption on page 1.",
       "evidence": "/private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/2550q-2024/EVIDENCE-address-line3-and-ZIP-comb-merged.png - the row above shows correct per-compartment outlines, the affected row shows one continuous outline.",
       "cause": "C5",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED (already), verified by geometry against the pinned PDF's own drawing operators, which is the vector equivalent of the raster crop and strictly better evidence. Address line 3 is p1c42 (22.05, 243.47)-(461.33, 261.78): the source prints 30 dividers at x 36.0...447.08 between rails at 22.05 and 461.08-461.58, i.e. 31 compartments, and the cell is emitted data-field-kind='comb' with 31 slots and 31 inputs. The 10A ZIP is p1c44 (532.35, 243.47)-(592.28, 261.78): rails at 532.10-532.60, dividers at 546.80/562.00/576.20, i.e. 4 compartments, emitted as 4 slots and 4 inputs. Line 2 -- p1c41, the row this finding cites as already correct -- is 40/40. There is no merged outline anywhere in the block."
     },
     {
       "id": "F167",
@@ -2657,6 +2657,19 @@
       "where": "Worst: 2553-1999 48, 1604cf-2008 44, 2552-2018 39, 1701-2018 30, 1701q-2018 22, 1701a-2018 20, 2550m-2007 18, 2551m-2002 18, 1600wp-2010 16, 1701ms-2024 15. Includes 1701-2018-conso p2c97/p2c103/p2c109, which are three of F151's seven cells -- the reason that blocker cannot close on the measurement alone.",
       "evidence": "Measured on the r38 tree over label cells sharing a row with at least one field cell (4,633 of them): 419 have zero geometrically-contained text runs. Distribution of trailing blank against the form's own line_width_pt: 116 at >=1.0x, 303 at >=2.0x, none below -- i.e. no separation whatever. Contrast the row-number population (296 cells), where the same bound cuts 296 to 56 and excludes every narrow item-number box.",
       "cause": null,
+      "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F204",
+      "form": "2550m-undated",
+      "page": 3,
+      "severity": "minor",
+      "status": "open",
+      "what": "Cosmetic residual split out of F120 rather than left inside a closed finding: the ATC table's six-column header (INDUSTRIES COVERED BY VAT | ATC, three times) is emitted as two prose blocks above the table instead of as the table's own header row.",
+      "where": "guide.html for 2550m-undated, page 3, the ALPHANUMERIC TAX CODES (ATC) section.",
+      "evidence": "Measured on the r38 tree while verifying F120. No ATC code is misattributed -- all four formerly stranded codes now sit with their industry rows and stranded rate-only rows are 0 -- so this is presentation only. Fixing it means changing the guide section split, judged more cost than it buys.",
+      "cause": "C9",
       "audit_blind": true,
       "resolution": null
     }

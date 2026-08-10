@@ -1130,6 +1130,40 @@ def glyph_ink_box(faces: Sequence[fitz.Font], codepoint: int,
     return next(iter(boxes))
 
 
+def baseline_groups(chars: Sequence[dict[str, Any]]) -> list[tuple[int, int]]:
+    """A span's glyphs cut into maximal stretches that share one baseline.
+
+    A run in this IR states ONE `baseline_y` and one `origin_x`, and every
+    per-character offset is measured from them. MuPDF's `rawdict` span is not
+    bound by that contract: its line builder groups glyphs that are merely close
+    enough, so a span can carry glyphs set on two different baselines. Where it
+    does, `_text_run` published the FIRST glyph's baseline for all of them and a
+    box that unions both lines -- and emit.py places the whole run on that
+    baseline. 1707-A page 1 is the visible case: a positioning space at baseline
+    113.78 sits in the same span as `Calendar` at 117.50, so the word was set
+    3.72pt above the `1 For` / `Fiscal` it is printed on (finding F070), and
+    2200-P page 2 does the same to ` Total Tax-` by 4.80pt (F102).
+
+    Splitting is the faithful answer rather than a repair: the source drew each
+    stretch with its own text operator at its own `Td`, so one stretch per
+    baseline is what the file says. Comparison is on the quantised baseline --
+    two glyphs the IR cannot tell apart are one baseline here too.
+
+    Half-open [start, end) indices into `chars`, in the span's own order. A span
+    with one baseline yields exactly one group covering all of it, which is what
+    keeps this a no-op for 19,309 of the corpus's 19,333 ink-bearing spans.
+    """
+    groups: list[tuple[int, int]] = []
+    start = 0
+    for index in range(1, len(chars) + 1):
+        if (index < len(chars)
+                and q(chars[index]["origin"][1]) == q(chars[start]["origin"][1])):
+            continue
+        groups.append((start, index))
+        start = index
+    return groups
+
+
 def ruled_blank_groups(text: str) -> list[tuple[int, int]]:
     """Every maximal run of at least RULED_BLANK_MIN_GLYPHS underscores.
 
@@ -1347,6 +1381,11 @@ def extract_text_runs(page: fitz.Page, doc: fitz.Document, order: PaintOrder,
     mark it can be told to fix, instead of a section sign nobody can tell is
     wrong. See unmapped_glyph_origins.
 
+    A rawdict span is cut at every baseline change before any of that happens
+    (`baseline_groups`). One run states one baseline, and MuPDF's line builder
+    does not guarantee one: where a span carries two, the first glyph's baseline
+    used to be published for all of them and emit.py set the whole run there.
+
     A run of underscores is the one shape here that is not text at all. The
     sheet is drawing a writing line with a text operator, and while it stays a
     run the strip it draws is inside a printed run's box, so an input placed on
@@ -1375,75 +1414,90 @@ def extract_text_runs(page: fitz.Page, doc: fitz.Document, order: PaintOrder,
         for line in block["lines"]:
             direction = line.get("dir", (1.0, 0.0))
             for span in line["spans"]:
-                chars = span.get("chars") or []
-                unmapped_glyphs = []
-                letters = []
-                for position, char in enumerate(chars):
+                span_chars = span.get("chars") or []
+                span_unmapped = []
+                span_letters = []
+                for position, char in enumerate(span_chars):
                     glyph_id = unmapped.get((q(char["origin"][0]), q(char["origin"][1])))
                     if glyph_id is None:
-                        letters.append(char["c"])
+                        span_letters.append(char["c"])
                         continue
-                    letters.append(UNMAPPED_CODEPOINT)
-                    unmapped_glyphs.append({
+                    span_letters.append(UNMAPPED_CODEPOINT)
+                    span_unmapped.append({
                         "index": position,
                         "glyph_id": glyph_id,
                         "rawdict_codepoint": ord(char["c"]),
                     })
-                text = "".join(letters)
-                if not text.strip():
-                    continue
 
-                groups = ruled_blank_groups(text)
-                groups_seen += len(groups)
-                # Both maps cost a walk of the page's operator stream, so they
-                # are built only where a candidate group exists.
-                if groups and provenance is None:
-                    provenance = glyph_provenance(page)
-                    faces = substitutable_faces(page, doc)
-                size = round(float(span["size"]), 3)
-                published: list[tuple[int, int]] = []
-                for start, end in groups:
-                    if abs(float(direction[1])) > 1e-6:
-                        refusals["run is rotated"] += 1
+                # One stretch per baseline: see baseline_groups. For a span the
+                # file set on a single baseline this is the span itself, and the
+                # box below is its own bbox to the last quantised place.
+                for base_start, base_end in baseline_groups(span_chars):
+                    chars = span_chars[base_start:base_end]
+                    letters = span_letters[base_start:base_end]
+                    unmapped_glyphs = [
+                        {**entry, "index": entry["index"] - base_start}
+                        for entry in span_unmapped
+                        if base_start <= entry["index"] < base_end]
+                    text = "".join(letters)
+                    if not text.strip():
                         continue
-                    pieces, reason = ruled_blank_bars(
-                        chars[start:end], size,
-                        (faces or {}).get(span["font"], ()),
-                        provenance or {}, order.text, span.get("color"))
-                    if not pieces:
-                        refusals[reason] += 1
-                        continue
-                    bars.extend(pieces)
-                    groups_published += 1
-                    published.append((start, end))
+                    box = (min(char["bbox"][0] for char in chars),
+                           min(char["bbox"][1] for char in chars),
+                           max(char["bbox"][2] for char in chars),
+                           max(char["bbox"][3] for char in chars))
 
-                if not published:
-                    runs.append(_text_run(span, chars, letters, unmapped_glyphs,
-                                          direction, span["bbox"]))
-                    continue
+                    groups = ruled_blank_groups(text)
+                    groups_seen += len(groups)
+                    # Both maps cost a walk of the page's operator stream, so
+                    # they are built only where a candidate group exists.
+                    if groups and provenance is None:
+                        provenance = glyph_provenance(page)
+                        faces = substitutable_faces(page, doc)
+                    size = round(float(span["size"]), 3)
+                    published: list[tuple[int, int]] = []
+                    for start, end in groups:
+                        if abs(float(direction[1])) > 1e-6:
+                            refusals["run is rotated"] += 1
+                            continue
+                        pieces, reason = ruled_blank_bars(
+                            chars[start:end], size,
+                            (faces or {}).get(span["font"], ()),
+                            provenance or {}, order.text, span.get("color"))
+                        if not pieces:
+                            refusals[reason] += 1
+                            continue
+                        bars.extend(pieces)
+                        groups_published += 1
+                        published.append((start, end))
 
-                # What the bars left behind, in reading order.
-                fragments: list[tuple[int, int]] = []
-                cursor = 0
-                for start, end in published:
-                    if start > cursor:
-                        fragments.append((cursor, start))
-                    cursor = end
-                if cursor < len(chars):
-                    fragments.append((cursor, len(chars)))
-                for start, end in fragments:
-                    kept = chars[start:end]
-                    piece = letters[start:end]
-                    if not "".join(piece).strip():
+                    if not published:
+                        runs.append(_text_run(span, chars, letters,
+                                              unmapped_glyphs, direction, box))
                         continue
-                    runs.append(_text_run(
-                        span, kept, piece,
-                        [{**entry, "index": entry["index"] - start}
-                         for entry in unmapped_glyphs
-                         if start <= entry["index"] < end],
-                        direction,
-                        (kept[0]["bbox"][0], span["bbox"][1],
-                         kept[-1]["bbox"][2], span["bbox"][3])))
+
+                    # What the bars left behind, in reading order.
+                    fragments: list[tuple[int, int]] = []
+                    cursor = 0
+                    for start, end in published:
+                        if start > cursor:
+                            fragments.append((cursor, start))
+                        cursor = end
+                    if cursor < len(chars):
+                        fragments.append((cursor, len(chars)))
+                    for start, end in fragments:
+                        kept = chars[start:end]
+                        piece = letters[start:end]
+                        if not "".join(piece).strip():
+                            continue
+                        runs.append(_text_run(
+                            span, kept, piece,
+                            [{**entry, "index": entry["index"] - start}
+                             for entry in unmapped_glyphs
+                             if start <= entry["index"] < end],
+                            direction,
+                            (kept[0]["bbox"][0], box[1],
+                             kept[-1]["bbox"][2], box[3])))
 
     runs.sort(key=lambda r: (r["y0"], r["x0"]))
     return runs, bars, {
@@ -2499,6 +2553,105 @@ def ruled_blank_probe_ir() -> dict[str, Any]:
             "stats": ir["stats"]}
 
 
+# A fourth written-here page, for the fourth question no form can settle on its
+# own: what happens when MuPDF's line builder puts two baselines in one span.
+# The official corpus does carry the shape -- 24 spans across 11 forms -- but
+# those files are untracked, and the synthetic corpus carries none, so without
+# this page the split would ship proven on nobody's machine but the operator's.
+#
+# Page is 200x200 and PDF y counts up from the bottom, so an IR y is the
+# 200-complement. Every op is /F1 Helvetica at 10pt so that font, size and
+# colour cannot be what separates the spans -- only the baseline can.
+#
+#   XY / Z     two INK stretches, 1pt apart and set edge to edge so no space is
+#              bridged between them: 1706 page 2's `1 A` shape.
+#   ' ' / PQ   a positioning space 4pt above the ink it precedes: the shape 22
+#              of the corpus's 24 carry, and the one that moved `Calendar`
+#              (F070) and ` Total Tax-` (F102) off their printed baselines.
+#   RS         a control on one baseline, which must come through untouched.
+BASELINE_PROBE_STREAM = b"""0 g
+BT
+/F1 10 Tf
+20 160 Td
+(XY) Tj
+ET
+BT
+/F1 10 Tf
+33.34 159 Td
+(Z) Tj
+ET
+BT
+/F1 10 Tf
+20 130 Td
+( ) Tj
+ET
+BT
+/F1 10 Tf
+26 126 Td
+(PQ) Tj
+ET
+BT
+/F1 10 Tf
+20 100 Td
+(RS) Tj
+ET
+"""
+
+BASELINE_PROBE_RESOURCES = b"<</Font<</F1 5 0 R>>>>"
+BASELINE_PROBE_FONTS = (
+    b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>",
+)
+
+# What MuPDF's own grouping does with that page, asserted first and separately.
+# Without it the page could stop provoking a merged span -- a reader change, a
+# different line tolerance -- and the run table below would then pass while
+# proving nothing at all. Each entry is (text, distinct quantised baselines).
+BASELINE_PROBE_SPANS: tuple[tuple[str, int], ...] = (
+    ("XYZ", 2),
+    (" PQ", 2),
+    ("RS", 1),
+)
+
+# Every run the page publishes, in the extractor's own order, and why. Both
+# directions are asserted: a split that failed to happen and one that cut a
+# single-baseline span look the same on one row and opposite on the corpus.
+BASELINE_PROBE_RUNS: tuple[tuple[str, tuple[float, float, float, float],
+                                 float, float, str], ...] = (
+    ("XY", (20.0, 29.25, 33.34, 42.99), 40.0, 20.0,
+     "the first stretch, at its own baseline and its own box"),
+    ("Z", (33.34, 30.25, 39.45, 43.99), 41.0, 33.34,
+     "and the second, 1pt below it -- one span, two runs"),
+    ("PQ", (26.0, 63.25, 40.45, 76.99), 74.0, 26.0,
+     "the ink alone: the space 4pt above it is a whitespace-only stretch and "
+     "is dropped exactly as a whitespace-only span already was"),
+    ("RS", (20.0, 89.25, 33.89, 102.99), 100.0, 20.0,
+     "the control: one baseline in, one run out, at the span's own box"),
+)
+
+
+def baseline_probe_ir() -> dict[str, Any]:
+    """The probe page's runs, and MuPDF's own span grouping of it."""
+    doc = fitz.open(stream=probe_pdf(BASELINE_PROBE_STREAM,
+                                     BASELINE_PROBE_RESOURCES,
+                                     BASELINE_PROBE_FONTS),
+                    filetype="pdf")
+    page = doc[0]
+    spans: list[tuple[str, int]] = []
+    for block in page.get_text("rawdict")["blocks"]:
+        if block["type"] != 0:
+            continue
+        for line in block["lines"]:
+            for span in line["spans"]:
+                chars = span.get("chars") or []
+                if not chars:
+                    continue
+                spans.append(("".join(char["c"] for char in chars),
+                              len({q(char["origin"][1]) for char in chars})))
+    ir = extract_page(page, doc, 1)
+    doc.close()
+    return {"text_runs": ir["text_runs"], "spans": spans}
+
+
 def paint_order_desync_probes(page: fitz.Page,
                               drawings: list[dict[str, Any]]) -> dict[str, bool]:
     """Whether paint_order refuses a drawings list the bbox log cannot explain.
@@ -2548,6 +2701,9 @@ def gather_evidence(profile: SelfTestProfile,
         # And for a run of underscores, whose two fail-closed cases no form in
         # either corpus states.
         "ruled_blank_probe": ruled_blank_probe_ir(),
+        # And for a rawdict span carrying two baselines, which the tracked
+        # corpus does not.
+        "baseline_probe": baseline_probe_ir(),
     }
     for code, (relative, revision, digest) in profile.fixtures.items():
         path = source_root / relative
@@ -3168,6 +3324,53 @@ def check_ruled_blank_fail_closed(evidence: dict[str, Any]) -> list[str]:
     return failures
 
 
+def check_baseline_split(evidence: dict[str, Any]) -> list[str]:
+    """One run states one baseline, and the reader is not asked to guarantee it.
+
+    Asserted in three parts, and the first is what makes the other two mean
+    anything: the page must still provoke MuPDF into merging two baselines into
+    one span. A reader whose line builder stopped doing that would leave a probe
+    that passes while measuring nothing -- the green tick this project has
+    already shipped once.
+
+    Then the exact run table, in both directions. A split that failed to happen
+    leaves a run at the wrong baseline with a box unioning two lines; a split
+    that cut a single-baseline span leaves the control in pieces. Both are
+    failures here, and only one of them is the defect that was found.
+    """
+    probe = evidence["baseline_probe"]
+    failures: list[str] = []
+
+    spans = [tuple(entry) for entry in probe["spans"]]
+    if spans != list(BASELINE_PROBE_SPANS):
+        failures.append(
+            f"baseline probe's reader grouped its page into {spans}, expected "
+            f"{list(BASELINE_PROBE_SPANS)}: the page exists to carry a span "
+            f"with two baselines, and it no longer does")
+
+    want = [(text, box, baseline, origin_x)
+            for text, box, baseline, origin_x, _why in BASELINE_PROBE_RUNS]
+    got = [(run["text"], (run["x0"], run["y0"], run["x1"], run["y1"]),
+            run["baseline_y"], run["origin_x"]) for run in probe["text_runs"]]
+    for position in range(max(len(want), len(got))):
+        expected = want[position] if position < len(want) else None
+        entry = got[position] if position < len(got) else None
+        if entry == expected:
+            continue
+        if expected is None:
+            failures.append(f"baseline probe published run {position} as "
+                            f"{entry}, which nothing on its page draws")
+        elif entry is None:
+            failures.append(
+                f"baseline probe lost run {position}, {expected} "
+                f"({BASELINE_PROBE_RUNS[position][4]})")
+        else:
+            failures.append(
+                f"baseline probe reads run {position} as {entry}, expected "
+                f"{expected} ({BASELINE_PROBE_RUNS[position][4]})")
+    return failures
+
+
 def check_codepoints(evidence: dict[str, Any]) -> list[str]:
     """No run holds a character the source did not state.
 
@@ -3310,6 +3513,7 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("ruled-blank-split", check_ruled_blank_split),
     ("ruled-blank-floor", check_ruled_blank_floor),
     ("ruled-blank-fail-closed", check_ruled_blank_fail_closed),
+    ("baseline-split", check_baseline_split),
     ("codepoints", check_codepoints),
     ("is-bar-like", check_bar_like),
 )
@@ -3477,6 +3681,28 @@ def mutate_ruled_blank_fail_closed(evidence: dict[str, Any]) -> None:
                              "retained blank")
 
 
+def mutate_baseline_split(evidence: dict[str, Any]) -> None:
+    """Re-read the probe page with the split disabled, exactly as it was read.
+
+    Re-extracted rather than written out as a literal table. The state this must
+    reproduce is what the module DID -- one run per span, on its first glyph's
+    baseline, boxed to the whole span -- and a hand-written table of that state
+    could drift into disagreeing with the expectation beside it for some other
+    reason, which would let this mutation trip the check while proving nothing.
+    """
+    probe = evidence["baseline_probe"]
+    whole_span = globals()["baseline_groups"]
+    globals()["baseline_groups"] = lambda chars: [(0, len(chars))]
+    try:
+        unsplit = baseline_probe_ir()
+    finally:
+        globals()["baseline_groups"] = whole_span
+    if unsplit["text_runs"] == probe["text_runs"]:
+        raise AssertionError("baseline-split mutation changed nothing: the "
+                             "probe page carries no span with two baselines")
+    probe["text_runs"] = unsplit["text_runs"]
+
+
 def mutate_bar_like(evidence: dict[str, Any]) -> None:
     """Divert one leaning separator to paths, as exact alignment would have."""
     code = evidence["profile"].bar_like_form
@@ -3511,6 +3737,8 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
      mutate_ruled_blank_floor),
     ("ruled-blank-fail-closed", "a blank with no derivable band is dropped "
      "instead of kept as text", mutate_ruled_blank_fail_closed),
+    ("baseline-split", "a span carrying two baselines is published as one run",
+     mutate_baseline_split),
     ("codepoints", "an unmappable glyph prints as a section sign", mutate_codepoints),
     ("is-bar-like", "a leaning separator loses its rule", mutate_bar_like),
 )

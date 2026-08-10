@@ -3484,21 +3484,103 @@ def _column_bands(runs: Sequence[dict[str, Any]]
     return grid, _dissolve_narrow(grid, gutters, x1 - x0)
 
 
+def _is_set_fragment(run: dict[str, Any], other: dict[str, Any]) -> bool:
+    """Whether these two runs are one printed line, proven by ink and not by a
+    tolerance.
+
+    A raised or dropped fragment -- a superscript ordinal, an exponent, a
+    footnote mark -- is set on its OWN baseline, so the baseline window cannot
+    see that it belongs to the text it is set against. 1702Q page 3 writes
+    `(4th)` as `...the fourth (4`, a 4.56pt `th) ` 2.04pt higher, and
+    `taxable year (whether `; at 0.04pt outside a 2.00pt window the fragment
+    became a line of its own and the sentence was published as
+    `...is imposed upon th)` and `...the fourth (4 taxable year` (finding F060).
+
+    The proof used instead adds no constant of its own. One run's ink band lies
+    strictly INSIDE the other's -- which two runs of the SAME size on different
+    baselines can never do, so this can never merge two ordinary lines -- and
+    the two ABUT across the page: the distance between their nearer edges is no
+    more than `_line_pieces` already reads as a word space, in either direction,
+    because adjacent glyph runs' advance boxes overlap by hundredths of a point.
+    Measured over the corpus that separation is not close: every one of the 32
+    fragments the baseline window strands abuts its text within [-0.12, +0.31]pt,
+    while 2553's `BIR Form No.` -- a genuinely different line that merely sits
+    inside the tall title's box -- overlaps it by 4.60pt and is refused.
+    """
+    tall, small = (other, run) if (
+        float(other["y1"]) - float(other["y0"])
+        > float(run["y1"]) - float(run["y0"])) else (run, other)
+    if not (float(tall["y0"]) <= float(small["y0"])
+            and float(small["y1"]) <= float(tall["y1"])
+            and float(tall["y1"]) - float(tall["y0"])
+            > float(small["y1"]) - float(small["y0"])):
+        return False
+    gap = max(float(run["x0"]), float(other["x0"])) - min(
+        float(run["x1"]), float(other["x1"]))
+    return abs(gap) <= WORD_GAP_FRACTION * min(float(run["size_pt"]),
+                                               float(other["size_pt"]))
+
+
 def _group_lines(runs: Sequence[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     """Runs grouped into lines by baseline, each line ordered left to right.
 
     The anchor is the line's first baseline rather than a running mean, so a
     column of tightly leaded rows cannot drift a line's tolerance downward until
     it swallows the next one.
+
+    A run the window would strand -- set INSIDE the ink of another
+    (`_is_set_fragment`) and further from every such owner's baseline than the
+    window reaches -- never anchors a line and is not grouped by its own
+    baseline at all. It is set aside, the rest is grouped exactly as before, and
+    each stranded fragment then joins the line holding the run it is set
+    against. Only a stranded one is diverted, so this adds to the grouping and
+    changes nothing the window already got right.
+
+    The attachment is a second pass rather than a branch inside the walk because
+    the walk runs in reading order ACROSS columns: 1702Q's `th` is followed by
+    the next column's run on the body baseline, which would open the line before
+    the body run that owns the fragment ever arrives.
+
+    A fragment whose owners are not all on one body line keeps its own line,
+    which is what this function did for every run before: no guess replaces a
+    measurement that came out ambiguous.
     """
+    owners: dict[int, list[dict[str, Any]]] = {}
+    body: list[dict[str, Any]] = []
+    for run in runs:
+        set_against = [other for other in runs
+                       if other is not run and _is_set_fragment(run, other)
+                       and float(other["y1"]) - float(other["y0"])
+                       > float(run["y1"]) - float(run["y0"])]
+        if set_against and all(
+                abs(float(other["baseline_y"]) - float(run["baseline_y"]))
+                > LINE_BASELINE_TOLERANCE_PT for other in set_against):
+            owners[id(run)] = set_against
+        else:
+            body.append(run)
+
     lines: list[list[dict[str, Any]]] = []
     anchor = None
-    for run in sorted(runs, key=lambda r: (float(r["baseline_y"]), float(r["origin_x"]))):
+    for run in sorted(body, key=lambda r: (float(r["baseline_y"]), float(r["origin_x"]))):
         baseline = float(run["baseline_y"])
         if anchor is None or baseline - anchor > LINE_BASELINE_TOLERANCE_PT:
             anchor = baseline
             lines.append([])
         lines[-1].append(run)
+
+    of_body = {id(member): index for index, line in enumerate(lines)
+               for member in line}
+    for run in runs:
+        set_against = owners.get(id(run))
+        if set_against is None:
+            continue
+        found = [of_body[id(other)] for other in set_against
+                 if id(other) in of_body]
+        if len(found) == len(set_against) and len(set(found)) == 1:
+            lines[found[0]].append(run)
+        else:
+            lines.append([run])
+    lines.sort(key=lambda line: min(float(r["baseline_y"]) for r in line))
     return [sorted(line, key=lambda r: float(r["origin_x"])) for line in lines]
 
 
@@ -7369,8 +7451,14 @@ def print_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
     # row still looking well formed. This is the narrowest statement of the
     # loss, and it is a loss of exactly the kind of token this table exists to
     # publish.
+    # The ink band is stated, not omitted: every run in an extraction carries
+    # one, `_group_lines` reads it to tell a set fragment from a line, and a
+    # fixture that leaves it out would be asserting the clamp on a shape the
+    # producer never sees. Both runs are one size, so neither can contain the
+    # other and the grouping under test is untouched.
     def _cell_run(text: str, x0: float, x1: float) -> dict[str, Any]:
         return {"text": text, "x0": x0, "x1": x1, "origin_x": x0,
+                "y0": 100.0 - 0.905 * 8.0, "y1": 100.0 + 0.21 * 8.0,
                 "baseline_y": 100.0, "size_pt": 8.0}
 
     crossing = _table_markup(
@@ -7380,6 +7468,56 @@ def print_assertions(ir: dict[str, Any], layout: dict[str, Any], plan: dict[str,
            and 'colspan="2"' not in crossing,
            "a run crossing into an occupied column does not swallow its cell",
            crossing, failures)
+
+    # A run set inside another's ink is one printed line with it, whatever the
+    # baseline window says (`_is_set_fragment`, finding F060). Both directions
+    # are asserted with the corpus's own measurements, because a rule that only
+    # ever joins is not a rule -- the second case is 2553 page 1, where a 9.33pt
+    # label genuinely IS inside the 20.85pt title's box and is a different line.
+    def _raised(text: str, x0: float, x1: float, y0: float, y1: float,
+                baseline: float, size: float) -> dict[str, Any]:
+        return {"text": text, "x0": x0, "x1": x1, "origin_x": x0,
+                "y0": y0, "y1": y1, "baseline_y": baseline, "size_pt": size}
+
+    # 1702Q p3: `...the fourth (4`, a raised `th) `, `taxable year (whether `.
+    ordinal = [_raised("any domestic corporation and resident foreign "
+                       "corporation beginning the fourth (4",
+                       320.09, 526.59, 449.92, 457.89, 456.43, 6.96),
+               _raised("taxable year (whether ",
+                       532.42, 589.23, 449.92, 457.89, 456.43, 6.96),
+               _raised("th) ", 526.90, 532.25, 450.12, 455.35, 454.39, 4.56)]
+    grouped = _group_lines(ordinal)
+    _check(len(grouped) == 1
+           and [run["text"][-4:] for run in grouped[0]]
+           == ["h (4", "th) ", "her "],
+           "a superscript 2.04pt outside the baseline window joins its own line, "
+           "in reading order",
+           [[run["text"][-4:] for run in line] for line in grouped], failures)
+
+    # 2553 p1: the title's box contains the label beside it, and they overlap by
+    # 4.60pt rather than abutting. Two lines, exactly as the window says.
+    titles = [_raised("Return of Percentage Tax",
+                      235.92, 470.92, 51.69, 76.00, 71.52, 20.85),
+              _raised("             BIR Form No.",
+                      466.32, 555.11, 52.19, 63.24, 61.20, 9.33)]
+    _check(len(_group_lines(titles)) == 2,
+           "a shorter line merely sitting inside a tall title's box is not a "
+           "fragment of it",
+           [[run["text"] for run in line] for line in _group_lines(titles)],
+           failures)
+
+    # Two ordinary lines of ONE size, at the tightest real leading in any guide
+    # region (5.16pt, 1600-VT), abutting where the columns meet. Their ink bands
+    # overlap by 2.81pt, so an overlap test would fuse a column's last word to
+    # the next line's first; containment cannot, because two runs of the same
+    # size can never contain each other. That is the whole reason the test is
+    # containment and not overlap.
+    leaded = [_raised("Total amount ", 100.0, 200.0, 449.92, 457.89, 456.43, 6.96),
+              _raised("due here", 200.0, 260.0, 455.08, 463.05, 461.59, 6.96)]
+    _check(len(_group_lines(leaded)) == 2,
+           "two same-size lines at the corpus's tightest leading stay two lines",
+           [[run["text"] for run in line] for line in _group_lines(leaded)],
+           failures)
     url = esc_attr(urllib.parse.quote(f"guides/{name}"))
     _check(f'<p class="gl-download">Source PDF: <a href="{url}">' in converted,
            "a converted guide PDF is still linked as the pinned artefact",
