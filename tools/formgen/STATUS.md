@@ -4,10 +4,140 @@
 same commit.** This is the only formgen document allowed to hold measured
 status numbers (`GOAL.md` owns that rule; `README.md` owns the process).
 
-Measured 2026-08-08 over the 53-form corpus, on branch `gol/form-correction`,
-regenerated at the r27 producer bytes. Assertion counts are from the gate's own
-corpus-wide `audit.py` run over that regeneration; the findings tally is
-recomputed from `review-findings.json`.
+Measured 2026-08-11 over the 53-form corpus, on branch `gol/form-correction`,
+regenerated at the r43 producer bytes. Assertion counts are from a corpus-wide
+`audit.py --assertions-only` run over that regeneration, measured on the tree
+that run scored; the r27 section below is kept as written and its numbers are
+superseded by the r43 section.
+
+## r43 — a comb has a HORIZONTAL writing surface, and F199's seven money boxes clear
+
+**`inputs_over_printed_text` goes 6 forms / 13 offenders to 3 / 6, and the seven
+that clear are ONE mechanism rather than seven placements.** F208: `comb.slot_x`
+runs wall-CENTRE to wall-centre, so every comb's outer compartments were laid
+across half of each printed wall's own ink. The vertical twin of this was fixed
+at r21 (`lattice.comb_on_writing_surface` insets the band to `writing_y0` /
+`writing_y1`); the horizontal analogue had never been written. The physical fact
+under all seven offenders was that **the offending glyph's ink stops short of
+the wall's inner edge** — 2551M paints the wall left of item 28C at
+x 238.92-239.64 and prints the `C` of `28C` to 239.5176, tucked under the rule,
+with no blank paper between the label and the wall. The writing surface begins
+at 239.64.
+
+The cleared seven, cell for cell: 0605 `p1c3`, 2551M `p1c74`/`p1c79`/`p1c86`,
+2553 `p1c79`/`p1c84`/`p1c91`. The surviving six are F199's other two groups and
+are untouched by this, correctly: 1604CF `p1c16` and 2316 `p1c38`/`p1c39` are
+descenders on frozen date and telephone geometry, and 2316 `p1c62`/`p1c83` and
+1701MS `p1c287` are the outline overshoots that were at exactly 0.0000pt on the
+advance box.
+
+### `comb_slots_match_printed` 12 forms / 25 → 10 / 19, and the DECIDED residual is now zero
+
+The 6 decided offenders F196 recorded as unfixable are gone — 1701MS `p1c166`/
+`p1c173`/`p1c179`/`p1c187`, 2550M `p1c203`, 2550Q `p1c6` — and **nothing new
+appeared**: the 19 that remain are the same 19 source-unevaluable subjects as
+before, cell for cell, reason for reason. F196's freeze was the same defect seen
+from the other side: those six rails' own CENTRES fall 0.26-0.31pt outside their
+owner's fused edge, so "outer `slot_x` within 0.25pt of the rail" and "every
+emitted slot inside the cell rectangle" could not both hold. Measured against
+the rail's INK EDGE instead of its centre, both hold with room: 1701MS `p1c166`
+publishes 370.66 against a right rail whose ink starts at 370.68.
+
+### The contract, and its five consumers
+
+`lattice.comb_rails` now reports each outer rail's own painted ink beside its
+position (`left_rail_ink` / `right_rail_ink`), measured from exactly the bars
+that established that position and from no others.
+`lattice.comb_on_writing_surface` insets `slot_x`'s outer values to those ink
+edges and publishes `writing_x0` / `writing_x1` / `writing_width_pt`, with
+`writing_x_rails` naming what derived each side. **`slot_x`, `divider_x`, the
+compartment counts and the pitch are untouched**, exactly as the vertical twin
+leaves `y0`/`y1` alone: two questions, two sets of keys.
+
+| Consumer | Reads |
+| --- | --- |
+| `emit.comb_slot_edges` | the one reader; feeds the slot div, the input inside it, and the band-template JSON a cloned row is re-laid out from |
+| `audit.emitted_comb_evidence` | `emission_layout_outer_position` against `writing_x0`/`writing_x1`; `emission_source_outer_position` and `layout_source_outer_position` against `source_frame_geometry`'s `left_rail.ink_x1` / `right_rail.ink_x0` |
+| `comb_referee.emitted_geometry_contract` | one of two independent re-derivations of the emitted slot rectangles |
+| `gate._emission_geometry_from_layout` | the other, kept independent and moved with it |
+| `comb_referee.audit_offender_dimensions` | re-derives the audit's own rail expectation, so it names the ink edge too |
+
+**No tolerance moved.** `POSITION_TOL_PT` is still 0.25 and
+`EMITTED_GEOMETRY_EPS_PT` still 0.0002; only the comparison TARGET changed, from
+a rail's centre to that rail's inner ink edge, which is comparing an inner edge
+against an inner edge. Reusing `slot_x` for both jobs cannot work: the half-wall
+inset is 0.36-0.48pt and 38.7% of the corpus's 8,306 flush outer edges exceed
+0.25pt against the centre.
+
+A second change lands with it: `audit.input_boxes` now reads a comb input's OWN
+declared inset instead of scoring its slot div. Every comb input in this corpus
+declares `inset:0`, so this moves no number today; without it any producer-side
+move inside a slot — in either direction — is invisible to the judge. Where the
+attribution is ambiguous it keeps the larger slot rectangle, which can only
+report more overlap and never less.
+
+### Where the inset could not be measured: 8 combs, fail closed and counted
+
+`writing_x_rails` publishes `rail-ink` on both sides for **4,546 of 4,554**
+combs. Eight fail closed to `slot_x`'s own value on one or both sides, because
+no bar of that rail crosses the comb's band, and every one is a form whose walls
+this branch already had to heal: 1700 `p1c21`/`p1c68`, 1707 `p2c38`, 2000-DST
+`p1c4` (left) / `p1c5` (right), 2200C `p1c7`/`p1c11` (one side each) and 2200C
+`p1c13` (neither side). **Zero** combs surrender to a degenerate width. Nothing
+is guessed: a fused lattice edge times a nominal thickness is not a measurement
+of the rail at that band, and the code refuses to treat it as one.
+
+### Nothing becomes unusable, and this is NOT the reverted 2550M trade
+
+Insetting every comb in the corpus leaves a narrowest outer compartment of
+**6.12pt** (1604CF `p1c30`), and nothing under 6pt. The insets themselves run
+0.01 / 0.24 / 0.96pt (min / median / max). The r22 trade that had to be reverted
+cost a fitted face by cutting the writing box to a 3.12pt stub; this one cannot,
+because a comb's size is fitted to its writing HEIGHT and capped at the sheet's
+body size, never to its slot width — which is why the `<input>` attribute
+multiset is byte-identical in all 53 documents.
+
+### Corpus census — r43
+
+| Quantity | r43 | prior | Note |
+| --- | --- | --- | --- |
+| Bundles / unique codes / pages | 53 / 50 / 116 | same | unchanged |
+| Comb ledger subjects (`EXPECTED_COMBS`) | **4,587** | 4,587 | **did not move**: `slot_x` and `divider_x` are untouched, so no ledger topology digest moves |
+| Retained subjects (`EXPECTED_RETAINED_SUBJECTS`) | **33** | 33 | unchanged, slug for slug |
+| Cells carrying a comb | **4,554** | 4,554 | unchanged |
+| Combs with a measured rail-ink inset | **4,546 of 4,554** | — | 8 fail closed, 0 surrendered |
+| `<input>` corpus-wide | **45,494** | 45,494 | unchanged |
+| Emitted documents changed | **53 of 53** | — | almost every comb has an outer compartment |
+| Tag inventory across the 53 | **unchanged in every document** | — | nothing added, nothing deleted; visible text token-for-token identical in all 53; `<input>` attribute multiset identical in all 53 |
+| Slot rectangles moved | **9,307 of 40,185** | — | every one a first or last compartment; no document's slot COUNT moves; every internal divider byte-identical |
+| Embedded `<script>` | **runtime byte-identical in all 53** | — | only the 15 `formgen-bands` JSON blobs move, so `HTML_RUNTIME_SCRIPT_SHA256` does NOT move |
+| `EXPECTED_HTML_STRUCTURE_SHA256` | **53 of 53 re-pinned** | — | the review is recorded at the pin |
+| `LATTICE_PRODUCER_SHA256` / `AUDIT_PRODUCER_SHA256` | **both re-pinned** | — | with their causes named at each pin |
+| Determinism | **two generations byte-identical** | — | 461 files, tree digest `b0b55926b1fdab39` |
+
+### Assertions — corpus-wide `audit.py --assertions-only` at r43
+
+| Assertion | r43 | prior |
+| --- | --- | --- |
+| `inputs_over_printed_text` | **3 / 6** | 6 / 13 |
+| `comb_slots_match_printed` | **10 / 19** (19 unevaluable, 0 decided) | 12 / 25 (19 + 6) |
+| `inputs_span_no_printed_divider` | **HOLDS, 0** | 0 |
+| `money_boxes_have_inputs` | **0** | 0 |
+| every other assertion | **0** | 0 |
+
+### Reported loudly: one consumer outside this change's five files is now stale
+
+`fill_check.py` measures each typed glyph's centre against the layout's own
+`slot_x` centre. The two OUTER compartments are no longer laid on `slot_x`, so
+its expected centre for them is half an inset away from the box the character
+is actually typed in: **2,046 of the corpus's 9,108 outer compartment centres
+shift by more than `DEFAULT_CENTRE_TOL_PT` (0.25pt)**, and a `fill_check.py` run
+would report those as over-tolerance slot landings that are not. Nothing else in
+it is affected — the glyph window and the slot assignment both widen rather than
+narrow, so no glyph is lost or misassigned. The fix is the same three lines
+`emit.comb_slot_edges` already is, applied at `fill_check.py:341`; it was not
+made here because that file was outside this increment's declared ownership.
+`fill_check.py` is not one of the gate's twelve checks.
 
 ## r27 — a caption block is not a comb, and an occupied compartment is not a box
 

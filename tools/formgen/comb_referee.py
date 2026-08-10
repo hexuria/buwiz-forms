@@ -303,8 +303,24 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # regions. 2200C item 1 is now 8 character compartments (MM 2, DD 2, YYYY 4) and
 # 2000-DST's gate-blocking retained subject p1@164.30,109.94,248.69,131.06 splits
 # into two active_resolved subjects and RETIRES. Zero cells move corpus-wide.
+# Moved 2026-08-11 (r43) by F208: a comb now has a HORIZONTAL writing surface.
+# `comb_rails` reports each outer rail's own painted ink beside its position
+# (`left_rail_ink`/`right_rail_ink`, measured from exactly the bars that
+# established the position), and `comb_on_writing_surface` insets `slot_x`'s
+# outer values to those ink edges as `writing_x0`/`writing_x1`/
+# `writing_width_pt`, with `writing_x_rails` naming what derived each side.
+# This is the exact twin of the vertical `writing_y0`/`writing_y1` and exists
+# for the identical reason: `slot_x` runs rail CENTRE to rail centre, so every
+# comb's outer compartments were laid across half of each printed wall's ink.
+# `slot_x`, `divider_x`, the compartment counts and the pitch are UNTOUCHED, so
+# no ledger topology digest moves and the census does not move (4,587 subjects,
+# 33 retained, 4,554 comb cells, form for form). 4,546 of the 4,554 combs get a
+# measured ink inset on both rails, 8 fail closed to `slot_x` on one or both
+# sides and are counted by reason in `writing_x_rails`; 0 surrender to a
+# degenerate width, and the narrowest resulting outer compartment corpus-wide is
+# 6.12pt (1604CF p1c30). `EXPECTED_HTML_STRUCTURE_SHA256` moves on all 53, below.
 LATTICE_PRODUCER_SHA256 = (
-    "64796713f39000d84858b828680e11d9c623768d35a9a4cd4bcb43f3a7c83277"
+    "a3e03a707e7900331889941ad39400699289cd70dd3d83c2fc8d92012ba12a48"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -435,8 +451,25 @@ AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # unless the dividers themselves stand above the band, because with every
 # divider flush to the band 'higher than every divider' collapses into 'above
 # the band at all', which is the reading 2200-A refutes.
+# Re-pinned 2026-08-11 (r43) for F208, and this one DOES land inside
+# `comb_slots_match_printed`, the single derivation this referee adjudicates.
+# Stated plainly rather than buried: the TARGET of the two outer-edge relations
+# moved from the source rail's CENTRE to that rail's own INK EDGE, and the
+# layout side of them moved from `slot_x`'s outer values to the layout's
+# published `writing_x0`/`writing_x1`. Both are the same relation restated on
+# quantities that mean the same thing -- an inner edge against an inner edge --
+# and the ink edges were already published, unused, in `source_frame_geometry`.
+# No tolerance moved: `POSITION_TOL_PT` is still 0.25 and
+# `EMITTED_GEOMETRY_EPS_PT` still 0.0002. The internal-divider comparison, the
+# printed compartment count and every other failure kind are untouched. A layout
+# that publishes no writing edges is an OFFENDER, by name, never an excused
+# comparison. Second change, same increment: `input_boxes` now reads a comb
+# input's OWN declared inset instead of scoring its slot div, so a producer-side
+# move inside a slot is visible to the judge in both directions; where the
+# attribution is ambiguous it keeps the larger slot rectangle, which can only
+# report more overlap and never less.
 AUDIT_PRODUCER_SHA256 = (
-    "4c19ad75bdedc5e713f3e45d414e7a25eba36ebb42422ce94aaac7888b4ebecc"
+    "e864b25e31bd2c0fa61ff2425d829abe6f7d95c4cfae11212ddca66cea78851d"
 )
 AUDIT_DEPENDENCY_SHA256 = {
     # Re-pinned 2026-08-07 (r20): extract.py now models PDF 32000-1 8.4.3.3
@@ -1401,60 +1434,99 @@ HTML_ALLOWED_TAGS = frozenset({
 #   * No `<input>` is added or removed on any of the 11 (45,494 corpus-wide,
 #     unchanged), no comb subject moves state, and no slot rectangle moves:
 #     the change is confined to the text layer.
+#
+# Re-pinned 2026-08-11 (r43) for F208, ALL 53, and this is the widest pin move
+# in this file's history, so what was reviewed matters more than the count.
+# Every document moves because almost every comb in the corpus has an outer
+# compartment, and every outer compartment's own edge moves inward off the rail
+# CENTRE onto that rail's painted INK EDGE. Reviewed structurally, on the
+# emitted bytes, before re-pinning:
+#
+#   * TAG INVENTORY IS IDENTICAL IN ALL 53. Not one element of any kind is
+#     added or removed anywhere -- `<input>` stays at 45,494 corpus-wide, and
+#     every `<div>`, `<rect>`, `<path>`, `<template>` and `<script>` count is
+#     unchanged. Compare r27's -110 `<input>`/-22 `<div>`: this change adds and
+#     deletes nothing.
+#   * VISIBLE TEXT IS TOKEN-FOR-TOKEN IDENTICAL IN ALL 53.
+#   * The `<input>` ATTRIBUTE MULTISET IS IDENTICAL IN ALL 53, which is the
+#     evidence that no fitted face moved: a comb's size is fitted to its writing
+#     HEIGHT and capped at the sheet's body size, never to its slot width, so
+#     narrowing two compartments renumbers no field-metric CSS class.
+#   * The RUNTIME `<script>` IS BYTE-IDENTICAL IN ALL 53, so
+#     `HTML_RUNTIME_SCRIPT_SHA256` does NOT move. The only script bytes that
+#     move are the 15 `formgen-bands` JSON blobs, which carry the band
+#     template's own `slot_x` and therefore have to state the same writing
+#     edges the pre-rendered rows are laid on -- a clone rebuilt on the rail
+#     centres would sit on the printed wall beside identical printed rows that
+#     do not.
+#   * SLOT COUNT MOVES ON NO DOCUMENT. 9,307 of the corpus's 40,185 slot
+#     `style` strings change, and every one of them is a first or last
+#     compartment of its comb; every internal divider is byte-identical.
+#     2551M p1c74 is the shape: slot 0 `left:0pt;width:11.04pt` ->
+#     `left:0.36pt;width:10.68pt` (half of the 0.72pt wall the sheet paints at
+#     x 238.92-239.64, under which it prints the `C` of `28C`), slot 1
+#     `width:10.44pt` -> `width:9.96pt`, the divider between them unmoved at
+#     11.04pt, and the cell's own rect, capacity, pitch, ids and classes
+#     untouched.
+#   * EXPECTED_COMBS, EXPECTED_COMBS_BY_SLUG and
+#     EXPECTED_RETAINED_SUBJECTS_BY_SLUG do NOT move (4,587 subjects, 33
+#     retained, 4,554 comb cells, form for form): `slot_x`, `divider_x` and
+#     every compartment count are untouched, so no ledger topology digest
+#     moves either.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
-    "0605-1999": "cf4e8ceb12d7124c50327452c8b4fa358c9ea34562de27aaa09abd7e7a84b5b0",
-    "0619e-2018": "841c92f9b7392b86e68ccbe954aebca0b7f07980b860280a69168a2ec4ad65af",
-    "0619f-2018": "93f01896201709d07b206be7c3068bb0ce5eb8ad5137f891f11b6b067c32c05d",
-    "0620-2019": "20ddba4b3596feaac25b67085c04d0eb658194e4f451e3ad90534b90888a43d0",
-    "1600-pt-2018": "6bd0dfc056e49f1738a0f8539e39276637af33b333df837c3b1772dd52ce9c07",
-    "1600-vt-2018": "b89c4df00fa0dd35bf321a29a44c8ca9a126d75024a4be6668399e674d3b4765",
-    "1600wp-2010": "39a7211982c361f182e5ce35f0221855b525bbb533f3b9da7c5e288328ca0c4c",
-    "1601-fq-2020": "ef6d6420818713420366e9653ff69319b4ae3447bc73e56a3b9d24cb18f3db9d",
-    "1601c-2018": "bef326f02ee8c1ee802c596f4f35a1d85abd05fff7ded2bcc575600e44a4fa91",
-    "1601eq-2019": "2437748fb27b8a14024d7079fbeb6fbeb66e9aafd3238c0b83036acc371e49ef",
-    "1602q-2019": "f6dc781d24815d89ad0d0284e81c1def0beb052ea262d9efb12c86e36e70f5be",
-    "1603q-2018": "4aded7efe3e5e11a70e8967cf06ded7ec9f3d186fb6a8341a97265cabaee2458",
-    "1604c-2018": "0678a94f614c5bc97a36a688ccc07eafec2b823aeaf613eb716ca067695d9d68",
-    "1604cf-2008": "fca201ec4ea6d11f90489ffbec003cb993985a53abafe8b3ea671ee80e3c0077",
-    "1604e-2018": "df3a1657f937644760f62d469262147e3c0aa9363e67fe1c7f629fe8538c337a",
-    "1604f-2018": "7cd85f44a8176d2b0d8c2794459cab0655a450a9baa7589023c95b5206867261",
-    "1606-2018": "c244cd120f9b2c4f230b2a40425f9d14fd765753a9fd898fa79830b52be74381",
-    "1621-2019": "7ec49f83a6c2134f6ae7695c1438396ffddc27a35794d11215ecdab4da9fdf1a",
-    "1700-2018": "4efa02b74d9c392c154eae4ad59e27724bb60b8c5fff01063675fd5c317bb242",
-    "1701-2018": "d332c803690b6f76869c33a851d1e33fe7bd62c52c926898f2845d85da4eabd0",
-    "1701-2018-attachment": "f8917dd5b3aa6bfcac1d093371931535032c47ee68ff258c23018dc52f34a53f",
-    "1701-2018-conso": "d610dfe01a54851348bbefc1169a834d61c4bcfa17f08a03678ad964c13bc9f8",
-    "1701a-2018": "12047ef277a2e70535169f359886b51e186da3d4a6d21ffd79d71c5006e69dc7",
-    "1701ms-2024": "d0d4365fe622ad55d8391c74e1fd1e2b4dbdd1ac9e720fbb56952067de1fbfa0",
-    "1701q-2018": "564347bdfafb922ce699c2412e9b9c756a37eb054674b47fb5a704bcd37cf3a4",
-    "1702ex-2018": "e84bce62ffe8bb5c19a935e542947670c2ebdd1462057cae3c59a7d31675bcce",
-    "1702mx-2018c": "c00ad353757ced63cee14f8587882a44661fc99aeab19869ce76e3d696589118",
-    "1702mx-2018c-attachment": "92db8460407901af8307b42c129b3e59483f7c34bc8c79e2aff9897420e7221f",
-    "1702q-2018": "8b4a569b2bcf69fd477359cffdd73270980a9b7fc14568aec43a164f079a729f",
-    "1702rt-2018c": "9865cc81581aba1c72df0149327e323d84091151270eba32407db9a242d9e460",
-    "1706-2018": "b374a69bbfe81518737d4462dbf2697e3b5b3b995a1798af70b170f099a1b398",
-    "1707-2021": "ba77616ce8844f1285cb6ea6862a3d36cbb6e5f07418a9564e72450249da2d7e",
-    "1707a-2021": "fdfcac76e1ac56f7e8d6ac7628cc4ea1049f3838b7377add657dd256b6c8ab9e",
-    "1709-2020": "4f9dd3d145e9cab3ca9244d485e19798f6fae252ebdb2e1e47f676c0f9bf933d",
-    "1800-2018": "91ca54590d0e0765fa59edfbdc807f7245247c7648f6d191d24f31c45caa0afa",
-    "1801-2018": "2c4a3bd2dd760c49380efc9dd476b0a4c1e08d957dc3c7f6c27abc8ca5148fde",
-    "2000-dst-2018": "b19ff17714f3cee3823758adb8e61350a81c15549b3bf9190ea21fd5a9080596",
-    "2000-ot-2018": "3db7c02da51dabab569206e55c30d4a19184f70e39d9af04fe9bef6f29b0bea5",
-    "2200a-2020": "86b630a48e3a2b08e2365a647dfb28f8db583996aaee39a38c31f172cd013eea",
-    "2200an-2018": "61a9fbc36aef8ee71e94798fdfd3ab080df61ba5e4c82bf9e0f42083408cbd59",
-    "2200c-2018": "634ac954f5ce51ee3387d6d22d09078e7145d026e6d184c5d465907a767a70ec",
-    "2200m-2018": "666543bedeb654f3264ac13505c28e821dacaa3138fbeb96444d50ecd9abedfa",
-    "2200p-2020": "31f0397fae53a85ab954b38b1fd10f4f4675f6dd44e2c97247051a887c90d56c",
-    "2200s-2018": "9cbd65cb3dff5f09f919b12b9cb080bb464c7eb721f3f64530ba28cfaaf58e8c",
-    "2200t-2022": "6cb06bccb4378bed84d94988392e82d3e9bbca3334e559447791b436d8705465",
-    "2316-2021": "cd02ddf4f89f58dfd00fc9acbe48228b4971a23ac7fdb8962acfec9ccfd0cf0e",
-    "2550-ds-2025": "cd06d1c425b89504245b291ea48d7ca7edd6ade8c1e9c6e013e0849d84781c06",
-    "2550m-2007": "605aab9672815c6187e4481e495c217621abb3143f15a13ccb8485e18fad0508",
-    "2550q-2024": "d1738d3d9ad67d149c37b01e0a2fed9ddc7cb430150ea8d7282bd5abe3ed286e",
-    "2551m-2002": "2b8c6cc360fb61b731739554e670c4eb271dc356b2339e7a9b9b22507f3999ae",
-    "2551q-2018": "914531c8b760541bcc7fa0fea34cd3169c9e27d1b3fbdf711e5ef72d46ec720c",
-    "2552-2018": "e036276c284cb203b317cfc874e18dc3c0054a280abd730b3f43e30c5162ed22",
-    "2553-1999": "adde688093d296961c8ed80cf69c9bd677ac27e78020df1d03b60134b6c0c4d7",
+    "0605-1999": "2911425a931792d03762cc8508d815fec905e7102ae2b2e7921ef9c92a110197",
+    "0619e-2018": "6cfbd8c3bb016f9e4100e535403a5984cbc878a0bf95ac1b302b61be6fa13ff0",
+    "0619f-2018": "229e4d558a153e9bb8434f79d4a9423389fd2d16d37ec1fcd81f9760f1849272",
+    "0620-2019": "e5cb5d197334d6f658d3d397fa6d60e604dfd5c85af0cd9abfed8a185c56be84",
+    "1600-pt-2018": "ca3d320bca06ec2b50b94478d69180c7e60f01907574e43ddae1be394791fb83",
+    "1600-vt-2018": "934d723276655ad7f78c7efe7e1a9f1548c7c96cee50e15adee62e66aa78b023",
+    "1600wp-2010": "fd90570e4c03a3b657dfe3c304078b5bcc645a6c748868b2ee1999e2c0e9e600",
+    "1601-fq-2020": "6cd362f2bd538f6694654c8eb7071226dc08b2c22e502df3475dee2152f312e9",
+    "1601c-2018": "e50d48290a58780d412b09b52011ae9a7e70ff9a01a72ecaa261be1501ba5859",
+    "1601eq-2019": "3e70c0162474caa63252730cb7f8c59d3b55d7cc659cdd21d0105050ad1e35c4",
+    "1602q-2019": "6b3e89eda923c9392477af0e536cb28acd6fdceaf2ba4496c21c3133169e65a5",
+    "1603q-2018": "3801292f02d46fadcb198934e88023fcac641026226451ad9d767013f8219c13",
+    "1604c-2018": "a388d529b666adcd99a28b86b0c3c9b7a9e5b1d2679d0279763c0202cf82eeca",
+    "1604cf-2008": "32a5c3023490a352eb0a9aa080c5933fb0bb2355a28a48938190b4009c745a89",
+    "1604e-2018": "fdf43323cdd44eeff6361d4c633bdfa6301f4f66932a7ed362b8d528947b9ca7",
+    "1604f-2018": "8493cc0f5f133efa326e503fd0d62b9498d04e3356462099c8b558129de2b82f",
+    "1606-2018": "06021930250073a8ae129a0cfde8eb93503a3e02c959e3344860f6113fe095ad",
+    "1621-2019": "5017b8c88a9494e309ca35fc974602cce70befa25ed17bf2cc482c0981d600f5",
+    "1700-2018": "79cabae1c35c1cf4559722a52c69fedd3d3a09df4fae1561c8e04788ea420286",
+    "1701-2018-attachment": "543b9c5e635fca051fc157743061b7ea21ed3b1fdd9ab4c66e0012e3c3665173",
+    "1701-2018-conso": "3eca0df2cd1216b060544e6f579911d9c6964402fcddcf747225e1c332c1d07d",
+    "1701-2018": "e9fce4e299772a21fff2965282f3ec4395de63ad7dd0994f44b77b373db18a86",
+    "1701a-2018": "5b4f01e42c2b8ff5d8d5291511c063cc4210eef65ec03c51d4b3d19c4750d505",
+    "1701ms-2024": "a50c953b99c43641f8a284efd5d580048181db1c61d8d5d15c8b48b4b4e10461",
+    "1701q-2018": "9079a24efb3a216ae1bea8b49dc40ef713b80df49336fbf81d4fcc02e5ee6c8a",
+    "1702ex-2018": "b8d64260a2f0f4b806a2586354997d8c0961a48e4c672d25a5016cac4416a1f1",
+    "1702mx-2018c-attachment": "0167e82e6bd94d2c17ae9259a926df21f1647c89635dc577d249d31a874f4d30",
+    "1702mx-2018c": "0e75e7c47e963c85b104b421a650d087ee0867e84face0b33376aa7a8410e939",
+    "1702q-2018": "eba52f9b60de91f5d0056f7f35a4444faabfbda3770acc13a003a451e72699af",
+    "1702rt-2018c": "f7e3f18b4c94438842f437f14a1e1198df3dd824599559064efdba711ade7a6f",
+    "1706-2018": "b67046982c4327202e3f9e2382ba2c835fc34258fc0a7ae14df0e53985365424",
+    "1707-2021": "a90494773a7ca92f544c6d275c80cf645377367f12693b917cfa979f8a4ab337",
+    "1707a-2021": "e48e3ea23a6e8d43ba371c4bdab8f835f8c716917135328549937042be9c6adc",
+    "1709-2020": "67c689dac3e103ef7e006bde4896fedfe449b993c606b21be7c50cccaa4b6822",
+    "1800-2018": "5aadcfbabb54eb68aa69e16acbd6da82b78dbbdeabdb1b9a82f35665e7d1ed88",
+    "1801-2018": "043e1276e6dcc3bc9be8d31dc2d5aa86d838eb293457a04d52ff0fa29502dee0",
+    "2000-dst-2018": "5fbc623b66a7d6478882fa763b361a06639eb2ba5679c374a735ebe9c8e671a5",
+    "2000-ot-2018": "b1fa5a23f19566875d03120e4ca9cb299a996d6e2632778e8e13c92bb95796ba",
+    "2200a-2020": "5ea0c9e9c69a92e3b0f6dae77ef5b8e1a6da924b3f468f1fa0594933a88b4c91",
+    "2200an-2018": "9d7cb041aa5335beb0417d168d8aafbc07799b2a510018fa8a766e13e96d62a6",
+    "2200c-2018": "e0e570578b3ddd7286c1956c377520c10dde9988f50680d428a01d3bb7f6ae90",
+    "2200m-2018": "b8640f615c74906b53c800ccd353d0c0d48094d612c9deeb5a181789f9567383",
+    "2200p-2020": "219336e77c59130a9bbad537dbf91014346513e05cd98fcce95941afb69d526b",
+    "2200s-2018": "1a11982827a356d34dc44a29a0bde5199ab7a6d6ce2f2e4add5edca110f33bf1",
+    "2200t-2022": "c2d8556550699ce594c95828ce11c797e65854641bf7d1d0a3ceb5b14143965c",
+    "2316-2021": "5cdd66d888e11da734111fb1c40c60c604bf2beb8498d945b7437ef4ab243b02",
+    "2550-ds-2025": "c7c7416a3e32e5aafe047ce960ef1460a648980fff4ed01da2624e728406ada9",
+    "2550m-2007": "a58804e0b426159367b89be3b58355fe132af562d6e9866efe41a223c62e7cd0",
+    "2550q-2024": "02738ce8cea4b9a68390fbb399613042a4eb89120c112efcb48d315d6ac923f6",
+    "2551m-2002": "ab2a31aef1251ecc3f06d5135af586fd6e5273a9385945d0866e892ef05c4720",
+    "2551q-2018": "3be23621aa67003b1c58aac3157803340c6409f1ec59b07772d117beed41f339",
+    "2552-2018": "5e636342731688a2fd3f0fb9e42c1cc382af88279f599a48233d2a3392859712",
+    "2553-1999": "38a277197273a4e6779751f25c61af390c865cf055c23a1ed23ae667592fe176",
 }
 if set(EXPECTED_HTML_STRUCTURE_SHA256) != set(EXPECTED_COMBS_BY_SLUG):
     raise RuntimeError("HTML structural pins disagree with the referee corpus")
@@ -3849,9 +3921,18 @@ def emitted_geometry_contract(
     every emitting comb in the corpus, which forced all 4,550 of them to
     `stale-generation` and published 4,583 "mismatches" that did not exist.
 
+    The OUTER HORIZONTAL extent is the same distinction on the other axis, and
+    the same trap.  `slot_x` runs rail CENTRE to rail centre; the compartments
+    are laid on `writing_x0`/`writing_x1`, those rails' own ink edges, because
+    a rail is a painted stroke and a box starting at its centre starts inside
+    the printed rule.  Every INTERNAL edge is `slot_x`'s, untouched: a divider
+    is one stroke shared by the compartments either side of it.
+
     Alongside the contract this returns, per cell, the source's own verdict on
     that writing band: the vertical number is otherwise one the lattice asserts
-    freely, whereas the horizontal one is bound to Poppler's `source_divider_x`.
+    freely, whereas the horizontal ones are bound to Poppler's
+    `source_divider_x` (internally) and to `audit.source_frame_geometry`'s
+    independently measured rail ink (at the outer edges).
     """
     relocated = relocated_cells(guide)
     clipped_form_boxes: dict[str, dict[str, Any]] = {}
@@ -3908,13 +3989,27 @@ def emitted_geometry_contract(
                     comb["writing_y0"], f"{cell_id} comb writing_y0")
                 writing_y1 = finite_number(
                     comb["writing_y1"], f"{cell_id} comb writing_y1")
+                writing_x0 = finite_number(
+                    comb["writing_x0"], f"{cell_id} comb writing_x0")
+                writing_x1 = finite_number(
+                    comb["writing_x1"], f"{cell_id} comb writing_x1")
                 count = int(comb["cells"])
             except (KeyError, TypeError, ValueError):
                 raise RefereeError(
                     f"layout comb geometry is incomplete: {cell_id}")
+            # The compartment boundaries as LAID OUT: the writing edges outside,
+            # the measured dividers inside. Derived here from the layout's own
+            # published keys, independently of the producer that wrote them and
+            # of `gate._emission_geometry_from_layout`, which must arrive at the
+            # identical vector by its own route.
+            laid_x = [writing_x0, *slot_x[1:-1], writing_x1]
             if (len(slot_x) != count + 1
                     or any(right <= left
                            for left, right in zip(slot_x, slot_x[1:]))
+                    or any(right <= left
+                           for left, right in zip(laid_x, laid_x[1:]))
+                    or writing_x0 < slot_x[0] - HTML_GEOMETRY_EPSILON_PT
+                    or writing_x1 > slot_x[-1] + HTML_GEOMETRY_EPSILON_PT
                     or box_values["x1"] <= box_values["x0"]
                     or box_values["y1"] <= box_values["y0"]
                     or writing_y1 <= writing_y0
@@ -3943,7 +4038,7 @@ def emitted_geometry_contract(
                         "height": writing_y1 - writing_y0,
                     }
                     for index, (left, right)
-                    in enumerate(zip(slot_x, slot_x[1:]))
+                    in enumerate(zip(laid_x, laid_x[1:]))
                 ],
             }
     return result, corroborations
@@ -5176,7 +5271,7 @@ def writing_band_corroboration(
         box: dict[str, float], border: Any, comb: dict[str, Any],
         page: SvgPage,
         ) -> dict[str, Any]:
-    """Re-derive the comb's writing surface from the source, then compare.
+    """Re-derive the comb's VERTICAL writing surface from the source, compare.
 
     `slot_x` is corroborated horizontally against Poppler's own
     `source_divider_x`; without this the VERTICAL extent of every emitted slot
@@ -5186,6 +5281,21 @@ def writing_band_corroboration(
     measures those two weights itself, from the pinned PDF's vector output,
     insets the same rectangle, and demands the published band back to the
     precision the layout is written at.
+
+    The horizontal writing edges (`writing_x0`/`writing_x1`) are deliberately
+    NOT re-derived here, and the asymmetry is a decision rather than an
+    omission.  This function exists because the vertical inset is a RELATION
+    between two numbers the lattice asserts -- the cell box and its border
+    weight -- so nothing outside the producer could confirm it.  The horizontal
+    edges are not a relation: they are the rails' own painted ink, and
+    `audit.py` already measures that ink independently, from the pinned PDF's
+    content stream through its own parser rather than through Poppler, publishes
+    it per comb as `source_frame_geometry.left_rail.ink_x1` /
+    `right_rail.ink_x0`, and binds the layout to it at POSITION_TOL_PT in
+    `layout_source_outer_position`.  A second exact re-derivation here would
+    duplicate an existing independent check and would compare absolute
+    COORDINATES between two rasterisers at 1e-9, where the vertical compares a
+    THICKNESS and is robust to a sub-point offset between them.
 
     The declared border TONE selects which ink to measure; every number that
     reaches the verdict is Poppler's.  Selecting by tone is not a courtesy to
@@ -7259,12 +7369,20 @@ def audit_offender_dimensions(
                 raise RefereeError(
                     f"audit offender {cell_id} source frame is malformed")
             try:
+                # The rails' INNER INK EDGES, which is what an outer
+                # compartment is bounded by. A rail is a painted stroke and its
+                # `center_x` runs down the middle of it, so a comparison
+                # against the centre asks whether the taxpayer's box starts
+                # half a wall inside the printed wall (F208). This referee
+                # re-derives the audit's own expectation, so it has to name the
+                # same quantity the audit named or every framed offender would
+                # be rejected as disagreeing with itself.
                 frame_edges = [
                     finite_number(
-                        frame["left_rail"]["center_x"],
+                        frame["left_rail"]["ink_x1"],
                         f"audit offender {cell_id} left source rail"),
                     finite_number(
-                        frame["right_rail"]["center_x"],
+                        frame["right_rail"]["ink_x0"],
                         f"audit offender {cell_id} right source rail"),
                 ]
             except (KeyError, TypeError):
@@ -11373,6 +11491,9 @@ def self_test() -> int:
             # never be placed in.
             "y0": 8.0, "y1": 10.0,
             "writing_y0": 1.0, "writing_y1": 9.0,
+            # The horizontal twin: `slot_x`'s outer values are the rails'
+            # CENTRES, and the writing edges are those 1.2pt rails' ink.
+            "writing_x0": 0.6, "writing_x1": 39.4,
         }
         comb.update(comb_overrides)
         for key in [name for name, value in comb.items() if value is None]:
@@ -11399,8 +11520,8 @@ def self_test() -> int:
     band_contract, band_corroboration = emitted_geometry_contract(
         band_layout(band_cell()), {}, {1: band_source})
     assert band_contract["p1c1"]["slots"] == [
-        {"index": 0, "left": 0.0, "top": 1.0, "width": 20.0, "height": 8.0},
-        {"index": 1, "left": 20.0, "top": 1.0, "width": 20.0, "height": 8.0},
+        {"index": 0, "left": 0.6, "top": 1.0, "width": 19.4, "height": 8.0},
+        {"index": 1, "left": 20.0, "top": 1.0, "width": 19.4, "height": 8.0},
     ], band_contract
     assert band_corroboration["p1c1"]["status"] == "corroborated"
     assert band_corroboration["p1c1"]["source_top_wall_pt"] == 1.0
@@ -11446,6 +11567,23 @@ def self_test() -> int:
                 "layout comb geometry is invalid")
     band_raises(band_cell(writing_y0=9.0, writing_y1=1.0),
                 "layout comb geometry is invalid")
+    # The horizontal writing edges, on exactly the same terms.  A contract that
+    # laid the outer compartments on `slot_x` would put them across half of
+    # each printed rail, so a missing edge is an ERROR and never a fallback to
+    # the rail's centre.
+    band_raises(band_cell(writing_x0=None),
+                "layout comb geometry is incomplete")
+    band_raises(band_cell(writing_x1=None),
+                "layout comb geometry is incomplete")
+    band_raises(band_cell(writing_x0=float("nan")), "is not finite")
+    band_raises(band_cell(writing_x1="39.4"), "is not numeric")
+    # Mutation: a writing edge OUTSIDE the rail it is meant to be the ink of.
+    # Inward off the centre is the only direction a rail's ink can move it.
+    band_raises(band_cell(writing_x0=-0.5), "layout comb geometry is invalid")
+    band_raises(band_cell(writing_x1=40.5), "layout comb geometry is invalid")
+    # Mutation: the inset swallows the outer compartment.
+    band_raises(band_cell(writing_x0=21.0), "layout comb geometry is invalid")
+    band_raises(band_cell(writing_x1=19.0), "layout comb geometry is invalid")
     # Mutation: the inset matches no painted rule -- the wall is absent, is a
     # different weight, or is painted in a tone the contract does not claim.
     band_refuses(band_cell(), "paints no top wall", band_page(band_bottom_wall))
@@ -12635,9 +12773,16 @@ def self_test() -> int:
             "why": (
                 "self-test layout has two slots but source prints one "
                 "compartment"),
+            # An outer compartment is bounded by the rail's INNER INK EDGE, so
+            # that is the number this referee re-derives the audit's own
+            # expectation from. The centres are stated beside them and are
+            # deliberately different values, so a referee reading the centre
+            # cannot pass by coincidence.
             "source_frame_geometry": {
-                "left_rail": {"center_x": 0.0},
-                "right_rail": {"center_x": 2.0},
+                "left_rail": {
+                    "center_x": -0.12, "ink_x0": -0.24, "ink_x1": 0.0},
+                "right_rail": {
+                    "center_x": 2.12, "ink_x0": 2.0, "ink_x1": 2.24},
             },
         })
         item["emission_layout_position"] = {

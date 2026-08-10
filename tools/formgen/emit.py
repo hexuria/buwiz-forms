@@ -1286,6 +1286,38 @@ def comb_writing_rect(cell: dict[str, Any],
             float(comb.get("height_pt", float(cell["y1"]) - float(cell["y0"]))))
 
 
+def comb_slot_edges(comb: dict[str, Any]) -> list[float]:
+    """One comb's slot boundaries AS LAID OUT: N+1 absolute x, outer inset.
+
+    The horizontal twin of `comb_writing_rect`, and it exists for the identical
+    reason. `slot_x` runs rail CENTRE to rail centre -- that is how every
+    boundary in the layout is positioned -- so a compartment laid straight onto
+    it is laid across half of each outer rail's own printed ink. On 2551M the
+    wall left of item 28C is painted x 238.92-239.64 and the caption's `C` inks
+    to 239.5176, tucked under the rule; a box starting at the rail's centre of
+    239.28 starts on top of the label with no blank paper between them, which is
+    F199's seven money boxes and F208's mechanism.
+
+    So the OUTER two edges come from `lattice.comb_writing_edges`, published as
+    `writing_x0`/`writing_x1`, and every INTERNAL edge stays exactly its
+    measured `divider_x`: a divider is one stroke shared by the compartments
+    either side of it, and both are drawn against its centre. Everything the
+    emitter lays out horizontally for a comb -- the slot rectangle, the input
+    inside it, and the band-template JSON the runtime re-lays cloned rows from
+    -- comes from here, so those three can never disagree.
+
+    The fallback is `slot_x` unchanged, for a layout that predates the writing
+    edges and for the emitter's own synthetic fixtures. It is not a preference:
+    measured over `build/layout`, all 4,554 combs in this corpus publish both
+    keys.
+    """
+    slot_x = [float(value) for value in comb["slot_x"]]
+    if "writing_x0" not in comb or "writing_x1" not in comb:
+        return slot_x
+    return [float(comb["writing_x0"]), *slot_x[1:-1],
+            float(comb["writing_x1"])]
+
+
 # How many times the trim below may re-measure one box. Trimming one side can
 # put a glyph that was inside the box outside it, which is a fact about the
 # glyph and not an iteration artefact, so the loop re-measures rather than
@@ -2254,11 +2286,16 @@ def comb_slot_verdicts(cell: dict[str, Any], ink: PrePrintedInk | None,
     # never of the divider tick band. Asking them of the band regressed G11 on
     # the r21 integration: 1702EX's branch-code `00000` sits mid-compartment,
     # stopped being "wholly inside" the 3.84pt band, and 145 refused constants
-    # corpus-wide came back as live inputs over statutory ink. The rectangle is
-    # `comb_writing_rect`'s, which is the SAME rectangle `comb_slots_markup`
-    # lays the slot div and its input on: a verdict about a compartment a
-    # taxpayer cannot reach, or an input over ink no verdict was asked about,
-    # is what two rectangles for one comb bought last round.
+    # corpus-wide came back as live inputs over statutory ink.
+    #
+    # The invariant is CONTAINMENT, not sameness: the rectangle asked about
+    # must never be smaller than the rectangle the input occupies, or there is
+    # ink under a live box that no verdict was asked about. Vertically the two
+    # are identical (`comb_writing_rect`, the same call `comb_slots_markup`
+    # makes). Horizontally the question is asked of the PRINTED compartment,
+    # rail centre to rail centre, while the input is laid on the writing edges
+    # inside it (`comb_slot_edges`) -- a superset, so a constant the sheet
+    # tucked under its own wall still spends its compartment.
     top, height = comb_writing_rect(cell, comb)
     y0, y1 = top, top + height
     verdicts: dict[int, str] = {}
@@ -2758,11 +2795,13 @@ def comb_slots_markup(cell: dict[str, Any], comb: dict[str, Any],
     set is exactly `{"class", "data-slot", "style"}`. The exclusion is published
     through `FieldPlan`'s warnings, per cell and per slot index, instead.
     """
-    slot_x = comb["slot_x"]
-    # The slot rectangle is the compartment a taxpayer types into, so it is the
-    # comb's WRITING rectangle and never its divider band -- `comb_writing_rect`
-    # documents which is which and why. On the band, 2550M's item-4 TIN slots
-    # were 3.12pt tall inside a 15.60pt row.
+    # The slot rectangle is the compartment a taxpayer types into, so on BOTH
+    # axes it is the comb's WRITING rectangle: never its divider band
+    # vertically (on the band, 2550M's item-4 TIN slots were 3.12pt tall inside
+    # a 15.60pt row) and never its rail centres horizontally (on the centres,
+    # the outer compartments are laid across half of each printed wall).
+    # `comb_writing_rect` and `comb_slot_edges` document which is which and why.
+    slot_x = comb_slot_edges(comb)
     write_top, height = comb_writing_rect(cell, comb)
     top = write_top - cell["y0"]
     parts = []
@@ -2800,16 +2839,20 @@ def cell_json(cell: dict[str, Any], fields: "FieldPlan | None" = None) -> dict[s
     }
     comb = cell.get("comb")
     if comb:
-        # `y`/`h` are what the runtime re-lays a CLONED band row's slots from,
-        # so they have to be the same rectangle `comb_slots_markup` gave the
-        # pre-rendered rows -- the writing rectangle. A clone laid out on the
-        # divider band would be a row whose boxes are 3pt tall beside identical
-        # printed rows whose boxes are not.
+        # `slot_x`/`y`/`h` are what the runtime re-lays a CLONED band row's
+        # slots from, so all three have to be the same rectangles
+        # `comb_slots_markup` gave the pre-rendered rows -- the writing
+        # rectangle on both axes. A clone laid out on the divider band would be
+        # a row whose boxes are 3pt tall beside identical printed rows whose
+        # boxes are not, and a clone laid out on the rail centres would be a row
+        # whose first and last boxes sit on the printed wall beside identical
+        # printed rows whose boxes do not.
         write_top, height = comb_writing_rect(cell, comb)
         payload["comb"] = {
             "cells": comb["cells"],
             "pitch_pt": comb["pitch_pt"],
-            "slot_x": [round(float(v) - cell["x0"], 4) for v in comb["slot_x"]],
+            "slot_x": [round(value - cell["x0"], 4)
+                       for value in comb_slot_edges(comb)],
             "y": round(write_top - cell["y0"], 4),
             "h": round(height, 4),
         }
@@ -6977,23 +7020,59 @@ def comb_writing_rectangle_assertions(plan: dict[str, Any],
            "the runtime must not rebuild a clone on the cell's edges",
            failures)
 
+    # ...and a rail is a painted STROKE, so the outer compartments are laid on
+    # its ink edges and not down the middle of it. F208: `slot_x` runs rail
+    # centre to rail centre, so slot 0 used to start half a wall inside the
+    # printed wall -- on 2551M, 0.36pt under the `C` of the item code beside it.
+    # Only the two outer edges move; every internal divider stays exactly where
+    # it was measured, because both compartments either side of it are drawn
+    # against that one stroke's centre.
+    written_comb = {**railed_comb, "writing_x0": 30.26, "writing_x1": 119.54}
+    written_cell = _synthetic_cell("p0c0", row_y0, row_y1, written_comb)
+    written_fields = FieldPlan(
+        {"pages": [{"index": 0, "cells": [written_cell]}]}, face, [])
+    written_markup = comb_slots_markup(
+        written_cell, written_comb, written_fields.of("p0c0"),
+        written_fields, True)
+    written_lefts = re.findall(r"left:(-?[\d.]+)pt", written_markup)
+    written_widths = [value[1] for value in
+                      _SELF_TEST_STYLE_RE.findall(written_markup)]
+    _check(comb_slot_edges(written_comb) == [30.26, 59.9, 89.9, 119.54]
+           and written_lefts == [fmt(30.26), fmt(59.9), fmt(89.9)]
+           and written_widths == [fmt(29.64), fmt(30.0), fmt(29.64)]
+           and written_comb["slot_x"] == [29.9, 59.9, 89.9, 119.9],
+           "the outer compartments are laid on the rails' ink, not their centres",
+           f"lefts {written_lefts} widths {written_widths} from writing edges "
+           "30.26..119.54 on rails 29.9..119.9",
+           failures)
+    _check(cell_json(written_cell, written_fields)["comb"]["slot_x"]
+           == [30.26, 59.9, 89.9, 119.54],
+           "the band template re-lays cloned rows on the same writing edges",
+           "a clone rebuilt on the rail centres would sit on the printed wall "
+           "beside identical pre-rendered rows that do not",
+           failures)
     # The seam. G11's 287 corpus refusals and the 145 statutory constants that
     # nearly shipped as live inputs depend on the verdicts being asked of the same
     # rectangle the input occupies: a constant printed in the writing box but
     # clear of the 3.12pt band is invisible to a band-scoped question.
     glyph_y0 = write_y0 + 2.0
     glyph_y1 = glyph_y0 + 8.0
-    constant = {
-        "text": "0", "font": "Arial", "family": "Arial", "size_pt": 8.0,
-        "bold": False, "italic": False, "serif": False, "monospace": False,
-        "superscript": False, "flags": 0, "color": 0,
-        "x0": 8.0, "y0": glyph_y0, "x1": 22.0, "y1": glyph_y1,
-        "baseline_y": glyph_y1, "origin_x": 8.0, "ascender": 0.905,
-        "descender": -0.21, "line_height_pt": glyph_y1 - glyph_y0,
-        "measured_advance_pt": 14.0, "char_origin_offsets_pt": [0.0],
-        "char_advances_pt": [14.0], "char_widths_pt": [14.0],
-        "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
-    }
+
+    def _glyph(text: str, x0: float, x1: float) -> dict[str, Any]:
+        return {
+            "text": text, "font": "Arial", "family": "Arial", "size_pt": 8.0,
+            "bold": False, "italic": False, "serif": False,
+            "monospace": False, "superscript": False, "flags": 0, "color": 0,
+            "x0": x0, "y0": glyph_y0, "x1": x1, "y1": glyph_y1,
+            "baseline_y": glyph_y1, "origin_x": x0, "ascender": 0.905,
+            "descender": -0.21, "line_height_pt": glyph_y1 - glyph_y0,
+            "measured_advance_pt": x1 - x0,
+            "char_origin_offsets_pt": [0.0],
+            "char_advances_pt": [x1 - x0], "char_widths_pt": [x1 - x0],
+            "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+        }
+
+    constant = _glyph("0", 8.0, 22.0)
     _check(comb_slot_verdicts(cell, PrePrintedInk([constant]), None, None)
            == {0: "pre-printed"}
            and comb_slot_verdicts(legacy_cell, PrePrintedInk([constant]),
@@ -7001,6 +7080,19 @@ def comb_writing_rectangle_assertions(plan: dict[str, Any],
            "the pre-printed verdict is asked of the rectangle the input occupies",
            f"a constant at y {fmt(glyph_y0)}..{fmt(glyph_y1)} is inside the writing "
            f"box and clear of the band; only the writing-box question sees it",
+           failures)
+    # The horizontal half of the same seam, and it runs the OTHER way. The
+    # verdict rectangle may never be SMALLER than the box the input occupies or
+    # the sheet's own ink under that box goes unasked about, so the verdicts
+    # stay on the printed compartment -- rail centre to rail centre -- which
+    # contains the inset writing box by construction. A constant the sheet tucks
+    # under its own wall therefore still spends its compartment.
+    tucked = _glyph("2", 30.0, 30.2)
+    _check(comb_slot_verdicts(written_cell, PrePrintedInk([tucked]),
+                              None, None) == {0: "pre-printed"},
+           "a constant tucked under the printed wall still spends its slot",
+           "the verdicts are asked of the printed compartment, never of the "
+           "inset writing box, so an input is never offered over ink",
            failures)
 
 
