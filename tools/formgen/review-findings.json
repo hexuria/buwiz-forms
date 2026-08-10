@@ -2626,13 +2626,13 @@
       "form": "2200c-2018, 2000-dst-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "The bridge-healed boxes emit writing REGIONS where the sheet prints character compartments, because comb subjects arise only through the legacy-lattice discovery flow and P1 deliberately did not bridge the LEGACY view -- so the newly-formed cells cannot register comb subjects at all. Worse than the F197 class on one form: 2000-DST p1's previously CORRECT 6-slot single-character comb (which agreed with the printed topology) became 2+4 free-text region inputs when the restored wall at x=192.38 split its cell, and its ledger subject can no longer name one rectangle.",
       "where": "2200c-2018 p1c111 (MM, 2 regions), p1c112 (YYYY, 4 regions) vs sibling p1c5 (DD, a real 2-slot comb on the SAME row); p1c117 (2 regions). 2000-dst-2018: subject p1@164.30,109.94,248.69,131.06 now retained_unresolved, reasons [emission-suppressed-no-rectangular-owner, painted-edge-partition], blocks_gate true; the split pair p1c111/p1c112 carries 2+4 region inputs, same total writing surface, maxlength-1 model lost.",
       "evidence": "Measured on the r37 tree and confirmed by the operator's own referee run: 53/53 forms, forms_error 0, referee_layout_mismatches 0, subjects_retained_unresolved 33 -> 34 (exactly this subject), combs_found 4583 unchanged, combs_source_unevaluable 49 unchanged. EXPECTED_RETAINED_SUBJECTS_BY_SLUG gained 2000-dst-2018: 1 -- a census move that ACCEPTS the suppression pending review, made openly rather than hidden.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED in r41 by applying bridge_knockout_bites to the LEGACY lattice as well as the current one -- P1b, the design question this finding raised. 13 lines, the same evidence and the same 8 bites as P1. 2200C item 1 is now 8 CHARACTER COMPARTMENTS instead of free-text regions: p1c7 MM 2/2, p1c9 DD 2/2, p1c11 YYYY 4/4, p1c13 2/2, all with per-slot inputs. 2000-DST's gate-blocking retained subject p1@164.30,109.94,248.69,131.06 splits into two active_resolved subjects and RETIRES; that form now has none. Measured on the written tree: exactly 2 bundles move, ZERO cells move corpus-wide, zero subject_key churn, comb subjects 4583 -> 4587, retained 34 -> 33. inputs_over_printed_text 6 forms/15, inputs_span_no_printed_divider 0 and money_boxes_have_inputs 0 all unmoved. THE BLOCKING QUESTION WAS SETTLED FROM THE SOURCE, not from an opinion: 2000-DST's band carries three 0.48pt verticals of full height 19.32pt (x 164.06, 192.14, 248.45) and four 0.24pt ticks of height 7.92pt hanging from the baseline (178.22, 206.45, 220.49, 234.53), so the disputed stroke at 192.14 is twice the thickness and 2.4x the height of a divider -- a wall. The sheet confirms it: the white knockout of the top rule runs 164.54-192.14 AND 192.62-248.45, two spans stopping at the wall on both sides, where one box would have erased in one span. Cost recorded openly as F205."
     },
     {
       "id": "F202",
@@ -2671,6 +2671,19 @@
       "evidence": "Measured on the r38 tree while verifying F120. No ATC code is misattributed -- all four formerly stranded codes now sit with their industry rows and stranded rate-only rows are 0 -- so this is presentation only. Fixing it means changing the guide section split, judged more cost than it buys.",
       "cause": "C9",
       "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F205",
+      "form": "2000-dst-2018, 2200c-2018",
+      "page": 1,
+      "severity": "major",
+      "status": "open",
+      "what": "audit.py's source U-frame reader does not account for a WALL splitting a printed frame, so it reports three false offenders under comb_slots_match_printed: 'claimed comb owner crops a wider source U-frame'. The forms are right and the audit is wrong.",
+      "where": "2000-dst-2018 p1c4 (2 compartments) and p1c5 (4), 2200c-2018 p1c7 (2). Introduced as visible offenders by r41/P1b -- before it these subjects were emission-suppressed and nothing scored them, so these are newly VISIBLE, not newly broken.",
+      "evidence": "Settled from the pinned source's own operators by the operator, not inferred. 2000-DST p1 x 164.30-248.69 carries THREE full-height 0.48pt verticals (x 164.06, 192.14, 248.45; y 109.70-129.02, height 19.32pt) and FOUR short 0.24pt ticks (x 178.22, 206.45, 220.49, 234.53; y 121.10-129.02, height 7.92pt). The stroke at 192.14 is twice the thickness and 2.4x the height of every divider in the band, i.e. a wall by the same measure lattice already uses. The sheet corroborates: the white knockout of the top rule is drawn as TWO spans, 164.54-192.14 and 192.62-248.45, stopping at the wall on each side -- a single frame would have been erased in one span. So the source prints two boxes of 2 and 4 compartments, exactly what is emitted, and the audit's reading of one wider U-frame is the defect. Fixing it means teaching _source_u_frame that a full-height wall of border weight partitions a frame.",
+      "cause": null,
+      "audit_blind": false,
       "resolution": null
     }
   ]

@@ -99,7 +99,10 @@ EXPECTED_EXTRA_FORMS = 15
 # 4543 -> 4583 (2026-08-07, r21), moved in the same commit as its twin
 # comb_referee.EXPECTED_COMBS: lattice.py's bottom-guide-tick recognition adds
 # 40 subjects on nine slugs (see the cause note at that pin).
-EXPECTED_COMB_SUBJECTS = 4583
+# 4583 -> 4587 on 2026-08-10 (r41): F201/P1b bridges the legacy lattice too, so
+# 2200C gains 3 comb subjects and 2000-DST 1. Zero cells move; see comb_referee's
+# LATTICE_PRODUCER_SHA256 note.
+EXPECTED_COMB_SUBJECTS = 4587
 COMB_REFEREE_REPORT_VERSION = 2
 COMB_REFEREE_ATTESTATION_VERSION = 2
 COMB_REFEREE_SCOPE = "formgen-comb-referee-application-v1"

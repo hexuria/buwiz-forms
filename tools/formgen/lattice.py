@@ -6142,6 +6142,19 @@ def build_page(page: dict[str, Any],
     raw_xl = build_lattice(
         [*_raw_borders, *raw_walls], [*raw_verticals, *raw_walls], "v")
     raw_yl = build_lattice(raw_horizontals, raw_horizontals, "h")
+    # F201 / P1b: the legacy view is bridged on exactly the same evidence as
+    # the current one. A rail the source always drew, interrupted only by a
+    # white bite strictly inside it, is one wall in both readings -- so the
+    # healed boxes can register comb subjects through the legacy discovery
+    # flow instead of emitting free-text regions.
+    legacy_knockout_v = [r for r in page["rules"] if r.get("axis") == "v"
+                         and tone_role(r.get("gray")) == "knockout"]
+    legacy_knockout_h = [r for r in page["rules"] if r.get("axis") == "h"
+                         and tone_role(r.get("gray")) == "knockout"]
+    legacy_bite_bound = (0.0 if fillable_metrics is None
+                         else float(fillable_metrics["glyph_height_pt"]))
+    bridge_knockout_bites(raw_xl, legacy_knockout_v, "v", legacy_bite_bound)
+    bridge_knockout_bites(raw_yl, legacy_knockout_h, "h", legacy_bite_bound)
     if len(raw_xl) >= 2 and len(raw_yl) >= 2:
         raw_dsu, raw_v_at, raw_h_at = merge_grid(raw_xl, raw_yl)
     else:

@@ -127,7 +127,7 @@ EXPECTED_FORMS = 53
 # divider instead of an unsupported border, so groups that had lost their
 # compartments (2316's TINs, 0605's return-period boxes, 1600WP's item 5)
 # become combs again.
-EXPECTED_COMBS = 4583
+EXPECTED_COMBS = 4587
 LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # Re-pinned 2026-08-07 (r14): `topmost_covering_fill` became
 # `covering_shading_band`, so `on_shaded_paper` asks whether ONE connected,
@@ -293,8 +293,16 @@ LATTICE_PRODUCER_FILE = "tools/formgen/lattice.py"
 # `emission-suppressed-no-rectangular-owner` / `painted-edge-partition`,
 # `blocks_gate: true`, `requires_independent_evidence: true`. See
 # EXPECTED_RETAINED_SUBJECTS_BY_SLUG below, which is the pin this moves.
+# Moved 2026-08-10 (r41) by F201/P1b: `bridge_knockout_bites` now runs on the
+# LEGACY lattice as well as the current one, on exactly the same evidence and the
+# same 8 bites. A rail the source always drew, interrupted only by a white bite
+# strictly inside it, is one wall in both readings -- so the healed boxes register
+# comb subjects through the legacy discovery flow instead of emitting free-text
+# regions. 2200C item 1 is now 8 character compartments (MM 2, DD 2, YYYY 4) and
+# 2000-DST's gate-blocking retained subject p1@164.30,109.94,248.69,131.06 splits
+# into two active_resolved subjects and RETIRES. Zero cells move corpus-wide.
 LATTICE_PRODUCER_SHA256 = (
-    "0a476afece4bb86275f3d4d93104f4de8c353ed078083213d3c847f69cbf5b43"
+    "64796713f39000d84858b828680e11d9c623768d35a9a4cd4bcb43f3a7c83277"
 )
 AUDIT_PRODUCER_FILE = "tools/formgen/audit.py"
 # Re-pinned 2026-08-07 (r18) for G10: audit.py gained two FIELD-LAYER
@@ -639,11 +647,11 @@ EXPECTED_COMBS_BY_SLUG = {
     "1709-2020": 19,
     "1800-2018": 108,
     "1801-2018": 102,
-    "2000-dst-2018": 131,
+    "2000-dst-2018": 132,
     "2000-ot-2018": 75,
     "2200a-2020": 43,
     "2200an-2018": 87,
-    "2200c-2018": 40,
+    "2200c-2018": 43,
     "2200m-2018": 86,
     "2200p-2020": 42,
     "2200s-2018": 66,
@@ -717,7 +725,6 @@ EXPECTED_RETAINED_SUBJECTS_BY_SLUG = {
     "1707-2021": 1,
     "1707a-2021": 2,
     "1800-2018": 1,
-    "2000-dst-2018": 1,
     "2000-ot-2018": 2,
     "2200a-2020": 2,
     "2200an-2018": 1,
@@ -1399,11 +1406,11 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1709-2020": "4f9dd3d145e9cab3ca9244d485e19798f6fae252ebdb2e1e47f676c0f9bf933d",
     "1800-2018": "91ca54590d0e0765fa59edfbdc807f7245247c7648f6d191d24f31c45caa0afa",
     "1801-2018": "2c4a3bd2dd760c49380efc9dd476b0a4c1e08d957dc3c7f6c27abc8ca5148fde",
-    "2000-dst-2018": "f3ed0331d49ef188745a25cb6ae77f370e3c98a66ac7869d6c411888e2e7f4fe",
+    "2000-dst-2018": "b19ff17714f3cee3823758adb8e61350a81c15549b3bf9190ea21fd5a9080596",
     "2000-ot-2018": "3db7c02da51dabab569206e55c30d4a19184f70e39d9af04fe9bef6f29b0bea5",
     "2200a-2020": "86b630a48e3a2b08e2365a647dfb28f8db583996aaee39a38c31f172cd013eea",
     "2200an-2018": "61a9fbc36aef8ee71e94798fdfd3ab080df61ba5e4c82bf9e0f42083408cbd59",
-    "2200c-2018": "b70b224816f6ebfee23aa261463e43c2f33cbb1091bcb4479a0ada36839d952f",
+    "2200c-2018": "634ac954f5ce51ee3387d6d22d09078e7145d026e6d184c5d465907a767a70ec",
     "2200m-2018": "666543bedeb654f3264ac13505c28e821dacaa3138fbeb96444d50ecd9abedfa",
     "2200p-2020": "31f0397fae53a85ab954b38b1fd10f4f4675f6dd44e2c97247051a887c90d56c",
     "2200s-2018": "9cbd65cb3dff5f09f919b12b9cb080bb464c7eb721f3f64530ba28cfaaf58e8c",
