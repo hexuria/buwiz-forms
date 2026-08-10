@@ -1982,7 +1982,7 @@
       "evidence": "DOM cell dump plus /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018-conso/EVIDENCE-p2-scheduleD-description-no-input.png (official left shows white writable Description cells; ours right shows the fill reaching Legal Basis and the amounts but never the Description).",
       "cause": "C4",
       "audit_blind": true,
-      "resolution": "NOT fixed. P2's measurement (r38, operator) shows this finding's seven cells fall in TWO populations, only one of which separates. (a) The four Schedule D rows carry a row NUMBER: label cells sharing a row with >=1 field cell and holding only a short numeral number 296 corpus-wide, and bounding the trailing blank by the form's own min_fillable_line_metrics line_width_pt -- the metric the sliver rule already spends, no new constant -- plus requiring the cell to be tall enough to write in cuts that to 56 cells across 23 forms and catches all four (p2c132/136/140/144, 452.7pt wide, blank >=2x line_width). It correctly excludes the 188 narrow item-number boxes, e.g. p1c200 at 14.8pt holding '12'. (b) The three Schedule C rows (p2c97/103/109, 283.6pt) hold NO contained ink at all and are indistinguishable from 416 other such cells -- see F203. Every one of the 419 passes the blank/height test by construction, so 419 -> 419 and there is no discriminator. Per P2's own abort clause the overlapping half was NOT implemented. Landing (a) alone would give inputs to 56 cells across 23 forms that no finding has reviewed against the official sheets, and would still leave this blocker open, so it is surfaced for the user rather than shipped."
+      "resolution": "PARTLY REFUTED, and narrowed from seven cells to four. Its SCHEDULE C half is not a defect: p2c97/p2c103/p2c109 hold 94.0%/88.8%/88.7% of their own captions' ink inside their walls -- 'a Janitorial and Messengerial Services', 'b Professional Fees', 'c Security Services' -- which are PRE-PRINTED deduction category names on a 0.8509 tint, correctly not fields. The official sheet prints a/b/c and leaves row d white, and the pipeline already emits row d as a field with an input (p2c115). My earlier note that these three 'hold NO contained ink at all' was wrong, and wrong for the same reason as F203: a containment test that demanded a run lie WHOLLY inside a cell scored ~90%-inside as 0. WHAT REMAINS is the Schedule D half only -- p2c132/136/140/144, which hold their row numbers fully and are not in F203's set at all. They carry a 451.63pt knockout band but NO tint beneath it, so the knockout marker recorded in F206 does not reach them either; they still need the row-number rule P2 measured (296 -> 56 cells on a constant-free bound)."
     },
     {
       "id": "F152",
@@ -2652,13 +2652,13 @@
       "form": "*",
       "page": 0,
       "severity": "major",
-      "status": "open",
-      "what": "419 cells across 45 forms are classified kind 'label' while containing NO text at all. Their text_run_ids name a run that lies OUTSIDE their own box, so the cell is called a caption on the strength of ink it does not hold. Because a label emits no input, each of these is a potential missing field, and they cannot be told apart from one another by any measure tried: having no ink, all 419 pass a blank-width and height test by construction.",
+      "status": "not-a-defect",
+      "what": "REFUTED. This finding was MY MEASUREMENT ERROR, not a corpus defect. I compared a text run's BOX to a cell's WALLS and counted any run not wholly inside as 'no contained ink'. A run's box carries leading spaces, side bearings, ascender and descender, so a caption whose ascender clears a printed rule by a fraction of a point scored as if the cell held none of it.",
       "where": "Worst: 2553-1999 48, 1604cf-2008 44, 2552-2018 39, 1701-2018 30, 1701q-2018 22, 1701a-2018 20, 2550m-2007 18, 2551m-2002 18, 1600wp-2010 16, 1701ms-2024 15. Includes 1701-2018-conso p2c97/p2c103/p2c109, which are three of F151's seven cells -- the reason that blocker cannot close on the measurement alone.",
-      "evidence": "Measured on the r38 tree over label cells sharing a row with at least one field cell (4,633 of them): 419 have zero geometrically-contained text runs. Distribution of trailing blank against the form's own line_width_pt: 116 at >=1.0x, 303 at >=2.0x, none below -- i.e. no separation whatever. Contrast the row-number population (296 cells), where the same bound cuts 296 to 56 and excludes every narrow item-number box.",
+      "evidence": "Measured on a corpus regenerated at HEAD: of the 760 cells that fail the containment test, ZERO hold none of their own run's ink and 659 (86.7%) hold 99% or more of it. Median overshoot is 0.71pt VERTICALLY -- an ascender over a rule. The population collapses 771 -> 417 under just 0.75pt of slack, which is itself the proof that it is densely packed at sub-point overshoots; my 419 was exactly that 0.75pt-slack variant. Partition by mechanism: 499 vertical-overshoot-only, 160 sub-glyph horizontal overhang with >=99% ink inside, 90 straddling a printed wall with the majority inside, 11 straddling with the minority inside, and 0 holding no ink. The assignment itself is sound: lattice.py:5647 anchors a run by its box CENTRE, so the home cell always overlaps it, and the glyph_ink_spans fallback repairs the residue. I verified the key case myself: 1701-conso p2c97/p2c103/p2c109 hold 94.0%, 88.8% and 88.7% of their captions' ink inside their own walls. There was never anything here to discriminate.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "Closed as not-a-defect. The real population it was reaching for is 61 cells / 14 forms, an order of magnitude smaller, and is recorded as F206. Nothing in the producer changes."
     },
     {
       "id": "F204",
@@ -2684,6 +2684,32 @@
       "evidence": "Settled from the pinned source's own operators by the operator, not inferred. 2000-DST p1 x 164.30-248.69 carries THREE full-height 0.48pt verticals (x 164.06, 192.14, 248.45; y 109.70-129.02, height 19.32pt) and FOUR short 0.24pt ticks (x 178.22, 206.45, 220.49, 234.53; y 121.10-129.02, height 7.92pt). The stroke at 192.14 is twice the thickness and 2.4x the height of every divider in the band, i.e. a wall by the same measure lattice already uses. The sheet corroborates: the white knockout of the top rule is drawn as TWO spans, 164.54-192.14 and 192.62-248.45, stopping at the wall on each side -- a single frame would have been erased in one span. So the source prints two boxes of 2 and 4 compartments, exactly what is emitted, and the audit's reading of one wider U-frame is the defect. Fixing it means teaching _source_u_frame that a full-height wall of border weight partitions a frame.",
       "cause": null,
       "audit_blind": false,
+      "resolution": null
+    },
+    {
+      "id": "F206",
+      "form": "1801-2018 and 13 others",
+      "page": 0,
+      "severity": "major",
+      "status": "open",
+      "what": "The real 'a caption on ink the cell does not hold' population -- the honest remainder of the refuted F203 -- is 61 cells across 14 forms, defined by the strict test: no ink whose BASELINE sits on the cell's own paper. 60 of the 61 are already kind 'shaded' (thin strips of grey band offset from their caption line), so they are correctly non-fields for the wrong reason and have zero fillability impact. Exactly ONE is a genuine missing field: 1801-2018 p2c261 'Others (specify)'. Recorded separately from F203 because that finding was a measurement artifact and this one is not.",
+      "where": "61 cells / 14 forms: 2553-1999 28, 1600wp-2010 8, 1604cf-2008 7, 2551m-2002 5, 2550m-2007 3, 0605-1999 2, and one each on 1601-fq-2020, 1601c-2018, 1602q-2019, 1603q-2018, 1606-2018, 1702ex-2018, 1801-2018, 2316-2021. All 61 lie inside F203's 760, which was therefore 12x too large.",
+      "evidence": "Measured on a corpus regenerated at HEAD. Two independent source measures agree 60/1 in both directions: of the 61, 60 are shaded by the producer's own >=70% rule, and exactly 1 (1801 p2c261) carries an ink-free knockout band of at least the form's own line_width_pt. ALSO RECORDED HERE, because it is the route rather than a defect: the part-caption/part-writing-surface family that F148/F149/F151 all belong to IS bounded by a source-published marker -- the widest ink-free band whose topmost paint is a KNOCKOUT over a decorative tint, at >= 1x the form's own line_width_pt. That selects 61 cells / 19 forms with an 11x separation (0.09x -> 1.01x), and the gap is NOT empty: 8 named cells sit in it (0605 p2c58/p2c121, 2553 p1c37/42/47/52, 1600wp p1c30/33), all ATC-code or rate cells on reference tables and none a writing surface. So it is a marker with a reviewable residue, not a decision procedure. Dropping the 'over a tint' requirement destroys it (123 cells, mostly white-on-white reference tables): a knockout only means something where there is a band to knock out. The right implementation is a CELL SPLIT at the knockout boundary -- the writing surface is a sub-region -- not a reclassification of the whole cell.",
+      "cause": null,
+      "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F207",
+      "form": "1701a-2018",
+      "page": 1,
+      "severity": "major",
+      "status": "open",
+      "what": "Two 584pt-wide inputs are laid over printed text, and TWO independent box-geometry tests miss them for the same reason. The runs' baselines sit inside the strip, but each run was assigned to the cell ABOVE by box centre (lattice.py:5647), and emit's protective belt then fails to see them because PrePrintedInk requires half the run's BOX HEIGHT inside the cell (emit.py:1553-1567) and gets only 39% and 47% against a 0.5 threshold -- so coverage reads 0.0 and the input is allowed.",
+      "where": "1701a-2018 p1c227 over the printed second line 'of deduction', and p2c208 over '[available if gross sales/receipts ... (P3M)]'.",
+      "evidence": "Found by running the run-assignment mechanism backwards over the corpus: 196 cells hold ink whose baseline is on their paper while owning no run of their own, 35 of those emit an input, and 33 of the 35 are slivers of 1.44pt or less. These two are the real ones. Both failures are the same shape as the refuted F203 -- a box-geometry proxy standing in for where the ink actually is -- but here the proxy lets a defect THROUGH rather than inventing one.",
+      "cause": null,
+      "audit_blind": true,
       "resolution": null
     }
   ]
