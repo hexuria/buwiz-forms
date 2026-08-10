@@ -6369,13 +6369,35 @@ def form_binding_errors(form: dict[str, Any],
                 if actual_audit != expected_audit:
                     errors.append(
                         f"cell audit relation is not bound: {slug}/{cell_id}")
+        # Three clauses below read a SHAPE the audit does not publish for a
+        # holding assertion, and until the runtime attestation landed they
+        # could never run: `audit_evidence["complete"]` was False on every
+        # form, so this branch was dead code that had never once been
+        # evaluated. The moment it went live it fired on all 53 forms,
+        # including every form whose comb assertion holds with each counter
+        # clean.
+        #
+        #   * `offender_count` and `offender_dimensions` are set by `broken()`
+        #     and NOT by `held()`, which publishes `offenders: []` instead. On
+        #     a passing assertion they are absent, so `!= 0` and `!= {}` were
+        #     comparing None. Absent means none, and is now read that way.
+        #   * `expected_comb_ids` and `emitted_comb_ids` are the same SET in
+        #     two different orders -- expected in lattice order, emitted
+        #     lexicographic. Measured across the corpus: 53 of 53 forms have
+        #     identical membership, 0 have a member difference. A sequence
+        #     comparison was therefore reporting a defect that does not exist.
+        #     Compared SORTED rather than as sets, so a duplicate still fails.
+        #
+        # Not a weakening: the claim is that the expected comb inventory equals
+        # the emitted one, which is a question about membership and
+        # multiplicity and never about order.
         if audit_evidence.get("complete") is True and (
                 assertion_relation.get("holds") is not True
                 or assertion_relation.get("inventory_complete") is not True
-                or assertion_relation.get("offender_count") != 0
-                or assertion_relation.get("offender_dimensions") != {}
-                or assertion_relation.get("expected_comb_ids")
-                != assertion_relation.get("emitted_comb_ids")
+                or (assertion_relation.get("offender_count") or 0) != 0
+                or (assertion_relation.get("offender_dimensions") or {}) != {}
+                or sorted(assertion_relation.get("expected_comb_ids") or ())
+                != sorted(assertion_relation.get("emitted_comb_ids") or ())
                 or assertion_relation.get("owner_certificates_invalid") != 0
                 or assertion_relation.get("owner_certificates_valid")
                 != assertion_relation.get("combs_checked")
