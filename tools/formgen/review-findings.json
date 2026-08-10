@@ -2015,13 +2015,13 @@
       "form": "1701-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "not-a-defect",
       "what": "A 449.02 x 34.20 pt free-text input with no maxlength is laid over the sworn-declaration grey block ('I declare under the penalties of perjury ... I give my consent to the processing of my information'), and a second 135.12 x 22.20 pt input sits on the grey band beside item 33 Number of Attachments. Neither is entry space on the official sheet.",
       "where": "p1c123 at (14.88, 705.34) 449.02 x 34.20 pt, 1 input, no maxlength; p1c251 at (463.90, 705.34) 135.12 x 22.20 pt. 17 inputs on this form sit wholly on official grey decoration.",
       "evidence": "Measured against the official raster with only the input rectangle taken from our DOM: input interior inset 1pt, at least 95% of pixels in the grey band tone 150-240 and zero black pixels. Corpus total 169 such inputs across 22 forms, 46 of 53 forms measured (7 have no saved official raster). Evidence /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018/EVIDENCE-p1-item32-and-item33-inputs-on-grey.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018/EVIDENCE-p3-grey-spacer-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": "PARTIALLY FIXED in r35, deliberately left open. The item 33 grey band is fixed: that cell is now p1c251, kind `shaded`, no input. The sworn-declaration block is NOT fixed and is a different mechanism -- the cell (now p1c125, 14.88,705.34, 449.02x34.20pt) has ZERO overlapping area_fills in the IR, so its greyness is not decorative area shading and no tone rule can see it. It is an empty bordered cell that became a field: the declaration's own text is assigned elsewhere, leaving a 449pt free-text input over the perjury declaration. Same class as F198 (a note strip segmented as a field cell)."
+      "resolution": "CLOSED not-a-defect 2026-08-11 on the user's own visual review, which is the evidence this finding always needed and could not get from the content stream. The finding's item 33 half WAS a real defect and was fixed in r35 (that cell is now p1c251, kind `shaded`, no input). Its sworn-declaration half is refuted. The user loaded 1701-2018 p1 in Chromium, focused the input at p1c125 (14.88,705.34, 449.02 x 34.20 pt) and typed their full name into it, and reports the behaviour as CORRECT and wanted -- the strip sits directly above the printed caption 'Printed Name and Signature of Taxpayer/Authorized Representative', so it is the form's signature line, not decoration. The mechanism agrees: this cell has ZERO overlapping area_fills in the IR (re-verified 2026-08-11), so the grey the batch-1 raster measurement saw was the neighbouring block's, sampled through a raster the cell does not paint. A raster-only measurement of a cell that draws no fill cannot establish that the cell is decorated. What remains is not correctness but typography: the input is vertically centred in a 34.20pt strip (.fh52, line-height 33.24pt) where a signature line wants to sit at the bottom. Split out as F212 rather than kept open here, because a styling preference is not this finding's claim."
     },
     {
       "id": "F155",
@@ -2041,13 +2041,13 @@
       "form": "0619e-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "not-a-defect",
       "what": "Editable inputs are placed on the mid-grey decorative pads that flank the header combs, including the pad immediately left of the pre-printed tax type code 'WE'. On item 6 the correct white compartment and the fillable one are swapped: the input is bound to the grey pad and the white 'WE' compartment is left alone.",
       "where": "Four inputs: p1c9-i (19.0, 130.9) 26.6 x 19.1 pt (item 1 left pad), p1c12-i (132.0, 130.9) 13.5 pt (item 1 right pad), p1c19-i (520.9, 130.9) 28.3 pt (item 6 pad left of 'WE'), p1c36-i (579.8, 166.1) 12.5 pt (item 8 RDO trailing pad).",
       "evidence": "Batch-1 measurement: input interior inset 1pt, at least 95% of official-raster pixels in the grey band 150-240 and zero black. /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0619e-2018/EVIDENCE-item1-grey-pads-fillable.png and /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/0619e-2018/EVIDENCE-item6-taxtype-grey-pad-fillable.png.",
       "cause": null,
       "audit_blind": true,
-      "resolution": "PARTIALLY FIXED in r35, deliberately left open. All four grey-pad inputs are gone -- 0619E p1c9, p1c12, p1c19 and the item 8 RDO pad are kind `shaded` with no input. The finding's second claim, that item 6's white compartment and the fillable one are SWAPPED, is unverified and I did not act on it. Item 6 now reads: p1c19 shaded/no-input (left pad), p1c20 LABEL/no-input (the white box, which carries the pre-printed tax type code 'WE'), p1c21 shaded/no-input (right pad). If 'WE' is pre-printed then no input on item 6 is correct and the swap claim is false; settling it needs the official sheet, not the content stream."
+      "resolution": "CLOSED not-a-defect 2026-08-11 on the user's own visual review. The finding's first claim WAS real and was fixed in r35: all four grey-pad inputs are gone (0619E p1c9, p1c12, p1c19 and the item 8 RDO pad are kind `shaded`, no input). Its second claim -- that item 6's white 'WE' compartment and the fillable one are SWAPPED -- is refuted. The user tabbed 0619E p1 end to end in Chromium and reports item 6 as correct; the only defect they found anywhere on the form was the signature block, filed separately as F211. 'WE' is the pre-printed tax type code the Bureau prints, so a compartment holding it correctly takes no input, and no input is missing beside it. This resolves the 'unverified, did not act on it' note the r35 resolution left standing."
     },
     {
       "id": "F157",
@@ -2704,13 +2704,13 @@
       "form": "1701a-2018",
       "page": 1,
       "severity": "major",
-      "status": "open",
+      "status": "fixed",
       "what": "Two 584pt-wide inputs are laid over printed text, and TWO independent box-geometry tests miss them for the same reason. The runs' baselines sit inside the strip, but each run was assigned to the cell ABOVE by box centre (lattice.py:5647), and emit's protective belt then fails to see them because PrePrintedInk requires half the run's BOX HEIGHT inside the cell (emit.py:1553-1567) and gets only 39% and 47% against a 0.5 threshold -- so coverage reads 0.0 and the input is allowed.",
       "where": "1701a-2018 p1c227 over the printed second line 'of deduction', and p2c208 over '[available if gross sales/receipts ... (P3M)]'.",
       "evidence": "Found by running the run-assignment mechanism backwards over the corpus: 196 cells hold ink whose baseline is on their paper while owning no run of their own, 35 of those emit an input, and 33 of the 35 are slivers of 1.44pt or less. These two are the real ones. Both failures are the same shape as the refuted F203 -- a box-geometry proxy standing in for where the ink actually is -- but here the proxy lets a defect THROUGH rather than inventing one.",
       "cause": null,
       "audit_blind": true,
-      "resolution": null
+      "resolution": "FIXED. emit.PrePrintedInk._spans_over now admits a run when half its INK BAND is inside the cell OR its baseline is inside, using a new _ink_band(run) that reads the per-run glyph_ink_em published by extract's outline reader. The threshold itself is untouched -- PREPRINTED_COVERAGE stays 0.5 -- because the defect was never the threshold but the quantity measured against it: the old test used the run's BOX height, whose top is the face's ascent line and whose bottom is its descent line, so a run of capitals sitting on a cell's paper scored 39% and 47% 'inside' while all of its actual ink was inside. This is the same shape as the five other defects logged this session -- an outer bound taken from a nominal edge instead of measured from the ink -- and it is the sixth. Measured on the tree actually written: 1701A p1c227 and p2c208 lose their inputs (corpus 45,335 -> 45,333) and both cells now emit class=\"c\" + data-preprinted=\"true\"; every other document in the corpus is byte-identical; cell count 393 -> 393 on 1701A; comb censuses unmoved at 4,587 subjects / 33 retained / 4,554 comb cells with the same 369 compartments refused before and after, measured per compartment rather than assumed because the same 'printed in' test is shared with slot_constant/slot_caption. 1701A's form.css loses .fh0 (0.61pt) and .fh1 (1.06pt), which existed only for these two inputs: writing_box_clear_of_printed_ink had already trimmed each to a 584pt-wide typing surface 0.61pt tall lying across printed text -- unusable, and the reason check_inputs_over_printed_text never saw it (F207 is audit_blind, and the assertion count is unchanged at 3 forms / 6 offenders because it never counted these two). comb_referee EXPECTED_HTML_STRUCTURE_SHA256 re-pinned for 1701a-2018 only, with the cause recorded above the pin; comb_referee --self-test passes on the written tree."
     },
     {
       "id": "F208",
@@ -2724,6 +2724,71 @@
       "cause": null,
       "audit_blind": false,
       "resolution": "FIXED in r46. lattice.comb_rails reports each outer rail's own painted ink beside its position, measured from exactly the bars that established that position; comb_on_writing_surface insets slot_x's outer values to those ink edges and publishes writing_x0/writing_x1/writing_width_pt, with writing_x_rails naming what derived each side. slot_x, divider_x, the compartment counts and the pitch are UNTOUCHED -- two questions, two sets of keys, exactly as the vertical twin leaves y0/y1 alone. emit.comb_slot_edges is the single emit-side reader (slot div, input, and the band-template JSON a cloned row is re-laid from); comb_referee.emitted_geometry_contract and gate._emission_geometry_from_layout stay two INDEPENDENT re-derivations and moved together. NO TOLERANCE MOVED: POSITION_TOL_PT 0.25 and EMITTED_GEOMETRY_EPS_PT 0.0002 are unchanged; only the comparison target moved from a rail's centre to its inner ink edge, i.e. an inner edge against an inner edge. Verified by the operator on the regenerated tree: inputs_over_printed_text 6 forms/13 -> 3 forms/6, comb_slots_match_printed 12 forms/25 -> 10 forms/19 with its DECIDED RESIDUAL AT ZERO, both zero families still 0. 4,546 of 4,554 combs get a measured inset on both rails (insets 0.01/0.24/0.96pt min/median/max); 8 FAIL CLOSED to slot_x on at least one side because no bar of that rail crosses the band -- 1700 p1c21/p1c68, 1707 p2c38, 2000-DST p1c4/p1c5, 2200C p1c7/p1c11/p1c13 -- counted rather than guessed, and 0 surrender to a degenerate width. Narrowest resulting outer compartment 6.12pt (1604CF p1c30), nothing under 6pt, and NO fitted face moved -- proved rather than argued, the <input> attribute multiset is byte-identical in all 53 documents, because a comb's size is fitted to its writing HEIGHT and capped at the sheet's body size, never to slot width. That is what separates this from the 2550M trade reverted in r33. Companion change landed with it: audit.input_boxes now reads a comb input's own declared inset instead of scoring its slot div, so a producer-side move inside a slot is visible to the judge in both directions. Census unmoved: 4,587 subjects, 33 retained, 4,554 comb cells, 45,494 inputs, zero input delta. All 53 documents move and all 53 EXPECTED_HTML_STRUCTURE_SHA256 are re-pinned with a structural review recorded (tag inventory, visible text and input attributes identical in every one); HTML_RUNTIME_SCRIPT_SHA256 does not move. 18 mutations across five files, 18 caught, none tripping an unrelated check. NO horizontal Poppler corroboration was added, deliberately and with the reason in the docstring: the vertical band needed one because it is a RELATION between two lattice-asserted numbers, whereas these edges are the rails' own painted ink, which audit.py already measures independently through its own parser and binds per comb at POSITION_TOL_PT -- a second re-derivation would duplicate that check and would compare absolute coordinates between two rasterisers at 1e-9, where the vertical compares a THICKNESS and tolerates a sub-point offset. The one consequence outside the change, fill_check.py deriving expected slot centres from slot_x and so naming 2,046 of 9,108 outer-compartment centres as bad landings that are not real, was applied by the operator in the same commit."
+    },
+    {
+      "id": "F209",
+      "form": "(corpus: 22 of 53 forms with growable bands)",
+      "page": null,
+      "severity": "major",
+      "what": "Keyboard tab order does not follow the printed reading order on every form that has a growable band. Every band's rows are emitted AFTER the entire static field layer, so a user tabbing down a page reaches the bottom and is then thrown back UP to the band's rows, which sit mid-page. The user hit this by hand and described it exactly: 'sometimes I already finished the form and it went back up again'.",
+      "where": "emit.py:5677 closes <div class=\"layer-cells\"> and emit.py:5680-5698 then appends every <template> + <div class=\"band\" id=\"band-content-...\"> after it. Worst measured case 1600-pt-2018 p1: DOM neighbours p1c195 (top 829.0pt) -> p1c50 (top 338.9pt), a 490pt jump backwards, and p1c50 is a confirmed member of band p1g0 in the layout.",
+      "evidence": "Corpus scan of all 53 shipped forms/<slug>/index.html against build/layout/*.layout.json: 128 same-page DOM-order inversions in 47 forms, of which the band class is the systemic one; 22 of 53 forms have growable bands. Independently, the layout cell arrays are in exact (y0,x0) reading order with ZERO inversions, so the layout is right and the emission order is what is wrong. No tabindex attribute exists anywhere in tools/ or in any shipped document, so focus order IS DOM order.",
+      "audit_blind": true,
+      "cause": null,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F210",
+      "form": "1701-2018 (+ 1701 variants)",
+      "page": 2,
+      "severity": "major",
+      "what": "The Part V Schedule 1 'Taxpayer' / 'Spouse' checkbox squares are printed on the official sheet but are not fillable and are not even segmented as cells. The user could not tab into them; the ?debug=fields overlay marks them blue (printed box with no input), and those blue marks are REAL, not overlay phantoms.",
+      "where": "1701-2018 p2 cells p2c54 (14.88,354.17, 74.30x31.92pt, kind=label) and p2c59 (14.88,386.09, 74.30x31.92pt, kind=label). Four squares in total, overlay boxes at [32.52 364.13 42.36 369.89], [32.52 370.92 42.36 379.61], [32.52 396.05 42.12 401.76], [32.52 402.60 42.12 411.53].",
+      "evidence": "Read from build/ir/1701-2018.ir.json p2: the squares are drawn by rules h165 h169 h170 h172 v236 v241 and h174 h176 h179 h181 v235 v240, each 0.72pt at gray 0.251. lattice.tone_role (lattice.py:200) calls gray>0.15 decorative, and lattice.py:6295 builds the grid from structural rules only, so no lattice line exists at x 31.08/43.08 or y 360/371/381 and the whole 74x32pt area collapses to one cell. That cell holds glyph runs ('Taxpayer', '1', 'Spouse') so classify_cell returns `label` (lattice.py:3557) and field_verdict refuses at emit.py:2326 before any shading or bureau test runs. The source's own intent is recorded next to the rules: white KNOCKOUT fills at [31.44,359.76,42.72,370.56] and [31.44,370.32,42.72,381.12] paint the square interiors back to paper.",
+      "audit_blind": true,
+      "cause": "C4",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F211",
+      "form": "0619e-2018, 0619f-2018",
+      "page": 1,
+      "severity": "major",
+      "what": "The sworn-declaration signature boxes take no input at all -- the user cannot focus anywhere in them -- and the overlay does not flag it either, so the defect is invisible to both the reviewer and the debug tooling.",
+      "where": "0619e-2018 p1c87 (17.62,500.95, 302.23x43.32pt) and p1c88 (319.85,500.95, 273.89x43.32pt); 0619f-2018 p1c100 and p1c101 (same block, 302.57x31.56 and 273.58x31.56pt). All four kind=label, border_count=4, zero inputs.",
+      "evidence": "Each box's only printed ink is one 8.97pt caption run at its top-left corner ('For Individual: ' / 'For Non-Individual: '), which sets is_empty=False, so classify_cell returns `label` (lattice.py:3557) and field_verdict refuses at emit.py:2326 -- one caption run costs a 302x43pt writing surface. The control is 0620-2019 p1c87 (17.62,506.71, 576.12x35.64pt): the SAME signature box with no caption printed inside it, is_empty=True, border_count=4, classified `field` and shipping one input today. Identical geometry, opposite outcome, one caption run apart. The overlay is silent because its `vacant` test (emit.py:5297-5330) skips any printed box containing text -- correct in general, blind here.",
+      "audit_blind": true,
+      "cause": "C4",
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F212",
+      "form": "1701-2018 (+ every form with a signature strip)",
+      "page": 1,
+      "severity": "minor",
+      "what": "Signature-line inputs are vertically centred in their box instead of seated at the bottom, and are left-aligned instead of centred. On a line captioned 'Signature over Printed Name' the writing belongs on the rule at the bottom of the box, centred over the printed name.",
+      "where": "1701-2018 p1c125-i, .fh52 = font-size 9pt / line-height 33.24pt in a 34.20pt strip, so the caret sits at mid-height; no text-align is emitted for plain fields, so the UA default (left) applies. Same shape wherever a 'Signature over Printed Name...' caption binds the ruled box above it, including the inputs F211 will add to 0619E/0619F.",
+      "evidence": "User visual review 2026-08-11: typed into 1701 p1c125 and asked for bottom-aligned, centred text. Split out of F154, whose claim (the input should not exist) is refuted -- this is styling, not correctness, hence minor. Mechanism available without new CSS: the input's inline `inset` already varies per cell (emit.py:2702-2705, computed in field_box emit.py:1478-1569), and the referee's inline-style scan (comb_referee.py:928-948, 3446-3465) does not ban text-align, while the stylesheet allowlist (comb_referee.py:3607-3648) would reject a new CSS class.",
+      "audit_blind": true,
+      "cause": null,
+      "status": "open",
+      "resolution": null
+    },
+    {
+      "id": "F213",
+      "form": "(corpus: every form, ?debug=fields overlay)",
+      "page": null,
+      "severity": "major",
+      "what": "The ?debug=fields overlay treats grey decorative tint fragments as printed WALLS, so it reports red 'crosses a printed wall' and blue 'printed box with no input' marks for boxes that are not printed boxes at all. This misdirects review: the user asked why correctly placed inputs were flagged red, and the answer is that the reviewer's instrument is wrong, not the form.",
+      "where": "emit.py:5025-5066 (visibleRects keeps any rect whose fill differs from what is under it) and emit.py:5120-5149 (boxAt closes a box on those faces). No tone test exists anywhere in FIELD_DEBUG_JS; the `vacant` branch at emit.py:5297-5333 has none either.",
+      "evidence": "Proven case, 1701-2018 p2 item 3 'Filer's Spouse Type': p2c21-i is reported red with over=4.57pt. The wall responsible is h27, x 432.79-448.03 y 131.78-132.26 at gray 0.8509 role=decorative -- a fragment of the row-band tint running THROUGH the Compensation Earner checkbox, not a rule. Seven blue boxes in the same band come from the same tint fragments (h25 h26 h27 h28) closed against the structural rules h21 and h32. Every tone the overlay needs is already in hand: it stores each rect's fill at emit.py:5034, and the role is one parentNode away on the <g class=\"layer-structural|decorative|knockout\"> group (emit.py:428-434). Note that not all blue is phantom -- the Schedule 1 blues in F210 are real, which is exactly why the category has to become trustworthy rather than be suppressed.",
+      "audit_blind": true,
+      "cause": null,
+      "status": "open",
+      "resolution": null
     }
   ]
 }

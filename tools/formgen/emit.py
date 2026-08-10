@@ -1573,13 +1573,29 @@ def field_box(cell: dict[str, Any], face: FieldFace,
 # taxpayer can write in, whatever the box detector made of it: it is a table
 # cell whose text lattice.py assigned to a neighbour because the run crosses
 # cell boundaries. A majority is the test, and the corpus separates on it rather
-# than being tuned to it -- measured over all 4908 non-comb field cells, 50 sit
-# at 0.53-0.91 (every statutory bracket on 1700/1701/1701A/1701Q/1701MS page 2,
-# 2200A's "Unit of Measure Tax Rate" header, 2200P's "XP010 Lubricating Oils",
-# 1601EQ's and 1600WP's ATC rows, 2000-DST's rate table, 1801's OCT/TCT header)
-# and the next one down is at 0.44. Nothing lands between them. The remaining
-# 4858 are at 0.0.
+# than being tuned to it. Measured over all 5423 non-comb field cells
+# (build/layout + build/ir, 53 bundles, 2026-08-09), 31 are above it:
+#
+#     0.537   2   1701A item 19's caption strip, p1c227 and p2c208 (F207)
+#     0.614   1   1601EQ's "1/2 of 1% WI156" ATC row
+#     0.758-  28  every statutory bracket of the graduated-rate table on
+#     0.842       1701, 1701A, 1701Q and 1701MS page 2
+#
+# and the next cell down is at 0.126 (1604CF p1c20). Nothing lands in between,
+# so the threshold sits in an empty gap four times its own width; 5355 of the
+# remaining 5392 are at 0.0 exactly. The two F207 cells are the closest any
+# cell in the corpus comes to it and they clear it by 0.037 -- see
+# `PrePrintedInk._spans_over` for what they are and why the measure, not the
+# threshold, is what had to change to see them.
 PREPRINTED_COVERAGE = 0.5
+
+# One indexed run: its line box, its glyph x-extents, the band its outlines ink
+# (None where the source does not state them) and the baseline they are hung
+# off (None where the run states none). The last two are what `_spans_over`
+# asks "printed in" of; the line box is what `intrusions` asks its own,
+# different question of.
+_InkEntry = tuple[float, float, list[tuple[str, float, float]],
+                  tuple[float, float] | None, float | None]
 
 
 class PrePrintedInk:
@@ -1592,10 +1608,10 @@ class PrePrintedInk:
     and the IR states each one's origin and width, so this is measured rather
     than inferred.
 
-    A run counts against a cell only when at least half of the run's own height
-    lies inside it. That is what distinguishes "this text is printed in this
-    box" from "the line above dips 0.4pt into it": 1604C, 2316 and 2200S all
-    have field cells that a neighbouring line grazes by 1-5% of its height.
+    A run counts against a cell when the ink it lays is mostly on that cell's
+    paper, or when the line that ink is seated on is in the cell. See
+    `_spans_over` for why the question needs both halves and why neither is
+    asked of the run's box.
     """
 
     __slots__ = ("_buckets",)
@@ -1603,20 +1619,19 @@ class PrePrintedInk:
     BUCKET_PT = 16.0
 
     def __init__(self, runs: Sequence[dict[str, Any]]) -> None:
-        self._buckets: dict[
-            int, list[tuple[float, float, list[tuple[str, float, float]]]]] = {}
+        self._buckets: dict[int, list[_InkEntry]] = {}
         for run in runs:
             spans = _glyph_spans(run)
             if not spans:
                 continue
             y0, y1 = float(run["y0"]), float(run["y1"])
-            entry = (y0, y1, spans)
+            baseline = run.get("baseline_y")
+            entry = (y0, y1, spans, _ink_band(run),
+                     None if baseline is None else float(baseline))
             for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
                 self._buckets.setdefault(bucket, []).append(entry)
 
-    def _entries_over(self, y0: float, y1: float
-                      ) -> Iterator[tuple[float, float,
-                                          list[tuple[str, float, float]]]]:
+    def _entries_over(self, y0: float, y1: float) -> Iterator["_InkEntry"]:
         """Every run whose own line box reaches into the band `y0..y1`.
 
         No "printed in" test at all, which is what separates this from
@@ -1631,13 +1646,13 @@ class PrePrintedInk:
         whatever order the buckets were filled in.
         """
         seen: set[int] = set()
-        out: list[tuple[float, float, list[tuple[str, float, float]]]] = []
+        out: list[_InkEntry] = []
         for bucket in range(int(y0 // self.BUCKET_PT), int(y1 // self.BUCKET_PT) + 1):
             for entry in self._buckets.get(bucket, ()):
                 if id(entry) in seen:
                     continue
                 seen.add(id(entry))
-                run_y0, run_y1, spans = entry
+                run_y0, run_y1 = entry[0], entry[1]
                 if run_y1 <= run_y0 or run_y1 <= y0 or run_y0 >= y1:
                     continue
                 out.append(entry)
@@ -1650,16 +1665,58 @@ class PrePrintedInk:
                     ) -> Iterator[list[tuple[str, float, float]]]:
         """The glyphs of every run that is printed IN the band `y0..y1`.
 
-        The half-its-own-height test is the whole of "printed in" -- see the
-        class docstring -- and lives here so that the two questions asked of
-        this index, occupancy of a cell and what a comb slot carries, cannot
-        drift apart on which runs they consider.
+        "Printed in" is the whole of this method, and it lives here so that the
+        two questions asked of this index, occupancy of a cell and what a comb
+        slot carries, cannot drift apart on which runs they consider.
+
+        **Occupancy is not ownership, and that is why there are two clauses.**
+        `lattice.assign_points` gives a run to exactly one cell, because a run
+        has one owner. This asks something else -- is this cell's paper already
+        marked -- and one line of type can mark two rows: it fills the row its
+        ink mostly lies in and it is SEATED on the row its baseline is in. A
+        single test can only ever name one of those two rows, and both of them
+        are cells a taxpayer must not be handed a typing surface on.
+
+          * **Mostly on this paper.** At least half the run's INK band inside,
+            which is what distinguishes "this text is printed in this box" from
+            "the line above dips 0.4pt into it": 1604C, 2316 and 2200S all have
+            field cells that a neighbouring line grazes. The band is the run's
+            outlines (`_ink_band`), not its box, because a run's box is its
+            face's LINE box -- ascent line to descent line -- and charges every
+            glyph with a descender depth its characters may not have.
+          * **Seated on this paper.** The run's baseline inside the band. Type
+            is placed by its origin and every outline in `glyph_ink_em` is a
+            box hung off that origin, so the baseline is where the ink sits,
+            not a proxy for it; a line whose seat is on this cell is printed on
+            this cell however far its ascenders reach into the row above.
+
+        The second clause is the whole of F207 and neither half of it can
+        answer alone. 1701A item 19 sets the second line of both its captions
+        across the strip below the boxes -- "of deduction" and "[available if
+        gross sales/receipts ... (P3M)]" -- so that each line's ascenders cross
+        the lattice boundary. The first is 45% inside by its measured ink (47%
+        by its box); the second is set in Arial Narrow Italic, a face whose
+        outlines MuPDF's name cleaner cannot resolve, so it has no measured
+        band at all and falls back to its line box, 39% inside. Both are wholly
+        seated in the strip, and the unmeasured one is 267.16 of the 313.49pt
+        of ink that refuses a 584.16pt cell -- so the fallback is not a corner
+        case here, it is the majority of the evidence. With only the first
+        clause the strip reads as blank paper and takes a 584pt input laid over
+        two printed lines.
+
+        Measured over the whole corpus (build/layout + build/ir, 53 bundles,
+        2026-08-09), asking both clauses instead of half the run's box height
+        moves 11 cells across `PREPRINTED_COVERAGE` and no cell the other way.
+        Nine are `blank`, `label` or `shaded` cells, whose kind already refuses
+        an input before this evidence is read; the two that change what is
+        emitted are 1701A p1c227 and p2c208.
         """
-        for run_y0, run_y1, spans in self._entries_over(y0, y1):
-            overlap = min(y1, run_y1) - max(y0, run_y0)
-            if overlap < 0.5 * (run_y1 - run_y0):
-                continue
-            yield spans
+        for run_y0, run_y1, spans, band, baseline in self._entries_over(y0, y1):
+            top, bottom = band if band is not None else (run_y0, run_y1)
+            if bottom > top and min(y1, bottom) - max(y0, top) >= 0.5 * (bottom - top):
+                yield spans
+            elif baseline is not None and y0 <= baseline <= y1:
+                yield spans
 
     def intrusions(self, x0: float, y0: float, x1: float, y1: float
                    ) -> list[tuple[float, float, float, float]]:
@@ -1675,7 +1732,7 @@ class PrePrintedInk:
         of 44,603 emitted inputs meet a printed line box at all.
         """
         out: list[tuple[float, float, float, float]] = []
-        for run_y0, run_y1, spans in self._entries_over(y0, y1):
+        for run_y0, run_y1, spans, _band, _baseline in self._entries_over(y0, y1):
             for _char, span_x0, span_x1 in spans:
                 if span_x1 <= x0 or span_x0 >= x1:
                     continue
@@ -1866,6 +1923,58 @@ class PrePrintedInk:
                 continue
             return "".join(span[0] for span in spans)
         return None
+
+
+def _ink_band(run: dict[str, Any]) -> tuple[float, float] | None:
+    """The band this run's glyph outlines actually ink, or None when unknown.
+
+    `extract.run_glyph_ink` publishes `glyph_ink_em`, the outline box of every
+    character a run sets, in em units hung off the run's own baseline and
+    origin; `audit.glyph_boxes` reads the same table for the same reason. This
+    is that evidence collapsed to one vertical extent, because the question
+    asked of it here is a per-run one.
+
+    None is the fail-closed answer and every caller must fall back to the run's
+    recorded line box on it. It is returned whenever the table cannot describe
+    this run's ink: no table at all (a face MuPDF's own name cleaner does not
+    resolve -- Arial Narrow, Ebrima, Nirmala UI), a rotated run whose baseline
+    is not horizontal, a run with no baseline or size to hang the box off, a
+    malformed box, or a table that is missing even one of the characters the
+    run sets. That last one is deliberate: a band derived from part of a run is
+    not that run's band, and 457 of this corpus's 19,287 runs are that shape
+    (an en-dash in a `Part I – ...` heading, a fragment whose sibling carries
+    the letters). 15,995 runs publish a complete table and 2,835 publish none.
+    """
+    table = run.get("glyph_ink_em")
+    if not isinstance(table, dict) or not table:
+        return None
+    if run.get("rotated") or not run.get("size_pt"):
+        return None
+    baseline = run.get("baseline_y")
+    if baseline is None:
+        return None
+    baseline, size = float(baseline), float(run["size_pt"])
+    top: float | None = None
+    bottom: float | None = None
+    for char in run.get("text") or "":
+        if not char.strip():
+            continue
+        box = table.get(char)
+        if not isinstance(box, (list, tuple)) or len(box) != 4:
+            return None
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(value) for value in box):
+            return None
+        if box[3] <= box[1]:
+            return None
+        # Font space counts y up from the baseline; the page counts it down.
+        glyph_top = baseline - size * float(box[3])
+        glyph_bottom = baseline - size * float(box[1])
+        top = glyph_top if top is None else min(top, glyph_top)
+        bottom = glyph_bottom if bottom is None else max(bottom, glyph_bottom)
+    if top is None or bottom is None or bottom <= top:
+        return None
+    return top, bottom
 
 
 def _glyph_spans(run: dict[str, Any]) -> list[tuple[str, float, float]]:
@@ -6090,6 +6199,156 @@ def constructed_assertions(ir: dict[str, Any], layout: dict[str, Any],
                and 'data-preprinted="true"' in cell.group(0),
                "a cell filled with pre-printed text is emitted without an input",
                cell.group(0)[:80] if cell else "cell absent", failures)
+
+    # -- C6 part 2b: the strip a caption's second line is SEATED on (F207) -----
+    # 1701A item 19, at its measured geometry. The captions' second lines are
+    # set across the 6.89pt strip below the boxes so that their ascenders cross
+    # the lattice boundary: neither line's box is half inside the strip (39%
+    # and 47%), so a box-overlap test reads the strip as blank paper and lays a
+    # 584pt input over two printed lines. Each mutation below moves exactly one
+    # thing and must trip exactly its own clause.
+    # Arial's own outlines, as `extract.run_glyph_ink` publishes them: these are
+    # the boxes this corpus's IR states for these characters, not a table
+    # written here (2,086 to 4,612 runs each, one value apiece).
+    ARIAL_INK = {"a": [0.042, -0.023, 0.535, 0.539],
+                 "c": [0.031, -0.023, 0.477, 0.539],
+                 "d": [0.026, -0.023, 0.495, 0.729],
+                 "e": [0.04, -0.023, 0.513, 0.539],
+                 "f": [0.018, 0.0, 0.258, 0.732],
+                 "i": [0.066, 0.0, 0.15, 0.729],
+                 "n": [0.07, 0.0, 0.487, 0.539],
+                 "o": [0.036, -0.023, 0.51, 0.539],
+                 "r": [0.069, 0.0, 0.321, 0.539],
+                 "s": [0.034, -0.023, 0.459, 0.539],
+                 "t": [0.014, -0.023, 0.254, 0.668],
+                 "u": [0.065, -0.023, 0.482, 0.524]}
+
+    def _seated_run(text: str, x0: float, baseline: float, *,
+                    size: float = 9.0, table: dict[str, Any] | None = ARIAL_INK,
+                    ascent: float = 0.905, descent: float = 0.21,
+                    **extra: Any) -> dict[str, Any]:
+        """One measured Arial run, seated on `baseline` and starting at `x0`."""
+        each = size * 0.556
+        run: dict[str, Any] = {
+            "text": text, "font": "Arial", "family": "Arial", "size_pt": size,
+            "bold": False, "italic": False, "serif": False, "monospace": False,
+            "superscript": False, "flags": 0, "color": 0,
+            "x0": x0, "y0": baseline - ascent * size,
+            "x1": x0 + each * len(text), "y1": baseline + descent * size,
+            "baseline_y": baseline, "origin_x": x0,
+            "ascender": ascent, "descender": -descent,
+            "line_height_pt": (ascent + descent) * size,
+            "measured_advance_pt": each * len(text),
+            "char_origin_offsets_pt": [each * i for i in range(len(text))],
+            "char_advances_pt": [each] * len(text),
+            "char_widths_pt": [each] * len(text),
+            "direction": [1.0, 0.0], "rotated": False, "unmapped_glyphs": [],
+            "glyph_ink_em": dict(table) if table else {},
+        }
+        run.update(extra)
+        return run
+
+    def _box_fraction(run: dict[str, Any], cell: dict[str, Any]) -> float:
+        """How much of the run's LINE box is inside the cell -- the old test."""
+        height = float(run["y1"]) - float(run["y0"])
+        inside = (min(float(cell["y1"]), float(run["y1"]))
+                  - max(float(cell["y0"]), float(run["y0"])))
+        return inside / height if height > 0 else 0.0
+
+    strip = {"id": "p1c227", "x0": 14.88, "y0": 400.86, "x1": 599.04,
+             "y1": 407.75, "kind": "field", "border": {}, "border_count": 3}
+    # 47% of its box and 45% of its ink band are inside the strip; all of its
+    # seat is. The second, in a face whose outlines the source does not state,
+    # is the 267.16pt of the 313.49 that carries the verdict and it falls back
+    # to its line box -- 39% inside, so only its seat can see it.
+    seated = [_seated_run("of deduction", 101.18, 403.73),
+              _seated_run("[available if gross sales/receipts and other non-"
+                          "operating income do not exceed Three million pesos"
+                          " (P3M)]", 289.37, 402.65, size=7.56, table=None,
+                          ascent=0.936, descent=0.208,
+                          font="Arial Narrow,Italic", family="Arial Narrow",
+                          italic=True)]
+    seated_ink = PrePrintedInk(seated)
+    _check(seated_ink.coverage(strip) > PREPRINTED_COVERAGE
+           and field_verdict(strip, seated_ink, None, None)[1] == "pre-printed",
+           "a caption's second line refuses the strip it is seated on",
+           f"coverage {seated_ink.coverage(strip):.3f} from two runs "
+           f"{min(_box_fraction(r, strip) for r in seated):.0%} and "
+           f"{max(_box_fraction(r, strip) for r in seated):.0%} inside by box",
+           failures)
+    # The bound on the seat clause, set as tight as the geometry allows rather
+    # than comfortably: the same two lines raised 3.00pt, so they are seated
+    # 0.13 and 1.21pt ABOVE the strip while both still hang into it -- 1.76pt
+    # and 0.36pt of line box, and 0.08pt of measured ink. That is the graze
+    # 1604C, 2316 and 2200S are made of. A seat clause that admitted any run
+    # reaching the band would take this strip, and this strip is blank paper.
+    lifted = [_seated_run(r["text"], r["x0"], r["baseline_y"] - 3.0,
+                          size=r["size_pt"], table=r["glyph_ink_em"] or None,
+                          ascent=r["ascender"], descent=-r["descender"],
+                          font=r["font"], family=r["family"],
+                          italic=r["italic"])
+              for r in seated]
+    _check(all(run["y1"] > strip["y0"] for run in lifted)
+           and all(run["baseline_y"] < strip["y0"] for run in lifted)
+           and PrePrintedInk(lifted).coverage(strip) == 0.0
+           and field_verdict(strip, PrePrintedInk(lifted), None, None)[0],
+           "lines seated just above the strip graze it and do not take it",
+           f"coverage {PrePrintedInk(lifted).coverage(strip):.3f} from two "
+           f"runs reaching {min(r['y1'] for r in lifted) - strip['y0']:.2f} "
+           f"and {max(r['y1'] for r in lifted) - strip['y0']:.2f}pt into it",
+           failures)
+    # The other clause, alone, and in the direction only IT can answer: a line
+    # seated below the strip, of characters that carry no descender, whose LINE
+    # box is half inside because that box is drawn to its face's descent line
+    # and its ink is nowhere near it. This is the 0.39-1.5pt of blank paper
+    # audit.py measures between such a caption and the box under it; charging
+    # the cell for it would refuse a taxpayer a real writing surface.
+    narrow = {"id": "p1c227b", "x0": 14.88, "y0": 400.86, "x1": 120.0,
+              "y1": 407.75, "kind": "field", "border": {}, "border_count": 3}
+    below = _seated_run("successor courses", 20.0, 410.5)
+    _check(_box_fraction(below, narrow) >= 0.5
+           and PrePrintedInk([below]).coverage(narrow) == 0.0
+           and field_verdict(narrow, PrePrintedInk([below]), None, None)[0],
+           "a line box half inside is not ink half inside, and only ink counts",
+           f"box {_box_fraction(below, narrow):.0%} inside, ink "
+           f"{(407.75 - (410.5 - 9.0 * 0.539)) / (9.0 * 0.562):.0%}", failures)
+    # ... and the same run with no stated outline falls back to that line box
+    # and does refuse the cell, which is the fail-closed side: a band nobody
+    # measured is never invented, and the looser bound is the one that stands.
+    unmeasured = dict(below, glyph_ink_em={})
+    _check(_ink_band(unmeasured) is None
+           and PrePrintedInk([unmeasured]).coverage(narrow) > PREPRINTED_COVERAGE,
+           "with no stated outline the same run falls back to its line box",
+           f"coverage {PrePrintedInk([unmeasured]).coverage(narrow):.3f}",
+           failures)
+    # `_ink_band` itself, and each of its refusals mutated in isolation.
+    band = _ink_band(below)
+    _check(band is not None and abs(band[0] - (410.5 - 9.0 * 0.539)) < 1e-9
+           and abs(band[1] - (410.5 + 9.0 * 0.023)) < 1e-9,
+           "the band is the tallest and deepest outline the run sets",
+           f"{band[0]:.3f}..{band[1]:.3f} against a line box "
+           f"{below['y0']:.3f}..{below['y1']:.3f}", failures)
+    partial = dict(ARIAL_INK)
+    partial.pop("c")
+    _check(_ink_band(dict(below, rotated=True)) is None
+           and _ink_band(dict(below, baseline_y=None)) is None
+           and _ink_band(dict(below, size_pt=0.0)) is None
+           and _ink_band(dict(below, glyph_ink_em=partial)) is None
+           and _ink_band(dict(below, glyph_ink_em=dict(
+               ARIAL_INK, c=[0.031, 0.7, 0.477, 0.539]))) is None,
+           "a rotated, unseated, sizeless, partial or degenerate table is refused",
+           "None for all five", failures)
+    # The reshaped index must not have moved the OTHER question this class is
+    # asked. `intrusions` reads the line box on purpose -- see its docstring --
+    # so it reports the seated caption at its full ascent-to-descent extent,
+    # 1.56pt taller at the top and 1.68pt lower at the foot than its ink.
+    _check({box[1:4:2] for box
+            in seated_ink.intrusions(14.88, 400.86, 599.04, 407.75)}
+           == {(run["y0"], run["y1"]) for run in seated},
+           "intrusions still measures a run's line box, not its ink band",
+           f"{seated[0]['y0']:.2f}..{seated[0]['y1']:.2f} against a band "
+           f"{_ink_band(seated[0])[0]:.2f}..{_ink_band(seated[0])[1]:.2f}",
+           failures)
 
     # -- C6 part 3: decorative shading over a blank makes it uneditable --------
     # The 2200T page-2 hazard, staged: a cell the official form shades to say NO

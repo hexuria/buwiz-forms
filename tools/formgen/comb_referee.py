@@ -1473,6 +1473,39 @@ HTML_ALLOWED_TAGS = frozenset({
 #     retained, 4,554 comb cells, form for form): `slot_x`, `divider_x` and
 #     every compartment count are untouched, so no ledger topology digest
 #     moves either.
+#
+# Re-pinned 2026-08-11 (F207) for ONE slug, `1701a-2018`. The other 52
+# documents are byte-identical, which is the first thing reviewed: the change
+# is to `emit.PrePrintedInk`'s "printed in" test, which every form's every cell
+# is asked, and it moves two cells on one form.
+#
+#   * TWO `<input>` LEAVE THE CORPUS, 45,335 -> 45,333, both on 1701A: p1c227
+#     and p2c208, the full-width strips item 19 sets the second line of each of
+#     its two captions across ("of deduction", "[available if gross
+#     sales/receipts ... (P3M)]"). Each strip's cell goes `class="c f"` +
+#     `data-field-kind="text"` + `data-field-name` to `class="c"` +
+#     `data-preprinted="true"`, which are the first two cells in any FORM
+#     document to carry that attribute -- the 29 statutory-bracket cells the
+#     same rule refuses are all relocated into their guide and emitted in
+#     neither document.
+#   * NOTHING ELSE MOVES IN ANY DOCUMENT. Cell count 393 -> 393 on 1701A and
+#     unchanged elsewhere; no other cell's class, attribute string or input
+#     count changes anywhere in the corpus; visible text is token-for-token
+#     identical; every `<template>` and `<script>` is byte-identical, so
+#     `HTML_RUNTIME_SCRIPT_SHA256` does NOT move.
+#   * 1701A's `form.css` loses `.fh0` (0.61pt) and `.fh1` (1.06pt) and the
+#     remaining classes renumber. Those two metrics existed only for these two
+#     inputs: `writing_box_clear_of_printed_ink` had already trimmed each box
+#     down to the sliver under the caption's own line box, so what is removed
+#     is a 584pt-wide typing surface 0.61pt tall laid across printed text --
+#     not a writing surface anyone could use, and the reason `check_inputs_
+#     over_printed_text` never saw it (F207 is `audit_blind`).
+#   * COMB CENSUSES DO NOT MOVE: 4,587 subjects, 33 retained, 4,554 comb
+#     cells, form for form, and every compartment verdict is identical -- 369
+#     compartments refused before and after, the same 369. The "printed in"
+#     test is shared with `slot_constant`/`slot_caption` on purpose, so this
+#     was measured per compartment over all 4,554 comb cells rather than
+#     assumed.
 EXPECTED_HTML_STRUCTURE_SHA256 = {
     "0605-1999": "2911425a931792d03762cc8508d815fec905e7102ae2b2e7921ef9c92a110197",
     "0619e-2018": "6cfbd8c3bb016f9e4100e535403a5984cbc878a0bf95ac1b302b61be6fa13ff0",
@@ -1496,7 +1529,7 @@ EXPECTED_HTML_STRUCTURE_SHA256 = {
     "1701-2018-attachment": "543b9c5e635fca051fc157743061b7ea21ed3b1fdd9ab4c66e0012e3c3665173",
     "1701-2018-conso": "3eca0df2cd1216b060544e6f579911d9c6964402fcddcf747225e1c332c1d07d",
     "1701-2018": "e9fce4e299772a21fff2965282f3ec4395de63ad7dd0994f44b77b373db18a86",
-    "1701a-2018": "5b4f01e42c2b8ff5d8d5291511c063cc4210eef65ec03c51d4b3d19c4750d505",
+    "1701a-2018": "e8521d7b00087f52709404c9da469d4d180b5b36986281c80706c14d47915fda",
     "1701ms-2024": "a50c953b99c43641f8a284efd5d580048181db1c61d8d5d15c8b48b4b4e10461",
     "1701q-2018": "9079a24efb3a216ae1bea8b49dc40ef713b80df49336fbf81d4fcc02e5ee6c8a",
     "1702ex-2018": "b8d64260a2f0f4b806a2586354997d8c0961a48e4c672d25a5016cac4416a1f1",
