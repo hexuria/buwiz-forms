@@ -23,7 +23,7 @@
     "Times New Roman"
   ],
   "rules": 653,
-  "text_runs": 312,
+  "text_runs": 308,
   "images": 3,
   "cells": 357,
   "comb_cells": 75,
@@ -47,7 +47,7 @@
     "inline_pages": [],
     "standalone_pdfs": []
   },
-  "html_bytes": 497582,
+  "html_bytes": 496875,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

@@ -1418,7 +1418,14 @@ def self_test(ir_dir: pathlib.Path, layout_dir: pathlib.Path,
     # (4 -> 0) moved for the same reason and are not pinned here.
     expected = {
         ("1603q-2018", 2): (284.54, 0, 171, 70, "marker"),
-        ("1600-pt-2018", 2): (283.91, 4, 126, 70, BAND_PATTERN),
+        # 126 -> 121 on 2026-08-10 (P3): this page's ATC table sets its blanks
+        # as WHITE underscores, and extract.py now publishes a run of them as
+        # the bar it draws instead of as text. Twenty groups on the page; the
+        # fifteen that share a run with a code ('MMC ______') keep that code as
+        # a run, and the five that are a run of their own ('______') leave the
+        # text entirely. Cut, field cells below, reclaim and detector are all
+        # unchanged: nothing moved but which layer the underscores are on.
+        ("1600-pt-2018", 2): (283.91, 4, 121, 70, BAND_PATTERN),
         ("2551q-2018", 2): (292.43, 2, 93, 69, BAND_PATTERN),
         # 2551M keeps its cut only because the comb test asks about comb *bands*:
         # p2c0's box crosses the cut, its 2-slot comb sits 100pt above it.

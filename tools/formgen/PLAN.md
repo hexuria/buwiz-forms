@@ -718,6 +718,25 @@ extract self-test probe counts stay pinned. Close F148/F149 on shipped-bytes
 evidence, mark F200 fixed ("upstream reclassification — option 2 of the
 recorded pair"), and re-verify the full census population end-to-end.
 
+**P3 landed (2026-08-10, gate r38 pending).** The upstream reclassification
+works and F200 is closed: 118 of 119 groups are now rules, the 1 refusal stays
+text and is counted, and rules/text parity held clean 53/53 on a full
+round-trip audit. But **F148/F149 are NOT closed**, for a geometric reason
+that reshapes P2: **a ruled blank is written ON TOP of its line, not below
+it.** The rule lands at the glyphs' descender band -- the bottom of the
+caption's line box -- so the split returns the writing space to the CAPTION
+cell and leaves a sliver below (1701 p4: caption 11.54pt, strip 3.22pt
+`blank`). Corpus-wide 3 of 47 split strips are `field`; +1 input total.
+**P2 therefore absorbs this**: its target is now BOTH the row-number
+description cells (F151) AND making the space above a published ruled-blank
+rule writable inside its caption cell (F148/F149). Both are the same question
+-- a cell that is part printed constant and part writing surface -- and the
+ruled-blank case now has a source-published rule marking exactly where the
+writing surface begins, which the F151 case does not. Census deviation to
+reconcile in P2: the group census attributed **57** label cells, not the 50
+the operator measured; all 57 are `label` with 0 inputs and the agent could
+find no filter yielding 50.
+
 ### P2 — part-constant description rows (F151, blocker) — measure first, abort honestly
 
 AFTER P3, so the underscore cells are already out of this population.

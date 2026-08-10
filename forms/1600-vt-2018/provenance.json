@@ -22,7 +22,7 @@
     "Times New Roman"
   ],
   "rules": 889,
-  "text_runs": 269,
+  "text_runs": 264,
   "images": 3,
   "cells": 303,
   "comb_cells": 95,
@@ -55,9 +55,9 @@
         "marker": "Table 1 \u2013 Alphanumeric Tax Code (ATC)",
         "marker_pattern": "reference-band",
         "moved": {
-          "rules": 24,
+          "rules": 44,
           "cells": 36,
-          "text_runs": 66,
+          "text_runs": 61,
           "area_fills": 16,
           "images": 0
         },
@@ -78,7 +78,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 506154,
+  "html_bytes": 506171,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

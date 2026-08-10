@@ -1943,7 +1943,7 @@
       "evidence": "DOM cell dump; the official prints a ruled writable blank inside that rectangle - see /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701-2018/EVIDENCE-p4-item9-specify-no-input.png (official left, ours right, no input on the blank while the money comb beside it fills).",
       "cause": "C4",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "NOT fixed by r38's upstream reclassification, and the reason is geometric rather than incidental: A RULED BLANK IS WRITTEN ON TOP OF ITS LINE, NOT BELOW IT. The published rule lands at the underscore glyphs' own descender band, which is the bottom of the caption's line box, so the split hands the writing space back to the CAPTION cell above and leaves a useless sliver underneath. Verified by the operator on 1701-2018 p4: the rule is at y 428.50-428.91 (structural, 0.41pt), the caption cell p4c213 is y 417.17-428.71 (11.54pt, label, 0 inputs) and the strip below is y 428.71-431.93 -- 3.22pt, kind 'blank', 0 inputs. Corpus-wide only 3 of 47 split strips are 'field' (33 blank, 7 shaded, 4 label) and only one gained an input. What remains is to make the space ABOVE the line writable inside the caption cell -- cell-classification work, i.e. P2-shaped, now recorded there. (Old id p4c89 renumbered to p4c213/p4c214.)"
     },
     {
       "id": "F149",
@@ -1956,7 +1956,7 @@
       "evidence": "DOM cell dump plus /private/tmp/claude-501/-Volumes-goldcoders-reverse-engineer-ebir-forms-bir--claude-worktrees-stow-repo-cleanup-migration-8ced85/112a0a3f-286c-407c-91d8-41fa3855609b/scratchpad/review/1701a-2018/EVIDENCE-p2-item63-specify-no-input.png.",
       "cause": "C4",
       "audit_blind": true,
-      "resolution": null
+      "resolution": "NOT fixed by r38's upstream reclassification, and the reason is geometric rather than incidental: A RULED BLANK IS WRITTEN ON TOP OF ITS LINE, NOT BELOW IT. The published rule lands at the underscore glyphs' own descender band, which is the bottom of the caption's line box, so the split hands the writing space back to the CAPTION cell above and leaves a useless sliver underneath. Verified by the operator on 1701-2018 p4: the rule is at y 428.50-428.91 (structural, 0.41pt), the caption cell p2c176 is y 417.17-428.71 (11.54pt, label, 0 inputs) and the strip below is y 428.71-431.93 -- 3.22pt, kind 'blank', 0 inputs. Corpus-wide only 3 of 47 split strips are 'field' (33 blank, 7 shaded, 4 label) and only one gained an input. What remains is to make the space ABOVE the line writable inside the caption cell -- cell-classification work, i.e. P2-shaped, now recorded there. (Old id p2c105 renumbered to p2c176/p2c177.)"
     },
     {
       "id": "F150",
@@ -2613,13 +2613,13 @@
       "form": "*",
       "page": 0,
       "severity": "minor",
-      "status": "open",
+      "status": "fixed",
       "what": "F148/F149's fix is BLOCKED by a genuine conflict between two rules that are each correct on their own, and I reverted a working implementation rather than resolve it by editing the judge. A run of underscores is the sheet drawing a writing line -- it is the one ink signal in the corpus that INVITES typing, where every other one forbids it. But an input placed on that line necessarily overlaps a pre-printed text run's bbox, which is exactly what the assertion inputs_over_printed_text forbids.",
       "where": "Population measured on the r36 tree: 52 underscore runs of >=3 glyphs in 34 cells across 13 forms, EVERY one of them kind 'label' with zero inputs, and 30 of the 34 captions reading '(specify)' / 'please specify' / '(Specify)'. A wider population exists if underscore GROUPS inside a mixed run count too -- '(please specify) ______', 'XA ____', 'XG___', '__________ % X =' -- which is what my implementation actually matched, giving +61 inputs rather than the +34 whole-run measurement predicted.",
       "evidence": "Implemented and self-tested on 2026-08-10: PrePrintedInk.ruled_blanks + a field_verdict branch confined to non-field kinds (so it can never overrule the pre-printed, shading or bureau blocks) + a field_box branch placing the input on the line's own x-extent, untrimmed against its own underscores and not re-cut by printed partitions. Six new checks passed, including that a caption alone does not turn a label into a field and that a lone underscore is not a blank; the box landed at inset left 70.0 for a rule starting at x=70. It regenerated cleanly, +61 inputs, and money_boxes_have_inputs and inputs_span_no_printed_divider both stayed at 0 offenders. THEN inputs_over_printed_text went 6 forms/15 offenders to 26 forms/70: 34 offenders are pure-underscore runs, 20 are mixed runs, 16 are the pre-existing population. Reverted to 9f76779; the tree is unchanged and the gate stays at 10/13.",
       "cause": null,
       "audit_blind": false,
-      "resolution": "NOT resolved, and deliberately not resolved by me. The obvious move -- exempting underscore runs inside audit.py -- would be changing the judge immediately after changing the producer it judges, which is the failure mode this project has now found five times and which the 'without cheating' constraint forbids outright. Two candidate resolutions, both needing a decision rather than a tweak: (1) Treat the assertion's claim as over-broad relative to its PURPOSE. It exists so a taxpayer is not given a typing surface over text they cannot change; a ruled blank is not such text, it is the blank itself. That is defensible but it is a reviewed weakening of a gating check and must be argued as one, not slipped in. (2) Fix it upstream instead, where it arguably belongs: have extract.py classify a run of underscores as a RULE rather than as a text run. The blank then becomes ordinary paper, the lattice segments it as its own field cell, no input ever overlaps printed text, and the assertion needs no exception at all. Larger, and it moves what the text-parity check compares on both sides at once, so it needs its own round. Placing the input above the line's ink is NOT a third option: the assertion compares against the run's line box, whose top edge is the ascent line, and audit.py already documents that bound as loose by most of an em."
+      "resolution": "FIXED in r38 by resolution (2), the upstream route, exactly as recorded: extract.py now publishes a run of >=3 consecutive underscore glyphs as the horizontal rule it typographically is, measured at the glyphs' own outline band and required to lie inside MuPDF's own get_bboxlog() fill-text ink bound for that op, so a band derived off the wrong baseline, scale or coordinate space is refused rather than guessed. 118 of 119 groups published; the 1 refusal (1707-2021 p1t78, BaseFont 'Arial Narrow' with no embedded resource and no base-14 alias) stays TEXT and is counted in page stats -- fail closed, never guess. Verified by the operator on the shipped IR: exactly 1 underscore group remains in the whole text layer, on 1707-2021. THE CONFLICT IS GONE: an input on a ruled blank can no longer overlap a printed text run, because the underscores are no longer a text run, and NO assertion needed an exception -- Bundle.ink indexes IR text_runs, so a group that leaves text_runs leaves the ink index. rules parity clean 53/53 and text parity clean 53/53 on a full round-trip audit (measured on all 53, not --assertions-only). inputs_over_printed_text 6 forms/15 and comb_slots_match_printed 12/25, both byte-identical offender lists. F148/F149 are NOT closed by this and remain open -- see their notes and F202."
     },
     {
       "id": "F201",
@@ -2632,6 +2632,19 @@
       "evidence": "Measured on the r37 tree and confirmed by the operator's own referee run: 53/53 forms, forms_error 0, referee_layout_mismatches 0, subjects_retained_unresolved 33 -> 34 (exactly this subject), combs_found 4583 unchanged, combs_source_unevaluable 49 unchanged. EXPECTED_RETAINED_SUBJECTS_BY_SLUG gained 2000-dst-2018: 1 -- a census move that ACCEPTS the suppression pending review, made openly rather than hidden.",
       "cause": null,
       "audit_blind": true,
+      "resolution": null
+    },
+    {
+      "id": "F202",
+      "form": "1600-pt-2018, 1600-vt-2018, 1606-2018, 1706-2018",
+      "page": 0,
+      "severity": "minor",
+      "status": "open",
+      "what": "58 of the 118 ruled-blank bars r38 published are WHITE (gray 1.0, role knockout), and knockout rules are outside the gated rules comparison: audit.py computes rules_ref from page stats rules_structural only (audit.py:8480-8481, 9244). As text runs they were inside the text comparison, so this is a small, real loss of round-trip coverage -- ink that used to be compared no longer is.",
+      "where": "The white ATC-page bars on 1600-PT, 1600-VT, 1606 and 1706. 58 of them also sit below their pages' guide cut and so leave the emitted form document entirely, which rules_below_guide_cut already requires.",
+      "evidence": "Measured on the r38 tree: 118 published bars, 60 structural (gray 0.0) and 58 knockout (gray 1.0); rules parity stayed clean 53/53 precisely because the knockouts are not counted on either side. Visually nil -- white ink on white paper -- but the comparison coverage is genuinely smaller than before, which is why it is recorded rather than left implicit.",
+      "cause": null,
+      "audit_blind": false,
       "resolution": null
     }
   ]

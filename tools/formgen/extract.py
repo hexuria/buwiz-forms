@@ -84,6 +84,29 @@ CLIP_COINCIDENCE_PT = 2.5e-4
 # extract_text_runs.
 UNMAPPED_CODEPOINT = "�"
 
+# A run of underscores is the sheet DRAWING A WRITING LINE. Typographically it
+# is a rule set in a text operator, and publishing it as text is what made an
+# input on the blank overlap a printed run (review finding F200). Three is the
+# floor because two underscores are a punctuation mark -- an ellipsis stand-in,
+# a fill character -- while three already span more than a glyph's width and
+# read as a line on paper. The number is a property of the shape, not of any
+# form: nothing below keys on a form code.
+RULED_BLANK_MIN_GLYPHS = 3
+RULED_BLANK_CHARACTER = "_"
+RULED_BLANK_CODEPOINT = ord(RULED_BLANK_CHARACTER)
+
+# MuPDF's own name cleaner: the table PDF readers use to decide which base-14
+# face stands in for an unembedded one ("Arial" -> "Helvetica",
+# "TimesNewRoman" -> "Times-Roman"). It is asked rather than reimplemented, so
+# the face whose outline this module measures is the face MuPDF actually drew
+# with, and a name it does not recognise stays unrecognised instead of being
+# guessed at. Absent binding -> no unembedded face is ever resolvable, which
+# fails closed.
+try:  # pragma: no cover - binding presence is environmental
+    _clean_font_name = fitz.mupdf.pdf_clean_font_name
+except AttributeError:  # pragma: no cover - older PyMuPDF
+    _clean_font_name = None
+
 
 def q(value: float) -> float:
     """Quantise a coordinate. Returns a float that round-trips through JSON."""
@@ -269,19 +292,32 @@ class PaintOrder:
     scissor in force when it paints. Neither get_drawings() nor get_bboxlog()
     applies it -- both report the geometry the path *states* -- so an op drawn
     outside its own clip arrives here looking exactly like one that paints.
+
+    `text` is the same walk's answer for the ops that draw glyphs, keyed by
+    their position in the bbox log, which is what `get_texttrace()` reports as
+    a span's `seqno`. It carries how many painting ops precede each text op and
+    the box MuPDF bounds that op's ink to, so a rule reclassified out of a text
+    run (see `ruled_blank_bars`) can state its place in the paint order and be
+    checked against the reader's own measurement of where that text inks.
+    Glyph ops deliberately do NOT consume an ordinal: doing so would renumber
+    every rule in the corpus to record a fact only this one path needs.
     """
 
-    __slots__ = ("fill", "stroke", "images", "clip", "total")
+    __slots__ = ("fill", "stroke", "images", "clip", "total", "text")
 
     def __init__(self, fill: list[int], stroke: list[int],
                  images: list[tuple[fitz.Rect, int]],
                  clip: list[tuple[float, float, float, float] | None],
-                 total: int) -> None:
+                 total: int,
+                 text: dict[int, tuple[int, tuple[float, float, float, float]]]
+                 | None = None) -> None:
         self.fill = fill        # per drawing: ordinal of its fill op, or -1
         self.stroke = stroke    # per drawing: ordinal of its stroke op, or -1
         self.images = images    # (placement, ordinal) in stream order
         self.clip = clip        # per drawing: active scissor, or None for unclipped
         self.total = total      # one past the last ordinal
+        # bbox-log index -> (painting ops before it, the ink box it bounds)
+        self.text = text if text is not None else {}
 
 
 # The drawing types get_drawings() reports: fill, stroke, and both. Everything
@@ -361,10 +397,18 @@ def paint_order(page: fitz.Page, drawings: Sequence[dict[str, Any]]) -> PaintOrd
     fill = [-1] * len(drawings)
     stroke = [-1] * len(drawings)
     images: list[tuple[fitz.Rect, int]] = []
+    text: dict[int, tuple[int, tuple[float, float, float, float]]] = {}
     ordinal = 0
     index = 0
 
-    for kind, box in page.get_bboxlog():
+    for log_index, (kind, box) in enumerate(page.get_bboxlog()):
+        if "text" in kind:
+            # Recorded, not numbered: see PaintOrder. `ordinal` here is the
+            # count of painting ops already numbered, so the glyphs paint after
+            # every ordinal below it and before the one that will take it.
+            text[log_index] = (ordinal, (float(box[0]), float(box[1]),
+                                         float(box[2]), float(box[3])))
+            continue
         if kind == "fill-image":
             images.append((fitz.Rect(box), ordinal))
         elif kind == "fill-path":
@@ -390,7 +434,7 @@ def paint_order(page: fitz.Page, drawings: Sequence[dict[str, Any]]) -> PaintOrd
     # After the bbox reconciliation, so that a mutated drawings list still trips
     # the check the desync probes are aimed at.
     return PaintOrder(fill, stroke, images,
-                      clip_scissors(page, drawings), ordinal)
+                      clip_scissors(page, drawings), ordinal, text)
 
 
 def clipped(x0: float, y0: float, x1: float, y1: float,
@@ -533,13 +577,21 @@ def is_rectilinear(item: dict[str, Any]) -> bool:
     return True
 
 
-def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> list[Segment]:
+def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder,
+                     ruled_blanks: Sequence[dict[str, Any]] = ()) -> list[Segment]:
     """Turn every filled rect into maximal horizontal and vertical bars.
 
     The BIR generator draws a long border as a run of short filled rects plus a
     square at each joint. A square is thin on *both* axes, so it is offered to
     both groupings; the interval union absorbs the double count and the joint
     disappears into the segments it was patching.
+
+    `ruled_blanks` are the bars a run of underscore glyphs draws (see
+    `ruled_blank_bars`). They are offered into the SAME grouping rather than
+    appended afterwards, because a bar that abuts a drawn rule of the same tone
+    on the same band is one stroke on paper: emitting it as two would print two
+    abutting rects, and re-extracting our own print would union them back into
+    one and report the pair as a missing rule against an extra one.
     """
     h_groups: dict[tuple[float, float, float | None, Any], list[tuple[float, float, int]]] = (
         collections.defaultdict(list))
@@ -639,6 +691,13 @@ def extract_segments(drawings: Sequence[dict[str, Any]], order: PaintOrder) -> l
                 continue
 
             offer(rect.x0, rect.y0, rect.x1, rect.y1, gray, rgb, fill_seq, scissor)
+
+    for bar in ruled_blanks:
+        # No scissor: `extract_text_runs` does not model the clip on a text op
+        # either, so the glyphs these bars replace were already published
+        # unclipped. Inventing one here would be a new claim, not a kept one.
+        offer(bar["x0"], bar["y0"], bar["x1"], bar["y1"],
+              bar["gray"], bar["rgb"], bar["paint_seq"], None)
 
     segments: list[Segment] = []
     for (near, far, gray, rgb), spans in h_groups.items():
@@ -960,8 +1019,303 @@ def font_table(page: fitz.Page, doc: fitz.Document) -> dict[str, dict[str, Any]]
     return table
 
 
-def extract_text_runs(page: fitz.Page) -> list[dict[str, Any]]:
-    """Every visible text run with the metrics needed to reproduce its layout.
+# ---------------------------------------------------------------------------
+# Ruled blanks
+# ---------------------------------------------------------------------------
+
+
+def glyph_provenance(page: fitz.Page) -> dict[tuple[float, float],
+                                              tuple[int, int]]:
+    """Per glyph origin, the glyph id drawn there and the op that drew it.
+
+    Read from `get_texttrace()`, which is the operator stream rather than
+    rawdict's reconstruction of it, so the glyph id is the id of the outline
+    MuPDF actually rendered -- in an unembedded face, the substitute's. That id
+    is the key that lets a face be *identified* instead of assumed: a candidate
+    face is accepted only when the id it assigns to the character matches the
+    one drawn here.
+
+    `seqno` is the span's index in the same bbox log `paint_order` walks, which
+    is how a glyph reaches its place in the page's paint order and the box
+    MuPDF bounds its ink to.
+
+    Origins that carry more than one glyph are dropped rather than resolved by
+    a tiebreak, exactly as `unmapped_glyph_origins` drops them: the point of
+    this map is to be certain about the glyph it names.
+    """
+    seen: dict[tuple[float, float], set[tuple[int, int]]] = (
+        collections.defaultdict(set))
+    for span in page.get_texttrace():
+        seqno = span.get("seqno")
+        if not isinstance(seqno, int):
+            continue
+        for char in span["chars"]:
+            origin = (q(char[2][0]), q(char[2][1]))
+            seen[origin].add((int(char[1]), seqno))
+    return {origin: next(iter(entries))
+            for origin, entries in seen.items() if len(entries) == 1}
+
+
+def substitutable_faces(page: fitz.Page,
+                        doc: fitz.Document) -> dict[str, tuple[fitz.Font, ...]]:
+    """Every face the page could be drawing each BaseFont with.
+
+    Two kinds, and the difference is the whole point. A font whose program the
+    file embeds is measured from that program. A font it does not embed is
+    drawn by MuPDF from a substitute, and the substitute is resolved by asking
+    MuPDF's own name cleaner which base-14 face stands in -- never by a table
+    written here, and never by a font installed on this machine, which is the
+    machine-dependence extract_text_runs refuses on the metrics side for the
+    same reason.
+
+    A name MuPDF's cleaner does not recognise (this corpus has one: Arial
+    Narrow) yields no face at all. That is the intended answer, not a gap:
+    caller-side, no face means no measurement means the glyphs stay text.
+
+    Several resources can share one BaseFont -- 1701 page 4 carries both an
+    unembedded `Arial,Italic` and an embedded Type0 subset of the same name --
+    so the value is every candidate, and the caller resolves between them by
+    the glyph id the page actually drew.
+    """
+    faces: dict[str, list[fitz.Font]] = collections.defaultdict(list)
+    for xref, ext, _ftype, basefont, _res, _enc, _ in page.get_fonts(full=True):
+        font: fitz.Font | None = None
+        if ext not in ("n/a", "", None):
+            try:
+                buffer = doc.extract_font(xref)[3]
+                font = fitz.Font(fontbuffer=buffer) if buffer else None
+            except Exception:  # noqa: BLE001 - an unreadable program is "no face"
+                font = None
+        elif _clean_font_name is not None:
+            try:
+                font = fitz.Font(_clean_font_name(basefont))
+            except Exception:  # noqa: BLE001 - not a base-14 name is "no face"
+                font = None
+        if font is not None:
+            faces[basefont].append(font)
+    return {name: tuple(fonts) for name, fonts in faces.items()}
+
+
+def glyph_ink_box(faces: Sequence[fitz.Font], codepoint: int,
+                  glyph_id: int) -> tuple[float, float, float, float] | None:
+    """The em-relative ink box of one glyph, or None when it is not derivable.
+
+    Derivable means: exactly one of the candidate faces assigns `glyph_id` to
+    `codepoint`, and that face states a finite, non-degenerate outline box for
+    it. Two faces that agree on the box are one answer; two that disagree are
+    an ambiguity and get None, because a rule drawn at the wrong band is worse
+    than a glyph left as text.
+
+    The box is in font units with y counting UP from the baseline, which is why
+    the caller flips it into page coordinates rather than adding it.
+    """
+    boxes: set[tuple[float, float, float, float]] = set()
+    for font in faces:
+        try:
+            if font.has_glyph(codepoint) != glyph_id:
+                continue
+            box = font.glyph_bbox(codepoint)
+        except Exception:  # noqa: BLE001 - a face that cannot answer is not one
+            continue
+        if box is None:
+            continue
+        values = (float(box.x0), float(box.y0), float(box.x1), float(box.y1))
+        if not all(math.isfinite(value) for value in values):
+            continue
+        if values[2] <= values[0] or values[3] <= values[1]:
+            continue
+        boxes.add(values)
+    if len(boxes) != 1:
+        return None
+    return next(iter(boxes))
+
+
+def ruled_blank_groups(text: str) -> list[tuple[int, int]]:
+    """Every maximal run of at least RULED_BLANK_MIN_GLYPHS underscores.
+
+    A group is bounded by any other character, so `'XA ____ % X ='` carries
+    one and `'_ _ _'` carries none. Half-open [start, end) indices into `text`,
+    which is the run's text AFTER unmappable glyphs have been substituted --
+    a glyph the file gives no meaning is not an underscore, and must break a
+    group rather than be absorbed into one.
+    """
+    groups: list[tuple[int, int]] = []
+    start: int | None = None
+    for index, character in enumerate(text):
+        if character == RULED_BLANK_CHARACTER:
+            if start is None:
+                start = index
+            continue
+        if start is not None and index - start >= RULED_BLANK_MIN_GLYPHS:
+            groups.append((start, index))
+        start = None
+    if start is not None and len(text) - start >= RULED_BLANK_MIN_GLYPHS:
+        groups.append((start, len(text)))
+    return groups
+
+
+def ruled_blank_bars(chars: Sequence[dict[str, Any]], size: float,
+                     faces: Sequence[fitz.Font],
+                     provenance: dict[tuple[float, float], tuple[int, int]],
+                     text_ops: dict[int, tuple[int,
+                                               tuple[float, float, float, float]]],
+                     colour: Any) -> tuple[list[dict[str, Any]], str]:
+    """One underscore group as the bar it draws, or a refusal and its reason.
+
+    Every step can only fail closed. The band is the glyphs' OWN ink -- the
+    outline box of the face that drew them, scaled by the size the file states
+    and hung off the baseline the file states -- so nothing here is a
+    typographic convention or an underline position invented for the purpose.
+
+    One group can be drawn by several text operators -- 1701 page 4 sets its
+    33-underscore blank as five of them -- so the group is cut into pieces at
+    the points where its PAINT ORDINAL changes, and each piece is offered with
+    its own ordinal for `merge_intervals` to union. Not at every operator
+    boundary: consecutive text ops with no painting op between them land on the
+    same ordinal and are one paint event in this model, and cutting there would
+    publish two rules for one blank wherever the face's underscore is narrower
+    than its advance (Times-Roman leaves 0.003em, which is 0.04pt at 12pt --
+    four times the join epsilon, which exists for float error and not for real
+    gaps).
+
+    The last step is what makes the rest checkable: each piece must lie inside
+    the box MuPDF independently bounds its own text ops' ink to
+    (`PaintOrder.text`, from the same bbox log the paint ordinals come from).
+    That box is the reader's own measurement, taken without any of the font
+    arithmetic above, and it is expanded by one unit for antialiasing -- so a
+    band derived off the wrong baseline, at the wrong scale, or in the wrong
+    coordinate space cannot be contained by it and is refused.
+    """
+    if not chars:
+        return [], "no glyphs"
+    marks = [provenance.get((q(char["origin"][0]), q(char["origin"][1])))
+             for char in chars]
+    if any(mark is None for mark in marks):
+        return [], "glyph id and paint op not stated once per glyph"
+    if len({mark[0] for mark in marks}) != 1:
+        return [], "one group drawn with more than one glyph"
+    glyph_id = marks[0][0]
+    if glyph_id <= 0:
+        return [], "glyph is the face's .notdef"
+    if len({q(char["origin"][1]) for char in chars}) != 1:
+        return [], "glyphs do not share one baseline"
+    if any(mark[1] not in text_ops for mark in marks):
+        return [], "text op has no place in the paint order"
+
+    box = glyph_ink_box(faces, RULED_BLANK_CODEPOINT, glyph_id)
+    if box is None:
+        return [], "no single face states this glyph's outline"
+
+    channels = colour if isinstance(colour, (list, tuple)) else (
+        (((int(colour) >> 16) & 0xFF) / 255.0,
+         ((int(colour) >> 8) & 0xFF) / 255.0,
+         (int(colour) & 0xFF) / 255.0) if isinstance(colour, int) else None)
+    if channels is None:
+        return [], "run states no fill colour"
+    rgb = tuple(round(float(channel), 4) for channel in channels[:3])
+
+    baseline = float(chars[0]["origin"][1])
+    # Font space counts y up from the baseline; the page counts it down.
+    y0 = baseline - size * box[3]
+    y1 = baseline - size * box[1]
+    span_x0 = float(chars[0]["origin"][0]) + size * box[0]
+    span_x1 = float(chars[-1]["origin"][0]) + size * box[2]
+    if not all(math.isfinite(value) for value in (span_x0, y0, span_x1, y1)):
+        return [], "band is not a finite rectangle"
+    if q(y1) - q(y0) <= 0 or q(span_x1) - q(span_x0) <= 0:
+        return [], "band is degenerate once quantised"
+    if q(y1) - q(y0) > MAX_RULE_THICKNESS_PT:
+        return [], "band is thicker than a rule"
+    if q(span_x1) - q(span_x0) <= MAX_RULE_THICKNESS_PT:
+        return [], "bar is shorter than a rule's own thickness"
+
+    ordinals = [text_ops[mark[1]][0] for mark in marks]
+    bars: list[dict[str, Any]] = []
+    start = 0
+    for position in range(len(chars) + 1):
+        if position < len(chars) and ordinals[position] == ordinals[start]:
+            continue
+        piece = chars[start:position]
+        ink = [text_ops[mark[1]][1] for mark in marks[start:position]]
+        bound = (min(b[0] for b in ink), min(b[1] for b in ink),
+                 max(b[2] for b in ink), max(b[3] for b in ink))
+        x0 = float(piece[0]["origin"][0]) + size * box[0]
+        x1 = float(piece[-1]["origin"][0]) + size * box[2]
+        if not (bound[0] - AXIS_EPSILON_PT <= x0
+                and bound[1] - AXIS_EPSILON_PT <= y0
+                and x1 <= bound[2] + AXIS_EPSILON_PT
+                and y1 <= bound[3] + AXIS_EPSILON_PT):
+            return [], "band is not inside the reader's own bound for this ink"
+        bars.append({
+            "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+            "gray": to_gray(rgb),
+            "rgb": rgb,
+            "paint_seq": ordinals[start],
+        })
+        start = position
+    return bars, ""
+
+
+def _text_run(span: dict[str, Any], chars: Sequence[dict[str, Any]],
+              letters: Sequence[str], unmapped_glyphs: list[dict[str, Any]],
+              direction: Sequence[float],
+              box: tuple[float, float, float, float]) -> dict[str, Any]:
+    """One run, from the glyphs it keeps and the extent it was measured at.
+
+    Split out of extract_text_runs so a run and a FRAGMENT of a run are built
+    by the same arithmetic. `box` is the run's own rectangle: the span's for a
+    whole span, and the kept glyphs' for a fragment, because a fragment that
+    reported the span's extent would claim ink where a ruled blank now is.
+    """
+    origins = [c["origin"][0] for c in chars]
+    widths = [q(c["bbox"][2] - c["bbox"][0]) for c in chars]
+    offsets = [q(o - origins[0]) for o in origins] if chars else []
+    advances: list[float] = []
+    for i in range(len(chars) - 1):
+        advances.append(q(origins[i + 1] - origins[i]))
+    if chars:
+        advances.append(q(chars[-1]["bbox"][2] - origins[-1]))
+
+    measured = q(chars[-1]["bbox"][2] - chars[0]["origin"][0]) if chars else 0.0
+    size = round(float(span["size"]), 3)
+    flags = int(span["flags"])
+    parts = split_font_name(span["font"])
+    return {
+        "text": "".join(letters),
+        "font": span["font"],
+        "family": parts["family"],
+        "size_pt": size,
+        "bold": bool(flags & FLAG_BOLD) or parts["declared_bold"],
+        "italic": bool(flags & FLAG_ITALIC) or parts["declared_italic"],
+        "serif": bool(flags & FLAG_SERIF),
+        "monospace": bool(flags & FLAG_MONOSPACE),
+        "superscript": bool(flags & FLAG_SUPERSCRIPT),
+        "flags": flags,
+        "color": span.get("color"),
+        "x0": q(box[0]), "y0": q(box[1]),
+        "x1": q(box[2]), "y1": q(box[3]),
+        "baseline_y": q(chars[0]["origin"][1]) if chars else None,
+        "origin_x": q(chars[0]["origin"][0]) if chars else None,
+        "ascender": round(float(span.get("ascender", 0.0)), 4),
+        "descender": round(float(span.get("descender", 0.0)), 4),
+        "line_height_pt": q(
+            (float(span.get("ascender", 0.0)) - float(span.get("descender", 0.0)))
+            * size),
+        "measured_advance_pt": measured,
+        "char_origin_offsets_pt": offsets,
+        "char_advances_pt": advances,
+        "char_widths_pt": widths,
+        "direction": [round(float(direction[0]), 4), round(float(direction[1]), 4)],
+        "rotated": abs(float(direction[1])) > 1e-6,
+        "unmapped_glyphs": unmapped_glyphs,
+    }
+
+
+def extract_text_runs(page: fitz.Page, doc: fitz.Document, order: PaintOrder,
+                      ) -> tuple[list[dict[str, Any]],
+                                 list[dict[str, Any]],
+                                 dict[str, Any]]:
+    """Every visible text run, and the bars its ruled blanks actually draw.
 
     This records only what the PDF itself states: glyph origins, per-glyph
     advances from /Widths, and the resulting run extent. It deliberately does
@@ -992,10 +1346,28 @@ def extract_text_runs(page: fitz.Page) -> list[dict[str, Any]]:
     rawdict substitutes. Anything downstream then prints a visible replacement
     mark it can be told to fix, instead of a section sign nobody can tell is
     wrong. See unmapped_glyph_origins.
+
+    A run of underscores is the one shape here that is not text at all. The
+    sheet is drawing a writing line with a text operator, and while it stays a
+    run the strip it draws is inside a printed run's box, so an input placed on
+    the blank necessarily overlaps printed ink and is refused (F200). Each
+    group of at least RULED_BLANK_MIN_GLYPHS underscores therefore leaves the
+    run and is returned as a BAR at those glyphs' own ink band, measured by
+    `ruled_blank_bars`; the run splits into the fragments either side of it, and
+    a fragment left holding only whitespace is dropped exactly as a
+    whitespace-only span already was. Every group the measurement refuses stays
+    text and is counted by reason in the third return value: a band that cannot
+    be derived is never approximated.
     """
     runs: list[dict[str, Any]] = []
+    bars: list[dict[str, Any]] = []
+    refusals: collections.Counter[str] = collections.Counter()
+    groups_seen = 0
+    groups_published = 0
     raw = page.get_text("rawdict")
     unmapped = unmapped_glyph_origins(page)
+    provenance: dict[tuple[float, float], tuple[int, int]] | None = None
+    faces: dict[str, tuple[fitz.Font, ...]] | None = None
 
     for block in raw["blocks"]:
         if block["type"] != 0:
@@ -1021,50 +1393,66 @@ def extract_text_runs(page: fitz.Page) -> list[dict[str, Any]]:
                 if not text.strip():
                     continue
 
-                origins = [c["origin"][0] for c in chars]
-                widths = [q(c["bbox"][2] - c["bbox"][0]) for c in chars]
-                offsets = [q(o - origins[0]) for o in origins] if chars else []
-                advances: list[float] = []
-                for i in range(len(chars) - 1):
-                    advances.append(q(origins[i + 1] - origins[i]))
-                if chars:
-                    advances.append(q(chars[-1]["bbox"][2] - origins[-1]))
-
-                measured = q(chars[-1]["bbox"][2] - chars[0]["origin"][0]) if chars else 0.0
+                groups = ruled_blank_groups(text)
+                groups_seen += len(groups)
+                # Both maps cost a walk of the page's operator stream, so they
+                # are built only where a candidate group exists.
+                if groups and provenance is None:
+                    provenance = glyph_provenance(page)
+                    faces = substitutable_faces(page, doc)
                 size = round(float(span["size"]), 3)
-                flags = int(span["flags"])
-                parts = split_font_name(span["font"])
-                runs.append({
-                    "text": text,
-                    "font": span["font"],
-                    "family": parts["family"],
-                    "size_pt": size,
-                    "bold": bool(flags & FLAG_BOLD) or parts["declared_bold"],
-                    "italic": bool(flags & FLAG_ITALIC) or parts["declared_italic"],
-                    "serif": bool(flags & FLAG_SERIF),
-                    "monospace": bool(flags & FLAG_MONOSPACE),
-                    "superscript": bool(flags & FLAG_SUPERSCRIPT),
-                    "flags": flags,
-                    "color": span.get("color"),
-                    "x0": q(span["bbox"][0]), "y0": q(span["bbox"][1]),
-                    "x1": q(span["bbox"][2]), "y1": q(span["bbox"][3]),
-                    "baseline_y": q(chars[0]["origin"][1]) if chars else None,
-                    "origin_x": q(chars[0]["origin"][0]) if chars else None,
-                    "ascender": round(float(span.get("ascender", 0.0)), 4),
-                    "descender": round(float(span.get("descender", 0.0)), 4),
-                    "line_height_pt": q(
-                        (float(span.get("ascender", 0.0)) - float(span.get("descender", 0.0)))
-                        * size),
-                    "measured_advance_pt": measured,
-                    "char_origin_offsets_pt": offsets,
-                    "char_advances_pt": advances,
-                    "char_widths_pt": widths,
-                    "direction": [round(float(direction[0]), 4), round(float(direction[1]), 4)],
-                    "rotated": abs(float(direction[1])) > 1e-6,
-                    "unmapped_glyphs": unmapped_glyphs,
-                })
+                published: list[tuple[int, int]] = []
+                for start, end in groups:
+                    if abs(float(direction[1])) > 1e-6:
+                        refusals["run is rotated"] += 1
+                        continue
+                    pieces, reason = ruled_blank_bars(
+                        chars[start:end], size,
+                        (faces or {}).get(span["font"], ()),
+                        provenance or {}, order.text, span.get("color"))
+                    if not pieces:
+                        refusals[reason] += 1
+                        continue
+                    bars.extend(pieces)
+                    groups_published += 1
+                    published.append((start, end))
+
+                if not published:
+                    runs.append(_text_run(span, chars, letters, unmapped_glyphs,
+                                          direction, span["bbox"]))
+                    continue
+
+                # What the bars left behind, in reading order.
+                fragments: list[tuple[int, int]] = []
+                cursor = 0
+                for start, end in published:
+                    if start > cursor:
+                        fragments.append((cursor, start))
+                    cursor = end
+                if cursor < len(chars):
+                    fragments.append((cursor, len(chars)))
+                for start, end in fragments:
+                    kept = chars[start:end]
+                    piece = letters[start:end]
+                    if not "".join(piece).strip():
+                        continue
+                    runs.append(_text_run(
+                        span, kept, piece,
+                        [{**entry, "index": entry["index"] - start}
+                         for entry in unmapped_glyphs
+                         if start <= entry["index"] < end],
+                        direction,
+                        (kept[0]["bbox"][0], span["bbox"][1],
+                         kept[-1]["bbox"][2], span["bbox"][3])))
+
     runs.sort(key=lambda r: (r["y0"], r["x0"]))
-    return runs
+    return runs, bars, {
+        "ruled_blank_groups": groups_seen,
+        "ruled_blank_published": groups_published,
+        "ruled_blank_bars": len(bars),
+        "ruled_blank_text_retained": sum(refusals.values()),
+        "ruled_blank_refusals": dict(sorted(refusals.items())),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1385,7 +1773,11 @@ def extract_page(page: fitz.Page, doc: fitz.Document, index: int,
                  shipped_pixels: bool = False) -> dict[str, Any]:
     drawings = list(page.get_drawings())
     order = paint_order(page, drawings)
-    segments = extract_segments(drawings, order)
+    # Text first: a ruled blank leaves the runs as a bar, and the bar is a rule
+    # of the page like any other, so it has to be in hand before the segments
+    # are unioned.
+    text_runs, ruled_blanks, blank_stats = extract_text_runs(page, doc, order)
+    segments = extract_segments(drawings, order, ruled_blanks)
     rules = [s.to_ir(i) for i, s in enumerate(segments)]
     paths = extract_paths(drawings, order)
 
@@ -1399,7 +1791,7 @@ def extract_page(page: fitz.Page, doc: fitz.Document, index: int,
         "rules": rules,
         "area_fills": extract_area_fills(drawings, order),
         "paths": paths,
-        "text_runs": extract_text_runs(page),
+        "text_runs": text_runs,
         "images": extract_images(page, doc, order, shipped_pixels),
         "stats": {
             "rules_total": len(rules),
@@ -1411,6 +1803,7 @@ def extract_page(page: fitz.Page, doc: fitz.Document, index: int,
             "rules_decorative": sum(1 for r in rules if r["role"] == "decorative"),
             "structural_thickness_histogram": dict(sorted(thicknesses.items())),
             "drawings_raw": len(drawings),
+            **blank_stats,
         },
     }
 
@@ -1880,14 +2273,22 @@ CLIP_PROBE_RULES: tuple[tuple[tuple[float, float, float, float], str], ...] = (
 CLIP_PROBE_DROPPED = 3
 
 
-def probe_pdf(stream: bytes) -> bytes:
-    """Assemble a 200x200 probe page into a PDF, offsets and all."""
+def probe_pdf(stream: bytes, resources: bytes = b"<<>>",
+              extra_objects: Sequence[bytes] = ()) -> bytes:
+    """Assemble a 200x200 probe page into a PDF, offsets and all.
+
+    `extra_objects` are numbered from 5, which is what a `resources` dictionary
+    naming them has to assume. The defaults reproduce the earlier byte-for-byte
+    output, so the clip and cap probes are unaffected by the arrival of a page
+    that needs fonts.
+    """
     objects = [
         b"<</Type/Catalog/Pages 2 0 R>>",
         b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
         b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]"
-        b"/Contents 4 0 R/Resources<<>>>>",
+        b"/Contents 4 0 R/Resources" + resources + b">>",
         b"<</Length %d>>stream\n%s\nendstream" % (len(stream), stream),
+        *extra_objects,
     ]
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
@@ -1999,6 +2400,105 @@ def clip_probe_ir() -> dict[str, Any]:
             "drawings": len(drawings), "desync_refused": refused}
 
 
+# A third written-here page, for the third question no form in either corpus
+# can settle on its own: what a run of underscores is. The official corpus does
+# carry ruled blanks -- 2551Q has one, and it is measured through evidence["ir"]
+# like everything else -- but it carries no two-underscore punctuation beside
+# one, and no unresolvable face, so the two ways this must FAIL CLOSED would
+# ship unproven. The synthetic corpus carries none of the three.
+#
+# Page is 200x200 and PDF y counts up from the bottom, so an IR y is the
+# 200-complement. The filled bar is drawn FIRST so the text lands at paint
+# ordinal 1: a bar published at ordinal 0 would be one this page never proved
+# was read off the operator stream at all.
+#
+#   /F1 Helvetica     -- unembedded and base-14, the shape 111 of this corpus's
+#                        118 ruled blanks have: MuPDF substitutes, and the
+#                        substitute's own outline is the ink on the page.
+#   /F2 ArialNarrow   -- unembedded and NOT base-14, which is 1707's shape:
+#                        MuPDF still draws something, and no face this module
+#                        can name states that glyph's outline, so the glyphs
+#                        stay text.
+RULED_BLANK_PROBE_STREAM = b"""0 g
+20 20 60 1.2 re f
+BT
+/F1 10 Tf
+0 g
+20 160 Td
+(AB ____ CD) Tj
+ET
+BT
+/F1 10 Tf
+0 g
+20 140 Td
+(XY __ Z) Tj
+ET
+BT
+/F2 10 Tf
+0 g
+20 120 Td
+(____) Tj
+ET
+"""
+
+RULED_BLANK_PROBE_RESOURCES = b"<</Font<</F1 5 0 R/F2 6 0 R>>>>"
+RULED_BLANK_PROBE_FONTS = (
+    b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica/Encoding/WinAnsiEncoding>>",
+    b"<</Type/Font/Subtype/Type1/BaseFont/ArialNarrow/Encoding/WinAnsiEncoding>>",
+)
+
+# Every rule the probe page publishes, and why it is there. Both directions are
+# asserted, as with CAP_PROBE_RULES: a blank that failed to become a rule and
+# one invented for a blank that must stay text look the same on a single row
+# and opposite on the corpus.
+#
+# The blank's band is the glyphs' own: Helvetica draws '_' from -0.176 to
+# -0.126 em, so at 10pt on a baseline at IR y 40.0 the ink is 41.26 -> 41.76,
+# 0.5pt thick. Its x runs from the first glyph's ink edge to the last one's,
+# NOT from the run's box: the run starts at 20.0 and the bar starts at 35.9.
+RULED_BLANK_PROBE_RULES: tuple[tuple[tuple[float, float, float, float],
+                                     float, int, str], ...] = (
+    ((20.0, 178.8, 80.0, 180.0), 1.2, 0,
+     "the drawn bar, painted before the text: paint ordinal 0"),
+    ((35.9, 41.26, 58.58, 41.76), 0.5, 1,
+     "the ruled blank, at its glyphs' own ink band and after the bar"),
+)
+
+# What the page's text says once the blank has left it. `AB ____ CD` splits at
+# the measured extents into the two fragments either side, each ending at its
+# OWN outermost glyph rather than at the span's box.
+RULED_BLANK_PROBE_MIXED_TEXT = "AB ____ CD"
+RULED_BLANK_PROBE_SPLIT_RUNS: tuple[tuple[str, float, float, str], ...] = (
+    ("AB ", 20.0, 36.12, "the mixed run's head, ending at its own last glyph"),
+    (" CD", 58.36, 75.58, "and its tail, starting at its own first glyph"),
+)
+
+# The run that is below the floor, and how many groups the page holds at all.
+# Two: the mixed run's blank and the unresolvable face's. `XY __ Z` is not one
+# of them and that is the whole assertion -- a group is counted before it is
+# measured, so a below-floor run appearing here would mean the floor had moved
+# into the refusal path, where a later change could publish it.
+RULED_BLANK_PROBE_BELOW_FLOOR = "XY __ Z"
+RULED_BLANK_PROBE_GROUPS = 2
+
+# The blank whose band is not derivable, kept verbatim at its own extent, and
+# the reason it was refused.
+RULED_BLANK_PROBE_RETAINED = ("____", 20.0, 40.0)
+RULED_BLANK_PROBE_REFUSAL = "no single face states this glyph's outline"
+
+
+def ruled_blank_probe_ir() -> dict[str, Any]:
+    """The probe page's rules, runs and reclassification census."""
+    doc = fitz.open(stream=probe_pdf(RULED_BLANK_PROBE_STREAM,
+                                     RULED_BLANK_PROBE_RESOURCES,
+                                     RULED_BLANK_PROBE_FONTS),
+                    filetype="pdf")
+    ir = extract_page(doc[0], doc, 1)
+    doc.close()
+    return {"rules": ir["rules"], "text_runs": ir["text_runs"],
+            "stats": ir["stats"]}
+
+
 def paint_order_desync_probes(page: fitz.Page,
                               drawings: list[dict[str, Any]]) -> dict[str, bool]:
     """Whether paint_order refuses a drawings list the bbox log cannot explain.
@@ -2045,6 +2545,9 @@ def gather_evidence(profile: SelfTestProfile,
         "clip_probe": clip_probe_ir(),
         # Same reasoning, for the `J` operator.
         "cap_probe": cap_probe_ir(),
+        # And for a run of underscores, whose two fail-closed cases no form in
+        # either corpus states.
+        "ruled_blank_probe": ruled_blank_probe_ir(),
     }
     for code, (relative, revision, digest) in profile.fixtures.items():
         path = source_root / relative
@@ -2548,6 +3051,123 @@ def check_stroke_caps(evidence: dict[str, Any]) -> list[str]:
     return failures
 
 
+def _probe_groups_in_text(probe: dict[str, Any]) -> int:
+    """How many ruled-blank groups the probe page's runs still spell out."""
+    return sum(len(ruled_blank_groups(run["text"]))
+               for run in probe["text_runs"])
+
+
+def check_ruled_blank_split(evidence: dict[str, Any]) -> list[str]:
+    """A run holding a ruled blank splits into text, the rule, and text.
+
+    The rule is at the GLYPHS' OWN INK BAND -- the outline the face that drew
+    them states, at the size and baseline the file states -- and not at the
+    run's box, which is most of an em taller and starts three characters to the
+    left. Both directions are asserted: a blank that stayed text and a rule
+    invented for text that is not a blank are the same failure seen from
+    opposite sides.
+    """
+    probe = evidence["ruled_blank_probe"]
+    failures: list[str] = []
+
+    want = {box: (thickness, seq, why)
+            for box, thickness, seq, why in RULED_BLANK_PROBE_RULES}
+    got = {(rule["x0"], rule["y0"], rule["x1"], rule["y1"]): rule
+           for rule in probe["rules"]}
+    for box, (thickness, seq, why) in want.items():
+        rule = got.get(box)
+        if rule is None:
+            failures.append(f"ruled-blank probe lost the rule at {box} ({why})")
+            continue
+        if rule["thickness_pt"] != thickness:
+            failures.append(f"ruled-blank probe's rule at {box} is "
+                            f"{rule['thickness_pt']}pt thick, expected {thickness}")
+        if rule["paint_seq"] != seq or rule["paint_seq_max"] != seq:
+            failures.append(
+                f"ruled-blank probe's rule at {box} paints at "
+                f"{rule['paint_seq']}..{rule['paint_seq_max']}, expected {seq}")
+    for box in sorted(got.keys() - want.keys()):
+        failures.append(f"ruled-blank probe painted a rule at {box} that "
+                        f"nothing on its page draws")
+
+    fragments = {(run["text"], run["x0"], run["x1"]) for run in probe["text_runs"]}
+    for text, x0, x1, why in RULED_BLANK_PROBE_SPLIT_RUNS:
+        if (text, x0, x1) not in fragments:
+            failures.append(f"ruled-blank probe has no run {text!r} at "
+                            f"{x0}->{x1} ({why}); it reads "
+                            f"{sorted(fragments)}")
+    if any(run["text"] == RULED_BLANK_PROBE_MIXED_TEXT
+           for run in probe["text_runs"]):
+        failures.append(f"ruled-blank probe still prints "
+                        f"{RULED_BLANK_PROBE_MIXED_TEXT!r} as text: the blank "
+                        f"was published as a rule AND left in the run")
+    return failures
+
+
+def check_ruled_blank_floor(evidence: dict[str, Any]) -> list[str]:
+    """Two underscores are punctuation and stay in the text they punctuate.
+
+    The floor is what keeps this from eating an ellipsis stand-in or a fill
+    character, and it is asserted on the count as well as on the run: a group
+    below the floor must not even be offered for measurement, or a later change
+    to the refusal path could start publishing it.
+    """
+    probe = evidence["ruled_blank_probe"]
+    failures: list[str] = []
+    below = RULED_BLANK_PROBE_BELOW_FLOOR
+    if ruled_blank_groups(below):
+        failures.append(f"{below!r} is pinned as below the floor but "
+                        f"ruled_blank_groups reads a group in it")
+    if not any(run["text"] == below for run in probe["text_runs"]):
+        failures.append(f"ruled-blank probe lost {below!r}: a run of "
+                        f"{RULED_BLANK_MIN_GLYPHS - 1} underscores is not a "
+                        f"blank and must stay text, verbatim")
+    counted = probe["stats"]["ruled_blank_groups"]
+    if counted != RULED_BLANK_PROBE_GROUPS:
+        failures.append(f"ruled-blank probe counted {counted} group(s), "
+                        f"expected {RULED_BLANK_PROBE_GROUPS}: the below-floor "
+                        f"run must not be one of them")
+    return failures
+
+
+def check_ruled_blank_fail_closed(evidence: dict[str, Any]) -> list[str]:
+    """A blank whose ink band is not derivable stays text, and is counted.
+
+    Never guess a band. The probe's second face is unembedded and is not one
+    MuPDF's own name cleaner resolves, so no face this module can name states
+    that glyph's outline -- exactly 1707's shape. The count and the surviving
+    runs are asserted against each other, so neither a silently dropped blank
+    nor an unrecorded refusal can pass.
+    """
+    probe = evidence["ruled_blank_probe"]
+    stats = probe["stats"]
+    failures: list[str] = []
+    text, x0, x1 = RULED_BLANK_PROBE_RETAINED
+    if (text, x0, x1) not in {(run["text"], run["x0"], run["x1"])
+                              for run in probe["text_runs"]}:
+        failures.append(f"ruled-blank probe lost the run {text!r} at "
+                        f"{x0}->{x1}: a blank whose band cannot be derived "
+                        f"stays text, it does not vanish")
+    retained = _probe_groups_in_text(probe)
+    if stats["ruled_blank_text_retained"] != retained:
+        failures.append(
+            f"ruled-blank probe reports {stats['ruled_blank_text_retained']} "
+            f"group(s) retained as text but its runs still spell {retained}")
+    if retained != 1:
+        failures.append(f"ruled-blank probe retained {retained} group(s) as "
+                        f"text, expected the one face it cannot resolve")
+    if stats["ruled_blank_refusals"] != {RULED_BLANK_PROBE_REFUSAL: 1}:
+        failures.append(f"ruled-blank probe recorded refusals "
+                        f"{stats['ruled_blank_refusals']}, expected exactly "
+                        f"{{{RULED_BLANK_PROBE_REFUSAL!r}: 1}}")
+    if stats["ruled_blank_groups"] - stats["ruled_blank_published"] != retained:
+        failures.append(
+            f"ruled-blank probe saw {stats['ruled_blank_groups']} group(s) and "
+            f"published {stats['ruled_blank_published']}; the difference must "
+            f"be the {retained} it refused")
+    return failures
+
+
 def check_codepoints(evidence: dict[str, Any]) -> list[str]:
     """No run holds a character the source did not state.
 
@@ -2687,6 +3307,9 @@ SELF_TEST_CHECKS: tuple[tuple[str, Callable[[dict[str, Any]], list[str]]], ...] 
     ("tone", check_tone),
     ("clips", check_clips),
     ("stroke-caps", check_stroke_caps),
+    ("ruled-blank-split", check_ruled_blank_split),
+    ("ruled-blank-floor", check_ruled_blank_floor),
+    ("ruled-blank-fail-closed", check_ruled_blank_fail_closed),
     ("codepoints", check_codepoints),
     ("is-bar-like", check_bar_like),
 )
@@ -2812,6 +3435,48 @@ def mutate_stroke_caps(evidence: dict[str, Any]) -> None:
     raise AssertionError("stroke-caps mutation found no round-capped bar")
 
 
+def mutate_ruled_blank_split(evidence: dict[str, Any]) -> None:
+    """Publish the blank at its RUN's extent instead of its glyphs' ink.
+
+    The reverted emit-side attempt (F200) placed the input on the run's own
+    x-extent, and this is the same mistake one layer up: the run starts at 20.0
+    where the ink starts at 35.9, so a rule taken from the box would be drawn
+    through `AB `.
+    """
+    probe = evidence["ruled_blank_probe"]
+    for rule in probe["rules"]:
+        if (rule["x0"], rule["y0"], rule["x1"], rule["y1"]) == (
+                35.9, 41.26, 58.58, 41.76):
+            rule.update(x0=20.0, x1=75.58, length_pt=55.58)
+            return
+    raise AssertionError("ruled-blank-split mutation found no reclassified bar")
+
+
+def mutate_ruled_blank_floor(evidence: dict[str, Any]) -> None:
+    """Take the two-underscore run's underscores out of its text."""
+    probe = evidence["ruled_blank_probe"]
+    for run in probe["text_runs"]:
+        if run["text"] == RULED_BLANK_PROBE_BELOW_FLOOR:
+            run["text"] = run["text"].replace(RULED_BLANK_CHARACTER, "")
+            return
+    raise AssertionError("ruled-blank-floor mutation found no below-floor run")
+
+
+def mutate_ruled_blank_fail_closed(evidence: dict[str, Any]) -> None:
+    """Drop the run whose band could not be derived, publishing nothing for it.
+
+    The quiet failure this exists to catch: ink that leaves the text and never
+    arrives in the rules, so the sheet loses a line nobody counted.
+    """
+    probe = evidence["ruled_blank_probe"]
+    before = len(probe["text_runs"])
+    probe["text_runs"] = [run for run in probe["text_runs"]
+                          if not ruled_blank_groups(run["text"])]
+    if len(probe["text_runs"]) == before:
+        raise AssertionError("ruled-blank-fail-closed mutation found no "
+                             "retained blank")
+
+
 def mutate_bar_like(evidence: dict[str, Any]) -> None:
     """Divert one leaning separator to paths, as exact alignment would have."""
     code = evidence["profile"].bar_like_form
@@ -2840,6 +3505,12 @@ SELF_TEST_MUTATIONS: tuple[tuple[str, str, Callable[[dict[str, Any]], None]], ..
     ("clips", "a bar drawn outside its scissor is painted anyway", mutate_clips),
     ("stroke-caps", "a round-capped bar is published at its declared endpoints",
      mutate_stroke_caps),
+    ("ruled-blank-split", "a ruled blank is published at its run's extent",
+     mutate_ruled_blank_split),
+    ("ruled-blank-floor", "a two-underscore run loses its underscores",
+     mutate_ruled_blank_floor),
+    ("ruled-blank-fail-closed", "a blank with no derivable band is dropped "
+     "instead of kept as text", mutate_ruled_blank_fail_closed),
     ("codepoints", "an unmappable glyph prints as a section sign", mutate_codepoints),
     ("is-bar-like", "a leaning separator loses its rule", mutate_bar_like),
 )

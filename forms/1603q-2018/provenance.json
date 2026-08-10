@@ -23,10 +23,10 @@
     "Times New Roman",
     "Wingdings"
   ],
-  "rules": 706,
-  "text_runs": 375,
+  "rules": 707,
+  "text_runs": 374,
   "images": 3,
-  "cells": 227,
+  "cells": 228,
   "comb_cells": 78,
   "growables": [],
   "sources": [
@@ -73,7 +73,7 @@
     ],
     "standalone_pdfs": []
   },
-  "html_bytes": 419950,
+  "html_bytes": 419795,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }

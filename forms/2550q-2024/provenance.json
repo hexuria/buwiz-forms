@@ -21,10 +21,10 @@
     "Arial Narrow",
     "Times New Roman"
   ],
-  "rules": 1232,
-  "text_runs": 407,
+  "rules": 1237,
+  "text_runs": 403,
   "images": 3,
-  "cells": 448,
+  "cells": 451,
   "comb_cells": 150,
   "growables": [],
   "sources": [
@@ -65,7 +65,7 @@
       "2550Q guidelines April 2024_final.pdf"
     ]
   },
-  "html_bytes": 739402,
+  "html_bytes": 738617,
   "generator": "tools/formgen batch.py (rule-backend=svg)",
   "note": "Generated once from the pinned source PDF, then maintained by hand. Re-running the generator over this directory would discard manual edits."
 }
