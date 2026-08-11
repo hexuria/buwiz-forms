@@ -10,6 +10,55 @@ regenerated at the r43 producer bytes. Assertion counts are from a corpus-wide
 that run scored; the r27 section below is kept as written and its numbers are
 superseded by the r43 section.
 
+## r47 — tab order holds on all 53 forms, and the walk that proves it is a tool
+
+**Keyboard tab order now follows the printed reading order corpus-wide, and
+`tab_check.py` measures it end to end.** F209's mechanism: every growable
+band's rows were emitted after the page's whole static cell layer, so DOM
+order — which IS focus order, no `tabindex` exists anywhere — jumped back up
+the page (worst: 697pt on 1701 p4, where the NOLCO continuation rows tabbed
+after PART IX). The field layer is now split into `layer-cells` segments
+around each band at its own `(y0, x0)`. Measured: reading-order inversions
+3,363 across 20 forms → **0 across 53**; inputs 45,333 → 45,333; cell counts,
+censuses and both failing assertions unmoved (`inputs_over_printed_text`
+3 forms / 6, `comb_slots_match_printed` 10 / 19, decided residual zero);
+structural diff confined to the split boundaries on the 22 band forms;
+determinism byte-identical. Gate r47 **10/13** (`8e362d61d28f`) — the same
+three non-passing checks as r46, for the same reasons; the "audit-complete
+claim hides audit failures" forms named by comb-referee are 8 of the 10
+comb_slots offender forms, i.e. the known 19-offender residual seen through
+the referee's guard, verified against the fresh audit.
+
+**The tab walk is automated with reviewable artifacts.** `tab_check.py` tabs
+through every form in headless Chromium, grades each input
+green / red-skipped / red-order against the DOM's own `data-row` reading
+order, and writes `forms/review/<slug>/tab.json` + per-page PNGs with the
+verdicts burned in, plus one `forms/review/index.html` entry point —
+phone-viewable, no server, no tabbing. Before the fix it read 20 of the 22
+band forms red (the two clean ones genuinely have their band at the page
+bottom — verified independently against the shipped geometry); after the fix,
+**53/53 fully green in 74.5s**. `just tab-check` / `review-clean` /
+`review-serve`; one CI step fails the job on any red. Deliberately NOT a gate
+self-test (user decision: browser minutes).
+
+**The walk judges only inputs that exist.** A missing input looks identical
+to correct paper from the keyboard. Missing-field detection is T4's
+tone-aware blue census plus the ledger — the census this round measured:
+rule tones are eight quantised values, the wall/tint boundary sits in the
+genuinely empty 0.651 → 0.7489 interval, and 0.502/0.651 are WALLS (mid-grey
+checkbox outlines on 11 and 26 forms), which refutes the split this plan
+first assumed.
+
+**Ledger:** F207 fixed (ink-band pre-printed test; the sixth
+nominal-edge-vs-ink defect this session). F154 and F156 closed
+`not-a-defect` on the user's 2026-08-11 visual review — the review refuted
+both remaining claims. Filed: F209 (fixed this round), F210 (Schedule-1
+checkbox squares drawn at gray 0.251, invisible to the lattice), F211 (0619E/F
+signature boxes killed by one caption run; 0620 is the control), F212
+(signature typography, minor), F213 (overlay tone-blindness invents walls
+from tint — proven on 1701 p2 item 3, `over=4.57pt` against a gray 0.8509
+fragment). Open blocker+major 9 → 10, honestly: three closed, four filed.
+
 ## r43 — a comb has a HORIZONTAL writing surface, and F199's seven money boxes clear
 
 **`inputs_over_printed_text` goes 6 forms / 13 offenders to 3 / 6, and the seven
