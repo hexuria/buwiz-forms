@@ -989,7 +989,23 @@ insets — expected, not a defect).
 
 **T3:** a `?debug=tab` mode rendering `forms/review/<slug>/tab.json` — green,
 red and sequence numbers from the JSON's own geometry, no field-layer reads.
-Works served (`just review-serve`); on `file://` show a hint.
+Works served (`just review-serve`); on `file://` show a hint. **Fix
+`review-serve` first**: T2 rooted it at `forms/review/`, but the viewer needs
+`forms/<slug>/index.html` and `forms/review/<slug>/tab.json` under ONE server
+root — re-root it at `forms/`.
+
+**T3/T4 addendum (user, 2026-08-11):** the review surface should need no
+manual tabbing AND no separate blue pass. After T4 makes `vacant`
+trustworthy, `tab_check` burns the SAME tone-aware blue census into its
+`page-<N>.png` alongside green/red, so one image per page answers both "does
+tab order hold?" and "is anything printed still missing its input?".
+`forms/review/index.html` is the single entry point. The user's manual
+override loop (they name a field, we trace the mechanism) remains the escape
+hatch for defect CLASSES no rule formalises yet — each such report must land
+as a general rule plus a permanent check, never a one-field patch. Once T5c
+stamps underscore-origin rules, add the corpus assertion that every such rule
+inside a caption cell carries an input — F148's class becomes machine-checked
+from then on.
 
 **Acceptance:** 1701 p2 item-3 band shows zero red and no phantom blue, while
 **F210's Schedule-1 blues STAY blue** (they are real until T5a lands); 0619E
